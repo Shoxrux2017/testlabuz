@@ -7,7 +7,7 @@
 | Task ID | `S01-BE-005` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Backend / authorization` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-BE-004 — Mandatory First-Login Password Change Gate (Accepted)` |
 | Blocks | `S01-FE-001 — Flutter Client Scaffold & Core Infrastructure`; `S01-INT-004 — Stage 1 End-to-End Authentication Verification` |
 
