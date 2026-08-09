@@ -7,6 +7,7 @@ use App\Exceptions\Auth\PasswordChangeRequiredException;
 use App\Exceptions\Auth\UserInactiveException;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsurePasswordChanged;
+use App\Http\Middleware\EnsureUserHasRole;
 use App\Support\ApiErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'active.account' => EnsureAccountIsActive::class,
             'password.changed' => EnsurePasswordChanged::class,
+            'role' => EnsureUserHasRole::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
