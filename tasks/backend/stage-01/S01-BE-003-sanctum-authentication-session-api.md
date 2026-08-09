@@ -7,7 +7,7 @@
 | Task ID | `S01-BE-003` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Backend / authentication` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-BE-002 — Identity Persistence Foundation (Accepted)` |
 | Blocks | `S01-BE-004 — Mandatory First-Login Password Change Gate` |
 

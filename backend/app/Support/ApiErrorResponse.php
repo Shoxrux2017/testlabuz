@@ -12,6 +12,10 @@ final class ApiErrorResponse
 {
     private const CODE_AUTHENTICATION_REQUIRED = 'authentication_required';
 
+    private const CODE_INSTITUTION_INACTIVE = 'institution_inactive';
+
+    private const CODE_INVALID_CREDENTIALS = 'invalid_credentials';
+
     private const CODE_FORBIDDEN = 'forbidden';
 
     private const CODE_RATE_LIMITED = 'rate_limited';
@@ -19,6 +23,8 @@ final class ApiErrorResponse
     private const CODE_RESOURCE_NOT_FOUND = 'resource_not_found';
 
     private const CODE_SERVER_ERROR = 'server_error';
+
+    private const CODE_USER_INACTIVE = 'user_inactive';
 
     private const CODE_VALIDATION_FAILED = 'validation_failed';
 
@@ -51,6 +57,45 @@ final class ApiErrorResponse
             'Authentication is required.',
             self::CODE_AUTHENTICATION_REQUIRED,
             Response::HTTP_UNAUTHORIZED,
+        );
+    }
+
+    public static function invalidCredentials(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The provided login credentials are invalid.',
+            self::CODE_INVALID_CREDENTIALS,
+            Response::HTTP_UNAUTHORIZED,
+        );
+    }
+
+    public static function userInactive(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This user account is inactive.',
+            self::CODE_USER_INACTIVE,
+            Response::HTTP_FORBIDDEN,
+        );
+    }
+
+    public static function institutionInactive(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This institution is inactive.',
+            self::CODE_INSTITUTION_INACTIVE,
+            Response::HTTP_FORBIDDEN,
         );
     }
 
