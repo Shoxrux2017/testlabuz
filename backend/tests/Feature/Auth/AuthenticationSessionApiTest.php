@@ -378,7 +378,7 @@ class AuthenticationSessionApiTest extends TestCase
         $this->assertSame(0, PersonalAccessToken::query()->count());
     }
 
-    public function test_must_change_password_flag_is_returned_but_not_enforced_yet(): void
+    public function test_must_change_password_flag_is_returned_in_current_user_payload(): void
     {
         $user = $this->createUserForRole(UserRole::InstitutionAdmin, loginName: 'must_change_admin', attributes: [
             'must_change_password' => true,
@@ -390,7 +390,6 @@ class AuthenticationSessionApiTest extends TestCase
 
         $response->assertOk();
         $this->assertTrue($response->json('data.must_change_password'));
-        $this->assertErrorContract($this->postJson('/api/v1/auth/change-password'), 404, 'resource_not_found');
     }
 
     public function test_only_locked_auth_routes_are_registered(): void
@@ -408,6 +407,7 @@ class AuthenticationSessionApiTest extends TestCase
             ['methods' => ['POST'], 'uri' => 'api/v1/auth/login'],
             ['methods' => ['POST'], 'uri' => 'api/v1/auth/logout'],
             ['methods' => ['GET'], 'uri' => 'api/v1/auth/me'],
+            ['methods' => ['POST'], 'uri' => 'api/v1/auth/change-password'],
         ], $authRoutes);
     }
 
