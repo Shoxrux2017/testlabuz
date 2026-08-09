@@ -5,6 +5,12 @@ import 'auth_user.dart';
 abstract interface class AuthRepository {
   Future<AuthUser> signIn({required String login, required String password});
 
+  Future<AuthUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  });
+
   Future<AuthUser> currentUser();
 
   Future<void> signOut();
@@ -21,6 +27,15 @@ class AuthOperationSupersededException implements Exception {
 
   @override
   String toString() => 'AuthOperationSupersededException';
+}
+
+class AuthPasswordChangeSessionRefreshException implements Exception {
+  const AuthPasswordChangeSessionRefreshException(this.cause);
+
+  final ApiRequestException cause;
+
+  @override
+  String toString() => 'AuthPasswordChangeSessionRefreshException';
 }
 
 bool isAuthOrAccountStateRejection(ApiRequestException exception) {

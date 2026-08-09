@@ -94,6 +94,34 @@ void main() {
       expect(adapter.singleRequest.method, 'POST');
     });
 
+    test('changePassword sends exact backend keys and accepts 204', () async {
+      final adapter = RecordingAdapter((_) => ResponseBody.fromBytes([], 204));
+      final dataSource = AuthRemoteDataSource(
+        dio: _plainDio(adapter),
+        failureMapper: const DioFailureMapper(),
+      );
+
+      await dataSource.changePassword(
+        currentPassword: 'old-secret',
+        newPassword: 'new-secret',
+        newPasswordConfirmation: 'new-secret',
+      );
+
+      expect(adapter.singleRequest.path, '/auth/change-password');
+      expect(adapter.singleRequest.method, 'POST');
+      expect(adapter.singleRequest.data, {
+        'current_password': 'old-secret',
+        'new_password': 'new-secret',
+        'new_password_confirmation': 'new-secret',
+      });
+      expect(
+        (adapter.singleRequest.data as Map<Object?, Object?>).containsKey(
+          'must_change_password',
+        ),
+        isFalse,
+      );
+    });
+
     test(
       'malformed success envelope maps to typed invalid response failure',
       () async {

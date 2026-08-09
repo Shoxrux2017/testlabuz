@@ -5,5 +5,6 @@ abstract final class ApiErrorCodes {
   static const institutionInactive = 'institution_inactive';
   static const forbidden = 'forbidden';
   static const validationFailed = 'validation_failed';
+  static const currentPasswordInvalid = 'current_password_invalid';
   static const rateLimited = 'rate_limited';
 }

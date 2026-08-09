@@ -54,6 +54,27 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AuthUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    await remoteDataSource.changePassword(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+      newPasswordConfirmation: newPasswordConfirmation,
+    );
+    final AuthUser currentUser;
+    try {
+      currentUser = (await remoteDataSource.me()).user.toDomain();
+    } on ApiRequestException catch (exception) {
+      throw AuthPasswordChangeSessionRefreshException(exception);
+    }
+
+    return currentUser;
+  }
+
+  @override
   Future<AuthUser> currentUser() async {
     final currentUser = await remoteDataSource.me();
 
