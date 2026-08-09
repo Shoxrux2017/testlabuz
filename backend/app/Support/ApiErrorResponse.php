@@ -12,9 +12,13 @@ final class ApiErrorResponse
 {
     private const CODE_AUTHENTICATION_REQUIRED = 'authentication_required';
 
+    private const CODE_CURRENT_PASSWORD_INVALID = 'current_password_invalid';
+
     private const CODE_INSTITUTION_INACTIVE = 'institution_inactive';
 
     private const CODE_INVALID_CREDENTIALS = 'invalid_credentials';
+
+    private const CODE_PASSWORD_CHANGE_REQUIRED = 'password_change_required';
 
     private const CODE_FORBIDDEN = 'forbidden';
 
@@ -73,6 +77,19 @@ final class ApiErrorResponse
         );
     }
 
+    public static function currentPasswordInvalid(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The current password is invalid.',
+            self::CODE_CURRENT_PASSWORD_INVALID,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
     public static function userInactive(Request $request): ?JsonResponse
     {
         if (! self::isApiRequest($request)) {
@@ -95,6 +112,19 @@ final class ApiErrorResponse
         return self::json(
             'This institution is inactive.',
             self::CODE_INSTITUTION_INACTIVE,
+            Response::HTTP_FORBIDDEN,
+        );
+    }
+
+    public static function passwordChangeRequired(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'Password change is required before using this endpoint.',
+            self::CODE_PASSWORD_CHANGE_REQUIRED,
             Response::HTTP_FORBIDDEN,
         );
     }

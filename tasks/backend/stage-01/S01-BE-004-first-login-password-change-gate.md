@@ -7,7 +7,7 @@
 | Task ID | `S01-BE-004` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Backend / authentication security` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-BE-003 — Sanctum Authentication & Session API (Accepted)` |
 | Blocks | `S01-BE-005 — Role Authorization Foundation` |
 
