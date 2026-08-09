@@ -1,5 +1,9 @@
 <?php
 
+use App\Exceptions\Auth\InstitutionInactiveException;
+use App\Exceptions\Auth\InvalidCredentialsException;
+use App\Exceptions\Auth\UserInactiveException;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Support\ApiErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -21,7 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'active.account' => EnsureAccountIsActive::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -30,6 +36,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(fn (ValidationException $e, Request $request) => ApiErrorResponse::validation($e, $request));
         $exceptions->render(fn (AuthenticationException $e, Request $request) => ApiErrorResponse::authenticationRequired($request));
+        $exceptions->render(fn (InvalidCredentialsException $e, Request $request) => ApiErrorResponse::invalidCredentials($request));
+        $exceptions->render(fn (UserInactiveException $e, Request $request) => ApiErrorResponse::userInactive($request));
+        $exceptions->render(fn (InstitutionInactiveException $e, Request $request) => ApiErrorResponse::institutionInactive($request));
         $exceptions->render(fn (AuthorizationException $e, Request $request) => ApiErrorResponse::forbidden($request));
         $exceptions->render(fn (AccessDeniedHttpException $e, Request $request) => ApiErrorResponse::forbidden($request));
         $exceptions->render(fn (NotFoundHttpException $e, Request $request) => ApiErrorResponse::resourceNotFound($request));
