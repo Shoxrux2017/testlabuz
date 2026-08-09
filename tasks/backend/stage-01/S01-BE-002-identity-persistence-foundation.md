@@ -7,7 +7,7 @@
 | Task ID | `S01-BE-002` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Backend / persistence` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-INT-003 — Local Backend Runtime & PostgreSQL Foundation (Accepted)` |
 | Blocks | `S01-BE-003 — Sanctum Authentication & Session API` |
 
