@@ -1,0 +1,29 @@
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Private keys and certificate material
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.csr
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local IDE/editor state
+.idea/
+.vscode/
+*.swp
+*.swo
