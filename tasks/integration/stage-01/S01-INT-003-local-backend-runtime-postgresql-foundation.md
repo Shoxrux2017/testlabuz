@@ -7,7 +7,7 @@
 | Task ID | `S01-INT-003` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Integration / local backend infrastructure` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-BE-001 — Laravel API Scaffold & Backend Quality Foundation (Accepted)` |
 | Blocks | `S01-BE-002 — Identity Persistence Foundation` |
 
