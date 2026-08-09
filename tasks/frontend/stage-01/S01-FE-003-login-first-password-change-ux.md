@@ -7,7 +7,7 @@
 | Task ID | `S01-FE-003` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Frontend / authentication UX` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-FE-002 — Authentication Data & Session Foundation (Accepted)`; `S01-BE-004 — Mandatory First-Login Password Change Gate (Accepted)` |
 | Blocks | `S01-FE-004 — Role/Device Entry Routing & Session Isolation` |
 

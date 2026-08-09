@@ -133,6 +133,102 @@ void main() {
       expect(user.role, UserRole.parent);
     });
 
+    test(
+      'changePassword refreshes and returns canonical /auth/me user',
+      () async {
+        final remote = FakeAuthRemoteDataSource();
+        final tokenStore = AuthTokenStore(FakeSecureValueStore());
+        await tokenStore.write('token-a');
+        final repository = AuthRepositoryImpl(
+          remoteDataSource: remote,
+          tokenStore: tokenStore,
+        );
+        remote.onMe = () async => _meResponse(role: UserRole.student);
+
+        final user = await repository.changePassword(
+          currentPassword: 'old-secret',
+          newPassword: 'new-secret',
+          newPasswordConfirmation: 'new-secret',
+        );
+
+        expect(user.role, UserRole.student);
+        expect(remote.changePasswordCalls.single.currentPassword, 'old-secret');
+        expect(remote.changePasswordCalls.single.newPassword, 'new-secret');
+        expect(
+          remote.changePasswordCalls.single.newPasswordConfirmation,
+          'new-secret',
+        );
+        expect(remote.meCalls, 1);
+        expect(await tokenStore.read(), 'token-a');
+      },
+    );
+
+    test('changePassword surfaces current password conflict', () async {
+      final remote = FakeAuthRemoteDataSource();
+      final repository = AuthRepositoryImpl(
+        remoteDataSource: remote,
+        tokenStore: AuthTokenStore(FakeSecureValueStore()),
+      );
+      remote.onChangePassword = (_, _, _) async {
+        throw _serverFailure(
+          ApiErrorCodes.currentPasswordInvalid,
+          statusCode: 409,
+        );
+      };
+
+      await expectLater(
+        repository.changePassword(
+          currentPassword: 'wrong-secret',
+          newPassword: 'new-secret',
+          newPasswordConfirmation: 'new-secret',
+        ),
+        throwsA(
+          isA<ApiRequestException>().having(
+            (exception) => exception.failure.serverCode,
+            'serverCode',
+            ApiErrorCodes.currentPasswordInvalid,
+          ),
+        ),
+      );
+
+      expect(remote.meCalls, 0);
+    });
+
+    test(
+      'transport failure after password mutation keeps token for refresh retry',
+      () async {
+        final remote = FakeAuthRemoteDataSource();
+        final tokenStore = AuthTokenStore(FakeSecureValueStore());
+        await tokenStore.write('token-a');
+        final repository = AuthRepositoryImpl(
+          remoteDataSource: remote,
+          tokenStore: tokenStore,
+        );
+        remote.onMe = () async {
+          throw _transportFailure();
+        };
+
+        await expectLater(
+          repository.changePassword(
+            currentPassword: 'old-secret',
+            newPassword: 'new-secret',
+            newPasswordConfirmation: 'new-secret',
+          ),
+          throwsA(
+            isA<AuthPasswordChangeSessionRefreshException>().having(
+              (exception) => exception.cause.failure.kind,
+              'kind',
+              ApiFailureKind.connection,
+            ),
+          ),
+        );
+
+        expect(remote.changePasswordCalls, hasLength(1));
+        expect(remote.meCalls, 1);
+        expect(await tokenStore.read(), 'token-a');
+      },
+    );
+
     test('signOut calls backend logout and clears token', () async {
       final remote = FakeAuthRemoteDataSource();
       final tokenStore = AuthTokenStore(FakeSecureValueStore());
@@ -310,10 +406,17 @@ class FakeAuthRemoteDataSource extends AuthRemoteDataSource {
     : super(dio: Dio(), failureMapper: const DioFailureMapper());
 
   Future<AuthLoginResponseDto> Function(String login, String password)? onLogin;
+  Future<void> Function(
+    String currentPassword,
+    String newPassword,
+    String newPasswordConfirmation,
+  )?
+  onChangePassword;
   Future<AuthMeResponseDto> Function()? onMe;
   Future<void> Function()? onLogout;
 
   final loginCalls = <LoginCall>[];
+  final changePasswordCalls = <ChangePasswordCall>[];
   var meCalls = 0;
   var logoutCalls = 0;
 
@@ -326,6 +429,28 @@ class FakeAuthRemoteDataSource extends AuthRemoteDataSource {
 
     return onLogin?.call(login, password) ??
         Future.value(_loginResponse(token: 'token-a'));
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) {
+    changePasswordCalls.add(
+      ChangePasswordCall(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        newPasswordConfirmation: newPasswordConfirmation,
+      ),
+    );
+
+    return onChangePassword?.call(
+          currentPassword,
+          newPassword,
+          newPasswordConfirmation,
+        ) ??
+        Future.value();
   }
 
   @override
@@ -348,6 +473,18 @@ class LoginCall {
 
   final String login;
   final String password;
+}
+
+class ChangePasswordCall {
+  const ChangePasswordCall({
+    required this.currentPassword,
+    required this.newPassword,
+    required this.newPasswordConfirmation,
+  });
+
+  final String currentPassword;
+  final String newPassword;
+  final String newPasswordConfirmation;
 }
 
 class FakeSecureValueStore implements SecureValueStore {

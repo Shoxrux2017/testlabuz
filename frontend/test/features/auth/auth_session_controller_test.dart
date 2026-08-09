@@ -277,6 +277,155 @@ void main() {
     });
   });
 
+  group('AuthSessionController changePassword', () {
+    test('successful change requires refreshed false server flag', () async {
+      final repository = FakeAuthRepository(storedToken: 'token-a');
+      repository.onCurrentUser = () async =>
+          _user(loginName: 'teacher01', mustChangePassword: true);
+      repository.onChangePassword = (_, _, _) async =>
+          _user(loginName: 'teacher01');
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await pumpEventQueue();
+      expect(
+        container.read(authSessionControllerProvider).user?.mustChangePassword,
+        isTrue,
+      );
+
+      final result = await controller.changePassword(
+        currentPassword: 'old-secret',
+        newPassword: 'new-secret',
+        newPasswordConfirmation: 'new-secret',
+      );
+
+      expect(result.isSuccess, isTrue);
+      final state = container.read(authSessionControllerProvider);
+      expect(state.status, AuthSessionStatus.authenticated);
+      expect(state.user?.mustChangePassword, isFalse);
+      expect(repository.changePasswordCalls, hasLength(1));
+    });
+
+    test('refreshed true flag remains gated with retryable failure', () async {
+      final repository = FakeAuthRepository(storedToken: 'token-a');
+      repository.onCurrentUser = () async =>
+          _user(loginName: 'teacher01', mustChangePassword: true);
+      repository.onChangePassword = (_, _, _) async =>
+          _user(loginName: 'teacher01', mustChangePassword: true);
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await pumpEventQueue();
+
+      final result = await controller.changePassword(
+        currentPassword: 'old-secret',
+        newPassword: 'new-secret',
+        newPasswordConfirmation: 'new-secret',
+      );
+
+      expect(result.isSuccess, isFalse);
+      expect(result.canRetrySessionRefresh, isTrue);
+      expect(result.failure?.kind, ApiFailureKind.invalidResponse);
+      expect(
+        container.read(authSessionControllerProvider).user?.mustChangePassword,
+        isTrue,
+      );
+    });
+
+    test(
+      'current_password_invalid remains an authenticated form failure',
+      () async {
+        final repository = FakeAuthRepository(storedToken: 'token-a');
+        repository.onCurrentUser = () async =>
+            _user(loginName: 'teacher01', mustChangePassword: true);
+        repository.onChangePassword = (_, _, _) async {
+          throw _serverFailure(
+            ApiErrorCodes.currentPasswordInvalid,
+            statusCode: 409,
+          );
+        };
+        final container = _container(repository: repository);
+        addTearDown(container.dispose);
+        final controller = container.read(
+          authSessionControllerProvider.notifier,
+        );
+        await pumpEventQueue();
+
+        final result = await controller.changePassword(
+          currentPassword: 'wrong-secret',
+          newPassword: 'new-secret',
+          newPasswordConfirmation: 'new-secret',
+        );
+
+        expect(result.isSuccess, isFalse);
+        expect(
+          result.failure?.serverCode,
+          ApiErrorCodes.currentPasswordInvalid,
+        );
+        expect(
+          container.read(authSessionControllerProvider).status,
+          AuthSessionStatus.authenticated,
+        );
+        expect(repository.storedToken, 'token-a');
+      },
+    );
+
+    test('authentication_required during refresh clears the session', () async {
+      final repository = FakeAuthRepository(storedToken: 'token-a');
+      repository.onCurrentUser = () async =>
+          _user(loginName: 'teacher01', mustChangePassword: true);
+      repository.onChangePassword = (_, _, _) async {
+        throw AuthPasswordChangeSessionRefreshException(
+          _serverFailure(ApiErrorCodes.authenticationRequired, statusCode: 401),
+        );
+      };
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await pumpEventQueue();
+
+      final result = await controller.changePassword(
+        currentPassword: 'old-secret',
+        newPassword: 'new-secret',
+        newPasswordConfirmation: 'new-secret',
+      );
+
+      expect(result.failure?.serverCode, ApiErrorCodes.authenticationRequired);
+      expect(
+        container.read(authSessionControllerProvider).status,
+        AuthSessionStatus.unauthenticated,
+      );
+      expect(repository.storedToken, isNull);
+    });
+
+    test('retry session refresh does not resubmit password change', () async {
+      final repository = FakeAuthRepository(storedToken: 'token-a');
+      repository.onCurrentUser = () async =>
+          _user(loginName: 'teacher01', mustChangePassword: true);
+      repository.onChangePassword = (_, _, _) async {
+        throw AuthPasswordChangeSessionRefreshException(_transportFailure());
+      };
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await pumpEventQueue();
+
+      final first = await controller.changePassword(
+        currentPassword: 'old-secret',
+        newPassword: 'new-secret',
+        newPasswordConfirmation: 'new-secret',
+      );
+      expect(first.canRetrySessionRefresh, isTrue);
+
+      repository.onCurrentUser = () async => _user(loginName: 'teacher01');
+      final retry = await controller.retryPasswordChangeSessionRefresh();
+
+      expect(retry.isSuccess, isTrue);
+      expect(repository.changePasswordCalls, hasLength(1));
+      expect(repository.currentUserCalls, 2);
+    });
+  });
+
   group('AuthSessionController invalidation and races', () {
     test(
       'authentication_required signal clears active session without logout',
@@ -408,6 +557,33 @@ void main() {
       expect(state.status, AuthSessionStatus.unauthenticated);
       expect(state.user, isNull);
     });
+
+    test('logout supersedes delayed password-change refresh result', () async {
+      final repository = FakeAuthRepository(storedToken: 'token-a');
+      final passwordChange = Completer<AuthUser>();
+      repository.onCurrentUser = () async =>
+          _user(loginName: 'user-a', mustChangePassword: true);
+      repository.onChangePassword = (_, _, _) => passwordChange.future;
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await pumpEventQueue();
+
+      final changePassword = controller.changePassword(
+        currentPassword: 'old-secret',
+        newPassword: 'new-secret',
+        newPasswordConfirmation: 'new-secret',
+      );
+      await pumpEventQueue();
+      await controller.signOut();
+      passwordChange.complete(_user(loginName: 'user-a'));
+      await changePassword;
+      await pumpEventQueue();
+
+      final state = container.read(authSessionControllerProvider);
+      expect(state.status, AuthSessionStatus.unauthenticated);
+      expect(state.user, isNull);
+    });
   });
 }
 
@@ -424,7 +600,11 @@ ProviderContainer _container({
   );
 }
 
-AuthUser _user({required String loginName, UserRole role = UserRole.teacher}) {
+AuthUser _user({
+  required String loginName,
+  UserRole role = UserRole.teacher,
+  bool mustChangePassword = false,
+}) {
   return AuthUser(
     id: '$loginName-id',
     institutionId: role == UserRole.platformOwner ? null : 'institution-1',
@@ -434,7 +614,7 @@ AuthUser _user({required String loginName, UserRole role = UserRole.teacher}) {
     email: null,
     phone: null,
     isActive: true,
-    mustChangePassword: false,
+    mustChangePassword: mustChangePassword,
     institution: role == UserRole.platformOwner
         ? null
         : const AuthInstitution(
@@ -477,9 +657,16 @@ class FakeAuthRepository implements AuthRepository {
 
   Future<AuthUser> Function()? onCurrentUser;
   Future<AuthUser> Function(String login, String password)? onSignIn;
+  Future<AuthUser> Function(
+    String currentPassword,
+    String newPassword,
+    String newPasswordConfirmation,
+  )?
+  onChangePassword;
   Future<void> Function()? onSignOut;
 
   final signInCalls = <SignInCall>[];
+  final changePasswordCalls = <ChangePasswordCall>[];
   final clearTokenIfVersionCalls = <int>[];
   var currentUserCalls = 0;
   var signOutCalls = 0;
@@ -498,6 +685,28 @@ class FakeAuthRepository implements AuthRepository {
 
     return onSignIn?.call(login, password) ??
         Future.value(_user(loginName: login));
+  }
+
+  @override
+  Future<AuthUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) {
+    changePasswordCalls.add(
+      ChangePasswordCall(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        newPasswordConfirmation: newPasswordConfirmation,
+      ),
+    );
+
+    return onChangePassword?.call(
+          currentPassword,
+          newPassword,
+          newPasswordConfirmation,
+        ) ??
+        Future.value(_user(loginName: 'teacher01'));
   }
 
   @override
@@ -540,4 +749,16 @@ class SignInCall {
 
   final String login;
   final String password;
+}
+
+class ChangePasswordCall {
+  const ChangePasswordCall({
+    required this.currentPassword,
+    required this.newPassword,
+    required this.newPasswordConfirmation,
+  });
+
+  final String currentPassword;
+  final String newPassword;
+  final String newPasswordConfirmation;
 }

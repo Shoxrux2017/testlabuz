@@ -46,6 +46,29 @@ class AuthRemoteDataSource {
     });
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) {
+    return _mapFailures(() async {
+      final response = await dio.post<Object?>(
+        '/auth/change-password',
+        data: {
+          'current_password': currentPassword,
+          'new_password': newPassword,
+          'new_password_confirmation': newPasswordConfirmation,
+        },
+      );
+
+      if (response.statusCode != 204) {
+        throw const FormatException(
+          'Change password response must be 204 No Content.',
+        );
+      }
+    });
+  }
+
   Future<void> logout() {
     return _mapFailures(() async {
       final response = await dio.post<Object?>('/auth/logout');

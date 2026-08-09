@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error_codes.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/session_invalidation_signal.dart';
 import '../data/auth_repository_impl.dart';
 import '../domain/auth_repository.dart';
+import '../domain/auth_user.dart';
+import 'auth_password_change_result.dart';
 import 'auth_session_state.dart';
 
 final authSessionControllerProvider =
@@ -105,6 +108,56 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     }
   }
 
+  Future<AuthPasswordChangeResult> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    final generation = _advanceGeneration();
+    final repository = ref.read(authRepositoryProvider);
+
+    try {
+      final user = await repository.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+        newPasswordConfirmation: newPasswordConfirmation,
+      );
+      if (!_isCurrentGeneration(generation)) {
+        return const AuthPasswordChangeResult.superseded();
+      }
+
+      return _completePasswordChangeWithRefreshedUser(user);
+    } on AuthPasswordChangeSessionRefreshException catch (exception) {
+      if (!_isCurrentGeneration(generation)) {
+        return const AuthPasswordChangeResult.superseded();
+      }
+
+      return _handlePasswordChangeRefreshFailure(
+        exception.cause,
+        generation,
+        canRetrySessionRefresh: _isRetryableSessionRefreshFailure(
+          exception.cause.failure,
+        ),
+      );
+    } on ApiRequestException catch (exception) {
+      if (!_isCurrentGeneration(generation)) {
+        return const AuthPasswordChangeResult.superseded();
+      }
+
+      return _handlePasswordChangeRefreshFailure(
+        exception,
+        generation,
+        canRetrySessionRefresh: false,
+      );
+    }
+  }
+
+  Future<AuthPasswordChangeResult> retryPasswordChangeSessionRefresh() {
+    final generation = _advanceGeneration();
+
+    return _refreshAfterPasswordChange(generation);
+  }
+
   Future<void> signOut() async {
     final generation = _advanceGeneration();
     final repository = ref.read(authRepositoryProvider);
@@ -125,6 +178,81 @@ class AuthSessionController extends Notifier<AuthSessionState> {
 
       state = AuthSessionState.unauthenticated(failure: exception.failure);
     }
+  }
+
+  Future<AuthPasswordChangeResult> _refreshAfterPasswordChange(
+    int generation,
+  ) async {
+    final repository = ref.read(authRepositoryProvider);
+
+    try {
+      final user = await repository.currentUser();
+      if (!_isCurrentGeneration(generation)) {
+        return const AuthPasswordChangeResult.superseded();
+      }
+
+      if (user.mustChangePassword) {
+        return _passwordStillRequiredFailure();
+      }
+
+      return _completePasswordChangeWithRefreshedUser(user);
+    } on ApiRequestException catch (exception) {
+      if (!_isCurrentGeneration(generation)) {
+        return const AuthPasswordChangeResult.superseded();
+      }
+
+      return _handlePasswordChangeRefreshFailure(
+        exception,
+        generation,
+        canRetrySessionRefresh: _isRetryableSessionRefreshFailure(
+          exception.failure,
+        ),
+      );
+    }
+  }
+
+  AuthPasswordChangeResult _completePasswordChangeWithRefreshedUser(
+    AuthUser user,
+  ) {
+    if (user.mustChangePassword) {
+      return _passwordStillRequiredFailure();
+    }
+
+    state = AuthSessionState.authenticated(user);
+
+    return const AuthPasswordChangeResult.success();
+  }
+
+  AuthPasswordChangeResult _passwordStillRequiredFailure() {
+    return AuthPasswordChangeResult.failure(
+      ApiFailure.local(
+        kind: ApiFailureKind.invalidResponse,
+        message: 'Password change is still required by the server.',
+      ),
+      canRetrySessionRefresh: true,
+    );
+  }
+
+  Future<AuthPasswordChangeResult> _handlePasswordChangeRefreshFailure(
+    ApiRequestException exception,
+    int generation, {
+    required bool canRetrySessionRefresh,
+  }) async {
+    final repository = ref.read(authRepositoryProvider);
+
+    if (_requiresLocalSessionClear(exception)) {
+      await repository.clearToken();
+      if (!_isCurrentGeneration(generation)) {
+        return const AuthPasswordChangeResult.superseded();
+      }
+
+      state = AuthSessionState.unauthenticated(failure: exception.failure);
+    }
+
+    return AuthPasswordChangeResult.failure(
+      exception.failure,
+      canRetrySessionRefresh: canRetrySessionRefresh,
+    );
   }
 
   Future<void> _handleSessionInvalidation(
@@ -164,5 +292,12 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     return code == ApiErrorCodes.authenticationRequired ||
         code == ApiErrorCodes.userInactive ||
         code == ApiErrorCodes.institutionInactive;
+  }
+
+  bool _isRetryableSessionRefreshFailure(ApiFailure failure) {
+    return failure.kind == ApiFailureKind.connection ||
+        failure.kind == ApiFailureKind.timeout ||
+        failure.kind == ApiFailureKind.invalidResponse ||
+        failure.kind == ApiFailureKind.unknown;
   }
 }
