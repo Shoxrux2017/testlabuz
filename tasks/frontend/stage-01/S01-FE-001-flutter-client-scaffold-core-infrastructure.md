@@ -7,7 +7,7 @@
 | Task ID | `S01-FE-001` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Frontend / Flutter foundation` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-BE-005 — Role Authorization Foundation (Accepted)` |
 | Blocks | `S01-FE-002 — Authentication Data & Session Foundation` |
 
