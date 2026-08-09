@@ -7,7 +7,7 @@
 | Task ID | `S01-BE-001` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Backend` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-INT-002 — GitHub Remote, Repository Baseline & Stage 1 Control (Accepted)` |
 | Blocks | `S01-INT-003 — Local Backend Runtime & PostgreSQL Foundation` |
 
