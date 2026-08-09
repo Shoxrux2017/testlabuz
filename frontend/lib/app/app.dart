@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/auth/application/auth_session_controller.dart';
 import 'router/app_router.dart';
 
 class TestLabUzApp extends ConsumerWidget {
@@ -8,6 +9,7 @@ class TestLabUzApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(authSessionControllerProvider);
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(

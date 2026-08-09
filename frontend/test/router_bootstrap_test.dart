@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/app/app.dart';
 import 'package:testlabuz_client/app/config/app_config.dart';
 import 'package:testlabuz_client/app/router/app_router.dart';
+import 'package:testlabuz_client/core/storage/secure_value_store.dart';
+import 'package:testlabuz_client/core/storage/secure_value_store_provider.dart';
 
 void main() {
   group('router bootstrap', () {
@@ -16,6 +18,7 @@ void main() {
             appConfigProvider.overrideWithValue(
               AppConfig.fromApiBaseUrl('https://api.testlabuz.example/api/v1'),
             ),
+            secureValueStoreProvider.overrideWithValue(FakeSecureValueStore()),
           ],
           child: const TestLabUzApp(),
         ),
@@ -35,6 +38,7 @@ void main() {
             appConfigProvider.overrideWithValue(
               AppConfig.fromApiBaseUrl('https://api.testlabuz.example/api/v1'),
             ),
+            secureValueStoreProvider.overrideWithValue(FakeSecureValueStore()),
           ],
           child: const TestLabUzApp(),
         ),
@@ -56,4 +60,17 @@ void main() {
       expect(AppRoutePaths.all, isNot(contains('/parent')));
     });
   });
+}
+
+class FakeSecureValueStore implements SecureValueStore {
+  @override
+  Future<void> write({required String key, required String value}) async {}
+
+  @override
+  Future<String?> read({required String key}) async {
+    return null;
+  }
+
+  @override
+  Future<void> delete({required String key}) async {}
 }

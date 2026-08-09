@@ -7,7 +7,7 @@
 | Task ID | `S01-FE-002` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Frontend / authentication data and session` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-FE-001 — Flutter Client Scaffold & Core Infrastructure (Accepted)`; `S01-BE-003 — Sanctum Authentication & Session API (Accepted)` |
 | Blocks | `S01-FE-003 — Login & First-Login Password Change UX` |
 
