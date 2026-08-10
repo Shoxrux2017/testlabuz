@@ -35,6 +35,25 @@ class IdentitySchemaInspectionTest extends TestCase
             $this->assertColumnType($table, $column, 'timestamp with time zone');
         }
 
+        foreach ([
+            ['institutions', 'created_at'],
+            ['institutions', 'updated_at'],
+            ['users', 'created_at'],
+            ['users', 'updated_at'],
+            ['institution_settings', 'created_at'],
+            ['institution_settings', 'updated_at'],
+        ] as [$table, $column]) {
+            $this->assertColumnNullability($table, $column, 'NO');
+        }
+
+        foreach ([
+            ['institutions', 'deactivated_at'],
+            ['users', 'last_login_at'],
+            ['users', 'deactivated_at'],
+        ] as [$table, $column]) {
+            $this->assertColumnNullability($table, $column, 'YES');
+        }
+
         $scoreDifference = $this->column('institution_settings', 'acceptable_score_difference');
 
         $this->assertSame('numeric', $scoreDifference->data_type);
@@ -91,11 +110,16 @@ class IdentitySchemaInspectionTest extends TestCase
         $this->assertSame($expectedType, $this->column($table, $column)->data_type);
     }
 
+    private function assertColumnNullability(string $table, string $column, string $expectedNullability): void
+    {
+        $this->assertSame($expectedNullability, $this->column($table, $column)->is_nullable);
+    }
+
     private function column(string $table, string $column): object
     {
         $columnDefinition = DB::selectOne(
             <<<'SQL'
-                select data_type, numeric_precision, numeric_scale
+                select data_type, is_nullable, numeric_precision, numeric_scale
                 from information_schema.columns
                 where table_schema = 'public'
                   and table_name = ?
