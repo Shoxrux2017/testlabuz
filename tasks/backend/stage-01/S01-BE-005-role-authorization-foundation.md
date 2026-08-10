@@ -292,7 +292,7 @@ inactive institution
 → 403 institution_inactive
 
 must_change_password = true
-→ 403 forbidden from password gate
+→ 403 password_change_required from password gate
 
 active + password-complete + wrong role
 → 403 forbidden from role layer
@@ -318,23 +318,35 @@ resources exist.
 
 ## 7. Error Contract
 
-Use accepted centralized errors.
+Use accepted centralized errors. Preceding authentication/status/password-gate
+errors remain distinct from role-capability denial:
 
 ```text
 401 authentication_required
 403 user_inactive
 403 institution_inactive
+403 password_change_required
 403 forbidden
 ```
 
-Wrong role uses:
+Password gate denial uses the already-authoritative `S01-BE-004` and locked
+API contract behavior:
+
+```text
+403 password_change_required
+errors = {}
+```
+
+Wrong role from the role-capability layer uses:
 
 ```text
 403 forbidden
 errors = {}
 ```
 
-No new stable role error code.
+No new stable role error code. `password_change_required` is inherited from the
+mandatory first-login password gate, not introduced or redefined by this role
+authorization task.
 
 ## 8. Relevant Files
 
@@ -375,6 +387,7 @@ If those changes become necessary, stop and report.
 | `docs/07-architecture.md` | `9.2 One Primary Role Per MVP Account` | No custom/multiple roles |
 | `docs/07-architecture.md` | `9.4 Authorization Layers` | Layer 3 = Role Capability |
 | `docs/09-api-contracts.md` | `2.6 Authorization Error` | `403 forbidden` |
+| `docs/09-api-contracts.md` | `3.4 Change Password` / `Mandatory First-Login Gate` | `403 password_change_required` before role capability |
 | `docs/09-api-contracts.md` | `5.1 Stable Error Codes` | No invented role-specific codes |
 | `docs/09-api-contracts.md` | `33.1 Server Scope Order` | Security/authorization order |
 | `backend/AGENTS.md` | Authorization/security/testing sections | Backend enforcement |
@@ -468,7 +481,7 @@ active correct-role user in inactive institution
 → 403 institution_inactive
 
 active correct-role + must_change_password=true
-→ 403 forbidden before role layer
+→ 403 password_change_required before role layer
 
 active password-complete wrong role
 → 403 forbidden from role layer
