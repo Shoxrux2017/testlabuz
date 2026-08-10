@@ -96,17 +96,56 @@ Commands were run with transient local secret values and are recorded here with 
 - Windows: `flutter test integration_test/stage1_auth_flow_test.dart -d windows --dart-define=API_BASE_URL=http://127.0.0.1:8814/api/v1 --dart-define=STAGE1_E2E_PASSWORD=<redacted> --dart-define=STAGE1_E2E_NEW_PASSWORD=<redacted>`: PASS.
 - Android: `flutter test integration_test/stage1_auth_flow_test.dart -d emulator-5554 --dart-define=API_BASE_URL=http://10.0.2.2:8814/api/v1 --dart-define=STAGE1_E2E_PASSWORD=<redacted> --dart-define=STAGE1_E2E_NEW_PASSWORD=<redacted>`: PASS.
 
-## Manual Smoke
+## Evidence Layers
 
-- Separate human-observable manual smoke was not performed in this headless Codex execution environment.
-- The same Windows Teacher -> Student and Android Parent -> Teacher paths were covered by real Flutter integration tests against the real Laravel/PostgreSQL stack.
-- This limitation is recorded as a Stage 1 closure-review input, not silently claimed as a manual pass.
+- Automated real-stack E2E = PASS. Codex executed the accepted Flutter integration tests against the real Laravel/PostgreSQL backend, as recorded above.
+- Human-observable manual smoke = PASS. The project owner reported and attested that the human-observable manual smoke completed successfully after the automated E2E evidence was accepted.
+
+## Manual Smoke Verification
+
+Performed by: Project owner
+
+Verification type: Human-observable manual smoke
+
+Date: 2026-08-10
+
+Windows: PASS
+
+Android: PASS
+
+The owner-attested human smoke used the real accepted Stage 1 application flow against the Laravel/PostgreSQL backend and covered the Stage 1 authentication/entry behavior required for closure. Codex did not personally observe or execute these manual tests.
+
+### Windows Manual Smoke
+
+- Platform Owner -> Platform Owner entry: PASS.
+- Institution Admin -> Institution Admin entry: PASS.
+- Teacher -> Teacher desktop entry: PASS.
+- Student -> Student desktop entry: PASS.
+- Parent -> Unsupported device: PASS.
+- Invalid credentials blocked: PASS.
+- Inactive user blocked: PASS.
+- Inactive-institution user blocked: PASS.
+- Mandatory first-login redirect to Change Password: PASS.
+- Wrong current password rejected: PASS.
+- Valid password change succeeded: PASS.
+- Old password rejected after change: PASS.
+- New password accepted after change: PASS.
+- Logout returned to login and cleared the active UI session: PASS.
+
+### Android Manual Smoke
+
+- Platform Owner -> Unsupported device: PASS.
+- Institution Admin -> Unsupported device: PASS.
+- Teacher -> Teacher mobile entry: PASS.
+- Student -> Student mobile entry: PASS.
+- Parent -> Parent mobile entry: PASS.
+- Authentication/session behavior manually exercised during the Android smoke: PASS.
 
 ## Acceptance Gate
 
 - Phase 2 read-only acceptance gate: PASS.
 - Blocking findings: none.
-- Non-blocking finding: separate human-observable manual smoke was not available in this execution environment and is recorded above as a closure-review input.
+- Current evidence state for Stage 1 closure reassessment: automated real-stack E2E = PASS; human-observable manual smoke = PASS.
 
 ## Known Non-Blocking Limitations
 
