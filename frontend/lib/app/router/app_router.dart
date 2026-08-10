@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,14 +19,28 @@ final appInitialLocationProvider = Provider<String>((ref) {
   return AppRoutePaths.root;
 });
 
+final _appRouterRefreshProvider = Provider<_AppRouterRefresh>((ref) {
+  final refresh = _AppRouterRefresh();
+
+  ref
+    ..listen(authSessionControllerProvider, (_, _) => refresh.notify())
+    ..listen(appDeviceSurfaceProvider, (_, _) => refresh.notify())
+    ..onDispose(refresh.dispose);
+
+  return refresh;
+});
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final session = ref.watch(authSessionControllerProvider);
-  final surface = ref.watch(appDeviceSurfaceProvider);
+  final refresh = ref.watch(_appRouterRefreshProvider);
 
   return GoRouter(
     initialLocation: ref.watch(appInitialLocationProvider),
-    redirect: (context, state) =>
-        _authRedirect(session, surface, state.uri.path),
+    refreshListenable: refresh,
+    redirect: (context, state) => _authRedirect(
+      ref.read(authSessionControllerProvider),
+      ref.read(appDeviceSurfaceProvider),
+      state.uri.path,
+    ),
     routes: [
       GoRoute(
         name: AppRouteNames.technicalRoot,
@@ -52,7 +67,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.platformOwner,
         builder: (context, state) => RoleEntryScreen(
           expectedRole: UserRole.platformOwner,
-          surface: surface,
+          surface: ref.read(appDeviceSurfaceProvider),
         ),
       ),
       GoRoute(
@@ -60,31 +75,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.institutionAdmin,
         builder: (context, state) => RoleEntryScreen(
           expectedRole: UserRole.institutionAdmin,
-          surface: surface,
+          surface: ref.read(appDeviceSurfaceProvider),
         ),
       ),
       GoRoute(
         name: AppRouteNames.teacher,
         path: AppRoutePaths.teacher,
-        builder: (context, state) =>
-            RoleEntryScreen(expectedRole: UserRole.teacher, surface: surface),
+        builder: (context, state) => RoleEntryScreen(
+          expectedRole: UserRole.teacher,
+          surface: ref.read(appDeviceSurfaceProvider),
+        ),
       ),
       GoRoute(
         name: AppRouteNames.student,
         path: AppRoutePaths.student,
-        builder: (context, state) =>
-            RoleEntryScreen(expectedRole: UserRole.student, surface: surface),
+        builder: (context, state) => RoleEntryScreen(
+          expectedRole: UserRole.student,
+          surface: ref.read(appDeviceSurfaceProvider),
+        ),
       ),
       GoRoute(
         name: AppRouteNames.parent,
         path: AppRoutePaths.parent,
-        builder: (context, state) =>
-            RoleEntryScreen(expectedRole: UserRole.parent, surface: surface),
+        builder: (context, state) => RoleEntryScreen(
+          expectedRole: UserRole.parent,
+          surface: ref.read(appDeviceSurfaceProvider),
+        ),
       ),
       GoRoute(
         name: AppRouteNames.unsupportedDevice,
         path: AppRoutePaths.unsupportedDevice,
-        builder: (context, state) => UnsupportedDeviceScreen(surface: surface),
+        builder: (context, state) => UnsupportedDeviceScreen(
+          surface: ref.read(appDeviceSurfaceProvider),
+        ),
       ),
     ],
   );
@@ -125,4 +148,10 @@ String? _authRedirect(
   }
 
   return entryPath;
+}
+
+class _AppRouterRefresh extends ChangeNotifier {
+  void notify() {
+    notifyListeners();
+  }
 }

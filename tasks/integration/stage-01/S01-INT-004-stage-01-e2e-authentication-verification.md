@@ -7,7 +7,7 @@
 | Task ID | `S01-INT-004` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Integration / end-to-end verification` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-BE-005 — Role Authorization Foundation (Accepted)`; `S01-FE-004 — Role/Device Entry Routing & Session Isolation (Accepted)` |
 | Blocks | `Stage 1 Closure Review` |
 
