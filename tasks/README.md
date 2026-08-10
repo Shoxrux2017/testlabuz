@@ -208,7 +208,7 @@ multi-institution isolation rules in the applicable `AGENTS.md` files.
 | Stage | Status | Evidence / next gate |
 |---|---|---|
 | Stage 0 — Project Preparation and Technical Planning | `Closed` | See `STAGE_00_CLOSURE_REVIEW.md` |
-| Stage 1 — Authentication and Role-Based Entry | `In Progress` | See `STAGE_01_TASK_INDEX.md`; no production framework task may start until `S01-INT-002` is `Accepted` |
+| Stage 1 — Authentication and Role-Based Entry | `Closed` | See `STAGE_01_CLOSURE_REVIEW.md`; next gate is Stage 2 decomposition/planning only |
 
-Stage 1 production implementation is authorized only one approved task at a
-time, in the order controlled by `tasks/STAGE_01_TASK_INDEX.md`.
+Stage 2 is eligible for decomposition/planning only. Do not start Stage 2
+implementation until its task index and first task are explicitly approved.
