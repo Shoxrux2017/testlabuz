@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/app/app.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_router.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
+import 'package:testlabuz_client/core/network/api_error_response.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/session_invalidation_signal.dart';
@@ -500,6 +502,37 @@ void main() {
   });
 
   group('session isolation routing', () {
+    testWidgets('login failure remains visible after auth state refresh', (
+      tester,
+    ) async {
+      final repository = FakeAuthRepository();
+      repository.onSignIn = (_, _) async {
+        throw ApiRequestException(
+          ApiFailure.fromServerError(
+            statusCode: 401,
+            error: ApiErrorResponse(
+              message: 'The provided login credentials are invalid.',
+              code: ApiErrorCodes.invalidCredentials,
+              fieldErrors: const {},
+              requestId: null,
+            ),
+          ),
+        );
+      };
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.login,
+        repository: repository,
+      );
+      await tester.pumpAndSettle();
+
+      await _submitLogin(tester, login: 'teacher01');
+
+      expect(find.text('Login or password is incorrect.'), findsOneWidget);
+      expect(find.text('Teacher'), findsNothing);
+    });
+
     testWidgets('same-role account switch shows only new identity', (
       tester,
     ) async {
