@@ -10,7 +10,7 @@
 | Review mode | `Read-only stage-wide audit → post-PASS closure bookkeeping/delivery` |
 | Stage index | `tasks/STAGE_01_TASK_INDEX.md` |
 | Required final task | `S01-INT-004 — Stage 1 End-to-End Authentication Verification (Accepted)` |
-| Proposed verdict | `Pending` |
+| Proposed verdict | `Stage closed` |
 
 This review begins only after every approved Stage 1 task is `Accepted` and its
 accepted result is present on `origin/main`.
@@ -885,3 +885,114 @@ Return:
     - `Stage 2 implementation was NOT started.`
 
 Do not fix implementation findings inside this closure review.
+
+---
+
+## 28. Completed Review Record
+
+| Field | Result |
+|---|---|
+| Actual review date | `2026-08-10` |
+| Review branch | `review/stage-01-closure` |
+| Audit verdict | `AUDIT PASS - Stage 1 is ready for closure` |
+| Closure verdict | `Stage closed` |
+| Base hash audited | `f8193f67aaf908e430516548b4696551753fb694` |
+| Scope | Closure review, Stage 1 index, and task README bookkeeping only |
+
+### 28.1 Evidence Summary
+
+- Root, backend, and frontend `AGENTS.md` instructions were read.
+- All Stage 1 task contracts/statuses were read from the approved task files and task index.
+- Locked Stage 1 sections from `docs/01-09` were checked for roadmap acceptance, auth/session API, first-login gate, identity persistence, role/device boundaries, Flutter architecture, and testing/DoD requirements.
+- All 13 Stage 1 tasks were `Accepted` with `PASS` review status; accepted production results were present in `origin/main` history.
+- `S01-INT-004` evidence exists at `tasks/integration/stage-01/S01-INT-004-stage-01-e2e-evidence.md`.
+- Local `main` and `origin/main` matched at `f8193f67aaf908e430516548b4696551753fb694` before the closure branch audit.
+
+### 28.2 Roadmap Acceptance Matrix
+
+| Exact Stage 1 acceptance criterion | Result | Current evidence |
+|---|---|---|
+| All five roles can authenticate through their approved device surface. | `PASS` | Backend auth tests plus current Windows and Android real-stack E2E |
+| Each role reaches the correct entry area. | `PASS` | Flutter route/device matrix tests plus current Windows and Android real-stack E2E |
+| Inactive users are blocked. | `PASS` | Backend negative tests plus current E2E |
+| Users in inactive institutions are blocked. | `PASS` | Backend negative tests plus current E2E |
+| Unauthorized protected pages and endpoints are blocked. | `PASS` | Backend first-login/role middleware tests, Flutter direct-route tests, and E2E |
+| Previous auth/session state cannot expose another user's data. | `PASS` | Frontend race/account-switch tests and E2E Teacher A -> Teacher B / Teacher -> Student flows |
+
+### 28.3 Stage Definition of Done
+
+| `docs/06-roadmap.md` section 3.2 item | Result | Reason |
+|---|---|---|
+| Stage goal is implemented. | `PASS` | Stage 1 auth/session/entry goal is covered by accepted tasks and E2E. |
+| Required backend/API/database work is complete. | `PASS` | Laravel `/api/v1` auth contract, Sanctum tokens, identity schema, active gates, first-login gate, and role middleware are present. |
+| Required frontend work is complete. | `PASS` | Flutter auth repository/session state, login/change-password UX, role/device routing, and minimal entry shells are present. |
+| Locked contracts are followed. | `PASS` | No Stage 1 conflict with locked docs was found. |
+| Multi-institution scope is enforced where applicable. | `PASS` | Institution users require an active institution; product-resource tenant tests are N/A for Stage 1 because later product resources are not implemented. |
+| Authorization/security negative cases pass. | `PASS` | Inactive account/institution, first-login, role, direct-route, and session-isolation negative paths are covered. |
+| Required automated tests/checks pass. | `PASS` | Backend, frontend, formatting, static analysis, build, and E2E checks passed in the current audit. |
+| Required smoke evidence exists. | `PASS` | Manual smoke evidence is recorded in the accepted Stage 1 evidence file. |
+| Stage documentation/bookkeeping is current. | `PASS` | This closure commit updates the remaining Stage 1 status records. |
+| No blocking regression remains. | `PASS` | No P1/P2 finding remains after current audit. |
+
+### 28.4 Contract Audit Results
+
+- Backend auth routes match the locked Stage 1 API contract:
+  `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`,
+  `GET /api/v1/auth/me`, and `POST /api/v1/auth/change-password`.
+- Login uses `login`, maps it to `users.login_name`, does not accept client role or institution authority, and returns Sanctum bearer tokens.
+- `/auth/me` remains the Flutter bootstrap authority for current user, role, institution, account state, and required password-change state.
+- Inactive users return `403 user_inactive`; inactive-institution users return `403 institution_inactive`.
+- Mandatory first-login gate is backend-enforced. While `must_change_password = true`, only `/auth/me`, `/auth/change-password`, and `/auth/logout` are allowed; normal protected endpoints return `403 password_change_required`.
+- The stable machine code `password_change_required` is implemented directly; the first-login gate is not generic-only `403 forbidden`.
+- Identity persistence uses the approved five role values, institution/user UUIDs, Sanctum token persistence, platform-owner null-institution allowance only, and controlled institution settings defaults.
+- Backend role authorization foundation passed the required `5 allowed / 20 cross-role denied` coverage with no Platform Owner universal bypass.
+- Flutter uses `/auth/me` rather than cached role as long-term authority, clears token/session state on logout and invalid session, and guards stale async restoration.
+- Login and first-login UX handle invalid credentials, inactive states, current-password validation, and successful password change with session refresh.
+
+### 28.5 Role/Device Matrix
+
+| Role | Windows result | Android result |
+|---|---|---|
+| `platform_owner` | Platform Owner entry | Unsupported device |
+| `institution_admin` | Institution Admin entry | Unsupported device |
+| `teacher` | Teacher desktop entry | Teacher mobile entry |
+| `student` | Student desktop entry | Student mobile entry |
+| `parent` | Unsupported device | Parent mobile entry |
+
+### 28.6 Current Quality Gates
+
+Backend checks were run inside the accepted Docker Laravel/PostgreSQL runtime because the host PHP installation lacks `pdo_pgsql`.
+
+| Check | Result |
+|---|---|
+| `php artisan test` | `PASS` - 68 tests, 1412 assertions |
+| `vendor/bin/pint --test` | `PASS` |
+| `composer validate --strict` | `PASS` |
+| `flutter pub get` | `PASS` using Flutter `3.44.7` / Dart `3.12.2` |
+| `flutter analyze` | `PASS` |
+| `flutter test` | `PASS` - 135 tests |
+| `dart format --output=none --set-exit-if-changed lib test integration_test` | `PASS` |
+| `flutter build windows --debug` | `PASS` |
+| `flutter build apk --debug` | `PASS` |
+| Windows Stage 1 E2E | `PASS` against real Laravel/PostgreSQL testing stack |
+| Android Stage 1 E2E | `PASS` against real Laravel/PostgreSQL testing stack |
+
+### 28.7 Manual Smoke Evidence
+
+Manual smoke evidence is recorded in
+`tasks/integration/stage-01/S01-INT-004-stage-01-e2e-evidence.md` and was treated as supporting evidence only; closure relied on the current automated regression and E2E rerun.
+
+### 28.8 Findings
+
+| Severity | Finding | Closure impact |
+|---|---|---|
+| `P3` | A bare unauthenticated request to `/api/v1/auth/me` without `Accept: application/json` returns a Laravel redirect-route 500 instead of the JSON `401 authentication_required` envelope. The locked API default requires `Accept: application/json`, and all current backend/Flutter/E2E API paths use that header, so this did not invalidate Stage 1 closure. | Non-blocking hardening follow-up |
+
+No P1 or P2 findings were found.
+
+### 28.9 Scope, Git, and Documentation
+
+- No Stage 2 implementation was found or started.
+- No application code, tests, migrations, config, or locked `docs/01-09` files were modified during closure bookkeeping.
+- Closure bookkeeping updates are limited to this file, `tasks/STAGE_01_TASK_INDEX.md`, and `tasks/README.md`.
+- Stage 2 is eligible for decomposition/planning only after this closure record is delivered to `origin/main`.

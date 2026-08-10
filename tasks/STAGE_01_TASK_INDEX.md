@@ -5,10 +5,10 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
-| Status | `In Progress` |
+| Status | `Closed` |
 | Decomposition approved on | `2026-08-09` |
 | Implementation started | `Yes — S01-INT-001 is accepted` |
-| Stage closed | `No` |
+| Stage closed | `Yes` |
 
 ## 2. Stage Goal and Boundary
 
@@ -201,12 +201,12 @@ Unless a separately approved recovery task explicitly requires otherwise:
 
 | Roadmap acceptance criterion | Task(s) that implement it | Task(s) that verify it | Status |
 |---|---|---|---|
-| All five roles can authenticate through their approved device surface. | `S01-BE-002`, `S01-BE-003`, `S01-FE-002`, `S01-FE-003`, `S01-FE-004` | Task reviews + `S01-INT-004` | `Not started` |
-| Each role reaches the correct entry area. | `S01-FE-004` | `S01-FE-004` review + `S01-INT-004` | `Not started` |
-| Inactive users are blocked. | `S01-BE-003` | `S01-BE-003` tests/review + `S01-INT-004` | `Not started` |
-| Users in inactive institutions are blocked. | `S01-BE-003` | `S01-BE-003` tests/review + `S01-INT-004` | `Not started` |
-| Unauthorized protected pages and endpoints are blocked. | `S01-BE-004`, `S01-BE-005`, `S01-FE-004` | Backend negative tests, frontend guard tests, `S01-INT-004` | `Not started` |
-| Previous auth/session state cannot expose another user's data. | `S01-FE-002`, `S01-FE-004` | Session-isolation tests + `S01-INT-004` account-switch smoke | `Not started` |
+| All five roles can authenticate through their approved device surface. | `S01-BE-002`, `S01-BE-003`, `S01-FE-002`, `S01-FE-003`, `S01-FE-004` | Task reviews + `S01-INT-004` | `PASS - closure verified 2026-08-10` |
+| Each role reaches the correct entry area. | `S01-FE-004` | `S01-FE-004` review + `S01-INT-004` | `PASS - closure verified 2026-08-10` |
+| Inactive users are blocked. | `S01-BE-003` | `S01-BE-003` tests/review + `S01-INT-004` | `PASS - closure verified 2026-08-10` |
+| Users in inactive institutions are blocked. | `S01-BE-003` | `S01-BE-003` tests/review + `S01-INT-004` | `PASS - closure verified 2026-08-10` |
+| Unauthorized protected pages and endpoints are blocked. | `S01-BE-004`, `S01-BE-005`, `S01-FE-004` | Backend negative tests, frontend guard tests, `S01-INT-004` | `PASS - closure verified 2026-08-10` |
+| Previous auth/session state cannot expose another user's data. | `S01-FE-002`, `S01-FE-004` | Session-isolation tests + `S01-INT-004` account-switch smoke | `PASS - closure verified 2026-08-10` |
 
 Additional locked authentication contracts that must also pass even though they
 are more specific than the roadmap's six top-level acceptance bullets:
@@ -253,19 +253,20 @@ is discovered.
 | `2026-08-09` | Added post-acceptance GitHub delivery policy and changed `S01-INT-002` to establish remote/baseline control | User requires professional GitHub delivery after every accepted task | Project owner |
 | `2026-08-09` | Approved `S01-INT-002` for Codex execution | Project owner explicitly approved the detailed task | Project owner |
 | `2026-08-09` | Accepted and delivered `S01-INT-002` baseline workflow | Read-only gate passed and initial baseline delivery completed | Codex |
+| `2026-08-10` | Closed Stage 1 after closure review | Stage-wide audit passed and closure bookkeeping completed | Codex |
 
 ## 11. Closure Readiness
 
-- [ ] Every approved task is `Accepted`.
-- [ ] Every accepted production task is present on `origin/main`.
-- [ ] Local `main` matches `origin/main` and the working tree is clean.
-- [ ] All stage-wide acceptance criteria are mapped and satisfied.
-- [ ] Backend, frontend, database, and integration behavior agree.
-- [ ] Required automated tests and quality gates pass.
-- [ ] Required manual smoke paths pass.
-- [ ] Negative authorization and institution-status checks pass.
-- [ ] Previous-session/account-switch isolation is verified.
-- [ ] No blocking regression remains.
-- [ ] Task/index/documentation statuses are current.
-- [ ] `tasks/STAGE_01_CLOSURE_REVIEW.md` has been completed.
-- [ ] Stage 1 has been explicitly marked `Closed`.
+- [x] Every approved task is `Accepted`.
+- [x] Every accepted production task is present on `origin/main`.
+- [x] Local `main` matches `origin/main` and the working tree is clean.
+- [x] All stage-wide acceptance criteria are mapped and satisfied.
+- [x] Backend, frontend, database, and integration behavior agree.
+- [x] Required automated tests and quality gates pass.
+- [x] Required manual smoke paths pass.
+- [x] Negative authorization and institution-status checks pass.
+- [x] Previous-session/account-switch isolation is verified.
+- [x] No blocking regression remains.
+- [x] Task/index/documentation statuses are current.
+- [x] `tasks/STAGE_01_CLOSURE_REVIEW.md` has been completed.
+- [x] Stage 1 has been explicitly marked `Closed`.
