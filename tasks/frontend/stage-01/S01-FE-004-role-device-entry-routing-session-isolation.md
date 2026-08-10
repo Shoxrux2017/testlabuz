@@ -7,7 +7,7 @@
 | Task ID | `S01-FE-004` |
 | Roadmap stage | `Stage 1 — Authentication and Role-Based Entry` |
 | Area | `Frontend / navigation and entry boundaries` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S01-FE-003 — Login & First-Login Password Change UX (Accepted)`; `S01-BE-005 — Role Authorization Foundation (Accepted)` |
 | Blocks | `S01-INT-004 — Stage 1 End-to-End Authentication Verification` |
 
