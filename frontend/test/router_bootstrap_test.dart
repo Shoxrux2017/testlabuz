@@ -420,7 +420,12 @@ void main() {
         } else {
           expect(find.byKey(const Key('entryInstitutionName')), findsNothing);
         }
-        _expectNoFutureFeatureText();
+        if (testCase.role == UserRole.platformOwner) {
+          expect(find.text('Dashboard'), findsWidgets);
+          expect(find.text('Institutions'), findsWidgets);
+        } else {
+          _expectNoFutureFeatureText();
+        }
       }
     });
 
@@ -731,6 +736,7 @@ Future<void> _pumpApp(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
+      key: UniqueKey(),
       overrides: [
         appInitialLocationProvider.overrideWithValue(initialLocation),
         authRepositoryProvider.overrideWithValue(repository),

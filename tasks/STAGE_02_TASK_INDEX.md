@@ -72,7 +72,7 @@ detailed contracts are approved.
 | 5 | `S02-BE-005` | Backend | Platform dashboard aggregate API | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-005-platform-dashboard-aggregate-api.md` |
 | 6 | `S02-BE-006` | Backend | Institution Admin list/create API and first-login password gate | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-006-platform-institution-admin-list-create-api.md` |
 | 7 | `S02-BE-007` | Backend | Institution Admin update/activate/deactivate API | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-007-platform-institution-admin-update-lifecycle-api.md` |
-| 8 | `S02-FE-001` | Frontend | Platform Owner desktop shell and navigation | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
+| 8 | `S02-FE-001` | Frontend | Platform Owner desktop shell and navigation | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-001-platform-owner-desktop-shell-navigation.md` |
 | 9 | `S02-FE-002` | Frontend | Real Platform dashboard with loading/error/empty/data states | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 10 | `S02-FE-003` | Frontend | Institution list, search, filters, sorting, and pagination | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 11 | `S02-FE-004` | Frontend | Institution detail and basic usage presentation | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
