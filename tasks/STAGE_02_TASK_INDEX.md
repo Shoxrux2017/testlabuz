@@ -7,7 +7,7 @@
 | Roadmap stage | `Stage 2 — Multi-Institution Platform Management` |
 | Status | `In Progress` |
 | Decomposition approved on | `2026-08-10` |
-| Implementation started | `Yes — S02-BE-006 is accepted` |
+| Implementation started | `Yes — S02-BE-007 is accepted` |
 | Stage closed | `No` |
 
 This index records the approved Stage 2 decomposition only. It does not add,
@@ -59,8 +59,9 @@ learning workflows.
 ## 4. Approved Task Order
 
 Tasks are implemented and accepted one at a time. `S02-BE-001`, `S02-BE-002`,
-`S02-BE-003`, `S02-BE-004`, `S02-BE-005`, and `S02-BE-006` are accepted; all later tasks remain planned
-and may not be started until their own detailed contracts are approved.
+`S02-BE-003`, `S02-BE-004`, `S02-BE-005`, `S02-BE-006`, and `S02-BE-007` are
+accepted; all later tasks remain planned and may not be started until their own
+detailed contracts are approved.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|
@@ -70,7 +71,7 @@ and may not be started until their own detailed contracts are approved.
 | 4 | `S02-BE-004` | Backend | Idempotent institution activate/deactivate and institution-user access enforcement | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-004-platform-institution-lifecycle-access-enforcement.md` |
 | 5 | `S02-BE-005` | Backend | Platform dashboard aggregate API | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-005-platform-dashboard-aggregate-api.md` |
 | 6 | `S02-BE-006` | Backend | Institution Admin list/create API and first-login password gate | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-006-platform-institution-admin-list-create-api.md` |
-| 7 | `S02-BE-007` | Backend | Institution Admin update/activate/deactivate API | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
+| 7 | `S02-BE-007` | Backend | Institution Admin update/activate/deactivate API | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-007-platform-institution-admin-update-lifecycle-api.md` |
 | 8 | `S02-FE-001` | Frontend | Platform Owner desktop shell and navigation | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 9 | `S02-FE-002` | Frontend | Real Platform dashboard with loading/error/empty/data states | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 10 | `S02-FE-003` | Frontend | Institution list, search, filters, sorting, and pagination | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
@@ -96,7 +97,8 @@ Review. The closure review is not itself an implementation task.
 - [x] `S02-BE-004` is accepted and delivered.
 - [x] `S02-BE-005` is accepted and delivered.
 - [x] `S02-BE-006` is accepted and delivered.
-- [x] Later Stage 2 tasks from `S02-BE-007` onward are not individually approved for implementation.
+- [x] `S02-BE-007` is accepted and delivered.
+- [x] Later Stage 2 tasks from `S02-FE-001` onward are not individually approved for implementation.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
 
@@ -154,6 +156,7 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-11` | Accepted and delivered `S02-BE-005` | Read-only gate passed and platform dashboard aggregate API delivery completed | Codex |
 | `2026-08-11` | Accepted and delivered `S02-BE-006` | Read-only gate passed and institution admin list/create API delivery completed | Codex |
 | `2026-08-11` | Recorded `S02-BE-006` correction cycle | Delivery-integrity verification found the GET admin-list body rejection defect; correction re-verification is required before the existing accepted/delivered state remains authoritative | Codex |
+| `2026-08-11` | Accepted and delivered `S02-BE-007` | Read-only gate passed and institution admin update/lifecycle API delivery completed | Codex |
 
 ## 9. Closure Readiness
 
