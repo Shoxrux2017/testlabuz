@@ -59,9 +59,10 @@ learning workflows.
 ## 4. Approved Task Order
 
 Tasks are implemented and accepted one at a time. `S02-BE-001`, `S02-BE-002`,
-`S02-BE-003`, `S02-BE-004`, `S02-BE-005`, `S02-BE-006`, `S02-BE-007`,
-`S02-FE-001`, and `S02-FE-002` are accepted; all later tasks remain planned
-and may not be started until their own detailed contracts are approved.
+`S02-BE-003`, `S02-BE-004`, `S02-BE-005`, `S02-BE-006`, `S02-BE-007`, and
+`S02-FE-001` are accepted. `S02-FE-002` passed read-only review, but safe
+GitHub delivery is blocked. All later tasks remain planned and may not be
+started until their own detailed contracts are approved.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|
@@ -73,7 +74,7 @@ and may not be started until their own detailed contracts are approved.
 | 6 | `S02-BE-006` | Backend | Institution Admin list/create API and first-login password gate | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-006-platform-institution-admin-list-create-api.md` |
 | 7 | `S02-BE-007` | Backend | Institution Admin update/activate/deactivate API | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-007-platform-institution-admin-update-lifecycle-api.md` |
 | 8 | `S02-FE-001` | Frontend | Platform Owner desktop shell and navigation | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-001-platform-owner-desktop-shell-navigation.md` |
-| 9 | `S02-FE-002` | Frontend | Real Platform dashboard with loading/error/empty/data states | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-002-platform-dashboard-real-data-states.md` |
+| 9 | `S02-FE-002` | Frontend | Real Platform dashboard with loading/error/empty/data states | `Delivery Blocked` | `PASS` | `Blocked` | `tasks/frontend/stage-02/S02-FE-002-platform-dashboard-real-data-states.md` |
 | 10 | `S02-FE-003` | Frontend | Institution list, search, filters, sorting, and pagination | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 11 | `S02-FE-004` | Frontend | Institution detail and basic usage presentation | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 12 | `S02-FE-005` | Frontend | Create Institution form and mutation flow | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
@@ -157,7 +158,7 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-11` | Accepted and delivered `S02-BE-006` | Read-only gate passed and institution admin list/create API delivery completed | Codex |
 | `2026-08-11` | Recorded `S02-BE-006` correction cycle | Delivery-integrity verification found the GET admin-list body rejection defect; correction re-verification is required before the existing accepted/delivered state remains authoritative | Codex |
 | `2026-08-11` | Accepted and delivered `S02-BE-007` | Read-only gate passed and institution admin update/lifecycle API delivery completed | Codex |
-| `2026-08-11` | Accepted and delivered `S02-FE-002` | Read-only gate passed and Platform Owner dashboard read integration delivery completed | Codex |
+| `2026-08-11` | Delivery blocked for `S02-FE-002` | Read-only gate passed and branch pushed, but PR creation was blocked by unavailable GitHub delivery tooling/permissions | Codex |
 
 ## 9. Closure Readiness
 
