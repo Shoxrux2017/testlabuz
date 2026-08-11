@@ -18,8 +18,12 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
 
 void main() {
   group('router auth guard precedence', () {
@@ -747,6 +751,9 @@ Future<void> _pumpApp(
         platformDashboardRepositoryProvider.overrideWithValue(
           FakePlatformDashboardRepository(),
         ),
+        platformInstitutionListRepositoryProvider.overrideWithValue(
+          FakePlatformInstitutionListRepository(),
+        ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
       ],
@@ -770,6 +777,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       appDeviceSurfaceProvider.overrideWithValue(surface),
       platformDashboardRepositoryProvider.overrideWithValue(
         FakePlatformDashboardRepository(),
+      ),
+      platformInstitutionListRepositoryProvider.overrideWithValue(
+        FakePlatformInstitutionListRepository(),
       ),
     ],
   );
@@ -988,6 +998,39 @@ class FakePlatformDashboardRepository implements PlatformDashboardRepository {
           createdAt: DateTime.utc(2026, 8, 1, 10),
         ),
       ],
+    );
+  }
+}
+
+class FakePlatformInstitutionListRepository
+    implements PlatformInstitutionListRepository {
+  @override
+  Future<PlatformInstitutionListPage> fetchInstitutions(
+    PlatformInstitutionListQuery query,
+  ) async {
+    return PlatformInstitutionListPage(
+      institutions: [
+        PlatformInstitutionSummary(
+          id: '00000000-0000-0000-0000-000000000001',
+          name: 'Example School',
+          type: PlatformInstitutionType.school,
+          status: PlatformInstitutionStatus.active,
+          contactEmail: 'info@example.uz',
+          contactPhone: '+998901234567',
+          createdAt: DateTime.utc(2026, 8, 7, 15),
+          updatedAt: DateTime.utc(2026, 8, 7, 16),
+          userCounts: const PlatformInstitutionUserCounts(
+            total: 42,
+            active: 40,
+          ),
+        ),
+      ],
+      pagination: const PlatformInstitutionPagination(
+        page: 1,
+        perPage: 20,
+        total: 1,
+        lastPage: 1,
+      ),
     );
   }
 }

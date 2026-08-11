@@ -16,8 +16,12 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
 
 void main() {
   group('PlatformOwnerDashboardScreen', () {
@@ -372,28 +376,32 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
     });
 
-    testWidgets('/platform-owner/institutions remains separate placeholder', (
+    testWidgets('/platform-owner/institutions remains separate list route', (
       tester,
     ) async {
       final dashboardRepository = FakePlatformDashboardRepository(
         onFetch: (_) async => _dashboard(),
       );
+      final listRepository = FakePlatformInstitutionListRepository();
 
       await _pumpApp(
         tester,
         initialLocation: AppRoutePaths.platformOwnerInstitutions,
         authRepository: _authenticatedRepository(_owner('owner-a')),
         dashboardRepository: dashboardRepository,
+        listRepository: listRepository,
       );
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('platformOwnerInstitutionsPlaceholder')),
+        find.byKey(const Key('platformInstitutionListSurface')),
         findsOneWidget,
       );
+      expect(find.byKey(const Key('platformInstitutionTable')), findsOneWidget);
       expect(find.byKey(const Key('platformDashboardData')), findsNothing);
       expect(find.text('Total institutions'), findsNothing);
       expect(dashboardRepository.fetchCalls, 0);
+      expect(listRepository.fetchCalls, 1);
     });
   });
 }
@@ -403,6 +411,7 @@ Future<void> _pumpApp(
   String initialLocation = AppRoutePaths.platformOwner,
   required FakeAuthRepository authRepository,
   required FakePlatformDashboardRepository dashboardRepository,
+  FakePlatformInstitutionListRepository? listRepository,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -413,6 +422,9 @@ Future<void> _pumpApp(
         appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
         platformDashboardRepositoryProvider.overrideWithValue(
           dashboardRepository,
+        ),
+        platformInstitutionListRepositoryProvider.overrideWithValue(
+          listRepository ?? FakePlatformInstitutionListRepository(),
         ),
       ],
       child: const TestLabUzApp(),
@@ -565,6 +577,43 @@ class FakePlatformDashboardRepository implements PlatformDashboardRepository {
     fetchCalls += 1;
 
     return onFetch?.call(fetchCalls) ?? Future.value(_dashboard());
+  }
+}
+
+class FakePlatformInstitutionListRepository
+    implements PlatformInstitutionListRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<PlatformInstitutionListPage> fetchInstitutions(
+    PlatformInstitutionListQuery query,
+  ) async {
+    fetchCalls += 1;
+
+    return PlatformInstitutionListPage(
+      institutions: [
+        PlatformInstitutionSummary(
+          id: '00000000-0000-0000-0000-000000000001',
+          name: 'Example School',
+          type: PlatformInstitutionType.school,
+          status: PlatformInstitutionStatus.active,
+          contactEmail: 'info@example.uz',
+          contactPhone: '+998901234567',
+          createdAt: DateTime.utc(2026, 8, 7, 15),
+          updatedAt: DateTime.utc(2026, 8, 7, 16),
+          userCounts: const PlatformInstitutionUserCounts(
+            total: 42,
+            active: 40,
+          ),
+        ),
+      ],
+      pagination: const PlatformInstitutionPagination(
+        page: 1,
+        perPage: 20,
+        total: 1,
+        lastPage: 1,
+      ),
+    );
   }
 }
 
