@@ -59,9 +59,10 @@ learning workflows.
 ## 4. Approved Task Order
 
 Tasks are implemented and accepted one at a time. `S02-BE-001` through
-`S02-BE-007`, `S02-FE-001`, `S02-FE-002`, `S02-FE-003`, and `S02-FE-004` are accepted and
-delivered. All later tasks remain planned and may not be started until their
-own detailed contracts are approved.
+`S02-BE-007`, `S02-FE-001`, `S02-FE-002`, and `S02-FE-003` are accepted and
+delivered. `S02-FE-004` passed read-only review, but delivery is blocked. All
+later tasks remain planned and may not be started until their own detailed
+contracts are approved.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|
@@ -75,7 +76,7 @@ own detailed contracts are approved.
 | 8 | `S02-FE-001` | Frontend | Platform Owner desktop shell and navigation | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-001-platform-owner-desktop-shell-navigation.md` |
 | 9 | `S02-FE-002` | Frontend | Real Platform dashboard with loading/error/empty/data states | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-002-platform-dashboard-real-data-states.md` |
 | 10 | `S02-FE-003` | Frontend | Institution list, search, filters, sorting, and pagination | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-003-platform-institution-list-search-filters-pagination.md` |
-| 11 | `S02-FE-004` | Frontend | Institution detail and basic usage presentation | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-004-platform-institution-detail-basic-usage.md` |
+| 11 | `S02-FE-004` | Frontend | Institution detail and basic usage presentation | `Delivery Blocked` | `PASS` | `Blocked` | `tasks/frontend/stage-02/S02-FE-004-platform-institution-detail-basic-usage.md` |
 | 12 | `S02-FE-005` | Frontend | Create Institution form and mutation flow | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 13 | `S02-FE-006` | Frontend | Edit Institution form for allowed fields | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 14 | `S02-FE-007` | Frontend | Activate/deactivate confirmation, in-flight protection, and refresh | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
@@ -98,6 +99,7 @@ Review. The closure review is not itself an implementation task.
 - [x] `S02-BE-005` is accepted and delivered.
 - [x] `S02-BE-006` is accepted and delivered.
 - [x] `S02-BE-007` is accepted and delivered.
+- [x] `S02-FE-004` passed read-only review, but safe GitHub delivery is blocked.
 - [x] Later Stage 2 tasks from `S02-FE-005` onward are not individually approved for implementation.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
@@ -160,7 +162,7 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-11` | Delivery blocked for `S02-FE-002` | Read-only gate passed and branch pushed, but PR creation was blocked by unavailable GitHub delivery tooling/permissions | Codex |
 | `2026-08-11` | Accepted and delivered `S02-FE-002` | Manual PR merge completed; final delivery inspection confirmed required commits on `origin/main` and no implementation contradiction | Codex |
 | `2026-08-11` | Accepted and delivered `S02-FE-003` | Read-only gate passed and Platform Owner Institution list delivery completed | Codex |
-| `2026-08-11` | Accepted and delivered `S02-FE-004` | Read-only gate passed and Platform Owner Institution detail delivery completed | Codex |
+| `2026-08-11` | Delivery blocked for `S02-FE-004` | Read-only gate passed and branch pushed, but PR creation was blocked by GitHub connector permissions and unavailable GitHub CLI | Codex |
 
 ## 9. Closure Readiness
 
