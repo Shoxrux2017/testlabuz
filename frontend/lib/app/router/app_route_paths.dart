@@ -4,6 +4,7 @@ abstract final class AppRouteNames {
   static const changePassword = 'change-password';
   static const authenticated = 'authenticated';
   static const platformOwner = 'platform-owner';
+  static const platformOwnerInstitutions = 'platform-owner-institutions';
   static const institutionAdmin = 'institution-admin';
   static const teacher = 'teacher';
   static const student = 'student';
@@ -17,6 +18,8 @@ abstract final class AppRoutePaths {
   static const changePassword = '/change-password';
   static const authenticated = '/authenticated';
   static const platformOwner = '/platform-owner';
+  static const platformOwnerInstitutionsSegment = 'institutions';
+  static const platformOwnerInstitutions = '/platform-owner/institutions';
   static const institutionAdmin = '/institution-admin';
   static const teacher = '/teacher';
   static const student = '/student';
@@ -27,6 +30,7 @@ abstract final class AppRoutePaths {
 
   static const protected = <String>[
     platformOwner,
+    platformOwnerInstitutions,
     institutionAdmin,
     teacher,
     student,
@@ -35,4 +39,17 @@ abstract final class AppRoutePaths {
   ];
 
   static const all = <String>[...auth, ...protected];
+
+  static const platformOwnerDestinations = <String>[
+    platformOwner,
+    platformOwnerInstitutions,
+  ];
+
+  static bool isPlatformOwnerDestination(String path) {
+    return platformOwnerDestinations.contains(path);
+  }
+
+  static bool isPlatformOwnerSegment(String path) {
+    return path == platformOwner || path.startsWith('$platformOwner/');
+  }
 }

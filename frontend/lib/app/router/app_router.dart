@@ -10,6 +10,9 @@ import '../../features/auth/presentation/change_password/change_password_screen.
 import '../../features/auth/presentation/login/login_screen.dart';
 import '../../features/entry/domain/entry_route_resolver.dart';
 import '../../features/entry/presentation/role_entry_screen.dart';
+import '../../features/platform_admin/presentation/platform_owner_dashboard_placeholder_screen.dart';
+import '../../features/platform_admin/presentation/platform_owner_institutions_placeholder_screen.dart';
+import '../../features/platform_admin/presentation/platform_owner_shell.dart';
 import 'app_route_paths.dart';
 import 'technical_root_screen.dart';
 
@@ -32,6 +35,12 @@ final _appRouterRefreshProvider = Provider<_AppRouterRefresh>((ref) {
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refresh = ref.watch(_appRouterRefreshProvider);
+  final previousUrlReflection = GoRouter.optionURLReflectsImperativeAPIs;
+
+  GoRouter.optionURLReflectsImperativeAPIs = true;
+  ref.onDispose(() {
+    GoRouter.optionURLReflectsImperativeAPIs = previousUrlReflection;
+  });
 
   return GoRouter(
     initialLocation: ref.watch(appInitialLocationProvider),
@@ -62,13 +71,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.authenticated,
         builder: (context, state) => const TechnicalRootScreen(),
       ),
-      GoRoute(
-        name: AppRouteNames.platformOwner,
-        path: AppRoutePaths.platformOwner,
-        builder: (context, state) => RoleEntryScreen(
-          expectedRole: UserRole.platformOwner,
-          surface: ref.read(appDeviceSurfaceProvider),
-        ),
+      ShellRoute(
+        builder: (context, state, child) =>
+            PlatformOwnerShell(locationPath: state.uri.path, child: child),
+        routes: [
+          GoRoute(
+            name: AppRouteNames.platformOwner,
+            path: AppRoutePaths.platformOwner,
+            builder: (context, state) =>
+                const PlatformOwnerDashboardPlaceholderScreen(),
+            routes: [
+              GoRoute(
+                name: AppRouteNames.platformOwnerInstitutions,
+                path: AppRoutePaths.platformOwnerInstitutionsSegment,
+                builder: (context, state) =>
+                    const PlatformOwnerInstitutionsPlaceholderScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         name: AppRouteNames.institutionAdmin,
@@ -123,8 +144,15 @@ String? _authRedirect(
   final isChangePassword = location == AppRoutePaths.changePassword;
 
   if (session.status == AuthSessionStatus.initial ||
-      session.status == AuthSessionStatus.bootstrapping ||
-      session.status == AuthSessionStatus.bootstrapFailure) {
+      session.status == AuthSessionStatus.bootstrapping) {
+    if (_keepsLocationDuringBootstrap(location)) {
+      return null;
+    }
+
+    return isRoot ? null : AppRoutePaths.root;
+  }
+
+  if (session.status == AuthSessionStatus.bootstrapFailure) {
     return isRoot ? null : AppRoutePaths.root;
   }
 
@@ -143,11 +171,30 @@ String? _authRedirect(
   }
 
   final entryPath = resolveEntryPath(user, surface);
+  if (_canUsePlatformOwnerDestinations(user.role, surface)) {
+    if (AppRoutePaths.isPlatformOwnerDestination(location)) {
+      return null;
+    }
+
+    if (AppRoutePaths.isPlatformOwnerSegment(location)) {
+      return null;
+    }
+  }
+
   if (location == entryPath) {
     return null;
   }
 
   return entryPath;
+}
+
+bool _canUsePlatformOwnerDestinations(UserRole role, AppDeviceSurface surface) {
+  return role == UserRole.platformOwner && surface == AppDeviceSurface.desktop;
+}
+
+bool _keepsLocationDuringBootstrap(String location) {
+  return AppRoutePaths.protected.contains(location) ||
+      AppRoutePaths.isPlatformOwnerSegment(location);
 }
 
 class _AppRouterRefresh extends ChangeNotifier {
