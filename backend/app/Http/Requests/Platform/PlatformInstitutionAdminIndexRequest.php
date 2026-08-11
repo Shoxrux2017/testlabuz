@@ -34,10 +34,16 @@ class PlatformInstitutionAdminIndexRequest extends FormRequest
         $search = $this->query('search');
 
         if (is_string($search)) {
-            $this->merge([
-                'search' => trim($search),
-            ]);
+            $this->query->set('search', trim($search));
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function validationData(): array
+    {
+        return $this->query->all();
     }
 
     /**
@@ -63,8 +69,13 @@ class PlatformInstitutionAdminIndexRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $unknownKeys = array_values(array_diff(array_keys($this->query()), self::ACCEPTED_QUERY_KEYS));
+        $hasRequestBody = $this->hasRequestBody();
 
-        $validator->after(function (Validator $validator) use ($unknownKeys): void {
+        $validator->after(function (Validator $validator) use ($unknownKeys, $hasRequestBody): void {
+            if ($hasRequestBody) {
+                $validator->errors()->add('body', 'The request body is not allowed for this endpoint.');
+            }
+
             foreach ($unknownKeys as $unknownKey) {
                 $validator->errors()->add($unknownKey, 'This query parameter is not allowed.');
             }
@@ -105,5 +116,10 @@ class PlatformInstitutionAdminIndexRequest extends FormRequest
     public function perPage(): int
     {
         return (int) $this->validated('per_page', ListPlatformInstitutionAdmins::DEFAULT_PER_PAGE);
+    }
+
+    private function hasRequestBody(): bool
+    {
+        return $this->getContent() !== '';
     }
 }

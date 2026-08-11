@@ -116,7 +116,7 @@ class PlatformInstitutionAdminApiTest extends TestCase
         }
 
         $platformOwner = $this->createUserForRole(UserRole::PlatformOwner);
-        $this->withToken($this->tokenFor($platformOwner))->getJson($this->adminIndexUri($institution))->assertOk();
+        $this->authorizedRawIndex($this->tokenFor($platformOwner), $institution, '')->assertOk();
         $this->forgetAuthenticationGuards();
         $this->withToken($this->tokenFor($platformOwner))->postJson($this->adminIndexUri($institution), $this->validPayload([
             'login_name' => 'authorized_admin_create',
@@ -125,7 +125,7 @@ class PlatformInstitutionAdminApiTest extends TestCase
 
         foreach (['not-a-uuid', Str::uuid()->toString()] as $institutionId) {
             foreach ([
-                'list' => fn (): TestResponse => $this->withToken($this->tokenFor($platformOwner))->getJson('/api/v1/platform/institutions/'.$institutionId.'/admins'),
+                'list' => fn (): TestResponse => $this->authorizedRawIndexUri($this->tokenFor($platformOwner), '/api/v1/platform/institutions/'.$institutionId.'/admins', ''),
                 'create' => fn (): TestResponse => $this->withToken($this->tokenFor($platformOwner))->postJson('/api/v1/platform/institutions/'.$institutionId.'/admins', $this->validPayload([
                     'login_name' => 'not_found_'.Str::lower(Str::random(8)),
                 ])),
@@ -368,6 +368,89 @@ class PlatformInstitutionAdminApiTest extends TestCase
         $this->assertSame($ascendingWithTieBreaker, $this->idsFromList($this->authorizedIndex($institution)));
     }
 
+    public function test_list_accepts_only_query_parameters_and_rejects_every_non_empty_get_body_without_mutations(): void
+    {
+        $institution = Institution::factory()->create();
+        InstitutionSetting::factory()->create([
+            'institution_id' => $institution->id,
+        ]);
+
+        $queryAdmin = $this->createUserForRole(UserRole::InstitutionAdmin, $institution, [
+            'full_name' => 'Query Source Admin',
+            'login_name' => 'query_source_admin',
+            'is_active' => true,
+            'must_change_password' => true,
+        ]);
+        $bodyOnlyAdmin = $this->createUserForRole(UserRole::InstitutionAdmin, $institution, [
+            'full_name' => 'Body Only Admin',
+            'login_name' => 'body_only_admin',
+            'is_active' => false,
+            'deactivated_at' => now(),
+            'must_change_password' => true,
+        ]);
+
+        $platformOwner = $this->createUserForRole(UserRole::PlatformOwner);
+        $token = $this->tokenFor($platformOwner);
+
+        $institutionsBefore = $this->institutionRowsSnapshot();
+        $settingsBefore = $this->institutionSettingRowsSnapshot();
+        $usersBefore = $this->userRowsSnapshot();
+        $tokenRowsBefore = $this->tokenRowsSnapshot();
+
+        $emptyBodyResponse = $this->authorizedRawIndex($token, $institution, '', [
+            'search' => 'Query Source',
+            'status' => 'active',
+            'sort' => 'login_name',
+            'direction' => 'asc',
+            'page' => 1,
+            'per_page' => 10,
+        ]);
+
+        $emptyBodyResponse->assertOk();
+        $this->assertSame(['data', 'meta'], array_keys($emptyBodyResponse->json()));
+        $this->assertSame([$queryAdmin->id], $this->idsFromList($emptyBodyResponse));
+        $this->assertSame([
+            'page' => 1,
+            'per_page' => 10,
+            'total' => 1,
+            'last_page' => 1,
+        ], $emptyBodyResponse->json('meta.pagination'));
+        $this->assertStringNotContainsString($bodyOnlyAdmin->id, $emptyBodyResponse->getContent());
+        $this->assertReadOnlyPlatformRowsUnchanged($institutionsBefore, $settingsBefore, $usersBefore, $tokenRowsBefore, 'empty body success');
+
+        $bodyCases = [
+            'json allowed list parameter' => ['{"search":"Body Only"}', [], 'application/json'],
+            'conflicting query and json body' => ['{"search":"Body Only","status":"inactive"}', ['search' => 'Query Source', 'status' => 'active'], 'application/json'],
+            'empty json object' => ['{}', [], 'application/json'],
+            'json array' => ['["search","Body Only"]', [], 'application/json'],
+            'json scalar' => ['"Body Only"', [], 'application/json'],
+            'malformed json' => ['{"search":"Body Only"', [], 'application/json'],
+            'raw body bytes' => ['Body Only raw bytes', [], 'text/plain'],
+            'form encoded body' => ['search=Body+Only&status=inactive', [], 'application/x-www-form-urlencoded'],
+            'whitespace only body' => [" \t\r\n", [], 'text/plain'],
+        ];
+
+        foreach ($bodyCases as $case => [$content, $query, $contentType]) {
+            $decoded = $this->assertErrorContract(
+                $this->authorizedRawIndex($token, $institution, $content, $query, $contentType),
+                422,
+                'validation_failed',
+                $case,
+            );
+            $this->assertObjectHasProperty('body', $decoded->errors, $case);
+            $this->assertReadOnlyPlatformRowsUnchanged($institutionsBefore, $settingsBefore, $usersBefore, $tokenRowsBefore, $case);
+        }
+
+        $unknownQuery = $this->assertErrorContract(
+            $this->authorizedRawIndex($token, $institution, '', ['role' => UserRole::InstitutionAdmin->value]),
+            422,
+            'validation_failed',
+            'unknown query key',
+        );
+        $this->assertObjectHasProperty('role', $unknownQuery->errors, 'unknown query key');
+        $this->assertReadOnlyPlatformRowsUnchanged($institutionsBefore, $settingsBefore, $usersBefore, $tokenRowsBefore, 'unknown query key');
+    }
+
     public function test_list_resource_envelope_leakage_exclusions_and_query_behavior_are_bounded_and_read_only(): void
     {
         $institution = Institution::factory()->create();
@@ -405,9 +488,9 @@ class PlatformInstitutionAdminApiTest extends TestCase
         DB::enableQueryLog();
 
         try {
-            $response = $this->withToken($token)->getJson($this->adminIndexUri($institution).'?'.http_build_query([
+            $response = $this->authorizedRawIndex($token, $institution, '', [
                 'search' => 'Contract Admin',
-            ]));
+            ]);
             $queries = collect(DB::getQueryLog())->pluck('query')->map(fn (string $query): string => strtolower($query));
         } finally {
             DB::disableQueryLog();
@@ -969,8 +1052,43 @@ class PlatformInstitutionAdminApiTest extends TestCase
     {
         $platformOwner = $this->createUserForRole(UserRole::PlatformOwner);
 
-        return $this->withToken($this->tokenFor($platformOwner))
-            ->getJson($this->adminIndexUri($institution).($query === [] ? '' : '?'.http_build_query($query)));
+        return $this->authorizedRawIndex($this->tokenFor($platformOwner), $institution, '', $query);
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     */
+    private function authorizedRawIndex(
+        string $token,
+        Institution $institution,
+        string $content,
+        array $query = [],
+        string $contentType = 'application/json',
+    ): TestResponse {
+        $uri = $this->adminIndexUri($institution).($query === [] ? '' : '?'.http_build_query($query));
+
+        return $this->authorizedRawIndexUri($token, $uri, $content, $contentType);
+    }
+
+    private function authorizedRawIndexUri(
+        string $token,
+        string $uri,
+        string $content,
+        string $contentType = 'application/json',
+    ): TestResponse {
+        return $this->call(
+            'GET',
+            $uri,
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => $contentType,
+                'HTTP_ACCEPT' => 'application/json',
+                'HTTP_AUTHORIZATION' => 'Bearer '.$token,
+            ],
+            $content,
+        );
     }
 
     private function authorizedPost(
@@ -1006,7 +1124,7 @@ class PlatformInstitutionAdminApiTest extends TestCase
     private function adminRequestsFor(User $actor, Institution $institution): array
     {
         return [
-            'list' => fn (): TestResponse => $this->withToken($this->tokenFor($actor))->getJson($this->adminIndexUri($institution)),
+            'list' => fn (): TestResponse => $this->authorizedRawIndex($this->tokenFor($actor), $institution, ''),
             'create' => fn (): TestResponse => $this->withToken($this->tokenFor($actor))->postJson($this->adminIndexUri($institution), $this->validPayload([
                 'login_name' => 'denied_'.Str::lower(Str::random(10)),
             ])),
@@ -1063,6 +1181,32 @@ class PlatformInstitutionAdminApiTest extends TestCase
     /**
      * @return list<array<string, mixed>>
      */
+    private function institutionRowsSnapshot(): array
+    {
+        return Institution::query()
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Institution $institution): array => $institution->getRawOriginal())
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function institutionSettingRowsSnapshot(): array
+    {
+        return InstitutionSetting::query()
+            ->orderBy('institution_id')
+            ->get()
+            ->map(fn (InstitutionSetting $setting): array => $setting->getRawOriginal())
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
     private function tokenRowsSnapshot(): array
     {
         return PersonalAccessToken::query()
@@ -1082,6 +1226,25 @@ class PlatformInstitutionAdminApiTest extends TestCase
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $institutionsBefore
+     * @param  list<array<string, mixed>>  $settingsBefore
+     * @param  list<array<string, mixed>>  $usersBefore
+     * @param  list<array<string, mixed>>  $tokenRowsBefore
+     */
+    private function assertReadOnlyPlatformRowsUnchanged(
+        array $institutionsBefore,
+        array $settingsBefore,
+        array $usersBefore,
+        array $tokenRowsBefore,
+        string $case,
+    ): void {
+        $this->assertSame($institutionsBefore, $this->institutionRowsSnapshot(), $case.' institutions');
+        $this->assertSame($settingsBefore, $this->institutionSettingRowsSnapshot(), $case.' settings');
+        $this->assertSame($usersBefore, $this->userRowsSnapshot(), $case.' users');
+        $this->assertSame($tokenRowsBefore, $this->tokenRowsSnapshot(), $case.' tokens');
     }
 
     private function forgetAuthenticationGuards(): void

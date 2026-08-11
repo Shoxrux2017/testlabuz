@@ -18,6 +18,14 @@
 
 ---
 
+## Correction Cycle Addendum
+
+| Date | Scope | Bookkeeping note |
+|---|---|---|
+| `2026-08-11` | GET admin-list request body rejection | Delivery-integrity verification found that `GET /api/v1/platform/institutions/{institution}/admins` accepted non-empty request bodies through Laravel's merged input. This correction cycle records the narrow fix and re-verification required before the existing `Accepted` / `PASS` / `Delivered` state remains authoritative. `S02-BE-007` remains not started. |
+
+---
+
 ## 2. Goal
 
 Implement the approved Platform Owner endpoints for listing and creating

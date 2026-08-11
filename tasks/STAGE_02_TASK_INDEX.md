@@ -153,6 +153,7 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-11` | Accepted and delivered `S02-BE-004` | Read-only gate passed and platform institution lifecycle/access delivery completed | Codex |
 | `2026-08-11` | Accepted and delivered `S02-BE-005` | Read-only gate passed and platform dashboard aggregate API delivery completed | Codex |
 | `2026-08-11` | Accepted and delivered `S02-BE-006` | Read-only gate passed and institution admin list/create API delivery completed | Codex |
+| `2026-08-11` | Recorded `S02-BE-006` correction cycle | Delivery-integrity verification found the GET admin-list body rejection defect; correction re-verification is required before the existing accepted/delivered state remains authoritative | Codex |
 
 ## 9. Closure Readiness
 
