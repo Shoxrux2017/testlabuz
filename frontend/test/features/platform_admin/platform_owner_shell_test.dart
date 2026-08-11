@@ -14,9 +14,12 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_detail_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
@@ -82,6 +85,41 @@ void main() {
       );
       expect(repository.currentUserCalls, 1);
     });
+
+    testWidgets(
+      'desktop owner enters Institution detail with Institutions selected',
+      (tester) async {
+        final repository = _authenticatedRepository(
+          _user(
+            loginName: 'owner-a',
+            fullName: 'Owner A',
+            role: UserRole.platformOwner,
+          ),
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository();
+
+        await _pumpApp(
+          tester,
+          initialLocation: _detailPath(_institutionId),
+          repository: repository,
+          detailRepository: detailRepository,
+        );
+        await tester.pumpAndSettle();
+
+        _expectPlatformOwnerDestination(
+          tester,
+          path: _detailPath(_institutionId),
+          destination: PlatformOwnerShellDestination.institutions,
+          fullName: 'Owner A',
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionDetailData')),
+          findsOneWidget,
+        );
+        expect(detailRepository.institutionIds, [_institutionId]);
+        expect(repository.currentUserCalls, 1);
+      },
+    );
 
     testWidgets('direct Institutions entry is not reset after rebuild', (
       tester,
@@ -650,10 +688,13 @@ void main() {
   });
 }
 
-const _platformOwnerRoutes = <String>[
+final _platformOwnerRoutes = <String>[
   AppRoutePaths.platformOwner,
   AppRoutePaths.platformOwnerInstitutions,
+  _detailPath(_institutionId),
 ];
+
+const _institutionId = '550e8400-e29b-41d4-a716-446655440000';
 
 Future<void> _pumpApp(
   WidgetTester tester, {
@@ -661,6 +702,7 @@ Future<void> _pumpApp(
   required FakeAuthRepository repository,
   FakePlatformDashboardRepository? dashboardRepository,
   FakePlatformInstitutionListRepository? listRepository,
+  FakePlatformInstitutionDetailRepository? detailRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
   SessionInvalidationSignal? signal,
 }) async {
@@ -676,6 +718,9 @@ Future<void> _pumpApp(
         ),
         platformInstitutionListRepositoryProvider.overrideWithValue(
           listRepository ?? FakePlatformInstitutionListRepository(),
+        ),
+        platformInstitutionDetailRepositoryProvider.overrideWithValue(
+          detailRepository ?? FakePlatformInstitutionDetailRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -693,6 +738,7 @@ Future<ProviderContainer> _pumpAppWithContainer(
   required FakeAuthRepository repository,
   FakePlatformDashboardRepository? dashboardRepository,
   FakePlatformInstitutionListRepository? listRepository,
+  FakePlatformInstitutionDetailRepository? detailRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
 }) async {
   final container = ProviderContainer(
@@ -705,6 +751,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       platformInstitutionListRepositoryProvider.overrideWithValue(
         listRepository ?? FakePlatformInstitutionListRepository(),
+      ),
+      platformInstitutionDetailRepositoryProvider.overrideWithValue(
+        detailRepository ?? FakePlatformInstitutionDetailRepository(),
       ),
     ],
   );
@@ -732,12 +781,19 @@ void _expectPlatformOwnerDestination(
   expect(find.byKey(const Key('platformOwnerShell')), findsOneWidget);
   expect(find.byKey(const Key('platformOwnerNavigation')), findsOneWidget);
   expect(find.text('Current user: $fullName'), findsOneWidget);
-  expect(
-    destination == PlatformOwnerShellDestination.dashboard
-        ? find.byKey(const Key('platformDashboardData'))
-        : find.byKey(const Key('platformInstitutionListSurface')),
-    findsOneWidget,
-  );
+  if (destination == PlatformOwnerShellDestination.dashboard) {
+    expect(find.byKey(const Key('platformDashboardData')), findsOneWidget);
+  } else if (AppRoutePaths.isPlatformOwnerInstitutionDetailPath(path)) {
+    expect(
+      find.byKey(const Key('platformInstitutionDetailSurface')),
+      findsOneWidget,
+    );
+  } else {
+    expect(
+      find.byKey(const Key('platformInstitutionListSurface')),
+      findsOneWidget,
+    );
+  }
   expect(
     find.widgetWithText(NavigationRail, destination.label),
     findsOneWidget,
@@ -758,6 +814,10 @@ GoRouter _router(WidgetTester tester) {
 
 String _currentPath(WidgetTester tester) {
   return _router(tester).routeInformationProvider.value.uri.path;
+}
+
+String _detailPath(String institutionId) {
+  return AppRoutePaths.platformOwnerInstitutionDetailLocation(institutionId);
 }
 
 Future<void> _submitLogin(WidgetTester tester, {required String login}) async {
@@ -991,6 +1051,26 @@ class FakePlatformInstitutionListRepository
   }
 }
 
+class FakePlatformInstitutionDetailRepository
+    implements PlatformInstitutionDetailRepository {
+  FakePlatformInstitutionDetailRepository({this.onFetch});
+
+  Future<PlatformInstitutionDetail> Function(String institutionId)? onFetch;
+  final institutionIds = <String>[];
+
+  int get fetchCalls => institutionIds.length;
+
+  @override
+  Future<PlatformInstitutionDetail> fetchInstitutionDetail(
+    String institutionId,
+  ) {
+    institutionIds.add(institutionId);
+
+    return onFetch?.call(institutionId) ??
+        Future.value(_detail(id: institutionId));
+  }
+}
+
 PlatformDashboard _dashboard() {
   return PlatformDashboard(
     institutions: const PlatformInstitutionCounts(
@@ -1008,6 +1088,22 @@ PlatformDashboard _dashboard() {
         createdAt: DateTime.utc(2026, 8, 1, 10),
       ),
     ],
+  );
+}
+
+PlatformInstitutionDetail _detail({String id = _institutionId}) {
+  return PlatformInstitutionDetail(
+    id: id,
+    name: 'Example School',
+    type: PlatformInstitutionType.school,
+    status: PlatformInstitutionStatus.active,
+    contactEmail: 'info@example.uz',
+    contactPhone: '+998901234567',
+    address: 'Samarkand',
+    description: 'Optional notes',
+    createdAt: DateTime.utc(2026, 8, 7, 15),
+    updatedAt: DateTime.utc(2026, 8, 7, 16),
+    userCounts: const PlatformInstitutionUserCounts(total: 42, active: 40),
   );
 }
 

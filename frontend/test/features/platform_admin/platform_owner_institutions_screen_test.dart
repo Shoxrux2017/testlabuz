@@ -17,9 +17,12 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_detail_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
@@ -114,6 +117,7 @@ void main() {
         'Contact',
         'Created',
         'Updated',
+        'Details',
       ]) {
         expect(
           find.descendant(
@@ -135,6 +139,7 @@ void main() {
       expect(find.text('+998901234567'), findsOneWidget);
       expect(find.text('2026-08-07 15:00 UTC'), findsNWidgets(2));
       expect(find.text('2026-08-07 16:00 UTC'), findsNWidgets(2));
+      expect(find.text('View details'), findsNWidgets(2));
       expect(find.text('Page 1 / 1'), findsOneWidget);
       expect(find.text('2 matching Institutions'), findsOneWidget);
       expect(find.text('Sorted by Institution, ascending'), findsOneWidget);
@@ -147,6 +152,50 @@ void main() {
       expect(find.text('Teachers'), findsNothing);
       expect(find.text('Students'), findsNothing);
       _expectNoLaterScopeText();
+    });
+
+    testWidgets('row View details transitions to exact nested detail route', (
+      tester,
+    ) async {
+      const institutionId = '550e8400-e29b-41d4-a716-446655440000';
+      final listRepository = FakePlatformInstitutionListRepository(
+        onFetch: (_) async => _page(
+          rows: [_institution(id: institutionId, name: 'Transition School')],
+        ),
+      );
+      final detailRepository = FakePlatformInstitutionDetailRepository(
+        onFetch: (requestedId) async =>
+            _detail(id: requestedId, name: 'Transition Detail School'),
+      );
+
+      await _pumpApp(
+        tester,
+        listRepository: listRepository,
+        detailRepository: detailRepository,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.drag(
+        find.byKey(const Key('platformInstitutionHorizontalScroll')),
+        const Offset(-1400, 0),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('platformInstitutionViewDetails0')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        _currentPath(tester),
+        AppRoutePaths.platformOwnerInstitutionDetailLocation(institutionId),
+      );
+      expect(
+        find.byKey(const Key('platformInstitutionDetailData')),
+        findsOneWidget,
+      );
+      expect(find.text('Transition Detail School'), findsNWidgets(2));
+      expect(detailRepository.institutionIds, [institutionId]);
+      expect(listRepository.fetchCalls, 1);
     });
 
     testWidgets('search Enter filters sort page size pagination and reset', (
@@ -576,6 +625,7 @@ Future<void> _pumpApp(
   String initialLocation = AppRoutePaths.platformOwnerInstitutions,
   FakeAuthRepository? authRepository,
   required FakePlatformInstitutionListRepository listRepository,
+  FakePlatformInstitutionDetailRepository? detailRepository,
   FakePlatformDashboardRepository? dashboardRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
   Size? surfaceSize = const Size(1440, 900),
@@ -600,6 +650,9 @@ Future<void> _pumpApp(
         platformInstitutionListRepositoryProvider.overrideWithValue(
           listRepository,
         ),
+        platformInstitutionDetailRepositoryProvider.overrideWithValue(
+          detailRepository ?? FakePlatformInstitutionDetailRepository(),
+        ),
       ],
       child: const TestLabUzApp(),
     ),
@@ -621,6 +674,14 @@ Future<void> _scrollTableHorizontally(WidgetTester tester) async {
     const Offset(-520, 0),
   );
   await tester.pumpAndSettle();
+}
+
+GoRouter _router(WidgetTester tester) {
+  return GoRouter.of(tester.element(find.byType(Scaffold).first));
+}
+
+String _currentPath(WidgetTester tester) {
+  return _router(tester).routeInformationProvider.value.uri.path;
 }
 
 void _expectNoLaterScopeText() {
@@ -681,6 +742,25 @@ PlatformInstitutionSummary _institution({
       total: totalUsers,
       active: activeUsers,
     ),
+  );
+}
+
+PlatformInstitutionDetail _detail({
+  required String id,
+  String name = 'Example School',
+}) {
+  return PlatformInstitutionDetail(
+    id: id,
+    name: name,
+    type: PlatformInstitutionType.school,
+    status: PlatformInstitutionStatus.active,
+    contactEmail: 'info@example.uz',
+    contactPhone: '+998901234567',
+    address: 'Samarkand',
+    description: 'Optional notes',
+    createdAt: DateTime.utc(2026, 8, 7, 15),
+    updatedAt: DateTime.utc(2026, 8, 7, 16),
+    userCounts: const PlatformInstitutionUserCounts(total: 42, active: 40),
   );
 }
 
@@ -850,5 +930,25 @@ class FakePlatformInstitutionListRepository
         Future.value(
           _page(page: query.page, perPage: query.perPage, lastPage: 3),
         );
+  }
+}
+
+class FakePlatformInstitutionDetailRepository
+    implements PlatformInstitutionDetailRepository {
+  FakePlatformInstitutionDetailRepository({this.onFetch});
+
+  Future<PlatformInstitutionDetail> Function(String institutionId)? onFetch;
+  final institutionIds = <String>[];
+
+  int get fetchCalls => institutionIds.length;
+
+  @override
+  Future<PlatformInstitutionDetail> fetchInstitutionDetail(
+    String institutionId,
+  ) {
+    institutionIds.add(institutionId);
+
+    return onFetch?.call(institutionId) ??
+        Future.value(_detail(id: institutionId));
   }
 }

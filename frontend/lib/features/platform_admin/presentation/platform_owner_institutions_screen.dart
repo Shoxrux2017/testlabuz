@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/app_route_paths.dart';
 import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/platform_institution_list_controller.dart';
@@ -18,7 +20,7 @@ const _tableRadius = 8.0;
 const _searchWidth = 320.0;
 const _statusWidth = 180.0;
 const _typeWidth = 220.0;
-const _tableMinWidth = 1060.0;
+const _tableMinWidth = 1210.0;
 
 class PlatformOwnerInstitutionsScreen extends ConsumerStatefulWidget {
   const PlatformOwnerInstitutionsScreen({super.key});
@@ -128,6 +130,15 @@ class _PlatformOwnerInstitutionsScreenState
               ref
                   .read(platformInstitutionListControllerProvider.notifier)
                   .setPerPage(perPage);
+            },
+            onViewDetails: (institution) {
+              context.goNamed(
+                AppRouteNames.platformOwnerInstitutionDetail,
+                pathParameters: {
+                  AppRoutePaths.platformOwnerInstitutionIdParameter:
+                      institution.id,
+                },
+              );
             },
           ),
         ],
@@ -270,6 +281,7 @@ class _InstitutionListBody extends StatelessWidget {
     required this.onNext,
     required this.onFirstPage,
     required this.onPerPageChanged,
+    required this.onViewDetails,
   });
 
   final PlatformInstitutionListState state;
@@ -280,6 +292,7 @@ class _InstitutionListBody extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onFirstPage;
   final ValueChanged<int> onPerPageChanged;
+  final ValueChanged<PlatformInstitutionSummary> onViewDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +355,7 @@ class _InstitutionListBody extends StatelessWidget {
             result: state.result!,
             query: state.query,
             onSort: onSort,
+            onViewDetails: onViewDetails,
           ),
           const SizedBox(height: _sectionSpacing),
           _PaginationControls(
@@ -530,11 +544,13 @@ class _InstitutionTable extends StatelessWidget {
     required this.result,
     required this.query,
     required this.onSort,
+    required this.onViewDetails,
   });
 
   final PlatformInstitutionListPage result;
   final PlatformInstitutionListQuery query;
   final ValueChanged<PlatformInstitutionListSort> onSort;
+  final ValueChanged<PlatformInstitutionSummary> onViewDetails;
 
   @override
   Widget build(BuildContext context) {
@@ -577,6 +593,7 @@ class _InstitutionTable extends StatelessWidget {
                   sort: PlatformInstitutionListSort.updatedAt,
                   onSort: onSort,
                 ),
+                const DataColumn(label: Text('Details')),
               ],
               rows: [
                 for (var index = 0; index < result.institutions.length; index++)
@@ -630,6 +647,18 @@ class _InstitutionTable extends StatelessWidget {
         ),
         DataCell(
           Text(formatPlatformDashboardUtcTimestamp(institution.updatedAt)),
+        ),
+        DataCell(
+          Semantics(
+            button: true,
+            label: 'View details for ${institution.name}',
+            child: TextButton.icon(
+              key: Key('platformInstitutionViewDetails$index'),
+              onPressed: () => onViewDetails(institution),
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('View details'),
+            ),
+          ),
         ),
       ],
     );
