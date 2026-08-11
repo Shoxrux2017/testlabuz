@@ -5,16 +5,21 @@ namespace App\Http\Controllers\Api\V1\Platform;
 use App\Actions\Platform\CreatePlatformInstitution;
 use App\Actions\Platform\ListPlatformInstitutions;
 use App\Actions\Platform\LoadPlatformInstitutionForDetail;
+use App\Actions\Platform\UpdatePlatformInstitution;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Platform\PlatformInstitutionCreateRequest;
 use App\Http\Requests\Platform\PlatformInstitutionIndexRequest;
+use App\Http\Requests\Platform\PlatformInstitutionUpdateRequest;
 use App\Http\Resources\Platform\PlatformInstitutionCreatedResource;
 use App\Http\Resources\Platform\PlatformInstitutionDetailResource;
 use App\Http\Resources\Platform\PlatformInstitutionSummaryCollection;
+use App\Http\Resources\Platform\PlatformInstitutionUpdatedResource;
 use App\Models\Institution;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class PlatformInstitutionController extends Controller
 {
@@ -60,9 +65,42 @@ class PlatformInstitutionController extends Controller
     }
 
     public function show(
-        Institution $institution,
+        string $institution,
         LoadPlatformInstitutionForDetail $loadInstitutionForDetail,
     ): PlatformInstitutionDetailResource {
-        return new PlatformInstitutionDetailResource($loadInstitutionForDetail($institution));
+        return new PlatformInstitutionDetailResource(
+            $loadInstitutionForDetail($this->resolveInstitution($institution))
+        );
+    }
+
+    public function update(
+        PlatformInstitutionUpdateRequest $request,
+        string $institution,
+        UpdatePlatformInstitution $updateInstitution,
+    ): JsonResponse {
+        $updatedInstitution = $updateInstitution(
+            institution: $this->resolveInstitution($institution),
+            profileAttributes: $request->profileAttributes(),
+        );
+
+        return (new PlatformInstitutionUpdatedResource($updatedInstitution))
+            ->additional(['message' => 'Institution updated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    private function resolveInstitution(string $institution): Institution
+    {
+        if (! Str::isUuid($institution)) {
+            throw new NotFoundHttpException;
+        }
+
+        $resolvedInstitution = Institution::query()->find($institution);
+
+        if (! $resolvedInstitution instanceof Institution) {
+            throw new NotFoundHttpException;
+        }
+
+        return $resolvedInstitution;
     }
 }

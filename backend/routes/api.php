@@ -28,6 +28,6 @@ Route::prefix('platform')
     ->group(function (): void {
         Route::get('institutions', [PlatformInstitutionController::class, 'index']);
         Route::post('institutions', [PlatformInstitutionController::class, 'store']);
-        Route::get('institutions/{institution}', [PlatformInstitutionController::class, 'show'])
-            ->whereUuid('institution');
+        Route::patch('institutions/{institution}', [PlatformInstitutionController::class, 'update']);
+        Route::get('institutions/{institution}', [PlatformInstitutionController::class, 'show']);
     });
