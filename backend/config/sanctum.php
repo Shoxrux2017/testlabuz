@@ -54,6 +54,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Last Used Timestamp
+    |--------------------------------------------------------------------------
+    |
+    | TestLabUz protected API reads must not mutate token rows merely because a
+    | bearer token was authenticated. Login/logout remain the explicit token
+    | lifecycle operations.
+    |
+    */
+
+    'last_used_at' => false,
+
+    /*
+    |--------------------------------------------------------------------------
     | Token Prefix
     |--------------------------------------------------------------------------
     |
