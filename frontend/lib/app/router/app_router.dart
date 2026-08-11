@@ -10,7 +10,7 @@ import '../../features/auth/presentation/change_password/change_password_screen.
 import '../../features/auth/presentation/login/login_screen.dart';
 import '../../features/entry/domain/entry_route_resolver.dart';
 import '../../features/entry/presentation/role_entry_screen.dart';
-import '../../features/platform_admin/presentation/platform_owner_dashboard_placeholder_screen.dart';
+import '../../features/platform_admin/presentation/platform_owner_dashboard_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institutions_placeholder_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
 import 'app_route_paths.dart';
@@ -78,16 +78,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             name: AppRouteNames.platformOwner,
             path: AppRoutePaths.platformOwner,
+            builder: (context, state) => const PlatformOwnerDashboardScreen(),
+          ),
+          GoRoute(
+            name: AppRouteNames.platformOwnerInstitutions,
+            path: AppRoutePaths.platformOwnerInstitutions,
             builder: (context, state) =>
-                const PlatformOwnerDashboardPlaceholderScreen(),
-            routes: [
-              GoRoute(
-                name: AppRouteNames.platformOwnerInstitutions,
-                path: AppRoutePaths.platformOwnerInstitutionsSegment,
-                builder: (context, state) =>
-                    const PlatformOwnerInstitutionsPlaceholderScreen(),
-              ),
-            ],
+                const PlatformOwnerInstitutionsPlaceholderScreen(),
           ),
         ],
       ),

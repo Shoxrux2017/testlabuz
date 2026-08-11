@@ -13,6 +13,9 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/presentation/platform_owner_shell.dart';
 
 void main() {
@@ -41,10 +44,7 @@ void main() {
         destination: PlatformOwnerShellDestination.dashboard,
         fullName: 'Owner A',
       );
-      expect(
-        find.byKey(const Key('platformOwnerDashboardPlaceholder')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('platformDashboardData')), findsOneWidget);
       expect(repository.currentUserCalls, 1);
     });
 
@@ -280,7 +280,7 @@ void main() {
     ) async {
       await _pumpApp(
         tester,
-        initialLocation: AppRoutePaths.platformOwner,
+        initialLocation: AppRoutePaths.platformOwnerInstitutions,
         repository: _authenticatedRepository(
           _user(
             loginName: 'owner-a',
@@ -371,7 +371,7 @@ void main() {
       );
     });
 
-    testWidgets('shell rendering and navigation make no Platform API request', (
+    testWidgets('Dashboard data request is scoped to Dashboard destination', (
       tester,
     ) async {
       final repository = _authenticatedRepository(
@@ -381,23 +381,25 @@ void main() {
           role: UserRole.platformOwner,
         ),
       );
+      final dashboardRepository = FakePlatformDashboardRepository();
 
       await _pumpApp(
         tester,
-        initialLocation: AppRoutePaths.platformOwner,
+        initialLocation: AppRoutePaths.platformOwnerInstitutions,
         repository: repository,
+        dashboardRepository: dashboardRepository,
       );
       await tester.pumpAndSettle();
       expect(repository.currentUserCalls, 1);
+      expect(dashboardRepository.fetchCalls, 0);
 
-      await _selectDestination(
-        tester,
-        PlatformOwnerShellDestination.institutions,
-      );
+      await _selectDestination(tester, PlatformOwnerShellDestination.dashboard);
       await tester.pumpAndSettle();
+      expect(dashboardRepository.fetchCalls, 1);
       await _selectDestination(tester, PlatformOwnerShellDestination.dashboard);
       await tester.pumpAndSettle();
 
+      expect(dashboardRepository.fetchCalls, 1);
       expect(repository.currentUserCalls, 1);
       expect(repository.signInCalls, isEmpty);
       expect(repository.changePasswordCalls, isEmpty);
@@ -650,6 +652,7 @@ Future<void> _pumpApp(
   WidgetTester tester, {
   required String initialLocation,
   required FakeAuthRepository repository,
+  FakePlatformDashboardRepository? dashboardRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
   SessionInvalidationSignal? signal,
 }) async {
@@ -660,6 +663,9 @@ Future<void> _pumpApp(
         appInitialLocationProvider.overrideWithValue(initialLocation),
         authRepositoryProvider.overrideWithValue(repository),
         appDeviceSurfaceProvider.overrideWithValue(surface),
+        platformDashboardRepositoryProvider.overrideWithValue(
+          dashboardRepository ?? FakePlatformDashboardRepository(),
+        ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
       ],
@@ -674,6 +680,7 @@ Future<ProviderContainer> _pumpAppWithContainer(
   WidgetTester tester, {
   required String initialLocation,
   required FakeAuthRepository repository,
+  FakePlatformDashboardRepository? dashboardRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
 }) async {
   final container = ProviderContainer(
@@ -681,6 +688,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       appInitialLocationProvider.overrideWithValue(initialLocation),
       authRepositoryProvider.overrideWithValue(repository),
       appDeviceSurfaceProvider.overrideWithValue(surface),
+      platformDashboardRepositoryProvider.overrideWithValue(
+        dashboardRepository ?? FakePlatformDashboardRepository(),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -708,7 +718,9 @@ void _expectPlatformOwnerDestination(
   expect(find.byKey(const Key('platformOwnerNavigation')), findsOneWidget);
   expect(find.text('Current user: $fullName'), findsOneWidget);
   expect(
-    find.byKey(Key('platformOwner${destination.label}Placeholder')),
+    destination == PlatformOwnerShellDestination.dashboard
+        ? find.byKey(const Key('platformDashboardData'))
+        : find.byKey(Key('platformOwner${destination.label}Placeholder')),
     findsOneWidget,
   );
   expect(
@@ -911,6 +923,40 @@ class FakeAuthRepository implements AuthRepository {
 
     return true;
   }
+}
+
+class FakePlatformDashboardRepository implements PlatformDashboardRepository {
+  FakePlatformDashboardRepository({this.onFetch});
+
+  Future<PlatformDashboard> Function()? onFetch;
+  var fetchCalls = 0;
+
+  @override
+  Future<PlatformDashboard> fetchDashboard() {
+    fetchCalls += 1;
+
+    return onFetch?.call() ?? Future.value(_dashboard());
+  }
+}
+
+PlatformDashboard _dashboard() {
+  return PlatformDashboard(
+    institutions: const PlatformInstitutionCounts(
+      total: 20,
+      active: 18,
+      inactive: 2,
+    ),
+    users: const PlatformUserCounts(total: 2800, active: 2720),
+    recentInstitutions: [
+      RecentPlatformInstitution(
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Example School',
+        type: PlatformInstitutionType.school,
+        status: PlatformInstitutionStatus.active,
+        createdAt: DateTime.utc(2026, 8, 1, 10),
+      ),
+    ],
+  );
 }
 
 class ChangePasswordCall {

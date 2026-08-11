@@ -17,6 +17,9 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
 
 void main() {
   group('router auth guard precedence', () {
@@ -741,6 +744,9 @@ Future<void> _pumpApp(
         appInitialLocationProvider.overrideWithValue(initialLocation),
         authRepositoryProvider.overrideWithValue(repository),
         appDeviceSurfaceProvider.overrideWithValue(surface),
+        platformDashboardRepositoryProvider.overrideWithValue(
+          FakePlatformDashboardRepository(),
+        ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
       ],
@@ -762,6 +768,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       appInitialLocationProvider.overrideWithValue(initialLocation),
       authRepositoryProvider.overrideWithValue(repository),
       appDeviceSurfaceProvider.overrideWithValue(surface),
+      platformDashboardRepositoryProvider.overrideWithValue(
+        FakePlatformDashboardRepository(),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -953,5 +962,32 @@ class FakeAuthRepository implements AuthRepository {
     this.tokenVersion += 1;
 
     return true;
+  }
+}
+
+class FakePlatformDashboardRepository implements PlatformDashboardRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<PlatformDashboard> fetchDashboard() async {
+    fetchCalls += 1;
+
+    return PlatformDashboard(
+      institutions: const PlatformInstitutionCounts(
+        total: 20,
+        active: 18,
+        inactive: 2,
+      ),
+      users: const PlatformUserCounts(total: 2800, active: 2720),
+      recentInstitutions: [
+        RecentPlatformInstitution(
+          id: '00000000-0000-0000-0000-000000000001',
+          name: 'Example School',
+          type: PlatformInstitutionType.school,
+          status: PlatformInstitutionStatus.active,
+          createdAt: DateTime.utc(2026, 8, 1, 10),
+        ),
+      ],
+    );
   }
 }
