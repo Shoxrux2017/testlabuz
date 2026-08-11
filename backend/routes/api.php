@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\CurrentUserController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
+use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
 use App\Support\Auth\LoginRateLimitKey;
 use Illuminate\Support\Facades\Route;
@@ -33,5 +34,7 @@ Route::prefix('platform')
         Route::patch('institutions/{institution}', [PlatformInstitutionController::class, 'update']);
         Route::post('institutions/{institution}/activate', [PlatformInstitutionController::class, 'activate']);
         Route::post('institutions/{institution}/deactivate', [PlatformInstitutionController::class, 'deactivate']);
+        Route::get('institutions/{institution}/admins', [PlatformInstitutionAdminController::class, 'index']);
+        Route::post('institutions/{institution}/admins', [PlatformInstitutionAdminController::class, 'store']);
         Route::get('institutions/{institution}', [PlatformInstitutionController::class, 'show']);
     });
