@@ -1,3 +1,7 @@
+import 'platform_institution.dart';
+
+export 'platform_institution.dart';
+
 class PlatformDashboard {
   const PlatformDashboard({
     required this.institutions,
@@ -50,49 +54,4 @@ class RecentPlatformInstitution {
   final PlatformInstitutionType type;
   final PlatformInstitutionStatus status;
   final DateTime createdAt;
-}
-
-enum PlatformInstitutionType {
-  school('school'),
-  college('college'),
-  lyceum('lyceum'),
-  university('university'),
-  institute('institute'),
-  learningCenter('learning_center'),
-  trainingCenter('training_center'),
-  privateEducation('private_education'),
-  other('other');
-
-  const PlatformInstitutionType(this.value);
-
-  final String value;
-
-  static PlatformInstitutionType parse(String value) {
-    for (final type in values) {
-      if (type.value == value) {
-        return type;
-      }
-    }
-
-    throw FormatException('Unknown institution type: $value');
-  }
-}
-
-enum PlatformInstitutionStatus {
-  active('active'),
-  inactive('inactive');
-
-  const PlatformInstitutionStatus(this.value);
-
-  final String value;
-
-  static PlatformInstitutionStatus parse(String value) {
-    for (final status in values) {
-      if (status.value == value) {
-        return status;
-      }
-    }
-
-    throw FormatException('Unknown institution status: $value');
-  }
 }

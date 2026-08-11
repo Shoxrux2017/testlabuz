@@ -14,8 +14,12 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/presentation/platform_owner_shell.dart';
 
 void main() {
@@ -73,7 +77,7 @@ void main() {
         fullName: 'Owner A',
       );
       expect(
-        find.byKey(const Key('platformOwnerInstitutionsPlaceholder')),
+        find.byKey(const Key('platformInstitutionListSurface')),
         findsOneWidget,
       );
       expect(repository.currentUserCalls, 1);
@@ -307,7 +311,6 @@ void main() {
       expect(find.byTooltip('Dashboard'), findsOneWidget);
       expect(find.byTooltip('Institutions'), findsOneWidget);
       expect(find.text('Institution: Example School'), findsNothing);
-      expect(find.text('Example School'), findsNothing);
       _expectNoLaterTaskText();
     });
 
@@ -382,20 +385,24 @@ void main() {
         ),
       );
       final dashboardRepository = FakePlatformDashboardRepository();
+      final listRepository = FakePlatformInstitutionListRepository();
 
       await _pumpApp(
         tester,
         initialLocation: AppRoutePaths.platformOwnerInstitutions,
         repository: repository,
         dashboardRepository: dashboardRepository,
+        listRepository: listRepository,
       );
       await tester.pumpAndSettle();
       expect(repository.currentUserCalls, 1);
       expect(dashboardRepository.fetchCalls, 0);
+      expect(listRepository.fetchCalls, 1);
 
       await _selectDestination(tester, PlatformOwnerShellDestination.dashboard);
       await tester.pumpAndSettle();
       expect(dashboardRepository.fetchCalls, 1);
+      expect(listRepository.fetchCalls, 1);
       await _selectDestination(tester, PlatformOwnerShellDestination.dashboard);
       await tester.pumpAndSettle();
 
@@ -653,6 +660,7 @@ Future<void> _pumpApp(
   required String initialLocation,
   required FakeAuthRepository repository,
   FakePlatformDashboardRepository? dashboardRepository,
+  FakePlatformInstitutionListRepository? listRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
   SessionInvalidationSignal? signal,
 }) async {
@@ -665,6 +673,9 @@ Future<void> _pumpApp(
         appDeviceSurfaceProvider.overrideWithValue(surface),
         platformDashboardRepositoryProvider.overrideWithValue(
           dashboardRepository ?? FakePlatformDashboardRepository(),
+        ),
+        platformInstitutionListRepositoryProvider.overrideWithValue(
+          listRepository ?? FakePlatformInstitutionListRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -681,6 +692,7 @@ Future<ProviderContainer> _pumpAppWithContainer(
   required String initialLocation,
   required FakeAuthRepository repository,
   FakePlatformDashboardRepository? dashboardRepository,
+  FakePlatformInstitutionListRepository? listRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
 }) async {
   final container = ProviderContainer(
@@ -690,6 +702,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       appDeviceSurfaceProvider.overrideWithValue(surface),
       platformDashboardRepositoryProvider.overrideWithValue(
         dashboardRepository ?? FakePlatformDashboardRepository(),
+      ),
+      platformInstitutionListRepositoryProvider.overrideWithValue(
+        listRepository ?? FakePlatformInstitutionListRepository(),
       ),
     ],
   );
@@ -720,7 +735,7 @@ void _expectPlatformOwnerDestination(
   expect(
     destination == PlatformOwnerShellDestination.dashboard
         ? find.byKey(const Key('platformDashboardData'))
-        : find.byKey(Key('platformOwner${destination.label}Placeholder')),
+        : find.byKey(const Key('platformInstitutionListSurface')),
     findsOneWidget,
   );
   expect(
@@ -936,6 +951,43 @@ class FakePlatformDashboardRepository implements PlatformDashboardRepository {
     fetchCalls += 1;
 
     return onFetch?.call() ?? Future.value(_dashboard());
+  }
+}
+
+class FakePlatformInstitutionListRepository
+    implements PlatformInstitutionListRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<PlatformInstitutionListPage> fetchInstitutions(
+    PlatformInstitutionListQuery query,
+  ) async {
+    fetchCalls += 1;
+
+    return PlatformInstitutionListPage(
+      institutions: [
+        PlatformInstitutionSummary(
+          id: '00000000-0000-0000-0000-000000000001',
+          name: 'Example School',
+          type: PlatformInstitutionType.school,
+          status: PlatformInstitutionStatus.active,
+          contactEmail: 'info@example.uz',
+          contactPhone: '+998901234567',
+          createdAt: DateTime.utc(2026, 8, 7, 15),
+          updatedAt: DateTime.utc(2026, 8, 7, 16),
+          userCounts: const PlatformInstitutionUserCounts(
+            total: 42,
+            active: 40,
+          ),
+        ),
+      ],
+      pagination: const PlatformInstitutionPagination(
+        page: 1,
+        perPage: 20,
+        total: 1,
+        lastPage: 1,
+      ),
+    );
   }
 }
 
