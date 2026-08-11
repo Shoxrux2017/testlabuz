@@ -31,6 +31,7 @@ class PlatformInstitutionReadApiTest extends TestCase
                 'middleware' => $route->middleware(),
             ])
             ->filter(fn (array $route): bool => str_starts_with($route['uri'], 'api/v1/platform/institutions'))
+            ->filter(fn (array $route): bool => in_array('GET', $route['methods'], true))
             ->values()
             ->all();
 

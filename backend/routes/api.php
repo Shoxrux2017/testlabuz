@@ -27,6 +27,7 @@ Route::prefix('platform')
     ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::PlatformOwner->value])
     ->group(function (): void {
         Route::get('institutions', [PlatformInstitutionController::class, 'index']);
+        Route::post('institutions', [PlatformInstitutionController::class, 'store']);
         Route::get('institutions/{institution}', [PlatformInstitutionController::class, 'show'])
             ->whereUuid('institution');
     });
