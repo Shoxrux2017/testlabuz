@@ -25,7 +25,7 @@ class PlatformInstitutionAdminApiTest extends TestCase
 
     private const NEW_PASSWORD = 'Changed admin password 51!';
 
-    public function test_admin_routes_are_registered_once_with_required_middleware_order_and_no_later_routes(): void
+    public function test_admin_list_create_routes_are_registered_once_with_required_middleware_order(): void
     {
         $adminRoutes = collect(Route::getRoutes())
             ->map(fn ($route): array => [
@@ -52,13 +52,6 @@ class PlatformInstitutionAdminApiTest extends TestCase
             ],
         ], $adminRoutes);
 
-        $laterTaskRoutes = collect(Route::getRoutes())
-            ->map(fn ($route): string => $route->uri())
-            ->filter(fn (string $uri): bool => str_starts_with($uri, 'api/v1/platform/institution-admins/'))
-            ->values()
-            ->all();
-
-        $this->assertSame([], $laterTaskRoutes);
     }
 
     public function test_authentication_account_institution_password_role_and_not_found_precedence_for_both_routes(): void

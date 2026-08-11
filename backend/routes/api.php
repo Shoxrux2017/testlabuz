@@ -36,5 +36,8 @@ Route::prefix('platform')
         Route::post('institutions/{institution}/deactivate', [PlatformInstitutionController::class, 'deactivate']);
         Route::get('institutions/{institution}/admins', [PlatformInstitutionAdminController::class, 'index']);
         Route::post('institutions/{institution}/admins', [PlatformInstitutionAdminController::class, 'store']);
+        Route::patch('institution-admins/{user}', [PlatformInstitutionAdminController::class, 'update']);
+        Route::post('institution-admins/{user}/activate', [PlatformInstitutionAdminController::class, 'activate']);
+        Route::post('institution-admins/{user}/deactivate', [PlatformInstitutionAdminController::class, 'deactivate']);
         Route::get('institutions/{institution}', [PlatformInstitutionController::class, 'show']);
     });
