@@ -45,6 +45,11 @@ class PlatformInstitutionReadApiTest extends TestCase
             ],
             [
                 'methods' => ['GET'],
+                'uri' => 'api/v1/platform/institutions/{institution}/admins',
+                'middleware' => $expectedMiddleware,
+            ],
+            [
+                'methods' => ['GET'],
                 'uri' => 'api/v1/platform/institutions/{institution}',
                 'middleware' => $expectedMiddleware,
             ],
