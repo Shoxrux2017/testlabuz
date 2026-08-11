@@ -7,7 +7,7 @@
 | Roadmap stage | `Stage 2 — Multi-Institution Platform Management` |
 | Status | `In Progress` |
 | Decomposition approved on | `2026-08-10` |
-| Implementation started | `Yes — S02-BE-003 is accepted` |
+| Implementation started | `Yes — S02-BE-004 is accepted` |
 | Stage closed | `No` |
 
 This index records the approved Stage 2 decomposition only. It does not add,
@@ -59,15 +59,15 @@ learning workflows.
 ## 4. Approved Task Order
 
 Tasks are implemented and accepted one at a time. `S02-BE-001`, `S02-BE-002`,
-and `S02-BE-003` are accepted; all later tasks remain planned and may not be
-started until their own detailed contracts are approved.
+`S02-BE-003`, and `S02-BE-004` are accepted; all later tasks remain planned
+and may not be started until their own detailed contracts are approved.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|
 | 1 | `S02-BE-001` | Backend | Institution list/detail API, search, filters, sorting, pagination, and basic user counts | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-001-platform-institution-list-detail-api.md` |
 | 2 | `S02-BE-002` | Backend | Atomic institution creation with safe `institution_settings` initialization | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-002-platform-institution-create-api.md` |
 | 3 | `S02-BE-003` | Backend | Institution basic-profile update with a strict platform-field allowlist | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-003-platform-institution-update-api.md` |
-| 4 | `S02-BE-004` | Backend | Idempotent institution activate/deactivate and institution-user access enforcement | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
+| 4 | `S02-BE-004` | Backend | Idempotent institution activate/deactivate and institution-user access enforcement | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-02/S02-BE-004-platform-institution-lifecycle-access-enforcement.md` |
 | 5 | `S02-BE-005` | Backend | Platform dashboard aggregate API | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 6 | `S02-BE-006` | Backend | Institution Admin list/create API and first-login password gate | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 7 | `S02-BE-007` | Backend | Institution Admin update/activate/deactivate API | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
@@ -93,8 +93,8 @@ Review. The closure review is not itself an implementation task.
 - [x] Stage 2 decomposition is recorded here from the approved
       `S02-BE-001` contract.
 - [x] `S02-BE-001` is accepted and delivered.
-- [x] `S02-BE-002` is individually approved for implementation.
-- [x] Later Stage 2 tasks are not individually approved for implementation.
+- [x] `S02-BE-004` is accepted and delivered.
+- [x] Later Stage 2 tasks from `S02-BE-005` onward are not individually approved for implementation.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
 
@@ -148,6 +148,7 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-11` | Accepted and delivered `S02-BE-001` | Read-only gate passed and platform institution read API delivery completed | Codex |
 | `2026-08-11` | Accepted and delivered `S02-BE-002` | Read-only gate passed and atomic institution creation API delivery completed | Codex |
 | `2026-08-11` | Accepted and delivered `S02-BE-003` | Read-only gate passed and platform institution update API delivery completed | Codex |
+| `2026-08-11` | Accepted and delivered `S02-BE-004` | Read-only gate passed and platform institution lifecycle/access delivery completed | Codex |
 
 ## 9. Closure Readiness
 
