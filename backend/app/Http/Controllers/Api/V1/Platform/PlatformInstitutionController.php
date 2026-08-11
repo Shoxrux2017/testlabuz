@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Platform;
 
+use App\Actions\Platform\ChangePlatformInstitutionLifecycle;
 use App\Actions\Platform\CreatePlatformInstitution;
 use App\Actions\Platform\ListPlatformInstitutions;
 use App\Actions\Platform\LoadPlatformInstitutionForDetail;
@@ -9,9 +10,11 @@ use App\Actions\Platform\UpdatePlatformInstitution;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Platform\PlatformInstitutionCreateRequest;
 use App\Http\Requests\Platform\PlatformInstitutionIndexRequest;
+use App\Http\Requests\Platform\PlatformInstitutionLifecycleRequest;
 use App\Http\Requests\Platform\PlatformInstitutionUpdateRequest;
 use App\Http\Resources\Platform\PlatformInstitutionCreatedResource;
 use App\Http\Resources\Platform\PlatformInstitutionDetailResource;
+use App\Http\Resources\Platform\PlatformInstitutionLifecycleResource;
 use App\Http\Resources\Platform\PlatformInstitutionSummaryCollection;
 use App\Http\Resources\Platform\PlatformInstitutionUpdatedResource;
 use App\Models\Institution;
@@ -85,6 +88,32 @@ class PlatformInstitutionController extends Controller
 
         return (new PlatformInstitutionUpdatedResource($updatedInstitution))
             ->additional(['message' => 'Institution updated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function activate(
+        PlatformInstitutionLifecycleRequest $request,
+        string $institution,
+        ChangePlatformInstitutionLifecycle $changeInstitutionLifecycle,
+    ): JsonResponse {
+        $activatedInstitution = $changeInstitutionLifecycle->activate($this->resolveInstitution($institution));
+
+        return (new PlatformInstitutionLifecycleResource($activatedInstitution))
+            ->additional(['message' => 'Institution activated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function deactivate(
+        PlatformInstitutionLifecycleRequest $request,
+        string $institution,
+        ChangePlatformInstitutionLifecycle $changeInstitutionLifecycle,
+    ): JsonResponse {
+        $deactivatedInstitution = $changeInstitutionLifecycle->deactivate($this->resolveInstitution($institution));
+
+        return (new PlatformInstitutionLifecycleResource($deactivatedInstitution))
+            ->additional(['message' => 'Institution deactivated successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
     }

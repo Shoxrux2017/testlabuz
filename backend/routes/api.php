@@ -29,5 +29,7 @@ Route::prefix('platform')
         Route::get('institutions', [PlatformInstitutionController::class, 'index']);
         Route::post('institutions', [PlatformInstitutionController::class, 'store']);
         Route::patch('institutions/{institution}', [PlatformInstitutionController::class, 'update']);
+        Route::post('institutions/{institution}/activate', [PlatformInstitutionController::class, 'activate']);
+        Route::post('institutions/{institution}/deactivate', [PlatformInstitutionController::class, 'deactivate']);
         Route::get('institutions/{institution}', [PlatformInstitutionController::class, 'show']);
     });
