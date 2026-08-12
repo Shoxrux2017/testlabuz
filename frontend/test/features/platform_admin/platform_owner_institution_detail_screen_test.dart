@@ -18,11 +18,17 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_admin_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_detail_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_lifecycle_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_create.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list_query.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_lifecycle.dart';
@@ -43,11 +49,13 @@ void main() {
         final listRepository = FakePlatformInstitutionListRepository(
           label: 'Cached List',
         );
+        final adminRepository = FakePlatformInstitutionAdminRepository();
 
         await _pumpApp(
           tester,
           detailRepository: detailRepository,
           listRepository: listRepository,
+          adminRepository: adminRepository,
         );
         await tester.pump();
 
@@ -69,6 +77,7 @@ void main() {
         expect(find.text('Detail School'), findsNothing);
         expect(detailRepository.institutionIds, [_institutionIdA]);
         expect(listRepository.fetchCalls, 0);
+        expect(adminRepository.fetchCalls, isEmpty);
 
         detailCompleter.complete(
           _detail(
@@ -114,6 +123,13 @@ void main() {
         expect(find.text('2026-08-07 15:00 UTC'), findsOneWidget);
         expect(find.text('2026-08-07 16:30 UTC'), findsOneWidget);
         expect(find.text('Basic usage'), findsOneWidget);
+        expect(find.text('Institution administrators'), findsOneWidget);
+        expect(find.text('No administrators yet'), findsOneWidget);
+        expect(adminRepository.fetchCalls, hasLength(1));
+        expect(
+          adminRepository.fetchCalls.single.institutionId,
+          _institutionIdA,
+        );
         expect(
           find.byKey(
             const Key('platformInstitutionDetailUsageLabelTotal user accounts'),
@@ -164,6 +180,251 @@ void main() {
           findsNothing,
         );
         _expectNoLaterScopeText();
+      },
+    );
+
+    testWidgets('detail not-found does not probe institution admins', (
+      tester,
+    ) async {
+      final adminRepository = FakePlatformInstitutionAdminRepository();
+
+      await _pumpApp(
+        tester,
+        detailRepository: FakePlatformInstitutionDetailRepository(
+          onFetch: (_) async => throw _serverFailure(
+            ApiErrorCodes.resourceNotFound,
+            statusCode: 404,
+          ),
+        ),
+        adminRepository: adminRepository,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('platformInstitutionDetailNotFound')),
+        findsOneWidget,
+      );
+      expect(adminRepository.fetchCalls, isEmpty);
+      expect(
+        find.byKey(const Key('platformInstitutionAdministratorsSection')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('admin list renders public facts with no row actions', (
+      tester,
+    ) async {
+      final adminRepository = FakePlatformInstitutionAdminRepository(
+        admins: [
+          _admin(
+            fullName: 'Ali Valiyev',
+            loginName: 'Admin.MixedCase',
+            email: 'ali@example.uz',
+            phone: '+998901234567',
+          ),
+          _admin(
+            id: '550e8400-e29b-41d4-a716-446655440002',
+            fullName: 'Inactive Admin',
+            loginName: 'inactive.admin',
+            isActive: false,
+            mustChangePassword: false,
+            email: null,
+            phone: null,
+            lastLoginAt: DateTime.utc(2026, 8, 9, 10),
+          ),
+        ],
+      );
+
+      await _pumpApp(tester, adminRepository: adminRepository);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('platformInstitutionAdministratorsSection')),
+        findsOneWidget,
+      );
+      expect(find.text('Institution administrators'), findsOneWidget);
+      expect(find.text('2 matching administrators'), findsOneWidget);
+      expect(find.text('Ali Valiyev'), findsOneWidget);
+      expect(find.text('Admin.MixedCase'), findsOneWidget);
+      expect(find.text('ali@example.uz'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('platformInstitutionAdministratorsSection')),
+          matching: find.text('+998901234567'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Inactive Admin'), findsOneWidget);
+      expect(find.text('inactive.admin'), findsOneWidget);
+      expect(find.text('Password change required'), findsOneWidget);
+      expect(find.text('Password change completed'), findsOneWidget);
+      expect(find.text('Never'), findsOneWidget);
+      expect(find.text('2026-08-09 10:00 UTC'), findsOneWidget);
+      expect(find.textContaining('password_hash'), findsNothing);
+      expect(find.textContaining('institution_id'), findsNothing);
+      expect(find.text('Activate administrator'), findsNothing);
+      expect(find.text('Deactivate administrator'), findsNothing);
+      expect(find.text('Edit administrator'), findsNothing);
+    });
+
+    testWidgets(
+      'create dialog validates exact fields and cancel clears without POST',
+      (tester) async {
+        final adminRepository = FakePlatformInstitutionAdminRepository();
+
+        await _pumpApp(
+          tester,
+          detailRepository: FakePlatformInstitutionDetailRepository(
+            onFetch: (_) async => _detail(
+              name: 'Inactive School',
+              status: PlatformInstitutionStatus.inactive,
+            ),
+          ),
+          adminRepository: adminRepository,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminCreateButton')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionAdminCreateDialog')),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Add administrator for Inactive School'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('active and must change the initial password'),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionAdminInactiveInstitutionNote'),
+          ),
+          findsWidgets,
+        );
+        expect(find.text('Full name *'), findsOneWidget);
+        expect(find.text('Login name *'), findsOneWidget);
+        expect(find.text('Email'), findsOneWidget);
+        expect(find.text('Phone'), findsOneWidget);
+        expect(find.text('Initial password *'), findsOneWidget);
+        expect(find.text('Role'), findsNothing);
+        expect(find.text('Institution ID'), findsNothing);
+        expect(find.text('Password confirmation'), findsNothing);
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminCreateSubmitButton')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Full name is required.'), findsOneWidget);
+        expect(find.text('Login name is required.'), findsOneWidget);
+        expect(find.text('Initial password is required.'), findsOneWidget);
+        expect(adminRepository.createCalls, isEmpty);
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminCreateCancelButton')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionAdminCreateDialog')),
+          findsNothing,
+        );
+        expect(adminRepository.createCalls, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'confirmed admin create posts once and refreshes visible facts',
+      (tester) async {
+        final adminRepository = FakePlatformInstitutionAdminRepository();
+        final detailRepository = FakePlatformInstitutionDetailRepository(
+          onFetch: (institutionId) async =>
+              _detail(id: institutionId, name: 'Create School'),
+        );
+        final listRepository = FakePlatformInstitutionListRepository();
+        final dashboardRepository = FakePlatformDashboardRepository();
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          adminRepository: adminRepository,
+          listRepository: listRepository,
+          dashboardRepository: dashboardRepository,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminSearchField')),
+          'Current query',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        final listCallsBeforeCreate = adminRepository.fetchCalls.length;
+        final detailCallsBeforeCreate = detailRepository.fetchCalls;
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminCreateButton')),
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminCreateFullNameField')),
+          '  New Admin  ',
+        );
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminCreateLoginNameField')),
+          'New.Admin',
+        );
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminCreateEmailField')),
+          '',
+        );
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminCreatePhoneField')),
+          '  +998901111111  ',
+        );
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminCreatePasswordField')),
+          'valid-password',
+        );
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminCreateSubmitButton')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(adminRepository.createCalls, hasLength(1));
+        expect(
+          adminRepository.createCalls.single.institutionId,
+          _institutionIdA,
+        );
+        expect(adminRepository.createCalls.single.request.toJson(), {
+          'full_name': 'New Admin',
+          'login_name': 'New.Admin',
+          'email': null,
+          'phone': '+998901111111',
+          'password': 'valid-password',
+        });
+        expect(
+          find.byKey(const Key('platformInstitutionAdminCreateDialog')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionAdminCreateSuccessSnackBar'),
+          ),
+          findsOneWidget,
+        );
+        expect(adminRepository.fetchCalls.length, listCallsBeforeCreate + 1);
+        expect(adminRepository.fetchCalls.last.query.search, 'Current query');
+        expect(detailRepository.fetchCalls, detailCallsBeforeCreate + 1);
+        expect(listRepository.fetchCalls, 0);
+        expect(dashboardRepository.fetchCalls, 0);
       },
     );
 
@@ -787,6 +1048,7 @@ Future<void> _pumpApp(
   FakeAuthRepository? authRepository,
   FakePlatformInstitutionDetailRepository? detailRepository,
   FakePlatformInstitutionLifecycleRepository? lifecycleRepository,
+  FakePlatformInstitutionAdminRepository? adminRepository,
   FakePlatformInstitutionListRepository? listRepository,
   FakePlatformDashboardRepository? dashboardRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
@@ -820,6 +1082,9 @@ Future<void> _pumpApp(
         ),
         platformInstitutionLifecycleRepositoryProvider.overrideWithValue(
           lifecycleRepository ?? FakePlatformInstitutionLifecycleRepository(),
+        ),
+        platformInstitutionAdminRepositoryProvider.overrideWithValue(
+          adminRepository ?? FakePlatformInstitutionAdminRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -936,6 +1201,46 @@ PlatformInstitutionListPage _page({String label = 'Example'}) {
       total: 1,
       lastPage: 1,
     ),
+  );
+}
+
+PlatformInstitutionAdminList _adminPage({
+  required List<PlatformInstitutionAdmin> admins,
+  required PlatformInstitutionAdminListQuery query,
+}) {
+  return PlatformInstitutionAdminList(
+    admins: List<PlatformInstitutionAdmin>.unmodifiable(admins),
+    pagination: PlatformInstitutionAdminPagination(
+      page: query.page,
+      perPage: query.perPage,
+      total: admins.length,
+      lastPage: 1,
+    ),
+  );
+}
+
+PlatformInstitutionAdmin _admin({
+  String id = '550e8400-e29b-41d4-a716-446655440001',
+  String fullName = 'Ali Valiyev',
+  String loginName = 'admin-a',
+  String? email = 'ali@example.uz',
+  String? phone,
+  bool isActive = true,
+  bool mustChangePassword = true,
+  DateTime? lastLoginAt,
+}) {
+  return PlatformInstitutionAdmin(
+    id: id,
+    fullName: fullName,
+    loginName: loginName,
+    email: email,
+    phone: phone,
+    isActive: isActive,
+    mustChangePassword: mustChangePassword,
+    lastLoginAt: lastLoginAt,
+    deactivatedAt: isActive ? null : DateTime.utc(2026, 8, 8, 9),
+    createdAt: DateTime.utc(2026, 8, 7, 15),
+    updatedAt: DateTime.utc(2026, 8, 7, 16),
   );
 }
 
@@ -1164,6 +1469,65 @@ class FakePlatformInstitutionLifecycleRepository
           _lifecycleResult(
             id: institutionId,
             status: PlatformInstitutionStatus.inactive,
+          ),
+        );
+  }
+}
+
+class FakePlatformInstitutionAdminRepository
+    implements PlatformInstitutionAdminRepository {
+  FakePlatformInstitutionAdminRepository({
+    this.admins = const [],
+    this.onFetch,
+    this.onCreate,
+  });
+
+  final List<PlatformInstitutionAdmin> admins;
+  Future<PlatformInstitutionAdminList> Function(
+    String institutionId,
+    PlatformInstitutionAdminListQuery query,
+  )?
+  onFetch;
+  Future<PlatformInstitutionAdminCreateResult> Function(
+    String institutionId,
+    PlatformInstitutionAdminCreateRequest request,
+  )?
+  onCreate;
+  final fetchCalls =
+      <({String institutionId, PlatformInstitutionAdminListQuery query})>[];
+  final createCalls =
+      <
+        ({String institutionId, PlatformInstitutionAdminCreateRequest request})
+      >[];
+
+  @override
+  Future<PlatformInstitutionAdminList> fetchAdmins({
+    required String institutionId,
+    required PlatformInstitutionAdminListQuery query,
+  }) {
+    fetchCalls.add((institutionId: institutionId, query: query));
+
+    return onFetch?.call(institutionId, query) ??
+        Future.value(_adminPage(admins: admins, query: query));
+  }
+
+  @override
+  Future<PlatformInstitutionAdminCreateResult> createAdmin({
+    required String institutionId,
+    required PlatformInstitutionAdminCreateRequest request,
+  }) {
+    createCalls.add((institutionId: institutionId, request: request));
+
+    return onCreate?.call(institutionId, request) ??
+        Future.value(
+          PlatformInstitutionAdminCreateResult(
+            admin: _admin(
+              fullName: request.fullName,
+              loginName: request.loginName,
+              email: request.email,
+              phone: request.phone,
+            ),
+            message: 'Institution administrator created.',
           ),
         );
   }
