@@ -60,8 +60,8 @@ learning workflows.
 
 Tasks are implemented and accepted one at a time. `S02-BE-001` through
 `S02-BE-007`, `S02-FE-001`, `S02-FE-002`, `S02-FE-003`, `S02-FE-004`,
-`S02-FE-005`, `S02-FE-006`, and `S02-FE-007` are accepted and delivered. All
-later tasks from `S02-FE-008` onward remain planned and may not be started
+`S02-FE-005`, `S02-FE-006`, `S02-FE-007`, and `S02-FE-008` are accepted and
+delivered. All later tasks from `S02-FE-009` onward remain planned and may not be started
 until their own detailed contracts are approved.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
@@ -80,7 +80,7 @@ until their own detailed contracts are approved.
 | 12 | `S02-FE-005` | Frontend | Create Institution form and mutation flow | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-005-platform-institution-create-form-mutation.md` |
 | 13 | `S02-FE-006` | Frontend | Edit Institution form for allowed fields | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-006-platform-institution-edit-basic-information.md` |
 | 14 | `S02-FE-007` | Frontend | Activate/deactivate confirmation, in-flight protection, and refresh | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-007-platform-institution-lifecycle-actions.md` |
-| 15 | `S02-FE-008` | Frontend | Institution Admin list/create UI within Institution detail | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
+| 15 | `S02-FE-008` | Frontend | Institution Admin list/create UI within Institution detail | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-008-platform-institution-admin-list-create.md` |
 | 16 | `S02-FE-009` | Frontend | Institution Admin edit/activate/deactivate UI | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 | 17 | `S02-INT-001` | Integration | Full real-stack Stage 2 end-to-end verification on Windows | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 
@@ -101,7 +101,7 @@ Review. The closure review is not itself an implementation task.
 - [x] `S02-BE-007` is accepted and delivered.
 - [x] `S02-FE-004` is accepted and delivered.
 - [x] `S02-FE-007` is accepted and delivered after read-only review and manual PR merge.
-- [x] Later Stage 2 tasks from `S02-FE-008` onward are not individually approved for implementation.
+- [x] Later Stage 2 tasks from `S02-FE-009` onward are not individually approved for implementation.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
 
@@ -170,6 +170,9 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-12` | Recorded approval for `S02-FE-007` | Project owner approved Platform Owner Institution lifecycle action implementation | Project owner |
 | `2026-08-12` | Accepted `S02-FE-007` | Read-only gate passed for Platform Owner Institution lifecycle actions; manual real-stack Windows smoke was not run because a controlled backend, credentials, and test data were unavailable | Codex |
 | `2026-08-12` | Accepted and delivered `S02-FE-007` | Manual PR #34 merge completed; final delivery inspection confirmed required commit `025861380861c4764f8eeb21650bf12e87373d08` on `origin/main`, merge commit `2f8e902e8073eeec847d8108f7600a486b0302a8`, and no implementation contradiction | Codex |
+| `2026-08-13` | Accepted `S02-FE-008` | Read-only gate passed for Institution Admin list/create UI; manual live smoke was not run because no running backend or Platform Owner credentials were available | Codex |
+| `2026-08-13` | Delivery blocked for `S02-FE-008` | Accepted branch was pushed, but PR creation was blocked by GitHub connector permission `403`; manual PR creation and merge were required | Codex |
+| `2026-08-13` | Accepted and delivered `S02-FE-008` | Manual PR #36 merge completed; final delivery inspection confirmed required commit `86fd616eab3a55e7d38116b203d67f80881cea69` on `origin/main`, merge commit `37a154d2d40d408df86b9b39263289cbe082187c`, and no implementation/security/contract contradiction. Manual live smoke remains NOT RUN because no running backend or Platform Owner credentials were available | Codex |
 
 ## 9. Closure Readiness
 
