@@ -109,6 +109,11 @@ void main() {
         find.byKey(const Key('platformInstitutionResetButton')),
         findsOneWidget,
       );
+      expect(find.text('Create Institution'), findsOneWidget);
+      expect(
+        find.byKey(const Key('platformInstitutionCreateButton')),
+        findsOneWidget,
+      );
       for (final header in [
         'Institution',
         'Type',
@@ -378,7 +383,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('No platform institutions exist yet.'), findsOneWidget);
-      expect(find.text('Create Institution'), findsNothing);
+      expect(find.text('Create Institution'), findsOneWidget);
 
       final filteredRepository = FakePlatformInstitutionListRepository(
         onFetch: (query) async => query.search == null
@@ -685,7 +690,6 @@ String _currentPath(WidgetTester tester) {
 }
 
 void _expectNoLaterScopeText() {
-  expect(find.text('Create Institution'), findsNothing);
   expect(find.text('Edit Institution'), findsNothing);
   expect(find.text('Activate'), findsNothing);
   expect(find.text('Deactivate'), findsNothing);

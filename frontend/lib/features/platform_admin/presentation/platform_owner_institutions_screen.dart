@@ -58,10 +58,33 @@ class _PlatformOwnerInstitutionsScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Institutions',
-            key: const Key('platformInstitutionListHeading'),
-            style: Theme.of(context).textTheme.headlineMedium,
+          Wrap(
+            key: const Key('platformInstitutionListHeader'),
+            spacing: _controlSpacing,
+            runSpacing: _controlSpacing,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.spaceBetween,
+            children: [
+              Text(
+                'Institutions',
+                key: const Key('platformInstitutionListHeading'),
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              Semantics(
+                button: true,
+                label: 'Create Institution',
+                child: FilledButton.icon(
+                  key: const Key('platformInstitutionCreateButton'),
+                  onPressed: () {
+                    context.goNamed(
+                      AppRouteNames.platformOwnerInstitutionCreate,
+                    );
+                  },
+                  icon: const Icon(Icons.add_business_outlined),
+                  label: const Text('Create Institution'),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: _sectionSpacing),
           _InstitutionListToolbar(

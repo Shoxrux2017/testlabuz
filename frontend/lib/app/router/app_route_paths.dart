@@ -5,6 +5,8 @@ abstract final class AppRouteNames {
   static const authenticated = 'authenticated';
   static const platformOwner = 'platform-owner';
   static const platformOwnerInstitutions = 'platform-owner-institutions';
+  static const platformOwnerInstitutionCreate =
+      'platform-owner-institution-create';
   static const platformOwnerInstitutionDetail =
       'platform-owner-institution-detail';
   static const institutionAdmin = 'institution-admin';
@@ -21,8 +23,11 @@ abstract final class AppRoutePaths {
   static const authenticated = '/authenticated';
   static const platformOwner = '/platform-owner';
   static const platformOwnerInstitutionsSegment = 'institutions';
+  static const platformOwnerInstitutionCreateSegment = 'new';
   static const platformOwnerInstitutionIdParameter = 'institutionId';
   static const platformOwnerInstitutions = '/platform-owner/institutions';
+  static const platformOwnerInstitutionCreate =
+      '/platform-owner/institutions/new';
   static const platformOwnerInstitutionDetail =
       '/platform-owner/institutions/:institutionId';
   static const institutionAdmin = '/institution-admin';
@@ -36,6 +41,7 @@ abstract final class AppRoutePaths {
   static const protected = <String>[
     platformOwner,
     platformOwnerInstitutions,
+    platformOwnerInstitutionCreate,
     institutionAdmin,
     teacher,
     student,
@@ -66,10 +72,16 @@ abstract final class AppRoutePaths {
 
     final segment = path.substring(prefix.length);
 
-    return segment.isNotEmpty && !segment.contains('/');
+    return segment.isNotEmpty &&
+        segment != platformOwnerInstitutionCreateSegment &&
+        !segment.contains('/');
   }
 
   static String platformOwnerInstitutionDetailLocation(String institutionId) {
     return '$platformOwnerInstitutions/${Uri.encodeComponent(institutionId)}';
+  }
+
+  static bool isPlatformOwnerInstitutionCreatePath(String path) {
+    return path == platformOwnerInstitutionCreate;
   }
 }
