@@ -113,6 +113,10 @@ enum PlatformOwnerShellDestination {
       }
     }
 
+    if (AppRoutePaths.isPlatformOwnerInstitutionDetailPath(path)) {
+      return PlatformOwnerShellDestination.institutions;
+    }
+
     return null;
   }
 }

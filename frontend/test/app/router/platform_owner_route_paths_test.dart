@@ -10,10 +10,22 @@ void main() {
         AppRouteNames.platformOwnerInstitutions,
         'platform-owner-institutions',
       );
+      expect(
+        AppRouteNames.platformOwnerInstitutionDetail,
+        'platform-owner-institution-detail',
+      );
       expect(AppRoutePaths.platformOwnerInstitutionsSegment, 'institutions');
+      expect(
+        AppRoutePaths.platformOwnerInstitutionIdParameter,
+        'institutionId',
+      );
       expect(
         AppRoutePaths.platformOwnerInstitutions,
         '/platform-owner/institutions',
+      );
+      expect(
+        AppRoutePaths.platformOwnerInstitutionDetail,
+        '/platform-owner/institutions/:institutionId',
       );
       expect(AppRoutePaths.platformOwnerDestinations, [
         AppRoutePaths.platformOwner,
@@ -40,6 +52,12 @@ void main() {
         AppRoutePaths.isPlatformOwnerDestination('/platform-owner/settings'),
         isFalse,
       );
+      expect(
+        AppRoutePaths.isPlatformOwnerDestination(
+          '/platform-owner/institutions/550e8400-e29b-41d4-a716-446655440000',
+        ),
+        isFalse,
+      );
     });
 
     test('uses segment-safe Platform Owner route-family checks', () {
@@ -59,6 +77,45 @@ void main() {
       );
       expect(
         AppRoutePaths.isPlatformOwnerSegment('/platform-owner-extra'),
+        isFalse,
+      );
+    });
+
+    test('recognizes and builds only one-segment institution detail paths', () {
+      const institutionId = '550e8400-e29b-41d4-a716-446655440000';
+
+      expect(
+        AppRoutePaths.platformOwnerInstitutionDetailLocation(institutionId),
+        '/platform-owner/institutions/$institutionId',
+      );
+      expect(
+        AppRoutePaths.platformOwnerInstitutionDetailLocation(
+          'id with/slash?admin=true',
+        ),
+        '/platform-owner/institutions/id%20with%2Fslash%3Fadmin%3Dtrue',
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+          '/platform-owner/institutions/$institutionId',
+        ),
+        isTrue,
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+          '/platform-owner/institutions',
+        ),
+        isFalse,
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+          '/platform-owner/institutions/',
+        ),
+        isFalse,
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+          '/platform-owner/institutions/$institutionId/edit',
+        ),
         isFalse,
       );
     });
