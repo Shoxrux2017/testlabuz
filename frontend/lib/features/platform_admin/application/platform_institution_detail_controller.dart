@@ -96,6 +96,16 @@ class PlatformInstitutionDetailController
     await _loadForKey();
   }
 
+  Future<void> refreshVisibleAfterRelatedMutation() async {
+    if (_sessionUserId == null ||
+        state.status != PlatformInstitutionDetailStatus.data ||
+        _inFlightInstitutionId == key.institutionId) {
+      return;
+    }
+
+    await _loadForKey();
+  }
+
   Future<void> _loadForKey({bool isRetry = false}) async {
     if (!isRetry &&
         state.isRequestInFlight &&

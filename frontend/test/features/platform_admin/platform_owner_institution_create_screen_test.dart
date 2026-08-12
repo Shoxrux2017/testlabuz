@@ -18,11 +18,16 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_admin_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_create_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_detail_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_create.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list_query.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_create.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_create_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail.dart';
@@ -454,6 +459,7 @@ Future<void> _pumpApp(
   FakePlatformInstitutionDetailRepository? detailRepository,
   FakePlatformDashboardRepository? dashboardRepository,
   FakePlatformInstitutionCreateRepository? createRepository,
+  FakePlatformInstitutionAdminRepository? adminRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
   Size? surfaceSize = const Size(1440, 900),
 }) async {
@@ -482,6 +488,9 @@ Future<void> _pumpApp(
         ),
         platformInstitutionCreateRepositoryProvider.overrideWithValue(
           createRepository ?? FakePlatformInstitutionCreateRepository(),
+        ),
+        platformInstitutionAdminRepositoryProvider.overrideWithValue(
+          adminRepository ?? FakePlatformInstitutionAdminRepository(),
         ),
       ],
       child: const TestLabUzApp(),
@@ -856,6 +865,40 @@ class FakePlatformInstitutionDetailRepository
 
     return onFetch?.call(institutionId) ??
         Future.value(_detail(id: institutionId));
+  }
+}
+
+class FakePlatformInstitutionAdminRepository
+    implements PlatformInstitutionAdminRepository {
+  final fetchCalls =
+      <({String institutionId, PlatformInstitutionAdminListQuery query})>[];
+
+  @override
+  Future<PlatformInstitutionAdminList> fetchAdmins({
+    required String institutionId,
+    required PlatformInstitutionAdminListQuery query,
+  }) {
+    fetchCalls.add((institutionId: institutionId, query: query));
+
+    return Future.value(
+      PlatformInstitutionAdminList(
+        admins: const [],
+        pagination: PlatformInstitutionAdminPagination(
+          page: query.page,
+          perPage: query.perPage,
+          total: 0,
+          lastPage: 1,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<PlatformInstitutionAdminCreateResult> createAdmin({
+    required String institutionId,
+    required PlatformInstitutionAdminCreateRequest request,
+  }) {
+    throw UnimplementedError('Create screen tests do not create admins.');
   }
 }
 
