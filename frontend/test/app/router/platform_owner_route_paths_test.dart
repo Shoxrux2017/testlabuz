@@ -18,8 +18,13 @@ void main() {
         AppRouteNames.platformOwnerInstitutionCreate,
         'platform-owner-institution-create',
       );
+      expect(
+        AppRouteNames.platformOwnerInstitutionEdit,
+        'platform-owner-institution-edit',
+      );
       expect(AppRoutePaths.platformOwnerInstitutionsSegment, 'institutions');
       expect(AppRoutePaths.platformOwnerInstitutionCreateSegment, 'new');
+      expect(AppRoutePaths.platformOwnerInstitutionEditSegment, 'edit');
       expect(
         AppRoutePaths.platformOwnerInstitutionIdParameter,
         'institutionId',
@@ -35,6 +40,10 @@ void main() {
       expect(
         AppRoutePaths.platformOwnerInstitutionDetail,
         '/platform-owner/institutions/:institutionId',
+      );
+      expect(
+        AppRoutePaths.platformOwnerInstitutionEdit,
+        '/platform-owner/institutions/:institutionId/edit',
       );
       expect(AppRoutePaths.platformOwnerDestinations, [
         AppRoutePaths.platformOwner,
@@ -73,6 +82,12 @@ void main() {
         ),
         isFalse,
       );
+      expect(
+        AppRoutePaths.isPlatformOwnerDestination(
+          '/platform-owner/institutions/550e8400-e29b-41d4-a716-446655440000/edit',
+        ),
+        isFalse,
+      );
     });
 
     test('uses segment-safe Platform Owner route-family checks', () {
@@ -96,61 +111,98 @@ void main() {
       );
     });
 
-    test('recognizes and builds only one-segment institution detail paths', () {
-      const institutionId = '550e8400-e29b-41d4-a716-446655440000';
+    test(
+      'recognizes and builds only one-segment institution detail and edit paths',
+      () {
+        const institutionId = '550e8400-e29b-41d4-a716-446655440000';
 
-      expect(
-        AppRoutePaths.platformOwnerInstitutionDetailLocation(institutionId),
-        '/platform-owner/institutions/$institutionId',
-      );
-      expect(
-        AppRoutePaths.platformOwnerInstitutionDetailLocation(
-          'id with/slash?admin=true',
-        ),
-        '/platform-owner/institutions/id%20with%2Fslash%3Fadmin%3Dtrue',
-      );
-      expect(
-        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+        expect(
+          AppRoutePaths.platformOwnerInstitutionDetailLocation(institutionId),
           '/platform-owner/institutions/$institutionId',
-        ),
-        isTrue,
-      );
-      expect(
-        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
-          '/platform-owner/institutions',
-        ),
-        isFalse,
-      );
-      expect(
-        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
-          '/platform-owner/institutions/',
-        ),
-        isFalse,
-      );
-      expect(
-        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
-          AppRoutePaths.platformOwnerInstitutionCreate,
-        ),
-        isFalse,
-      );
-      expect(
-        AppRoutePaths.isPlatformOwnerInstitutionCreatePath(
-          AppRoutePaths.platformOwnerInstitutionCreate,
-        ),
-        isTrue,
-      );
-      expect(
-        AppRoutePaths.isPlatformOwnerInstitutionCreatePath(
-          '/platform-owner/institutions/550e8400-e29b-41d4-a716-446655440000',
-        ),
-        isFalse,
-      );
-      expect(
-        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+        );
+        expect(
+          AppRoutePaths.platformOwnerInstitutionDetailLocation(
+            'id with/slash?admin=true',
+          ),
+          '/platform-owner/institutions/id%20with%2Fslash%3Fadmin%3Dtrue',
+        );
+        expect(
+          AppRoutePaths.platformOwnerInstitutionEditLocation(institutionId),
           '/platform-owner/institutions/$institutionId/edit',
-        ),
-        isFalse,
-      );
-    });
+        );
+        expect(
+          AppRoutePaths.platformOwnerInstitutionEditLocation(
+            'id with/slash?admin=true',
+          ),
+          '/platform-owner/institutions/id%20with%2Fslash%3Fadmin%3Dtrue/edit',
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+            '/platform-owner/institutions/$institutionId',
+          ),
+          isTrue,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+            '/platform-owner/institutions',
+          ),
+          isFalse,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+            '/platform-owner/institutions/',
+          ),
+          isFalse,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+            AppRoutePaths.platformOwnerInstitutionCreate,
+          ),
+          isFalse,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionCreatePath(
+            AppRoutePaths.platformOwnerInstitutionCreate,
+          ),
+          isTrue,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionCreatePath(
+            '/platform-owner/institutions/550e8400-e29b-41d4-a716-446655440000',
+          ),
+          isFalse,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+            '/platform-owner/institutions/$institutionId/edit',
+          ),
+          isFalse,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionEditPath(
+            '/platform-owner/institutions/$institutionId/edit',
+          ),
+          isTrue,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionEditPath(
+            '/platform-owner/institutions/$institutionId',
+          ),
+          isFalse,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionEditPath(
+            AppRoutePaths.platformOwnerInstitutionCreate,
+          ),
+          isFalse,
+        );
+        expect(
+          AppRoutePaths.isPlatformOwnerInstitutionEditPath(
+            '/platform-owner/institutions/$institutionId/edit/extra',
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 }

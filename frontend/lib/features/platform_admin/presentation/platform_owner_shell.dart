@@ -117,6 +117,10 @@ enum PlatformOwnerShellDestination {
       return PlatformOwnerShellDestination.institutions;
     }
 
+    if (AppRoutePaths.isPlatformOwnerInstitutionEditPath(path)) {
+      return PlatformOwnerShellDestination.institutions;
+    }
+
     if (AppRoutePaths.isPlatformOwnerInstitutionCreatePath(path)) {
       return PlatformOwnerShellDestination.institutions;
     }
