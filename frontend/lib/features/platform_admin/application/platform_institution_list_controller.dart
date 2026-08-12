@@ -19,9 +19,15 @@ final platformInstitutionListControllerProvider =
       PlatformInstitutionListState
     >(PlatformInstitutionListController.new);
 
+final platformInstitutionListRetainedQueryProvider =
+    Provider<PlatformInstitutionListRetainedQueryStore>((ref) {
+      return PlatformInstitutionListRetainedQueryStore();
+    });
+
 class PlatformInstitutionListController
     extends Notifier<PlatformInstitutionListState> {
   String? _sessionUserId;
+  int? _sessionInstanceId;
   PlatformInstitutionListQuery? _inFlightQuery;
   Timer? _searchDebounce;
   int _operationGeneration = 0;
@@ -47,25 +53,38 @@ class PlatformInstitutionListController
       return const PlatformInstitutionListState.initial();
     }
 
-    if (_sessionUserId == user.id) {
+    final sessionInstanceId = identityHashCode(user);
+    if (_sessionUserId == user.id && _sessionInstanceId == sessionInstanceId) {
       return state;
     }
 
     _sessionUserId = user.id;
+    _sessionInstanceId = sessionInstanceId;
     _searchDebounce?.cancel();
     _inFlightQuery = null;
     _operationGeneration += 1;
 
-    const initialQuery = PlatformInstitutionListQuery.initial();
+    final retained = ref
+        .read(platformInstitutionListRetainedQueryProvider)
+        .value;
+    final initialQuery = retained?.matches(user.id, sessionInstanceId) ?? false
+        ? retained!.query
+        : const PlatformInstitutionListQuery.initial();
+    final initialSearchText =
+        retained?.matches(user.id, sessionInstanceId) ?? false
+        ? retained!.searchText
+        : initialQuery.search ?? '';
     scheduleMicrotask(() {
-      if (!_isDisposed && _sessionUserId == user.id) {
+      if (!_isDisposed &&
+          _sessionUserId == user.id &&
+          _sessionInstanceId == sessionInstanceId) {
         unawaited(_load(initialQuery, sessionUserId: user.id));
       }
     });
 
-    return const PlatformInstitutionListState.loading(
+    return PlatformInstitutionListState.loading(
       query: initialQuery,
-      searchText: '',
+      searchText: initialSearchText,
     );
   }
 
@@ -76,6 +95,7 @@ class PlatformInstitutionListController
 
     _searchDebounce?.cancel();
     state = state.withSearchText(value, errorText: errorText);
+    _rememberListQuery();
 
     if (errorText != null) {
       return;
@@ -171,6 +191,7 @@ class PlatformInstitutionListController
     if (query == state.query) {
       if (searchText != null && searchText != state.searchText) {
         state = state.withSearchText(searchText);
+        _rememberListQuery();
       }
       return;
     }
@@ -185,6 +206,7 @@ class PlatformInstitutionListController
       query: query,
       searchText: nextSearchText,
     );
+    _rememberListQuery();
     unawaited(_load(query, sessionUserId: sessionUserId));
   }
 
@@ -211,6 +233,7 @@ class PlatformInstitutionListController
         searchText: state.searchText,
         result: result,
       );
+      _rememberListQuery();
     } on ApiRequestException catch (exception) {
       if (!_canComplete(generation, sessionUserId, query)) {
         return;
@@ -248,10 +271,31 @@ class PlatformInstitutionListController
   }
 
   void _clearSessionState() {
+    ref
+        .read(platformInstitutionListRetainedQueryProvider)
+        .clearIfMatches(_sessionUserId, _sessionInstanceId);
     _sessionUserId = null;
+    _sessionInstanceId = null;
     _inFlightQuery = null;
     _searchDebounce?.cancel();
     _operationGeneration += 1;
+  }
+
+  void _rememberListQuery() {
+    final sessionUserId = _sessionUserId;
+    final sessionInstanceId = _sessionInstanceId;
+    if (sessionUserId == null || sessionInstanceId == null) {
+      return;
+    }
+
+    ref
+        .read(platformInstitutionListRetainedQueryProvider)
+        .value = PlatformInstitutionListRetainedQuery(
+      sessionUserId: sessionUserId,
+      sessionInstanceId: sessionInstanceId,
+      query: state.query,
+      searchText: state.searchText,
+    );
   }
 
   void _reconcileSessionForFailure(ApiFailure failure) {
@@ -262,5 +306,37 @@ class PlatformInstitutionListController
         code == ApiErrorCodes.institutionInactive) {
       unawaited(ref.read(authSessionControllerProvider.notifier).bootstrap());
     }
+  }
+}
+
+class PlatformInstitutionListRetainedQueryStore {
+  PlatformInstitutionListRetainedQuery? value;
+
+  void clearIfMatches(String? userId, int? userInstanceId) {
+    final retained = value;
+    if (retained != null &&
+        userId != null &&
+        userInstanceId != null &&
+        retained.matches(userId, userInstanceId)) {
+      value = null;
+    }
+  }
+}
+
+class PlatformInstitutionListRetainedQuery {
+  const PlatformInstitutionListRetainedQuery({
+    required this.sessionUserId,
+    required this.sessionInstanceId,
+    required this.query,
+    required this.searchText,
+  });
+
+  final String sessionUserId;
+  final int sessionInstanceId;
+  final PlatformInstitutionListQuery query;
+  final String searchText;
+
+  bool matches(String userId, int userInstanceId) {
+    return sessionUserId == userId && sessionInstanceId == userInstanceId;
   }
 }

@@ -14,7 +14,12 @@ void main() {
         AppRouteNames.platformOwnerInstitutionDetail,
         'platform-owner-institution-detail',
       );
+      expect(
+        AppRouteNames.platformOwnerInstitutionCreate,
+        'platform-owner-institution-create',
+      );
       expect(AppRoutePaths.platformOwnerInstitutionsSegment, 'institutions');
+      expect(AppRoutePaths.platformOwnerInstitutionCreateSegment, 'new');
       expect(
         AppRoutePaths.platformOwnerInstitutionIdParameter,
         'institutionId',
@@ -22,6 +27,10 @@ void main() {
       expect(
         AppRoutePaths.platformOwnerInstitutions,
         '/platform-owner/institutions',
+      );
+      expect(
+        AppRoutePaths.platformOwnerInstitutionCreate,
+        '/platform-owner/institutions/new',
       );
       expect(
         AppRoutePaths.platformOwnerInstitutionDetail,
@@ -50,6 +59,12 @@ void main() {
       );
       expect(
         AppRoutePaths.isPlatformOwnerDestination('/platform-owner/settings'),
+        isFalse,
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerDestination(
+          AppRoutePaths.platformOwnerInstitutionCreate,
+        ),
         isFalse,
       );
       expect(
@@ -109,6 +124,24 @@ void main() {
       expect(
         AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
           '/platform-owner/institutions/',
+        ),
+        isFalse,
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerInstitutionDetailPath(
+          AppRoutePaths.platformOwnerInstitutionCreate,
+        ),
+        isFalse,
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerInstitutionCreatePath(
+          AppRoutePaths.platformOwnerInstitutionCreate,
+        ),
+        isTrue,
+      );
+      expect(
+        AppRoutePaths.isPlatformOwnerInstitutionCreatePath(
+          '/platform-owner/institutions/550e8400-e29b-41d4-a716-446655440000',
         ),
         isFalse,
       );

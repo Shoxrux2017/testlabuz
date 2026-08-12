@@ -843,7 +843,6 @@ Future<void> _selectDestination(
 }
 
 void _expectNoLaterTaskText() {
-  expect(find.text('Create Institution'), findsNothing);
   expect(find.text('Edit Institution'), findsNothing);
   expect(find.text('Activate'), findsNothing);
   expect(find.text('Deactivate'), findsNothing);

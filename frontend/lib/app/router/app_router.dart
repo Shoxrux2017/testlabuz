@@ -11,6 +11,7 @@ import '../../features/auth/presentation/login/login_screen.dart';
 import '../../features/entry/domain/entry_route_resolver.dart';
 import '../../features/entry/presentation/role_entry_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_dashboard_screen.dart';
+import '../../features/platform_admin/presentation/platform_owner_institution_create_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institution_detail_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
@@ -86,6 +87,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.platformOwnerInstitutions,
             builder: (context, state) =>
                 const PlatformOwnerInstitutionsScreen(),
+          ),
+          GoRoute(
+            name: AppRouteNames.platformOwnerInstitutionCreate,
+            path: AppRoutePaths.platformOwnerInstitutionCreate,
+            builder: (context, state) =>
+                const PlatformOwnerInstitutionCreateScreen(),
           ),
           GoRoute(
             name: AppRouteNames.platformOwnerInstitutionDetail,

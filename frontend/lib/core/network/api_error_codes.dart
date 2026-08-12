@@ -7,6 +7,7 @@ abstract final class ApiErrorCodes {
   static const forbidden = 'forbidden';
   static const resourceNotFound = 'resource_not_found';
   static const validationFailed = 'validation_failed';
+  static const serverError = 'server_error';
   static const currentPasswordInvalid = 'current_password_invalid';
   static const rateLimited = 'rate_limited';
 }
