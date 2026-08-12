@@ -65,6 +65,11 @@ class PlatformOwnerInstitutionDetailScreen extends ConsumerWidget {
           const SizedBox(height: _sectionSpacing),
           _InstitutionDetailBody(
             state: state,
+            onEdit: (detail) {
+              context.go(
+                AppRoutePaths.platformOwnerInstitutionEditLocation(detail.id),
+              );
+            },
             onRetry: key == null
                 ? null
                 : () {
@@ -84,9 +89,14 @@ class PlatformOwnerInstitutionDetailScreen extends ConsumerWidget {
 }
 
 class _InstitutionDetailBody extends StatelessWidget {
-  const _InstitutionDetailBody({required this.state, required this.onRetry});
+  const _InstitutionDetailBody({
+    required this.state,
+    required this.onEdit,
+    required this.onRetry,
+  });
 
   final PlatformInstitutionDetailState state;
+  final ValueChanged<PlatformInstitutionDetail> onEdit;
   final VoidCallback? onRetry;
 
   @override
@@ -97,6 +107,7 @@ class _InstitutionDetailBody extends StatelessWidget {
         const _InstitutionDetailLoading(),
       PlatformInstitutionDetailStatus.data => _InstitutionDetailData(
         detail: state.detail!,
+        onEdit: onEdit,
       ),
       PlatformInstitutionDetailStatus.notFound =>
         const _InstitutionDetailNotFound(),
@@ -135,9 +146,10 @@ class _InstitutionDetailLoading extends StatelessWidget {
 }
 
 class _InstitutionDetailData extends StatelessWidget {
-  const _InstitutionDetailData({required this.detail});
+  const _InstitutionDetailData({required this.detail, required this.onEdit});
 
   final PlatformInstitutionDetail detail;
+  final ValueChanged<PlatformInstitutionDetail> onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +157,7 @@ class _InstitutionDetailData extends StatelessWidget {
       key: const Key('platformInstitutionDetailData'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _InstitutionDetailHeader(detail: detail),
+        _InstitutionDetailHeader(detail: detail, onEdit: onEdit),
         const SizedBox(height: _sectionSpacing),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -179,9 +191,10 @@ class _InstitutionDetailData extends StatelessWidget {
 }
 
 class _InstitutionDetailHeader extends StatelessWidget {
-  const _InstitutionDetailHeader({required this.detail});
+  const _InstitutionDetailHeader({required this.detail, required this.onEdit});
 
   final PlatformInstitutionDetail detail;
+  final ValueChanged<PlatformInstitutionDetail> onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -210,6 +223,16 @@ class _InstitutionDetailHeader extends StatelessWidget {
               label: Text(platformInstitutionTypeLabel(detail.type)),
             ),
             _DetailStatusBadge(status: detail.status),
+            Semantics(
+              button: true,
+              label: 'Edit basic information for ${detail.name}',
+              child: FilledButton.icon(
+                key: const Key('platformInstitutionDetailEditButton'),
+                onPressed: () => onEdit(detail),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit basic information'),
+              ),
+            ),
           ],
         ),
       ],

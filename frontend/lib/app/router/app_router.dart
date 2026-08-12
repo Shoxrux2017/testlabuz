@@ -13,6 +13,7 @@ import '../../features/entry/presentation/role_entry_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_dashboard_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institution_create_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institution_detail_screen.dart';
+import '../../features/platform_admin/presentation/platform_owner_institution_edit_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
 import 'app_route_paths.dart';
@@ -98,6 +99,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: AppRouteNames.platformOwnerInstitutionDetail,
             path: AppRoutePaths.platformOwnerInstitutionDetail,
             builder: (context, state) => PlatformOwnerInstitutionDetailScreen(
+              institutionId:
+                  state.pathParameters[AppRoutePaths
+                      .platformOwnerInstitutionIdParameter] ??
+                  '',
+            ),
+          ),
+          GoRoute(
+            name: AppRouteNames.platformOwnerInstitutionEdit,
+            path: AppRoutePaths.platformOwnerInstitutionEdit,
+            builder: (context, state) => PlatformOwnerInstitutionEditScreen(
               institutionId:
                   state.pathParameters[AppRoutePaths
                       .platformOwnerInstitutionIdParameter] ??

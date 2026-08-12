@@ -9,6 +9,7 @@ abstract final class AppRouteNames {
       'platform-owner-institution-create';
   static const platformOwnerInstitutionDetail =
       'platform-owner-institution-detail';
+  static const platformOwnerInstitutionEdit = 'platform-owner-institution-edit';
   static const institutionAdmin = 'institution-admin';
   static const teacher = 'teacher';
   static const student = 'student';
@@ -24,12 +25,15 @@ abstract final class AppRoutePaths {
   static const platformOwner = '/platform-owner';
   static const platformOwnerInstitutionsSegment = 'institutions';
   static const platformOwnerInstitutionCreateSegment = 'new';
+  static const platformOwnerInstitutionEditSegment = 'edit';
   static const platformOwnerInstitutionIdParameter = 'institutionId';
   static const platformOwnerInstitutions = '/platform-owner/institutions';
   static const platformOwnerInstitutionCreate =
       '/platform-owner/institutions/new';
   static const platformOwnerInstitutionDetail =
       '/platform-owner/institutions/:institutionId';
+  static const platformOwnerInstitutionEdit =
+      '/platform-owner/institutions/:institutionId/edit';
   static const institutionAdmin = '/institution-admin';
   static const teacher = '/teacher';
   static const student = '/student';
@@ -42,6 +46,7 @@ abstract final class AppRoutePaths {
     platformOwner,
     platformOwnerInstitutions,
     platformOwnerInstitutionCreate,
+    platformOwnerInstitutionEdit,
     institutionAdmin,
     teacher,
     student,
@@ -81,7 +86,23 @@ abstract final class AppRoutePaths {
     return '$platformOwnerInstitutions/${Uri.encodeComponent(institutionId)}';
   }
 
+  static String platformOwnerInstitutionEditLocation(String institutionId) {
+    return '${platformOwnerInstitutionDetailLocation(institutionId)}/edit';
+  }
+
   static bool isPlatformOwnerInstitutionCreatePath(String path) {
     return path == platformOwnerInstitutionCreate;
+  }
+
+  static bool isPlatformOwnerInstitutionEditPath(String path) {
+    const prefix = '$platformOwnerInstitutions/';
+    const suffix = '/$platformOwnerInstitutionEditSegment';
+    if (!path.startsWith(prefix) || !path.endsWith(suffix)) {
+      return false;
+    }
+
+    final segment = path.substring(prefix.length, path.length - suffix.length);
+
+    return segment.isNotEmpty && !segment.contains('/');
   }
 }

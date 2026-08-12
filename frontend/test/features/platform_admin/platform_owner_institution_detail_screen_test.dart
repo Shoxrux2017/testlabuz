@@ -147,7 +147,74 @@ void main() {
         expect(find.text('Inactive user accounts'), findsNothing);
         expect(find.text('Online users'), findsNothing);
         expect(find.text('Role counts'), findsNothing);
+        expect(
+          find.byKey(const Key('platformInstitutionDetailEditButton')),
+          findsOneWidget,
+        );
+        expect(find.text('Edit basic information'), findsOneWidget);
         _expectNoLaterScopeText();
+      },
+    );
+
+    testWidgets(
+      'detail exposes one accessible edit action to exact edit route',
+      (tester) async {
+        final detailRepository = FakePlatformInstitutionDetailRepository(
+          onFetch: (institutionId) async => _detail(
+            id: institutionId,
+            name: 'Editable School',
+            status: PlatformInstitutionStatus.inactive,
+          ),
+        );
+
+        await _pumpApp(tester, detailRepository: detailRepository);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionDetailEditButton')),
+          findsOneWidget,
+        );
+        final semanticsWidget = tester.widget<Semantics>(
+          find
+              .ancestor(
+                of: find.byKey(
+                  const Key('platformInstitutionDetailEditButton'),
+                ),
+                matching: find.byType(Semantics),
+              )
+              .first,
+        );
+        expect(
+          semanticsWidget.properties.label,
+          'Edit basic information for Editable School',
+        );
+        expect(semanticsWidget.properties.button, isTrue);
+        expect(find.text('Activate'), findsNothing);
+        expect(find.text('Deactivate'), findsNothing);
+        expect(find.text('Institution Admins'), findsNothing);
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionDetailEditButton')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), '${_detailPath(_institutionIdA)}/edit');
+        expect(
+          tester
+              .widget<NavigationRail>(
+                find.byKey(const Key('platformOwnerNavigation')),
+              )
+              .selectedIndex,
+          1,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionEditHeading')),
+          findsOneWidget,
+        );
+        expect(detailRepository.institutionIds, [
+          _institutionIdA,
+          _institutionIdA,
+        ]);
       },
     );
 
