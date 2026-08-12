@@ -100,7 +100,7 @@ Review. The closure review is not itself an implementation task.
 - [x] `S02-BE-006` is accepted and delivered.
 - [x] `S02-BE-007` is accepted and delivered.
 - [x] `S02-FE-004` is accepted and delivered.
-- [x] Later Stage 2 tasks from `S02-FE-005` onward are not individually approved for implementation.
+- [x] Later Stage 2 tasks from `S02-FE-006` onward are not individually approved for implementation.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
 
