@@ -87,6 +87,15 @@ class PlatformInstitutionDetailController
     await _loadForKey(isRetry: true);
   }
 
+  Future<void> refreshAfterMutation() async {
+    if (_sessionUserId == null || state.isRequestInFlight) {
+      return;
+    }
+
+    state = const PlatformInstitutionDetailState.loading();
+    await _loadForKey();
+  }
+
   Future<void> _loadForKey({bool isRetry = false}) async {
     if (!isRetry &&
         state.isRequestInFlight &&

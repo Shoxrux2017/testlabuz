@@ -19,11 +19,14 @@ import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_detail_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_lifecycle_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_lifecycle.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_lifecycle_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
@@ -152,6 +155,14 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Edit basic information'), findsOneWidget);
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleActivateButton')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+          findsNothing,
+        );
         _expectNoLaterScopeText();
       },
     );
@@ -189,8 +200,14 @@ void main() {
           'Edit basic information for Editable School',
         );
         expect(semanticsWidget.properties.button, isTrue);
-        expect(find.text('Activate'), findsNothing);
-        expect(find.text('Deactivate'), findsNothing);
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleActivateButton')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+          findsNothing,
+        );
         expect(find.text('Institution Admins'), findsNothing);
 
         await tester.tap(
@@ -215,6 +232,270 @@ void main() {
           _institutionIdA,
           _institutionIdA,
         ]);
+      },
+    );
+
+    testWidgets(
+      'lifecycle confirmation shows truthful wording and cancel sends no request',
+      (tester) async {
+        final activateRepository = FakePlatformInstitutionLifecycleRepository();
+        await _pumpApp(
+          tester,
+          detailRepository: FakePlatformInstitutionDetailRepository(
+            onFetch: (_) async => _detail(
+              name: 'Inactive School',
+              status: PlatformInstitutionStatus.inactive,
+            ),
+          ),
+          lifecycleRepository: activateRepository,
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleActivateButton')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+          findsNothing,
+        );
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionLifecycleActivateButton')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Activate institution'), findsOneWidget);
+        expect(find.text('Inactive School'), findsNWidgets(3));
+        expect(find.text('Current status'), findsOneWidget);
+        expect(find.text('Target status'), findsOneWidget);
+        expect(find.text('Inactive'), findsWidgets);
+        expect(find.text('Active'), findsWidgets);
+        expect(find.text('Cancel'), findsOneWidget);
+        expect(
+          find.byKey(
+            const Key('platformInstitutionLifecycleConfirmActivateButton'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('first-login requirement'), findsOneWidget);
+        expect(find.textContaining('reactivates'), findsNothing);
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionLifecycleCancelButton')),
+        );
+        await tester.pumpAndSettle();
+        expect(activateRepository.activateCalls, 0);
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleDialog')),
+          findsNothing,
+        );
+
+        final deactivateRepository =
+            FakePlatformInstitutionLifecycleRepository();
+        await _pumpApp(
+          tester,
+          detailRepository: FakePlatformInstitutionDetailRepository(
+            onFetch: (_) async => _detail(name: 'Active School'),
+          ),
+          lifecycleRepository: deactivateRepository,
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleActivateButton')),
+          findsNothing,
+        );
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Deactivate institution'), findsOneWidget);
+        expect(
+          find.byKey(
+            const Key('platformInstitutionLifecycleConfirmDeactivateButton'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Institution Admins'), findsOneWidget);
+        expect(
+          find.textContaining('Historical data is preserved'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('delete'), findsNothing);
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionLifecycleCancelButton')),
+        );
+        await tester.pumpAndSettle();
+        expect(deactivateRepository.deactivateCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'confirmed deactivation sends one POST and refreshes visible detail',
+      (tester) async {
+        final deactivateCompleter =
+            Completer<PlatformInstitutionLifecycleResult>();
+        final lifecycleRepository = FakePlatformInstitutionLifecycleRepository(
+          onDeactivate: (_) => deactivateCompleter.future,
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository();
+        detailRepository.onFetch = (_) async {
+          if (detailRepository.fetchCalls == 1) {
+            return _detail(name: 'Lifecycle School');
+          }
+
+          return _detail(
+            name: 'Lifecycle School',
+            status: PlatformInstitutionStatus.inactive,
+          );
+        };
+        final listRepository = FakePlatformInstitutionListRepository();
+        final dashboardRepository = FakePlatformDashboardRepository();
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          lifecycleRepository: lifecycleRepository,
+          listRepository: listRepository,
+          dashboardRepository: dashboardRepository,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            const Key('platformInstitutionLifecycleConfirmDeactivateButton'),
+          ),
+        );
+        await tester.tap(
+          find.byKey(
+            const Key('platformInstitutionLifecycleConfirmDeactivateButton'),
+          ),
+        );
+        await tester.pump();
+
+        expect(lifecycleRepository.deactivateCalls, 1);
+        expect(find.text('Deactivate in progress'), findsOneWidget);
+
+        deactivateCompleter.complete(
+          _lifecycleResult(status: PlatformInstitutionStatus.inactive),
+        );
+        await tester.pumpAndSettle();
+
+        expect(lifecycleRepository.deactivateCalls, 1);
+        expect(detailRepository.fetchCalls, 2);
+        expect(listRepository.fetchCalls, 0);
+        expect(dashboardRepository.fetchCalls, 0);
+        expect(
+          find.text('Institution deactivated successfully.'),
+          findsOneWidget,
+        );
+        expect(find.text('Inactive'), findsNWidgets(2));
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleActivateButton')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'ambiguous outcome exposes GET-only Check status without POST retry',
+      (tester) async {
+        final statusCompleter = Completer<PlatformInstitutionDetail>();
+        final lifecycleRepository = FakePlatformInstitutionLifecycleRepository(
+          onDeactivate: (_) async =>
+              throw const PlatformInstitutionLifecycleOutcomeUnknownException(
+                'unknown',
+              ),
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository();
+        detailRepository.onFetch = (_) {
+          if (detailRepository.fetchCalls == 1) {
+            return Future.value(_detail(name: 'Ambiguous School'));
+          }
+
+          if (detailRepository.fetchCalls == 2) {
+            throw _localFailure(ApiFailureKind.connection);
+          }
+
+          return statusCompleter.future;
+        };
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          lifecycleRepository: lifecycleRepository,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionLifecycleDeactivateButton')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            const Key('platformInstitutionLifecycleConfirmDeactivateButton'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(lifecycleRepository.deactivateCalls, 1);
+        expect(detailRepository.fetchCalls, 2);
+        expect(
+          find.text(
+            'Lifecycle outcome is unknown. Check status before acting again.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionLifecycleCheckStatusButton'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionLifecycleConfirmDeactivateButton'),
+          ),
+          findsNothing,
+        );
+
+        await tester.tap(
+          find.byKey(
+            const Key('platformInstitutionLifecycleCheckStatusButton'),
+          ),
+        );
+        await tester.pump();
+        expect(find.text('Checking status'), findsOneWidget);
+        expect(lifecycleRepository.deactivateCalls, 1);
+        expect(detailRepository.fetchCalls, 3);
+
+        statusCompleter.complete(
+          _detail(
+            name: 'Ambiguous School',
+            status: PlatformInstitutionStatus.inactive,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(lifecycleRepository.deactivateCalls, 1);
+        expect(find.text('Current server status is inactive.'), findsOneWidget);
+        expect(find.text('Check status'), findsNothing);
       },
     );
 
@@ -505,6 +786,7 @@ Future<void> _pumpApp(
   String? initialLocation,
   FakeAuthRepository? authRepository,
   FakePlatformInstitutionDetailRepository? detailRepository,
+  FakePlatformInstitutionLifecycleRepository? lifecycleRepository,
   FakePlatformInstitutionListRepository? listRepository,
   FakePlatformDashboardRepository? dashboardRepository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
@@ -536,6 +818,9 @@ Future<void> _pumpApp(
         platformInstitutionDetailRepositoryProvider.overrideWithValue(
           detailRepository ?? FakePlatformInstitutionDetailRepository(),
         ),
+        platformInstitutionLifecycleRepositoryProvider.overrideWithValue(
+          lifecycleRepository ?? FakePlatformInstitutionLifecycleRepository(),
+        ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
       ],
@@ -549,8 +834,6 @@ Future<void> _pumpApp(
 void _expectNoLaterScopeText() {
   expect(find.text('Create Institution'), findsNothing);
   expect(find.text('Edit Institution'), findsNothing);
-  expect(find.text('Activate'), findsNothing);
-  expect(find.text('Deactivate'), findsNothing);
   expect(find.text('Institution Admins'), findsNothing);
   expect(find.text('Settings'), findsNothing);
   expect(find.text('Statistics'), findsNothing);
@@ -605,6 +888,30 @@ PlatformInstitutionDetail _detail({
     createdAt: DateTime.utc(2026, 8, 7, 15),
     updatedAt: DateTime.utc(2026, 8, 7, 16, 30),
     userCounts: const PlatformInstitutionUserCounts(total: 42, active: 40),
+  );
+}
+
+PlatformInstitutionLifecycleResult _lifecycleResult({
+  String id = _institutionIdA,
+  String name = 'Example School',
+  PlatformInstitutionStatus status = PlatformInstitutionStatus.active,
+}) {
+  final message = status == PlatformInstitutionStatus.active
+      ? 'Institution activated successfully.'
+      : 'Institution deactivated successfully.';
+
+  return PlatformInstitutionLifecycleResult(
+    id: id,
+    name: name,
+    type: PlatformInstitutionType.school,
+    status: status,
+    contactEmail: 'info@example.uz',
+    contactPhone: '+998901234567',
+    address: 'Samarkand',
+    description: null,
+    createdAt: DateTime.utc(2026, 8, 7, 15),
+    updatedAt: DateTime.utc(2026, 8, 10, 12),
+    message: message,
   );
 }
 
@@ -710,6 +1017,12 @@ ApiRequestException _serverFailure(
   );
 }
 
+ApiRequestException _localFailure(ApiFailureKind kind) {
+  return ApiRequestException(
+    ApiFailure.local(kind: kind, message: 'Local lifecycle failure.'),
+  );
+}
+
 FakeAuthRepository _authenticatedRepository(
   AuthUser user, {
   int tokenVersion = 0,
@@ -810,6 +1123,49 @@ class FakePlatformInstitutionDetailRepository
 
     return onFetch?.call(institutionId) ??
         Future.value(_detail(id: institutionId));
+  }
+}
+
+class FakePlatformInstitutionLifecycleRepository
+    implements PlatformInstitutionLifecycleRepository {
+  FakePlatformInstitutionLifecycleRepository({
+    this.onActivate,
+    this.onDeactivate,
+  });
+
+  Future<PlatformInstitutionLifecycleResult> Function(String institutionId)?
+  onActivate;
+  Future<PlatformInstitutionLifecycleResult> Function(String institutionId)?
+  onDeactivate;
+  final activateInstitutionIds = <String>[];
+  final deactivateInstitutionIds = <String>[];
+
+  int get activateCalls => activateInstitutionIds.length;
+  int get deactivateCalls => deactivateInstitutionIds.length;
+
+  @override
+  Future<PlatformInstitutionLifecycleResult> activateInstitution(
+    String institutionId,
+  ) {
+    activateInstitutionIds.add(institutionId);
+
+    return onActivate?.call(institutionId) ??
+        Future.value(_lifecycleResult(id: institutionId));
+  }
+
+  @override
+  Future<PlatformInstitutionLifecycleResult> deactivateInstitution(
+    String institutionId,
+  ) {
+    deactivateInstitutionIds.add(institutionId);
+
+    return onDeactivate?.call(institutionId) ??
+        Future.value(
+          _lifecycleResult(
+            id: institutionId,
+            status: PlatformInstitutionStatus.inactive,
+          ),
+        );
   }
 }
 
