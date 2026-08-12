@@ -6,6 +6,10 @@
 |---|---|
 | Task ID | `S02-FE-007` |
 | Status | `Accepted` |
+| Review | `PASS` |
+| Delivery | `Delivered` |
+| Pull request | `#34` |
+| Merge commit | `2f8e902e8073eeec847d8108f7600a486b0302a8` |
 | Approved on | `2026-08-10` |
 | Stage | `Stage 2 — Multi-Institution Platform Management` |
 | Area | `Frontend / Platform Owner Institution lifecycle` |
