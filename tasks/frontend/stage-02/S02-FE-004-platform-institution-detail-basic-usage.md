@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Task ID | `S02-FE-004` |
-| Status | `Delivery Blocked` |
+| Status | `Accepted` |
 | Approved on | `2026-08-10` |
 | Stage | `Stage 2 — Multi-Institution Platform Management` |
 | Area | `Frontend / Platform Owner Institution detail read integration` |
