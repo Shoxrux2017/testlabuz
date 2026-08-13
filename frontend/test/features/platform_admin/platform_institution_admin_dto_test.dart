@@ -67,6 +67,15 @@ void main() {
       expect(result.message, 'Institution admin created.');
     });
 
+    test('accepts inactive admins only with deactivation timestamp', () {
+      final inactive = PlatformInstitutionAdminDto.fromJson(
+        _adminResource(isActive: false, deactivatedAt: '2026-08-07T17:00:00Z'),
+      ).toDomain();
+
+      expect(inactive.isActive, isFalse);
+      expect(inactive.deactivatedAt, DateTime.utc(2026, 8, 7, 17));
+    });
+
     test('rejects malformed required and timestamp fields', () {
       final cases = [
         _adminResource(id: 'not-a-uuid'),
@@ -76,6 +85,8 @@ void main() {
         _adminResource(mustChangePassword: 1),
         _adminResource(lastLoginAt: ''),
         _adminResource(deactivatedAt: 'not-time'),
+        _adminResource(isActive: true, deactivatedAt: '2026-08-07T17:00:00Z'),
+        _adminResource(isActive: false, deactivatedAt: null),
         _adminResource(createdAt: '2026-08-07 15:00:00'),
         _adminResource(updatedAt: 'not-time'),
       ];

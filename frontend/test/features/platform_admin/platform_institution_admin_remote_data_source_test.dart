@@ -10,8 +10,10 @@ import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_admin_remote_data_source.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_admin_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_create.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_lifecycle.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_update.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 
 void main() {
@@ -138,6 +140,132 @@ void main() {
     });
 
     test(
+      'PATCH sends only changed update fields and never protected authority',
+      () async {
+        final adapter = RecordingAdapter(
+          (_) => _jsonResponse(200, _updateEnvelope()),
+        );
+        final dataSource = PlatformInstitutionAdminRemoteDataSource(
+          dio: _plainDio(adapter),
+          failureMapper: const DioFailureMapper(),
+        );
+        final request = PlatformInstitutionAdminUpdateRequest({
+          PlatformInstitutionAdminEditField.email: null,
+          PlatformInstitutionAdminEditField.phone: '+998901234567',
+        });
+
+        final dto = await dataSource.updateAdmin(
+          adminId: '550e8400-e29b-41d4-a716-446655440001',
+          request: request,
+        );
+
+        expect(dto.admin.id, '550e8400-e29b-41d4-a716-446655440001');
+        expect(adapter.requests, hasLength(1));
+        expect(adapter.singleRequest.method, 'PATCH');
+        expect(
+          adapter.singleRequest.path,
+          '/platform/institution-admins/550e8400-e29b-41d4-a716-446655440001',
+        );
+        expect(adapter.singleRequest.queryParameters, isEmpty);
+        expect(adapter.singleRequest.data, {
+          'email': null,
+          'phone': '+998901234567',
+        });
+        expect(adapter.singleRequest.data.keys, hasLength(2));
+        expect(
+          adapter.singleRequest.headers.keys,
+          isNot(contains('Idempotency-Key')),
+        );
+        expect(
+          adapter.singleRequest.data.keys,
+          isNot(
+            containsAll([
+              'login_name',
+              'password',
+              'role',
+              'institution_id',
+              'is_active',
+              'must_change_password',
+              'last_login_at',
+              'deactivated_at',
+              'created_by_user_id',
+            ]),
+          ),
+        );
+      },
+    );
+
+    test('empty update request is rejected before HTTP', () async {
+      final adapter = RecordingAdapter(
+        (_) => _jsonResponse(200, _updateEnvelope()),
+      );
+      final dataSource = PlatformInstitutionAdminRemoteDataSource(
+        dio: _plainDio(adapter),
+        failureMapper: const DioFailureMapper(),
+      );
+
+      expect(
+        () => dataSource.updateAdmin(
+          adminId: '550e8400-e29b-41d4-a716-446655440001',
+          request: PlatformInstitutionAdminUpdateRequest(const {}),
+        ),
+        throwsArgumentError,
+      );
+      expect(adapter.requests, isEmpty);
+    });
+
+    test(
+      'lifecycle POSTs exact state endpoint with empty body and no idempotency',
+      () async {
+        final adapter = RecordingAdapter((options) {
+          final active = options.path.endsWith('/activate');
+          return _jsonResponse(
+            200,
+            _lifecycleEnvelope(
+              action: active
+                  ? PlatformInstitutionAdminLifecycleAction.activate
+                  : PlatformInstitutionAdminLifecycleAction.deactivate,
+            ),
+          );
+        });
+        final dataSource = PlatformInstitutionAdminRemoteDataSource(
+          dio: _plainDio(adapter),
+          failureMapper: const DioFailureMapper(),
+        );
+
+        final activated = await dataSource.activateAdmin(
+          adminId: '550e8400-e29b-41d4-a716-446655440001',
+        );
+        final deactivated = await dataSource.deactivateAdmin(
+          adminId: '550e8400-e29b-41d4-a716-446655440001',
+        );
+
+        expect(activated.admin.isActive, isTrue);
+        expect(deactivated.admin.isActive, isFalse);
+        expect(adapter.requests, hasLength(2));
+        expect(adapter.requests[0].method, 'POST');
+        expect(
+          adapter.requests[0].path,
+          '/platform/institution-admins/550e8400-e29b-41d4-a716-446655440001/activate',
+        );
+        expect(adapter.requests[0].data, isEmpty);
+        expect(
+          adapter.requests[0].headers.keys,
+          isNot(contains('Idempotency-Key')),
+        );
+        expect(
+          adapter.requests[1].path,
+          '/platform/institution-admins/550e8400-e29b-41d4-a716-446655440001/deactivate',
+        );
+        expect(adapter.requests[1].data, isEmpty);
+        expect(
+          adapter.requests[1].headers.keys,
+          isNot(contains('Idempotency-Key')),
+        );
+      },
+    );
+
+    test(
       'does not accept non-201 malformed or invariant mismatch as success',
       () async {
         final cases = [
@@ -183,6 +311,82 @@ void main() {
             ),
             throwsA(
               isA<PlatformInstitutionAdminCreateOutcomeUnknownException>(),
+            ),
+          );
+        }
+      },
+    );
+
+    test(
+      'update and lifecycle malformed successes become unknown outcomes',
+      () async {
+        final updateCases = [
+          _jsonResponse(204, _updateEnvelope()),
+          _jsonResponse(200, _updateEnvelope(admin: _adminResource(id: 'bad'))),
+          _jsonResponse(200, {'data': _adminResource(), 'message': ''}),
+          _jsonResponse(
+            200,
+            _updateEnvelope(
+              admin: _adminResource(isActive: false, deactivatedAt: null),
+            ),
+          ),
+        ];
+
+        for (final response in updateCases) {
+          final dataSource = PlatformInstitutionAdminRemoteDataSource(
+            dio: _plainDio(RecordingAdapter((_) => response)),
+            failureMapper: const DioFailureMapper(),
+          );
+
+          await expectLater(
+            dataSource.updateAdmin(
+              adminId: '550e8400-e29b-41d4-a716-446655440001',
+              request: PlatformInstitutionAdminUpdateRequest({
+                PlatformInstitutionAdminEditField.fullName: 'Updated',
+              }),
+            ),
+            throwsA(
+              isA<PlatformInstitutionAdminMutationOutcomeUnknownException>(),
+            ),
+          );
+        }
+
+        final lifecycleCases = [
+          _jsonResponse(
+            200,
+            _lifecycleEnvelope(
+              action: PlatformInstitutionAdminLifecycleAction.activate,
+              admin: _adminResource(isActive: false),
+            ),
+          ),
+          _jsonResponse(
+            200,
+            _lifecycleEnvelope(
+              action: PlatformInstitutionAdminLifecycleAction.deactivate,
+              admin: _adminResource(isActive: false, deactivatedAt: null),
+            ),
+          ),
+          _jsonResponse(
+            200,
+            _lifecycleEnvelope(
+              action: PlatformInstitutionAdminLifecycleAction.deactivate,
+              message: 'Wrong message',
+            ),
+          ),
+        ];
+
+        for (final response in lifecycleCases) {
+          final dataSource = PlatformInstitutionAdminRemoteDataSource(
+            dio: _plainDio(RecordingAdapter((_) => response)),
+            failureMapper: const DioFailureMapper(),
+          );
+
+          await expectLater(
+            dataSource.deactivateAdmin(
+              adminId: '550e8400-e29b-41d4-a716-446655440001',
+            ),
+            throwsA(
+              isA<PlatformInstitutionAdminMutationOutcomeUnknownException>(),
             ),
           );
         }
@@ -256,6 +460,35 @@ void main() {
         throwsA(isA<PlatformInstitutionAdminCreateOutcomeUnknownException>()),
       );
     });
+
+    test(
+      'maps update timeout or disconnect as unknown without replay',
+      () async {
+        final dataSource = PlatformInstitutionAdminRemoteDataSource(
+          dio: _plainDio(
+            RecordingAdapter((options) {
+              throw DioException(
+                requestOptions: options,
+                type: DioExceptionType.receiveTimeout,
+              );
+            }),
+          ),
+          failureMapper: const DioFailureMapper(),
+        );
+
+        await expectLater(
+          dataSource.updateAdmin(
+            adminId: '550e8400-e29b-41d4-a716-446655440001',
+            request: PlatformInstitutionAdminUpdateRequest({
+              PlatformInstitutionAdminEditField.fullName: 'Updated',
+            }),
+          ),
+          throwsA(
+            isA<PlatformInstitutionAdminMutationOutcomeUnknownException>(),
+          ),
+        );
+      },
+    );
   });
 }
 
@@ -296,6 +529,30 @@ Map<String, Object?> _createEnvelope({Map<String, Object?>? admin}) {
   return {
     'data': admin ?? _adminResource(),
     'message': 'Institution administrator created.',
+  };
+}
+
+Map<String, Object?> _updateEnvelope({Map<String, Object?>? admin}) {
+  return {
+    'data': admin ?? _adminResource(),
+    'message': 'Institution admin updated successfully.',
+  };
+}
+
+Map<String, Object?> _lifecycleEnvelope({
+  required PlatformInstitutionAdminLifecycleAction action,
+  Map<String, Object?>? admin,
+  String? message,
+}) {
+  final active = action == PlatformInstitutionAdminLifecycleAction.activate;
+  return {
+    'data':
+        admin ??
+        _adminResource(
+          isActive: active,
+          deactivatedAt: active ? null : '2026-08-07T17:00:00Z',
+        ),
+    'message': message ?? action.successMessage,
   };
 }
 

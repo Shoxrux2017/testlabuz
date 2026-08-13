@@ -7,6 +7,8 @@ import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../../auth/application/auth_session_state.dart';
+import '../application/platform_institution_admin_action_controller.dart';
+import '../application/platform_institution_admin_action_state.dart';
 import '../application/platform_institution_admin_create_controller.dart';
 import '../application/platform_institution_admin_create_state.dart';
 import '../application/platform_institution_admin_list_controller.dart';
@@ -18,7 +20,9 @@ import '../application/platform_institution_lifecycle_state.dart';
 import '../domain/platform_institution.dart';
 import '../domain/platform_institution_admin.dart';
 import '../domain/platform_institution_admin_create.dart';
+import '../domain/platform_institution_admin_lifecycle.dart';
 import '../domain/platform_institution_admin_list_query.dart';
+import '../domain/platform_institution_admin_update.dart';
 import '../domain/platform_institution_detail.dart';
 import '../domain/platform_institution_lifecycle.dart';
 import '../domain/platform_institution_list_query.dart';
@@ -56,6 +60,7 @@ class _PlatformOwnerInstitutionDetailScreenState
   int? _snackShownGeneration;
   int? _refreshRequestedGeneration;
   int? _acknowledgedRefreshGeneration;
+  int? _adminCompletionHandledGeneration;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +115,23 @@ class _PlatformOwnerInstitutionDetailScreenState
             institutionId: widget.institutionId,
           )
         : null;
+    final adminActionKey =
+        detailState.status == PlatformInstitutionDetailStatus.data &&
+            detail != null &&
+            detail.id == widget.institutionId &&
+            session.status == AuthSessionStatus.authenticated &&
+            user != null
+        ? PlatformInstitutionAdminActionKey(
+            sessionUserId: user.id,
+            sessionInstanceId: identityHashCode(user),
+            institutionId: widget.institutionId,
+          )
+        : null;
+    final adminActionState = adminActionKey == null
+        ? const PlatformInstitutionAdminActionState.idle()
+        : ref.watch(
+            platformInstitutionAdminActionControllerProvider(adminActionKey),
+          );
 
     _handleLifecycleEffects(
       detailKey,
@@ -117,6 +139,7 @@ class _PlatformOwnerInstitutionDetailScreenState
       detailState,
       lifecycleState,
     );
+    _handleAdminActionEffects(adminActionKey, adminListKey, adminActionState);
 
     return SingleChildScrollView(
       key: const Key('platformInstitutionDetailSurface'),
@@ -140,6 +163,7 @@ class _PlatformOwnerInstitutionDetailScreenState
             lifecycleState: lifecycleState,
             adminListKey: adminListKey,
             adminCreateKey: adminCreateKey,
+            adminActionKey: adminActionKey,
             onEdit: (detail) {
               context.go(
                 AppRoutePaths.platformOwnerInstitutionEditLocation(detail.id),
@@ -171,6 +195,67 @@ class _PlatformOwnerInstitutionDetailScreenState
         ],
       ),
     );
+  }
+
+  void _handleAdminActionEffects(
+    PlatformInstitutionAdminActionKey? actionKey,
+    PlatformInstitutionAdminListKey? listKey,
+    PlatformInstitutionAdminActionState actionState,
+  ) {
+    if (actionKey == null || listKey == null) {
+      _adminCompletionHandledGeneration = null;
+      return;
+    }
+
+    final snapshot = actionState.snapshot;
+    final completion = actionState.completion;
+    if (snapshot == null ||
+        completion == null ||
+        _adminCompletionHandledGeneration == snapshot.requestGeneration) {
+      return;
+    }
+
+    _adminCompletionHandledGeneration = snapshot.requestGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final provider = platformInstitutionAdminActionControllerProvider(
+        actionKey,
+      );
+      final latestState = ref.read(provider);
+      if (latestState.snapshot?.requestGeneration !=
+              snapshot.requestGeneration ||
+          latestState.completion != completion) {
+        return;
+      }
+
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.pop(completion);
+      }
+
+      final controller = ref.read(provider.notifier);
+      switch (completion.kind) {
+        case PlatformInstitutionAdminActionCompletionKind.profileUpdated:
+          controller.invalidateProfileSuccess();
+        case PlatformInstitutionAdminActionCompletionKind.lifecycleChanged:
+          controller.invalidateLifecycleSuccess();
+        case PlatformInstitutionAdminActionCompletionKind.targetUnavailable:
+          break;
+      }
+
+      controller.resetAfterCompletion();
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            key: const Key('platformInstitutionAdminActionSnackBar'),
+            content: Text(completion.message),
+          ),
+        );
+    });
   }
 
   void _handleLifecycleEffects(
@@ -322,6 +407,7 @@ class _InstitutionDetailBody extends StatelessWidget {
     required this.lifecycleState,
     required this.adminListKey,
     required this.adminCreateKey,
+    required this.adminActionKey,
     required this.onEdit,
     required this.onLifecycleAction,
     required this.onRetry,
@@ -331,6 +417,7 @@ class _InstitutionDetailBody extends StatelessWidget {
   final PlatformInstitutionLifecycleState lifecycleState;
   final PlatformInstitutionAdminListKey? adminListKey;
   final PlatformInstitutionAdminCreateKey? adminCreateKey;
+  final PlatformInstitutionAdminActionKey? adminActionKey;
   final ValueChanged<PlatformInstitutionDetail> onEdit;
   final ValueChanged<PlatformInstitutionDetail>? onLifecycleAction;
   final VoidCallback? onRetry;
@@ -346,6 +433,7 @@ class _InstitutionDetailBody extends StatelessWidget {
         lifecycleState: lifecycleState,
         adminListKey: adminListKey,
         adminCreateKey: adminCreateKey,
+        adminActionKey: adminActionKey,
         onEdit: onEdit,
         onLifecycleAction: onLifecycleAction,
       ),
@@ -398,6 +486,7 @@ class _InstitutionDetailData extends StatelessWidget {
     required this.lifecycleState,
     required this.adminListKey,
     required this.adminCreateKey,
+    required this.adminActionKey,
     required this.onEdit,
     required this.onLifecycleAction,
   });
@@ -406,6 +495,7 @@ class _InstitutionDetailData extends StatelessWidget {
   final PlatformInstitutionLifecycleState lifecycleState;
   final PlatformInstitutionAdminListKey? adminListKey;
   final PlatformInstitutionAdminCreateKey? adminCreateKey;
+  final PlatformInstitutionAdminActionKey? adminActionKey;
   final ValueChanged<PlatformInstitutionDetail> onEdit;
   final ValueChanged<PlatformInstitutionDetail>? onLifecycleAction;
 
@@ -449,7 +539,9 @@ class _InstitutionDetailData extends StatelessWidget {
           },
         ),
         const SizedBox(height: _sectionSpacing),
-        if (adminListKey != null && adminCreateKey != null)
+        if (adminListKey != null &&
+            adminCreateKey != null &&
+            adminActionKey != null)
           _InstitutionAdministratorsSection(
             key: ValueKey(
               'platformInstitutionAdministrators-${adminListKey!.institutionId}-${adminListKey!.sessionInstanceId}',
@@ -457,6 +549,7 @@ class _InstitutionDetailData extends StatelessWidget {
             detail: detail,
             listKey: adminListKey!,
             createKey: adminCreateKey!,
+            actionKey: adminActionKey!,
           )
         else
           const _InstitutionAdministratorsWaitingSection(),
@@ -663,12 +756,14 @@ class _InstitutionAdministratorsSection extends ConsumerStatefulWidget {
     required this.detail,
     required this.listKey,
     required this.createKey,
+    required this.actionKey,
     super.key,
   });
 
   final PlatformInstitutionDetail detail;
   final PlatformInstitutionAdminListKey listKey;
   final PlatformInstitutionAdminCreateKey createKey;
+  final PlatformInstitutionAdminActionKey actionKey;
 
   @override
   ConsumerState<_InstitutionAdministratorsSection> createState() {
@@ -698,7 +793,17 @@ class _InstitutionAdministratorsSectionState
       widget.listKey,
     );
     final state = ref.watch(provider);
+    final createState = ref.watch(
+      platformInstitutionAdminCreateControllerProvider(widget.createKey),
+    );
+    final actionState = ref.watch(
+      platformInstitutionAdminActionControllerProvider(widget.actionKey),
+    );
     _syncSearchText(state.searchText);
+    final mutationControlsEnabled =
+        actionState.canStartAction &&
+        !createState.isSubmitting &&
+        !createState.isOutcomeUnknown;
 
     return DecoratedBox(
       key: const Key('platformInstitutionAdministratorsSection'),
@@ -711,6 +816,7 @@ class _InstitutionAdministratorsSectionState
             _InstitutionAdministratorsHeader(
               detail: widget.detail,
               state: state,
+              canCreate: actionState.canStartAction,
               onCreate: _showCreateDialog,
             ),
             if (widget.detail.status == PlatformInstitutionStatus.inactive) ...[
@@ -736,8 +842,11 @@ class _InstitutionAdministratorsSectionState
             const SizedBox(height: 16),
             _InstitutionAdministratorsBody(
               state: state,
+              actionControlsEnabled: mutationControlsEnabled,
               onRetry: () => ref.read(provider.notifier).retry(),
               onSort: (sort) => ref.read(provider.notifier).toggleSort(sort),
+              onEdit: _showEditDialog,
+              onLifecycle: _showLifecycleDialog,
             ),
             if (state.result != null) ...[
               const SizedBox(height: 16),
@@ -772,6 +881,13 @@ class _InstitutionAdministratorsSectionState
   }
 
   Future<void> _showCreateDialog() async {
+    final actionState = ref.read(
+      platformInstitutionAdminActionControllerProvider(widget.actionKey),
+    );
+    if (!actionState.canStartAction) {
+      return;
+    }
+
     final provider = platformInstitutionAdminCreateControllerProvider(
       widget.createKey,
     );
@@ -824,17 +940,89 @@ class _InstitutionAdministratorsSectionState
         ),
       );
   }
+
+  Future<void> _showEditDialog(PlatformInstitutionAdmin admin) async {
+    final provider = platformInstitutionAdminActionControllerProvider(
+      widget.actionKey,
+    );
+    final controller = ref.read(provider.notifier);
+    if (!controller.beginEdit(admin)) {
+      return;
+    }
+
+    final actionGeneration = ref.read(provider).snapshot?.actionGeneration;
+    if (actionGeneration == null) {
+      return;
+    }
+
+    await showDialog<PlatformInstitutionAdminActionCompletion>(
+      context: context,
+      barrierDismissible: true,
+      useRootNavigator: false,
+      builder: (context) => _EditInstitutionAdminDialog(
+        actionKey: widget.actionKey,
+        actionGeneration: actionGeneration,
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final latestState = ref.read(provider);
+    if (latestState.snapshot?.actionGeneration == actionGeneration &&
+        latestState.canDismiss) {
+      controller.dismiss();
+    }
+  }
+
+  Future<void> _showLifecycleDialog(PlatformInstitutionAdmin admin) async {
+    final provider = platformInstitutionAdminActionControllerProvider(
+      widget.actionKey,
+    );
+    final controller = ref.read(provider.notifier);
+    if (!controller.beginLifecycle(admin)) {
+      return;
+    }
+
+    final actionGeneration = ref.read(provider).snapshot?.actionGeneration;
+    if (actionGeneration == null) {
+      return;
+    }
+
+    await showDialog<PlatformInstitutionAdminActionCompletion>(
+      context: context,
+      barrierDismissible: true,
+      useRootNavigator: false,
+      builder: (context) => _InstitutionAdminLifecycleDialog(
+        actionKey: widget.actionKey,
+        actionGeneration: actionGeneration,
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final latestState = ref.read(provider);
+    if (latestState.snapshot?.actionGeneration == actionGeneration &&
+        latestState.canDismiss) {
+      controller.dismiss();
+    }
+  }
 }
 
 class _InstitutionAdministratorsHeader extends StatelessWidget {
   const _InstitutionAdministratorsHeader({
     required this.detail,
     required this.state,
+    required this.canCreate,
     required this.onCreate,
   });
 
   final PlatformInstitutionDetail detail;
   final PlatformInstitutionAdminListState state;
+  final bool canCreate;
   final VoidCallback onCreate;
 
   @override
@@ -864,7 +1052,7 @@ class _InstitutionAdministratorsHeader extends StatelessWidget {
         ),
         FilledButton.icon(
           key: const Key('platformInstitutionAdminCreateButton'),
-          onPressed: onCreate,
+          onPressed: canCreate ? onCreate : null,
           icon: const Icon(Icons.person_add_alt_1_outlined),
           label: const Text('Add administrator'),
         ),
@@ -1031,13 +1219,19 @@ class _InstitutionAdministratorsToolbar extends StatelessWidget {
 class _InstitutionAdministratorsBody extends StatelessWidget {
   const _InstitutionAdministratorsBody({
     required this.state,
+    required this.actionControlsEnabled,
     required this.onRetry,
     required this.onSort,
+    required this.onEdit,
+    required this.onLifecycle,
   });
 
   final PlatformInstitutionAdminListState state;
+  final bool actionControlsEnabled;
   final VoidCallback onRetry;
   final ValueChanged<PlatformInstitutionAdminListSort> onSort;
+  final ValueChanged<PlatformInstitutionAdmin> onEdit;
+  final ValueChanged<PlatformInstitutionAdmin> onLifecycle;
 
   @override
   Widget build(BuildContext context) {
@@ -1091,7 +1285,10 @@ class _InstitutionAdministratorsBody extends StatelessWidget {
       PlatformInstitutionAdminListStatus.data => _InstitutionAdministratorsRows(
         admins: state.result!.admins,
         query: state.query,
+        actionControlsEnabled: actionControlsEnabled,
         onSort: onSort,
+        onEdit: onEdit,
+        onLifecycle: onLifecycle,
       ),
     };
   }
@@ -1101,12 +1298,18 @@ class _InstitutionAdministratorsRows extends StatelessWidget {
   const _InstitutionAdministratorsRows({
     required this.admins,
     required this.query,
+    required this.actionControlsEnabled,
     required this.onSort,
+    required this.onEdit,
+    required this.onLifecycle,
   });
 
   final List<PlatformInstitutionAdmin> admins;
   final PlatformInstitutionAdminListQuery query;
+  final bool actionControlsEnabled;
   final ValueChanged<PlatformInstitutionAdminListSort> onSort;
+  final ValueChanged<PlatformInstitutionAdmin> onEdit;
+  final ValueChanged<PlatformInstitutionAdmin> onLifecycle;
 
   @override
   Widget build(BuildContext context) {
@@ -1116,7 +1319,10 @@ class _InstitutionAdministratorsRows extends StatelessWidget {
           return _InstitutionAdministratorsTable(
             admins: admins,
             query: query,
+            actionControlsEnabled: actionControlsEnabled,
             onSort: onSort,
+            onEdit: onEdit,
+            onLifecycle: onLifecycle,
           );
         }
 
@@ -1125,7 +1331,12 @@ class _InstitutionAdministratorsRows extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final admin in admins) ...[
-              _InstitutionAdminCard(admin: admin),
+              _InstitutionAdminCard(
+                admin: admin,
+                actionControlsEnabled: actionControlsEnabled,
+                onEdit: onEdit,
+                onLifecycle: onLifecycle,
+              ),
               if (admin != admins.last) const SizedBox(height: 12),
             ],
           ],
@@ -1139,12 +1350,18 @@ class _InstitutionAdministratorsTable extends StatelessWidget {
   const _InstitutionAdministratorsTable({
     required this.admins,
     required this.query,
+    required this.actionControlsEnabled,
     required this.onSort,
+    required this.onEdit,
+    required this.onLifecycle,
   });
 
   final List<PlatformInstitutionAdmin> admins;
   final PlatformInstitutionAdminListQuery query;
+  final bool actionControlsEnabled;
   final ValueChanged<PlatformInstitutionAdminListSort> onSort;
+  final ValueChanged<PlatformInstitutionAdmin> onEdit;
+  final ValueChanged<PlatformInstitutionAdmin> onLifecycle;
 
   @override
   Widget build(BuildContext context) {
@@ -1171,6 +1388,7 @@ class _InstitutionAdministratorsTable extends StatelessWidget {
           onSort: (_, _) => onSort(PlatformInstitutionAdminListSort.createdAt),
         ),
         const DataColumn(label: Text('Last login')),
+        const DataColumn(label: Text('Actions')),
       ],
       rows: [
         for (final admin in admins)
@@ -1199,6 +1417,15 @@ class _InstitutionAdministratorsTable extends StatelessWidget {
                   maxWidth: 160,
                 ),
               ),
+              DataCell(
+                _AdminActionButtons(
+                  admin: admin,
+                  enabled: actionControlsEnabled,
+                  compact: true,
+                  onEdit: onEdit,
+                  onLifecycle: onLifecycle,
+                ),
+              ),
             ],
           ),
       ],
@@ -1216,9 +1443,17 @@ class _InstitutionAdministratorsTable extends StatelessWidget {
 }
 
 class _InstitutionAdminCard extends StatelessWidget {
-  const _InstitutionAdminCard({required this.admin});
+  const _InstitutionAdminCard({
+    required this.admin,
+    required this.actionControlsEnabled,
+    required this.onEdit,
+    required this.onLifecycle,
+  });
 
   final PlatformInstitutionAdmin admin;
+  final bool actionControlsEnabled;
+  final ValueChanged<PlatformInstitutionAdmin> onEdit;
+  final ValueChanged<PlatformInstitutionAdmin> onLifecycle;
 
   @override
   Widget build(BuildContext context) {
@@ -1260,9 +1495,84 @@ class _InstitutionAdminCard extends StatelessWidget {
               label: 'Created at',
               value: formatPlatformDashboardUtcTimestamp(admin.createdAt),
             ),
+            const SizedBox(height: 12),
+            _AdminActionButtons(
+              admin: admin,
+              enabled: actionControlsEnabled,
+              compact: false,
+              onEdit: onEdit,
+              onLifecycle: onLifecycle,
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AdminActionButtons extends StatelessWidget {
+  const _AdminActionButtons({
+    required this.admin,
+    required this.enabled,
+    required this.compact,
+    required this.onEdit,
+    required this.onLifecycle,
+  });
+
+  final PlatformInstitutionAdmin admin;
+  final bool enabled;
+  final bool compact;
+  final ValueChanged<PlatformInstitutionAdmin> onEdit;
+  final ValueChanged<PlatformInstitutionAdmin> onLifecycle;
+
+  @override
+  Widget build(BuildContext context) {
+    final lifecycleAction = PlatformInstitutionAdminLifecycleAction.forAdmin(
+      admin,
+    );
+    final lifecycleIcon =
+        lifecycleAction == PlatformInstitutionAdminLifecycleAction.deactivate
+        ? Icons.pause_circle_outline
+        : Icons.check_circle_outline;
+    final lifecycleKey =
+        lifecycleAction == PlatformInstitutionAdminLifecycleAction.deactivate
+        ? 'platformInstitutionAdminDeactivateButton-${admin.id}'
+        : 'platformInstitutionAdminActivateButton-${admin.id}';
+
+    final children = [
+      Semantics(
+        button: true,
+        label: 'Edit administrator ${admin.loginName}',
+        child: OutlinedButton.icon(
+          key: Key('platformInstitutionAdminEditButton-${admin.id}'),
+          onPressed: enabled ? () => onEdit(admin) : null,
+          icon: const Icon(Icons.edit_outlined),
+          label: const Text('Edit'),
+        ),
+      ),
+      Semantics(
+        button: true,
+        label:
+            '${lifecycleAction.confirmLabel} administrator ${admin.loginName}',
+        child: FilledButton.icon(
+          key: Key(lifecycleKey),
+          onPressed: enabled ? () => onLifecycle(admin) : null,
+          icon: Icon(lifecycleIcon),
+          label: Text(lifecycleAction.confirmLabel),
+        ),
+      ),
+    ];
+
+    if (compact) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 190),
+        child: Wrap(spacing: 8, runSpacing: 8, children: children),
+      );
+    }
+
+    return Semantics(
+      label: 'Administrator actions for ${admin.loginName}',
+      child: Wrap(spacing: 8, runSpacing: 8, children: children),
     );
   }
 }
@@ -1575,6 +1885,677 @@ class _InstitutionAdministratorsMessage extends StatelessWidget {
                 key: Key('${keyName}Message'),
               ),
               if (trailing != null) ...[const SizedBox(height: 16), trailing!],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EditInstitutionAdminDialog extends ConsumerStatefulWidget {
+  const _EditInstitutionAdminDialog({
+    required this.actionKey,
+    required this.actionGeneration,
+  });
+
+  final PlatformInstitutionAdminActionKey actionKey;
+  final int actionGeneration;
+
+  @override
+  ConsumerState<_EditInstitutionAdminDialog> createState() {
+    return _EditInstitutionAdminDialogState();
+  }
+}
+
+class _EditInstitutionAdminDialogState
+    extends ConsumerState<_EditInstitutionAdminDialog> {
+  late final TextEditingController _fullNameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _phoneController;
+  late final FocusNode _fullNameFocusNode;
+  late final FocusNode _emailFocusNode;
+  late final FocusNode _phoneFocusNode;
+  PlatformInstitutionAdminEditField? _focusedErrorField;
+  var _completionHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fullNameController = TextEditingController();
+    _emailController = TextEditingController();
+    _phoneController = TextEditingController();
+    _fullNameFocusNode = FocusNode();
+    _emailFocusNode = FocusNode();
+    _phoneFocusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _fullNameFocusNode.dispose();
+    _emailFocusNode.dispose();
+    _phoneFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = platformInstitutionAdminActionControllerProvider(
+      widget.actionKey,
+    );
+    final state = ref.watch(provider);
+    if (!_isInstitutionAdminActionRouteCurrent(context, widget.actionKey)) {
+      _closeStaleDialog();
+      return const AlertDialog(
+        key: Key('platformInstitutionAdminEditUnavailableDialog'),
+        title: Text('Edit administrator'),
+        content: Text('The administrator action is no longer available.'),
+      );
+    }
+
+    _handleEffects(state);
+    if (_completionHandled) {
+      return const SizedBox.shrink();
+    }
+
+    final snapshot = state.snapshot;
+    final form = state.form;
+
+    if (state.status == PlatformInstitutionAdminActionStatus.idle ||
+        snapshot == null ||
+        snapshot.actionGeneration != widget.actionGeneration ||
+        snapshot.kind != PlatformInstitutionAdminActionKind.edit ||
+        form == null) {
+      if (!_completionHandled) {
+        _closeStaleDialog();
+      }
+      return const AlertDialog(
+        key: Key('platformInstitutionAdminEditUnavailableDialog'),
+        title: Text('Edit administrator'),
+        content: Text('The administrator action is no longer available.'),
+      );
+    }
+
+    _syncEditControllers(form);
+
+    return PopScope(
+      canPop: !state.isBusy,
+      child: AlertDialog(
+        key: const Key('platformInstitutionAdminEditDialog'),
+        title: const Text('Edit administrator'),
+        content: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: _EditInstitutionAdminDialogContent(
+              state: state,
+              snapshot: snapshot,
+              fullNameController: _fullNameController,
+              emailController: _emailController,
+              phoneController: _phoneController,
+              fullNameFocusNode: _fullNameFocusNode,
+              emailFocusNode: _emailFocusNode,
+              phoneFocusNode: _phoneFocusNode,
+              onFullNameChanged: (value) =>
+                  ref.read(provider.notifier).updateFullName(value),
+              onEmailChanged: (value) =>
+                  ref.read(provider.notifier).updateEmail(value),
+              onPhoneChanged: (value) =>
+                  ref.read(provider.notifier).updatePhone(value),
+              onSubmit: () => ref.read(provider.notifier).submitEdit(),
+            ),
+          ),
+        ),
+        actions: _buildEditActions(context, ref, state),
+      ),
+    );
+  }
+
+  List<Widget> _buildEditActions(
+    BuildContext context,
+    WidgetRef ref,
+    PlatformInstitutionAdminActionState state,
+  ) {
+    final provider = platformInstitutionAdminActionControllerProvider(
+      widget.actionKey,
+    );
+
+    if (state.status == PlatformInstitutionAdminActionStatus.unknownOutcome) {
+      return [
+        FilledButton(
+          key: const Key('platformInstitutionAdminEditCloseButton'),
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Close'),
+        ),
+      ];
+    }
+
+    return [
+      TextButton(
+        key: const Key('platformInstitutionAdminEditCancelButton'),
+        onPressed: state.isBusy ? null : () => Navigator.of(context).pop(null),
+        child: const Text('Cancel'),
+      ),
+      FilledButton.icon(
+        key: const Key('platformInstitutionAdminEditSubmitButton'),
+        onPressed: state.canSubmitEdit
+            ? () => ref.read(provider.notifier).submitEdit()
+            : null,
+        icon: state.isBusy
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.save_outlined),
+        label: Text(state.isBusy ? 'Saving administrator' : 'Save changes'),
+      ),
+    ];
+  }
+
+  void _handleEffects(PlatformInstitutionAdminActionState state) {
+    final completion = state.completion;
+    if (completion != null && !_completionHandled) {
+      _completionHandled = true;
+      return;
+    }
+
+    final firstErrorField = state.firstErrorField;
+    if (firstErrorField != null && firstErrorField != _focusedErrorField) {
+      _focusedErrorField = firstErrorField;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        _focusNodeFor(firstErrorField).requestFocus();
+      });
+    }
+  }
+
+  void _syncEditControllers(PlatformInstitutionAdminEditFormValue form) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      _setControllerText(_fullNameController, form.fullName);
+      _setControllerText(_emailController, form.email);
+      _setControllerText(_phoneController, form.phone);
+    });
+  }
+
+  void _setControllerText(TextEditingController controller, String value) {
+    if (controller.text == value) {
+      return;
+    }
+
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
+  FocusNode _focusNodeFor(PlatformInstitutionAdminEditField field) {
+    return switch (field) {
+      PlatformInstitutionAdminEditField.fullName => _fullNameFocusNode,
+      PlatformInstitutionAdminEditField.email => _emailFocusNode,
+      PlatformInstitutionAdminEditField.phone => _phoneFocusNode,
+    };
+  }
+
+  void _closeStaleDialog() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        Navigator.of(context).pop(null);
+      }
+    });
+  }
+}
+
+class _EditInstitutionAdminDialogContent extends StatelessWidget {
+  const _EditInstitutionAdminDialogContent({
+    required this.state,
+    required this.snapshot,
+    required this.fullNameController,
+    required this.emailController,
+    required this.phoneController,
+    required this.fullNameFocusNode,
+    required this.emailFocusNode,
+    required this.phoneFocusNode,
+    required this.onFullNameChanged,
+    required this.onEmailChanged,
+    required this.onPhoneChanged,
+    required this.onSubmit,
+  });
+
+  final PlatformInstitutionAdminActionState state;
+  final PlatformInstitutionAdminActionSnapshot snapshot;
+  final TextEditingController fullNameController;
+  final TextEditingController emailController;
+  final TextEditingController phoneController;
+  final FocusNode fullNameFocusNode;
+  final FocusNode emailFocusNode;
+  final FocusNode phoneFocusNode;
+  final ValueChanged<String> onFullNameChanged;
+  final ValueChanged<String> onEmailChanged;
+  final ValueChanged<String> onPhoneChanged;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final canEdit =
+        !state.isBusy &&
+        state.status != PlatformInstitutionAdminActionStatus.unknownOutcome;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AdminDialogContext(admin: snapshot.admin),
+        if (state.formError != null) ...[
+          const SizedBox(height: 12),
+          _AdminActionMessage(
+            keyName: 'platformInstitutionAdminEditFormError',
+            message: state.formError!,
+          ),
+        ],
+        if (state.message != null &&
+            (state.status == PlatformInstitutionAdminActionStatus.reconciling ||
+                state.status ==
+                    PlatformInstitutionAdminActionStatus.definiteFailure ||
+                state.status ==
+                    PlatformInstitutionAdminActionStatus.unknownOutcome)) ...[
+          const SizedBox(height: 12),
+          _AdminActionMessage(
+            keyName: 'platformInstitutionAdminEditStateMessage',
+            message: state.message!,
+            showProgress:
+                state.status ==
+                PlatformInstitutionAdminActionStatus.reconciling,
+          ),
+        ],
+        const SizedBox(height: 16),
+        TextField(
+          key: const Key('platformInstitutionAdminEditFullNameField'),
+          controller: fullNameController,
+          focusNode: fullNameFocusNode,
+          autofocus: true,
+          enabled: canEdit,
+          textInputAction: TextInputAction.next,
+          onChanged: onFullNameChanged,
+          onSubmitted: (_) => emailFocusNode.requestFocus(),
+          decoration: InputDecoration(
+            labelText: 'Full name *',
+            errorText: state.errorTextFor(
+              PlatformInstitutionAdminEditField.fullName,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('platformInstitutionAdminEditEmailField'),
+          controller: emailController,
+          focusNode: emailFocusNode,
+          enabled: canEdit,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          onChanged: onEmailChanged,
+          onSubmitted: (_) => phoneFocusNode.requestFocus(),
+          decoration: InputDecoration(
+            labelText: 'Email',
+            errorText: state.errorTextFor(
+              PlatformInstitutionAdminEditField.email,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('platformInstitutionAdminEditPhoneField'),
+          controller: phoneController,
+          focusNode: phoneFocusNode,
+          enabled: canEdit,
+          keyboardType: TextInputType.phone,
+          textInputAction: TextInputAction.done,
+          onChanged: onPhoneChanged,
+          onSubmitted: (_) {
+            if (state.canSubmitEdit) {
+              onSubmit();
+            }
+          },
+          decoration: InputDecoration(
+            labelText: 'Phone',
+            errorText: state.errorTextFor(
+              PlatformInstitutionAdminEditField.phone,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InstitutionAdminLifecycleDialog extends ConsumerStatefulWidget {
+  const _InstitutionAdminLifecycleDialog({
+    required this.actionKey,
+    required this.actionGeneration,
+  });
+
+  final PlatformInstitutionAdminActionKey actionKey;
+  final int actionGeneration;
+
+  @override
+  ConsumerState<_InstitutionAdminLifecycleDialog> createState() {
+    return _InstitutionAdminLifecycleDialogState();
+  }
+}
+
+class _InstitutionAdminLifecycleDialogState
+    extends ConsumerState<_InstitutionAdminLifecycleDialog> {
+  var _completionHandled = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = platformInstitutionAdminActionControllerProvider(
+      widget.actionKey,
+    );
+    final state = ref.watch(provider);
+    if (!_isInstitutionAdminActionRouteCurrent(context, widget.actionKey)) {
+      _closeStaleDialog();
+      return const AlertDialog(
+        key: Key('platformInstitutionAdminLifecycleUnavailableDialog'),
+        title: Text('Administrator lifecycle'),
+        content: Text('The administrator action is no longer available.'),
+      );
+    }
+
+    _handleEffects(state);
+    if (_completionHandled) {
+      return const SizedBox.shrink();
+    }
+
+    final snapshot = state.snapshot;
+    final action = snapshot?.lifecycleAction;
+
+    if (state.status == PlatformInstitutionAdminActionStatus.idle ||
+        snapshot == null ||
+        snapshot.actionGeneration != widget.actionGeneration ||
+        snapshot.kind != PlatformInstitutionAdminActionKind.lifecycle ||
+        action == null) {
+      if (!_completionHandled) {
+        _closeStaleDialog();
+      }
+      return const AlertDialog(
+        key: Key('platformInstitutionAdminLifecycleUnavailableDialog'),
+        title: Text('Administrator lifecycle'),
+        content: Text('The administrator action is no longer available.'),
+      );
+    }
+
+    return PopScope(
+      canPop: !state.isBusy,
+      child: AlertDialog(
+        key: const Key('platformInstitutionAdminLifecycleDialog'),
+        title: Text(action.title),
+        content: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: _InstitutionAdminLifecycleDialogContent(
+              state: state,
+              snapshot: snapshot,
+              action: action,
+            ),
+          ),
+        ),
+        actions: _buildLifecycleActions(context, ref, state, action),
+      ),
+    );
+  }
+
+  List<Widget> _buildLifecycleActions(
+    BuildContext context,
+    WidgetRef ref,
+    PlatformInstitutionAdminActionState state,
+    PlatformInstitutionAdminLifecycleAction action,
+  ) {
+    final provider = platformInstitutionAdminActionControllerProvider(
+      widget.actionKey,
+    );
+
+    if (state.status ==
+        PlatformInstitutionAdminActionStatus.lifecycleConfirming) {
+      return [
+        TextButton(
+          key: const Key('platformInstitutionAdminLifecycleCancelButton'),
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          key: Key(
+            action == PlatformInstitutionAdminLifecycleAction.deactivate
+                ? 'platformInstitutionAdminLifecycleConfirmDeactivateButton'
+                : 'platformInstitutionAdminLifecycleConfirmActivateButton',
+          ),
+          onPressed: () => ref.read(provider.notifier).confirmLifecycle(),
+          icon: Icon(
+            action == PlatformInstitutionAdminLifecycleAction.deactivate
+                ? Icons.pause_circle_outline
+                : Icons.check_circle_outline,
+          ),
+          label: Text(action.confirmLabel),
+        ),
+      ];
+    }
+
+    if (state.isBusy) {
+      return [
+        const TextButton(
+          key: Key('platformInstitutionAdminLifecycleCancelButton'),
+          onPressed: null,
+          child: Text('Cancel'),
+        ),
+        FilledButton.icon(
+          key: const Key('platformInstitutionAdminLifecycleSubmittingButton'),
+          onPressed: null,
+          icon: const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          label: Text(
+            state.status == PlatformInstitutionAdminActionStatus.reconciling
+                ? 'Checking administrator'
+                : '${action.confirmLabel} in progress',
+          ),
+        ),
+      ];
+    }
+
+    return [
+      FilledButton(
+        key: const Key('platformInstitutionAdminLifecycleCloseButton'),
+        onPressed: () => Navigator.of(context).pop(null),
+        child: const Text('Close'),
+      ),
+    ];
+  }
+
+  void _handleEffects(PlatformInstitutionAdminActionState state) {
+    final completion = state.completion;
+    if (completion != null && !_completionHandled) {
+      _completionHandled = true;
+    }
+  }
+
+  void _closeStaleDialog() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        Navigator.of(context).pop(null);
+      }
+    });
+  }
+}
+
+bool _isInstitutionAdminActionRouteCurrent(
+  BuildContext context,
+  PlatformInstitutionAdminActionKey actionKey,
+) {
+  final currentPath = GoRouter.of(
+    context,
+  ).routeInformationProvider.value.uri.path;
+  return currentPath ==
+      AppRoutePaths.platformOwnerInstitutionDetailLocation(
+        actionKey.institutionId,
+      );
+}
+
+class _InstitutionAdminLifecycleDialogContent extends StatelessWidget {
+  const _InstitutionAdminLifecycleDialogContent({
+    required this.state,
+    required this.snapshot,
+    required this.action,
+  });
+
+  final PlatformInstitutionAdminActionState state;
+  final PlatformInstitutionAdminActionSnapshot snapshot;
+  final PlatformInstitutionAdminLifecycleAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AdminDialogContext(admin: snapshot.admin),
+        const SizedBox(height: 16),
+        _AdminLifecycleStatusLine(
+          label: 'Target account status',
+          value: action == PlatformInstitutionAdminLifecycleAction.activate
+              ? 'Active'
+              : 'Inactive',
+        ),
+        const SizedBox(height: 16),
+        if (state.message != null &&
+            state.status !=
+                PlatformInstitutionAdminActionStatus.lifecycleConfirming)
+          _AdminActionMessage(
+            keyName: 'platformInstitutionAdminLifecycleStateMessage',
+            message: state.message!,
+            showProgress:
+                state.status ==
+                PlatformInstitutionAdminActionStatus.reconciling,
+          )
+        else
+          Text(
+            _adminLifecycleConsequence(action),
+            key: const Key('platformInstitutionAdminLifecycleConsequence'),
+          ),
+      ],
+    );
+  }
+}
+
+class _AdminDialogContext extends StatelessWidget {
+  const _AdminDialogContext({required this.admin});
+
+  final PlatformInstitutionAdmin admin;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      key: const Key('platformInstitutionAdminDialogContext'),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(_panelRadius),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              admin.fullName,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            _AdminLifecycleStatusLine(
+              label: 'Login name',
+              value: admin.loginName,
+            ),
+            _AdminLifecycleStatusLine(
+              label: 'Current account status',
+              value: admin.isActive ? 'Active' : 'Inactive',
+            ),
+            _AdminLifecycleStatusLine(
+              label: 'Password change',
+              value: _passwordChangeLabel(admin),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminLifecycleStatusLine extends StatelessWidget {
+  const _AdminLifecycleStatusLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 170,
+            child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminActionMessage extends StatelessWidget {
+  const _AdminActionMessage({
+    required this.keyName,
+    required this.message,
+    this.showProgress = false,
+  });
+
+  final String keyName;
+  final String message;
+  final bool showProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: DecoratedBox(
+        key: Key(keyName),
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).colorScheme.primary),
+          borderRadius: BorderRadius.circular(_panelRadius),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (showProgress) ...[
+                const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(child: Text(message)),
             ],
           ),
         ),
@@ -2448,6 +3429,17 @@ String _lifecycleConsequence(PlatformInstitutionLifecycleAction action) {
       'Eligible users may use this Institution again according to each account\'s active state, first-login requirement, role, relationships, and permissions.',
     PlatformInstitutionLifecycleAction.deactivate =>
       'Institution Admins, Teachers, Students, and Parents will lose normal Institution access. Historical data is preserved.',
+  };
+}
+
+String _adminLifecycleConsequence(
+  PlatformInstitutionAdminLifecycleAction action,
+) {
+  return switch (action) {
+    PlatformInstitutionAdminLifecycleAction.activate =>
+      'Activation restores only the account active state. An inactive Institution still blocks normal access, password change may still be required, and this action does not create a session, reset a password, or change role.',
+    PlatformInstitutionAdminLifecycleAction.deactivate =>
+      'Normal protected access for this administrator is blocked immediately. Institution binding, credentials, first-login state, and historical data remain unchanged, and this action does not deactivate the Institution or other users.',
   };
 }
 

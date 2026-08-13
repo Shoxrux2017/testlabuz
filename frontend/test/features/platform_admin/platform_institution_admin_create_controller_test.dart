@@ -15,9 +15,11 @@ import 'package:testlabuz_client/features/platform_admin/application/platform_in
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_admin_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_create.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_lifecycle.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_update.dart';
 
 void main() {
   group('PlatformInstitutionAdminCreateController', () {
@@ -428,6 +430,30 @@ class FakePlatformInstitutionAdminRepository
     createCalls.add((institutionId: institutionId, request: request));
 
     return onCreate?.call(institutionId, request) ?? Future.value(_result());
+  }
+
+  @override
+  Future<PlatformInstitutionAdminUpdateResult> updateAdmin({
+    required String adminId,
+    required PlatformInstitutionAdminUpdateRequest request,
+  }) {
+    throw UnimplementedError('Create controller tests do not update admins.');
+  }
+
+  @override
+  Future<PlatformInstitutionAdminLifecycleResult> activateAdmin({
+    required String adminId,
+  }) {
+    throw UnimplementedError('Create controller tests do not activate admins.');
+  }
+
+  @override
+  Future<PlatformInstitutionAdminLifecycleResult> deactivateAdmin({
+    required String adminId,
+  }) {
+    throw UnimplementedError(
+      'Create controller tests do not deactivate admins.',
+    );
   }
 }
 
