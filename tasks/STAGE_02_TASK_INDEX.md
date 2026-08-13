@@ -61,8 +61,9 @@ learning workflows.
 Tasks are implemented and accepted one at a time. `S02-BE-001` through
 `S02-BE-007`, `S02-FE-001`, `S02-FE-002`, `S02-FE-003`, `S02-FE-004`,
 `S02-FE-005`, `S02-FE-006`, `S02-FE-007`, and `S02-FE-008` are accepted and
-delivered. All later tasks from `S02-FE-009` onward remain planned and may not be started
-until their own detailed contracts are approved.
+delivered. `S02-FE-009` is accepted after read-only review and awaits delivery.
+`S02-INT-001` remains planned and may not be started until its detailed contract
+is approved.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|
@@ -81,7 +82,7 @@ until their own detailed contracts are approved.
 | 13 | `S02-FE-006` | Frontend | Edit Institution form for allowed fields | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-006-platform-institution-edit-basic-information.md` |
 | 14 | `S02-FE-007` | Frontend | Activate/deactivate confirmation, in-flight protection, and refresh | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-007-platform-institution-lifecycle-actions.md` |
 | 15 | `S02-FE-008` | Frontend | Institution Admin list/create UI within Institution detail | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-008-platform-institution-admin-list-create.md` |
-| 16 | `S02-FE-009` | Frontend | Institution Admin edit/activate/deactivate UI | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
+| 16 | `S02-FE-009` | Frontend | Institution Admin edit/activate/deactivate UI | `Accepted` | `PASS` | `Not started` | `tasks/frontend/stage-02/S02-FE-009-platform-institution-admin-update-lifecycle.md` |
 | 17 | `S02-INT-001` | Integration | Full real-stack Stage 2 end-to-end verification on Windows | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
 
 After all 17 implementation tasks are accepted, run a separate Stage 2 Closure
@@ -101,7 +102,8 @@ Review. The closure review is not itself an implementation task.
 - [x] `S02-BE-007` is accepted and delivered.
 - [x] `S02-FE-004` is accepted and delivered.
 - [x] `S02-FE-007` is accepted and delivered after read-only review and manual PR merge.
-- [x] Later Stage 2 tasks from `S02-FE-009` onward are not individually approved for implementation.
+- [x] `S02-FE-009` is accepted after read-only review; `S02-INT-001` remains
+      planned, not individually approved, and not started.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
 
@@ -173,6 +175,7 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-13` | Accepted `S02-FE-008` | Read-only gate passed for Institution Admin list/create UI; manual live smoke was not run because no running backend or Platform Owner credentials were available | Codex |
 | `2026-08-13` | Delivery blocked for `S02-FE-008` | Accepted branch was pushed, but PR creation was blocked by GitHub connector permission `403`; manual PR creation and merge were required | Codex |
 | `2026-08-13` | Accepted and delivered `S02-FE-008` | Manual PR #36 merge completed; final delivery inspection confirmed required commit `86fd616eab3a55e7d38116b203d67f80881cea69` on `origin/main`, merge commit `37a154d2d40d408df86b9b39263289cbe082187c`, and no implementation/security/contract contradiction. Manual live smoke remains NOT RUN because no running backend or Platform Owner credentials were available | Codex |
+| `2026-08-13` | Accepted `S02-FE-009` | Read-only gate passed with zero unresolved P1/P2/P3 findings; required checks and real-stack smoke passed | Codex |
 
 ## 9. Closure Readiness
 

@@ -23,9 +23,11 @@ import 'package:testlabuz_client/features/platform_admin/data/platform_instituti
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_create.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_lifecycle.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_update.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
@@ -997,5 +999,29 @@ class FakePlatformInstitutionAdminRepository
     required PlatformInstitutionAdminCreateRequest request,
   }) {
     throw UnimplementedError('Institution list tests do not create admins.');
+  }
+
+  @override
+  Future<PlatformInstitutionAdminUpdateResult> updateAdmin({
+    required String adminId,
+    required PlatformInstitutionAdminUpdateRequest request,
+  }) {
+    throw UnimplementedError('Institution list tests do not update admins.');
+  }
+
+  @override
+  Future<PlatformInstitutionAdminLifecycleResult> activateAdmin({
+    required String adminId,
+  }) {
+    throw UnimplementedError('Institution list tests do not activate admins.');
+  }
+
+  @override
+  Future<PlatformInstitutionAdminLifecycleResult> deactivateAdmin({
+    required String adminId,
+  }) {
+    throw UnimplementedError(
+      'Institution list tests do not deactivate admins.',
+    );
   }
 }

@@ -1,6 +1,8 @@
 import '../../domain/platform_institution_admin.dart';
 import '../../domain/platform_institution_admin_create.dart';
+import '../../domain/platform_institution_admin_lifecycle.dart';
 import '../../domain/platform_institution_admin_list.dart';
+import '../../domain/platform_institution_admin_update.dart';
 
 class PlatformInstitutionAdminListDto {
   const PlatformInstitutionAdminListDto({
@@ -78,6 +80,71 @@ class PlatformInstitutionAdminCreateResponseDto {
   }
 }
 
+class PlatformInstitutionAdminUpdateResponseDto {
+  const PlatformInstitutionAdminUpdateResponseDto({
+    required this.admin,
+    required this.message,
+  });
+
+  factory PlatformInstitutionAdminUpdateResponseDto.fromJson(Object? json) {
+    final envelope = _readRequiredMap(
+      json,
+      'institution admin update envelope',
+    );
+
+    return PlatformInstitutionAdminUpdateResponseDto(
+      admin: PlatformInstitutionAdminDto.fromJson(envelope['data']),
+      message: _readRequiredString(envelope, 'message'),
+    );
+  }
+
+  final PlatformInstitutionAdminDto admin;
+  final String message;
+
+  PlatformInstitutionAdminUpdateResult toDomain() {
+    return PlatformInstitutionAdminUpdateResult(
+      admin: admin.toDomain(),
+      message: message,
+    );
+  }
+}
+
+class PlatformInstitutionAdminLifecycleResponseDto {
+  const PlatformInstitutionAdminLifecycleResponseDto({
+    required this.admin,
+    required this.message,
+    required this.action,
+  });
+
+  factory PlatformInstitutionAdminLifecycleResponseDto.fromJson(
+    Object? json, {
+    required PlatformInstitutionAdminLifecycleAction action,
+  }) {
+    final envelope = _readRequiredMap(
+      json,
+      'institution admin lifecycle envelope',
+    );
+
+    return PlatformInstitutionAdminLifecycleResponseDto(
+      admin: PlatformInstitutionAdminDto.fromJson(envelope['data']),
+      message: _readRequiredString(envelope, 'message'),
+      action: action,
+    );
+  }
+
+  final PlatformInstitutionAdminDto admin;
+  final String message;
+  final PlatformInstitutionAdminLifecycleAction action;
+
+  PlatformInstitutionAdminLifecycleResult toDomain() {
+    return PlatformInstitutionAdminLifecycleResult(
+      admin: admin.toDomain(),
+      message: message,
+      action: action,
+    );
+  }
+}
+
 class PlatformInstitutionAdminDto {
   const PlatformInstitutionAdminDto({
     required this.id,
@@ -96,16 +163,30 @@ class PlatformInstitutionAdminDto {
   factory PlatformInstitutionAdminDto.fromJson(Object? json) {
     final map = _readRequiredMap(json, 'institution admin resource');
 
+    final isActive = _readRequiredBool(map, 'is_active');
+    final deactivatedAt = _readNullableRfc3339DateTime(map, 'deactivated_at');
+    if (isActive && deactivatedAt != null) {
+      throw const FormatException(
+        'Active institution admin cannot have deactivated_at.',
+      );
+    }
+
+    if (!isActive && deactivatedAt == null) {
+      throw const FormatException(
+        'Inactive institution admin requires deactivated_at.',
+      );
+    }
+
     return PlatformInstitutionAdminDto(
       id: _readRequiredUuidString(map, 'id'),
       fullName: _readRequiredString(map, 'full_name'),
       loginName: _readRequiredString(map, 'login_name'),
       email: _readNullableString(map, 'email'),
       phone: _readNullableString(map, 'phone'),
-      isActive: _readRequiredBool(map, 'is_active'),
+      isActive: isActive,
       mustChangePassword: _readRequiredBool(map, 'must_change_password'),
       lastLoginAt: _readNullableRfc3339DateTime(map, 'last_login_at'),
-      deactivatedAt: _readNullableRfc3339DateTime(map, 'deactivated_at'),
+      deactivatedAt: deactivatedAt,
       createdAt: _readRequiredRfc3339DateTime(map, 'created_at'),
       updatedAt: _readRequiredRfc3339DateTime(map, 'updated_at'),
     );

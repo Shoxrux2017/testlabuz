@@ -12,11 +12,14 @@ import 'package:testlabuz_client/core/network/api_error_response.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/session_invalidation_signal.dart';
+import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/data/auth_repository_impl.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/platform_admin/application/platform_institution_admin_action_controller.dart';
+import 'package:testlabuz_client/features/platform_admin/application/platform_institution_admin_action_state.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_admin_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_detail_repository_impl.dart';
@@ -26,9 +29,11 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboa
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_create.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_lifecycle.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_admin_update.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_detail_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_lifecycle.dart';
@@ -211,7 +216,7 @@ void main() {
       );
     });
 
-    testWidgets('admin list renders public facts with no row actions', (
+    testWidgets('admin list renders public facts with row lifecycle actions', (
       tester,
     ) async {
       final adminRepository = FakePlatformInstitutionAdminRepository(
@@ -262,9 +267,30 @@ void main() {
       expect(find.text('2026-08-09 10:00 UTC'), findsOneWidget);
       expect(find.textContaining('password_hash'), findsNothing);
       expect(find.textContaining('institution_id'), findsNothing);
-      expect(find.text('Activate administrator'), findsNothing);
-      expect(find.text('Deactivate administrator'), findsNothing);
-      expect(find.text('Edit administrator'), findsNothing);
+      expect(
+        find.byKey(
+          const Key(
+            'platformInstitutionAdminEditButton-550e8400-e29b-41d4-a716-446655440001',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const Key(
+            'platformInstitutionAdminDeactivateButton-550e8400-e29b-41d4-a716-446655440001',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const Key(
+            'platformInstitutionAdminActivateButton-550e8400-e29b-41d4-a716-446655440002',
+          ),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets(
@@ -425,6 +451,497 @@ void main() {
         expect(detailRepository.fetchCalls, detailCallsBeforeCreate + 1);
         expect(listRepository.fetchCalls, 0);
         expect(dashboardRepository.fetchCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'edit dialog submits changed administrator fields and refreshes list only',
+      (tester) async {
+        final admin = _admin(
+          fullName: 'Ali Valiyev',
+          loginName: 'admin.school1',
+          email: 'ali@example.uz',
+          phone: '+998901234567',
+        );
+        final updateCompleter =
+            Completer<PlatformInstitutionAdminUpdateResult>();
+        final adminRepository = FakePlatformInstitutionAdminRepository(
+          admins: [admin],
+          onUpdate: (_, _) => updateCompleter.future,
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository();
+        final listRepository = FakePlatformInstitutionListRepository();
+        final dashboardRepository = FakePlatformDashboardRepository();
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          adminRepository: adminRepository,
+          listRepository: listRepository,
+          dashboardRepository: dashboardRepository,
+        );
+        await tester.pumpAndSettle();
+        final listCallsBeforeEdit = adminRepository.fetchCalls.length;
+        final detailCallsBeforeEdit = detailRepository.fetchCalls;
+
+        final editButton = find.byKey(
+          Key('platformInstitutionAdminEditButton-${admin.id}'),
+        );
+        await tester.ensureVisible(editButton);
+        await tester.pumpAndSettle();
+        await tester.tap(editButton);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditDialog')),
+          findsOneWidget,
+        );
+        expect(find.text('Edit administrator'), findsOneWidget);
+        expect(find.text('admin.school1'), findsWidgets);
+        expect(find.text('Active'), findsWidgets);
+        expect(find.text('Password change required'), findsWidgets);
+        expect(find.text('Login name *'), findsNothing);
+        expect(find.text('Initial password *'), findsNothing);
+        expect(find.text('Role'), findsNothing);
+        expect(find.text('Institution ID'), findsNothing);
+
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminEditFullNameField')),
+          '  Updated Institution Admin  ',
+        );
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminEditEmailField')),
+          '',
+        );
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminEditPhoneField')),
+          '  +998901111111  ',
+        );
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminEditSubmitButton')),
+        );
+        await tester.pump();
+
+        expect(adminRepository.updateCalls, hasLength(1));
+        expect(adminRepository.updateCalls.single.adminId, admin.id);
+        expect(adminRepository.updateCalls.single.request.toJson(), {
+          'full_name': 'Updated Institution Admin',
+          'email': null,
+          'phone': '+998901111111',
+        });
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditDialog')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditSubmitButton')),
+          findsOneWidget,
+        );
+
+        updateCompleter.complete(
+          PlatformInstitutionAdminUpdateResult(
+            admin: _copyAdmin(
+              admin,
+              fullName: 'Updated Institution Admin',
+              email: null,
+              phone: '+998901111111',
+            ),
+            message: 'Institution admin updated successfully.',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditDialog')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionAdminActionSnackBar')),
+          findsOneWidget,
+        );
+        expect(adminRepository.fetchCalls.length, listCallsBeforeEdit + 1);
+        expect(detailRepository.fetchCalls, detailCallsBeforeEdit);
+        expect(listRepository.fetchCalls, 0);
+        expect(dashboardRepository.fetchCalls, 0);
+        expect(find.text('Updated Institution Admin'), findsNothing);
+        expect(find.text('Ali Valiyev'), findsOneWidget);
+      },
+    );
+
+    testWidgets('edit no-change keeps dialog and sends no PATCH', (
+      tester,
+    ) async {
+      final admin = _admin(loginName: 'admin.school1');
+      final adminRepository = FakePlatformInstitutionAdminRepository(
+        admins: [admin],
+      );
+
+      await _pumpApp(tester, adminRepository: adminRepository);
+      await tester.pumpAndSettle();
+
+      final editButton = find.byKey(
+        Key('platformInstitutionAdminEditButton-${admin.id}'),
+      );
+      await tester.ensureVisible(editButton);
+      await tester.pumpAndSettle();
+      await tester.tap(editButton);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('platformInstitutionAdminEditSubmitButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(adminRepository.updateCalls, isEmpty);
+      expect(
+        find.byKey(const Key('platformInstitutionAdminEditDialog')),
+        findsOneWidget,
+      );
+      expect(find.text('No administrator changes to save.'), findsOneWidget);
+    });
+
+    testWidgets(
+      'edit target 404 closes dialog resets action refreshes list and never retries PATCH',
+      (tester) async {
+        final admin = _admin(loginName: 'admin.school1');
+        var serverListRead = 0;
+        final adminRepository = FakePlatformInstitutionAdminRepository(
+          admins: [admin],
+          onFetch: (institutionId, query) async {
+            serverListRead += 1;
+            return _adminPage(
+              admins: serverListRead == 1 ? [admin] : const [],
+              query: query,
+            );
+          },
+          onUpdate: (_, _) async => throw _serverFailure(
+            ApiErrorCodes.resourceNotFound,
+            statusCode: 404,
+          ),
+        );
+
+        await _pumpApp(tester, adminRepository: adminRepository);
+        await tester.pumpAndSettle();
+        final listCallsBeforeEdit = adminRepository.fetchCalls.length;
+
+        final editButton = find.byKey(
+          Key('platformInstitutionAdminEditButton-${admin.id}'),
+        );
+        await tester.ensureVisible(editButton);
+        await tester.tap(editButton);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminEditFullNameField')),
+          'Updated Institution Admin',
+        );
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminEditSubmitButton')),
+        );
+        await _pumpThroughTargetUnavailableCompletion(tester);
+
+        expect(adminRepository.updateCalls, hasLength(1));
+        expect(adminRepository.updateCalls.single.adminId, admin.id);
+        expect(adminRepository.activateAdminIds, isEmpty);
+        expect(adminRepository.deactivateAdminIds, isEmpty);
+        expect(adminRepository.fetchCalls.length, listCallsBeforeEdit + 1);
+        expect(adminRepository.fetchCalls.last.institutionId, _institutionIdA);
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditDialog')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionAdminEditUnavailableDialog'),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionAdminLifecycleUnavailableDialog'),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionAdminActionSnackBar')),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Administrator is no longer available.'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Institution admin updated successfully.'),
+          findsNothing,
+        );
+        expect(
+          _adminActionState(tester).status,
+          PlatformInstitutionAdminActionStatus.idle,
+        );
+        expect(_adminActionState(tester).snapshot, isNull);
+        expect(_adminActionState(tester).form, isNull);
+        expect(_adminActionState(tester).completion, isNull);
+
+        await tester.pump(const Duration(seconds: 1));
+        expect(adminRepository.updateCalls, hasLength(1));
+        expect(adminRepository.fetchCalls.length, listCallsBeforeEdit + 1);
+      },
+    );
+
+    testWidgets(
+      'lifecycle target 404 closes dialog resets action refreshes list and never retries POST',
+      (tester) async {
+        final admin = _admin(loginName: 'admin.school1');
+        var serverListRead = 0;
+        final adminRepository = FakePlatformInstitutionAdminRepository(
+          admins: [admin],
+          onFetch: (institutionId, query) async {
+            serverListRead += 1;
+            return _adminPage(
+              admins: serverListRead == 1 ? [admin] : const [],
+              query: query,
+            );
+          },
+          onDeactivate: (_) async => throw _serverFailure(
+            ApiErrorCodes.resourceNotFound,
+            statusCode: 404,
+          ),
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository();
+        final listRepository = FakePlatformInstitutionListRepository();
+        final dashboardRepository = FakePlatformDashboardRepository();
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          adminRepository: adminRepository,
+          listRepository: listRepository,
+          dashboardRepository: dashboardRepository,
+        );
+        await tester.pumpAndSettle();
+        final listCallsBeforeLifecycle = adminRepository.fetchCalls.length;
+        final detailCallsBeforeLifecycle = detailRepository.fetchCalls;
+
+        final deactivateButton = find.byKey(
+          Key('platformInstitutionAdminDeactivateButton-${admin.id}'),
+        );
+        await tester.ensureVisible(deactivateButton);
+        await tester.tap(deactivateButton);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            const Key(
+              'platformInstitutionAdminLifecycleConfirmDeactivateButton',
+            ),
+          ),
+        );
+        await _pumpThroughTargetUnavailableCompletion(tester);
+
+        expect(adminRepository.deactivateAdminIds, [admin.id]);
+        expect(adminRepository.activateAdminIds, isEmpty);
+        expect(adminRepository.updateCalls, isEmpty);
+        expect(adminRepository.fetchCalls.length, listCallsBeforeLifecycle + 1);
+        expect(adminRepository.fetchCalls.last.institutionId, _institutionIdA);
+        expect(detailRepository.fetchCalls, detailCallsBeforeLifecycle);
+        expect(listRepository.fetchCalls, 0);
+        expect(dashboardRepository.fetchCalls, 0);
+        expect(
+          find.byKey(const Key('platformInstitutionAdminLifecycleDialog')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionAdminLifecycleUnavailableDialog'),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionAdminEditUnavailableDialog'),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionAdminActionSnackBar')),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Administrator is no longer available.'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Institution admin deactivated successfully.'),
+          findsNothing,
+        );
+        expect(
+          _adminActionState(tester).status,
+          PlatformInstitutionAdminActionStatus.idle,
+        );
+        expect(_adminActionState(tester).snapshot, isNull);
+        expect(_adminActionState(tester).completion, isNull);
+
+        await tester.pump(const Duration(seconds: 1));
+        expect(adminRepository.deactivateAdminIds, [admin.id]);
+        expect(adminRepository.fetchCalls.length, listCallsBeforeLifecycle + 1);
+      },
+    );
+
+    testWidgets(
+      'target 404 refresh completion from stale route and Admin is ignored',
+      (tester) async {
+        final adminA = _admin(loginName: 'admin.school1');
+        final adminB = _admin(
+          id: '550e8400-e29b-41d4-a716-446655440002',
+          fullName: 'Current Route Admin',
+          loginName: 'admin.school2',
+        );
+        final staleRefreshCompleter = Completer<PlatformInstitutionAdminList>();
+        var institutionAReads = 0;
+        final adminRepository = FakePlatformInstitutionAdminRepository(
+          admins: [adminA],
+          onFetch: (institutionId, query) {
+            if (institutionId == _institutionIdB) {
+              return Future.value(_adminPage(admins: [adminB], query: query));
+            }
+
+            institutionAReads += 1;
+            if (institutionAReads == 1) {
+              return Future.value(_adminPage(admins: [adminA], query: query));
+            }
+
+            return staleRefreshCompleter.future;
+          },
+          onUpdate: (_, _) async => throw _serverFailure(
+            ApiErrorCodes.resourceNotFound,
+            statusCode: 404,
+          ),
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository(
+          onFetch: (institutionId) async => _detail(id: institutionId),
+        );
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          adminRepository: adminRepository,
+        );
+        await tester.pumpAndSettle();
+
+        final editButton = find.byKey(
+          Key('platformInstitutionAdminEditButton-${adminA.id}'),
+        );
+        await tester.ensureVisible(editButton);
+        await tester.tap(editButton);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminEditFullNameField')),
+          'Stale Route Admin',
+        );
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminEditSubmitButton')),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(adminRepository.updateCalls, hasLength(1));
+        expect(adminRepository.updateCalls.single.adminId, adminA.id);
+        expect(institutionAReads, 2);
+
+        _router(tester).go(_detailPath(_institutionIdB));
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), _detailPath(_institutionIdB));
+        expect(find.text('Current Route Admin'), findsOneWidget);
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditDialog')),
+          findsNothing,
+        );
+
+        final staleQuery = adminRepository.fetchCalls
+            .firstWhere((call) => call.institutionId == _institutionIdA)
+            .query;
+        staleRefreshCompleter.complete(
+          _adminPage(admins: const [], query: staleQuery),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), _detailPath(_institutionIdB));
+        expect(find.text('Current Route Admin'), findsOneWidget);
+        expect(find.text('Stale Route Admin'), findsNothing);
+        expect(
+          find.byKey(const Key('platformInstitutionAdminActionSnackBar')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(
+            const Key('platformInstitutionAdminEditUnavailableDialog'),
+          ),
+          findsNothing,
+        );
+        expect(
+          _adminActionState(tester, institutionId: _institutionIdB).status,
+          PlatformInstitutionAdminActionStatus.idle,
+        );
+        expect(adminRepository.updateCalls, hasLength(1));
+        expect(adminRepository.activateAdminIds, isEmpty);
+        expect(adminRepository.deactivateAdminIds, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'lifecycle confirmation posts once and refreshes list plus detail',
+      (tester) async {
+        final admin = _admin(loginName: 'admin.school1');
+        final adminRepository = FakePlatformInstitutionAdminRepository(
+          admins: [admin],
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository();
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          adminRepository: adminRepository,
+        );
+        await tester.pumpAndSettle();
+        final listCallsBeforeLifecycle = adminRepository.fetchCalls.length;
+        final detailCallsBeforeLifecycle = detailRepository.fetchCalls;
+
+        final deactivateButton = find.byKey(
+          Key('platformInstitutionAdminDeactivateButton-${admin.id}'),
+        );
+        await tester.ensureVisible(deactivateButton);
+        await tester.pumpAndSettle();
+        await tester.tap(deactivateButton);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('platformInstitutionAdminLifecycleDialog')),
+          findsOneWidget,
+        );
+        expect(find.text('Deactivate administrator'), findsOneWidget);
+        expect(find.text('admin.school1'), findsWidgets);
+        expect(find.textContaining('Normal protected access'), findsOneWidget);
+        expect(find.textContaining('historical data remain'), findsOneWidget);
+
+        await tester.tap(
+          find.byKey(
+            const Key(
+              'platformInstitutionAdminLifecycleConfirmDeactivateButton',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(adminRepository.deactivateAdminIds, [admin.id]);
+        expect(adminRepository.activateAdminIds, isEmpty);
+        expect(
+          find.byKey(const Key('platformInstitutionAdminLifecycleDialog')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('platformInstitutionAdminActionSnackBar')),
+          findsOneWidget,
+        );
+        expect(adminRepository.fetchCalls.length, listCallsBeforeLifecycle + 1);
+        expect(detailRepository.fetchCalls, detailCallsBeforeLifecycle + 1);
       },
     );
 
@@ -909,6 +1426,77 @@ void main() {
     });
 
     testWidgets(
+      'route change closes an in-flight admin dialog and ignores late success',
+      (tester) async {
+        final admin = _admin(loginName: 'admin.school1');
+        final updateCompleter =
+            Completer<PlatformInstitutionAdminUpdateResult>();
+        final adminRepository = FakePlatformInstitutionAdminRepository(
+          admins: [admin],
+          onFetch: (institutionId, query) async => _adminPage(
+            admins: institutionId == _institutionIdA ? [admin] : const [],
+            query: query,
+          ),
+          onUpdate: (_, _) => updateCompleter.future,
+        );
+        final detailRepository = FakePlatformInstitutionDetailRepository(
+          onFetch: (institutionId) async => _detail(id: institutionId),
+        );
+
+        await _pumpApp(
+          tester,
+          detailRepository: detailRepository,
+          adminRepository: adminRepository,
+        );
+        await tester.pumpAndSettle();
+
+        final editButton = find.byKey(
+          Key('platformInstitutionAdminEditButton-${admin.id}'),
+        );
+        await tester.ensureVisible(editButton);
+        await tester.tap(editButton);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('platformInstitutionAdminEditFullNameField')),
+          'Late Admin',
+        );
+        await tester.tap(
+          find.byKey(const Key('platformInstitutionAdminEditSubmitButton')),
+        );
+        await tester.pump();
+
+        expect(adminRepository.updateCalls, hasLength(1));
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditDialog')),
+          findsOneWidget,
+        );
+
+        _router(tester).go(_detailPath(_institutionIdB));
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), _detailPath(_institutionIdB));
+        expect(
+          find.byKey(const Key('platformInstitutionAdminEditDialog')),
+          findsNothing,
+        );
+
+        updateCompleter.complete(
+          PlatformInstitutionAdminUpdateResult(
+            admin: _copyAdmin(admin, fullName: 'Late Admin'),
+            message: 'Institution admin updated successfully.',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), _detailPath(_institutionIdB));
+        expect(
+          find.byKey(const Key('platformInstitutionAdminActionSnackBar')),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
       'auth password and account-status failures remove protected detail',
       (tester) async {
         final cases = [
@@ -1096,6 +1684,52 @@ Future<void> _pumpApp(
   await tester.pump();
 }
 
+PlatformInstitutionAdminActionState _adminActionState(
+  WidgetTester tester, {
+  String institutionId = _institutionIdA,
+}) {
+  final context = tester.element(
+    find.byKey(const Key('platformInstitutionDetailData')),
+  );
+  final container = ProviderScope.containerOf(context);
+  final user = container.read(authSessionControllerProvider).user!;
+  final key = PlatformInstitutionAdminActionKey(
+    sessionUserId: user.id,
+    sessionInstanceId: identityHashCode(user),
+    institutionId: institutionId,
+  );
+
+  return container.read(platformInstitutionAdminActionControllerProvider(key));
+}
+
+Future<void> _pumpThroughTargetUnavailableCompletion(
+  WidgetTester tester,
+) async {
+  var feedbackFound = false;
+
+  for (var frame = 0; frame < 20; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      find.byKey(const Key('platformInstitutionAdminEditUnavailableDialog')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const Key('platformInstitutionAdminLifecycleUnavailableDialog'),
+      ),
+      findsNothing,
+    );
+    feedbackFound =
+        feedbackFound ||
+        find
+            .byKey(const Key('platformInstitutionAdminActionSnackBar'))
+            .evaluate()
+            .isNotEmpty;
+  }
+
+  expect(feedbackFound, isTrue);
+}
+
 void _expectNoLaterScopeText() {
   expect(find.text('Create Institution'), findsNothing);
   expect(find.text('Edit Institution'), findsNothing);
@@ -1243,6 +1877,33 @@ PlatformInstitutionAdmin _admin({
     updatedAt: DateTime.utc(2026, 8, 7, 16),
   );
 }
+
+PlatformInstitutionAdmin _copyAdmin(
+  PlatformInstitutionAdmin admin, {
+  String? fullName,
+  Object? email = _sentinel,
+  Object? phone = _sentinel,
+  bool? isActive,
+  Object? deactivatedAt = _sentinel,
+}) {
+  return PlatformInstitutionAdmin(
+    id: admin.id,
+    fullName: fullName ?? admin.fullName,
+    loginName: admin.loginName,
+    email: identical(email, _sentinel) ? admin.email : email as String?,
+    phone: identical(phone, _sentinel) ? admin.phone : phone as String?,
+    isActive: isActive ?? admin.isActive,
+    mustChangePassword: admin.mustChangePassword,
+    lastLoginAt: admin.lastLoginAt,
+    deactivatedAt: identical(deactivatedAt, _sentinel)
+        ? admin.deactivatedAt
+        : deactivatedAt as DateTime?,
+    createdAt: admin.createdAt,
+    updatedAt: DateTime.utc(2026, 8, 9, 10),
+  );
+}
+
+const _sentinel = Object();
 
 PlatformDashboard _dashboard() {
   return PlatformDashboard(
@@ -1480,6 +2141,9 @@ class FakePlatformInstitutionAdminRepository
     this.admins = const [],
     this.onFetch,
     this.onCreate,
+    this.onUpdate,
+    this.onActivate,
+    this.onDeactivate,
   });
 
   final List<PlatformInstitutionAdmin> admins;
@@ -1493,12 +2157,25 @@ class FakePlatformInstitutionAdminRepository
     PlatformInstitutionAdminCreateRequest request,
   )?
   onCreate;
+  Future<PlatformInstitutionAdminUpdateResult> Function(
+    String adminId,
+    PlatformInstitutionAdminUpdateRequest request,
+  )?
+  onUpdate;
+  Future<PlatformInstitutionAdminLifecycleResult> Function(String adminId)?
+  onActivate;
+  Future<PlatformInstitutionAdminLifecycleResult> Function(String adminId)?
+  onDeactivate;
   final fetchCalls =
       <({String institutionId, PlatformInstitutionAdminListQuery query})>[];
   final createCalls =
       <
         ({String institutionId, PlatformInstitutionAdminCreateRequest request})
       >[];
+  final updateCalls =
+      <({String adminId, PlatformInstitutionAdminUpdateRequest request})>[];
+  final activateAdminIds = <String>[];
+  final deactivateAdminIds = <String>[];
 
   @override
   Future<PlatformInstitutionAdminList> fetchAdmins({
@@ -1528,6 +2205,85 @@ class FakePlatformInstitutionAdminRepository
               phone: request.phone,
             ),
             message: 'Institution administrator created.',
+          ),
+        );
+  }
+
+  @override
+  Future<PlatformInstitutionAdminUpdateResult> updateAdmin({
+    required String adminId,
+    required PlatformInstitutionAdminUpdateRequest request,
+  }) {
+    updateCalls.add((adminId: adminId, request: request));
+
+    final existing = admins.firstWhere(
+      (admin) => admin.id == adminId,
+      orElse: () => _admin(id: adminId),
+    );
+    final body = request.toJson();
+
+    return onUpdate?.call(adminId, request) ??
+        Future.value(
+          PlatformInstitutionAdminUpdateResult(
+            admin: _copyAdmin(
+              existing,
+              fullName: body.containsKey('full_name')
+                  ? body['full_name']! as String
+                  : existing.fullName,
+              email: body.containsKey('email')
+                  ? body['email'] as String?
+                  : existing.email,
+              phone: body.containsKey('phone')
+                  ? body['phone'] as String?
+                  : existing.phone,
+            ),
+            message: 'Institution admin updated successfully.',
+          ),
+        );
+  }
+
+  @override
+  Future<PlatformInstitutionAdminLifecycleResult> activateAdmin({
+    required String adminId,
+  }) {
+    activateAdminIds.add(adminId);
+
+    final existing = admins.firstWhere(
+      (admin) => admin.id == adminId,
+      orElse: () => _admin(id: adminId, isActive: false),
+    );
+
+    return onActivate?.call(adminId) ??
+        Future.value(
+          PlatformInstitutionAdminLifecycleResult(
+            admin: _copyAdmin(existing, isActive: true, deactivatedAt: null),
+            message: 'Institution admin activated successfully.',
+            action: PlatformInstitutionAdminLifecycleAction.activate,
+          ),
+        );
+  }
+
+  @override
+  Future<PlatformInstitutionAdminLifecycleResult> deactivateAdmin({
+    required String adminId,
+  }) {
+    deactivateAdminIds.add(adminId);
+
+    final existing = admins.firstWhere(
+      (admin) => admin.id == adminId,
+      orElse: () => _admin(id: adminId),
+    );
+
+    return onDeactivate?.call(adminId) ??
+        Future.value(
+          PlatformInstitutionAdminLifecycleResult(
+            admin: _copyAdmin(
+              existing,
+              isActive: false,
+              deactivatedAt: DateTime.utc(2026, 8, 9, 10),
+            ),
+            message: 'Institution admin deactivated successfully.',
+            action: PlatformInstitutionAdminLifecycleAction.deactivate,
           ),
         );
   }
