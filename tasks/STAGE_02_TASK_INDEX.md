@@ -61,8 +61,8 @@ learning workflows.
 Tasks are implemented and accepted one at a time. `S02-BE-001` through
 `S02-BE-007`, `S02-FE-001`, `S02-FE-002`, `S02-FE-003`, `S02-FE-004`,
 `S02-FE-005`, `S02-FE-006`, `S02-FE-007`, and `S02-FE-008` are accepted and
-delivered. `S02-FE-009` is accepted and delivered. `S02-INT-001` remains
-planned and may not be started until its detailed contract is approved.
+delivered. `S02-FE-009` is accepted and delivered. `S02-INT-001` is accepted
+after its corrected read-only gate passed; delivery remains pending.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|
@@ -82,7 +82,7 @@ planned and may not be started until its detailed contract is approved.
 | 14 | `S02-FE-007` | Frontend | Activate/deactivate confirmation, in-flight protection, and refresh | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-007-platform-institution-lifecycle-actions.md` |
 | 15 | `S02-FE-008` | Frontend | Institution Admin list/create UI within Institution detail | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-008-platform-institution-admin-list-create.md` |
 | 16 | `S02-FE-009` | Frontend | Institution Admin edit/activate/deactivate UI | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-009-platform-institution-admin-update-lifecycle.md` |
-| 17 | `S02-INT-001` | Integration | Full real-stack Stage 2 end-to-end verification on Windows | `Planned / not individually approved` | `Not started` | `Not started` | `TBD` |
+| 17 | `S02-INT-001` | Integration | Full real-stack Stage 2 end-to-end verification on Windows | `Accepted` | `PASS` | `Not started` | `tasks/integration/stage-02/S02-INT-001-stage-02-windows-real-stack-e2e-verification.md` |
 
 After all 17 implementation tasks are accepted, run a separate Stage 2 Closure
 Review. The closure review is not itself an implementation task.
@@ -101,8 +101,8 @@ Review. The closure review is not itself an implementation task.
 - [x] `S02-BE-007` is accepted and delivered.
 - [x] `S02-FE-004` is accepted and delivered.
 - [x] `S02-FE-007` is accepted and delivered after read-only review and manual PR merge.
-- [x] `S02-FE-009` is accepted after read-only review; `S02-INT-001` remains
-      planned, not individually approved, and not started.
+- [x] `S02-FE-009` is accepted and delivered; `S02-INT-001` is accepted after
+      corrected Phase 2 PASS, with delivery pending.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
 
@@ -176,10 +176,11 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-13` | Accepted and delivered `S02-FE-008` | Manual PR #36 merge completed; final delivery inspection confirmed required commit `86fd616eab3a55e7d38116b203d67f80881cea69` on `origin/main`, merge commit `37a154d2d40d408df86b9b39263289cbe082187c`, and no implementation/security/contract contradiction. Manual live smoke remains NOT RUN because no running backend or Platform Owner credentials were available | Codex |
 | `2026-08-13` | Accepted `S02-FE-009` | Read-only gate passed with zero unresolved P1/P2/P3 findings; required checks and real-stack smoke passed | Codex |
 | `2026-08-13` | Accepted and delivered `S02-FE-009` | Manual PR #38 merge completed; final delivery inspection confirmed required commit `01417ae9d843c6b06f90b3d169609cfab483051a` on `origin/main`, merge commit `ce6d037e97015298788db3f4f3f73046d9674c60`, and no implementation/security/API-contract/scope contradiction | Codex |
+| `2026-08-13` | Accepted `S02-INT-001` | Corrected strictly read-only Phase 2 passed with no unresolved P1/P2/P3; Windows real-stack E2E, independent PostgreSQL oracle, owner smoke, and quality gates passed. Delivery remains pending | Codex |
 
 ## 9. Closure Readiness
 
-- [ ] Every approved Stage 2 implementation task is `Accepted`.
+- [x] Every approved Stage 2 implementation task is `Accepted`.
 - [ ] Every accepted production task is present on `origin/main`.
 - [ ] Local `main` matches `origin/main` and the working tree is clean.
 - [ ] Required backend, frontend, and integration quality gates pass.
