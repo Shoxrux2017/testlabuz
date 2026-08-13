@@ -209,7 +209,8 @@ multi-institution isolation rules in the applicable `AGENTS.md` files.
 |---|---|---|
 | Stage 0 — Project Preparation and Technical Planning | `Closed` | See `STAGE_00_CLOSURE_REVIEW.md` |
 | Stage 1 — Authentication and Role-Based Entry | `Closed` | See `STAGE_01_CLOSURE_REVIEW.md`; next gate is Stage 2 decomposition/planning only |
-| Stage 2 — Multi-Institution Platform Management | `In Progress` | See `STAGE_02_TASK_INDEX.md`; `S02-BE-001` through `S02-BE-007` accepted and delivered; later tasks remain not individually approved |
+| Stage 2 — Multi-Institution Platform Management | `In Progress / Verified / Not Closed` | See `STAGE_02_TASK_INDEX.md`; all 17 tasks are accepted, `S02-INT-001` delivery is pending, and the next action is the separate Stage 2 Closure Review |
 
-Stage 2 implementation is in progress. Do not start `S02-FE-001` or any later
-Stage 2 task until its detailed task contract is explicitly approved.
+Stage 2 implementation verification is accepted, but Stage 2 is not closed.
+After `S02-INT-001` delivery, run the separate Stage 2 Closure Review. Do not
+start Stage 3 and do not treat this task as the closure review.
