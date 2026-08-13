@@ -5,10 +5,11 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 2 — Multi-Institution Platform Management` |
-| Status | `In Progress` |
+| Status | `Closed` |
 | Decomposition approved on | `2026-08-10` |
-| Implementation started | `Yes — S02-BE-007 is accepted` |
-| Stage closed | `No` |
+| Implementation started | `Complete — all 17 tasks are accepted and delivered` |
+| Stage closed | `Yes` |
+| Closure review | `PASS` |
 
 This index records the approved Stage 2 decomposition only. It does not add,
 reinterpret, or approve product behavior beyond the locked specifications and
@@ -84,8 +85,9 @@ after its corrected read-only gate passed and is delivered.
 | 16 | `S02-FE-009` | Frontend | Institution Admin edit/activate/deactivate UI | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-009-platform-institution-admin-update-lifecycle.md` |
 | 17 | `S02-INT-001` | Integration | Full real-stack Stage 2 end-to-end verification on Windows | `Accepted` | `PASS` | `Delivered` | `tasks/integration/stage-02/S02-INT-001-stage-02-windows-real-stack-e2e-verification.md` |
 
-After all 17 implementation tasks are accepted, run a separate Stage 2 Closure
-Review. The closure review is not itself an implementation task.
+All 17 implementation tasks are accepted and delivered. The separate Stage 2
+Closure Review passed; this closure bookkeeping closes the stage when delivered
+to `origin/main`. The closure review is not an implementation task.
 
 ## 5. Entry Gate
 
@@ -178,14 +180,17 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-13` | Accepted and delivered `S02-FE-009` | Manual PR #38 merge completed; final delivery inspection confirmed required commit `01417ae9d843c6b06f90b3d169609cfab483051a` on `origin/main`, merge commit `ce6d037e97015298788db3f4f3f73046d9674c60`, and no implementation/security/API-contract/scope contradiction | Codex |
 | `2026-08-13` | Accepted `S02-INT-001` | Corrected strictly read-only Phase 2 passed with no unresolved P1/P2/P3; Windows real-stack E2E, independent PostgreSQL oracle, owner smoke, and quality gates passed. Delivery remains pending | Codex |
 | `2026-08-13` | Accepted and delivered `S02-INT-001` | Manual PR #40 merge completed; final delivery inspection confirmed required commit `4f2c4a16f43a0958312441a9b8b3af6d2c9c84a6` on `origin/main`, merge commit `aa223890c26bb9a5f4704c7d2efe1bd92e7786e8`, and no implementation, security, evidence, or scope contradiction. Stage 2 remains not closed | Codex |
+| `2026-08-13` | Stage 2 Closure Review `PASS` | Renewed read-only stage-wide audit at `8b43abc614fdd5c66760c4f26f48aab4e8947f9d` found no unresolved P1/P2; closure bookkeeping marks Stage 2 `Closed` / `Stage closed: Yes` for delivery through the closure PR | Codex |
 
 ## 9. Closure Readiness
 
 - [x] Every approved Stage 2 implementation task is `Accepted`.
-- [ ] Every accepted production task is present on `origin/main`.
-- [ ] Local `main` matches `origin/main` and the working tree is clean.
-- [ ] Required backend, frontend, and integration quality gates pass.
-- [ ] Required manual smoke paths pass.
-- [ ] No blocking regression remains.
-- [ ] Task/index/documentation statuses are current.
-- [ ] Stage 2 closure review has passed and been delivered.
+- [x] Every accepted production task is present on `origin/main`.
+- [x] Local `main` matched `origin/main` and the working tree was clean except
+      the owner-prepared closure-review file at audit preflight.
+- [x] Required backend, frontend, and integration quality gates pass.
+- [x] Required manual smoke paths pass.
+- [x] No blocking regression remains.
+- [x] Task/index/documentation statuses are current in this closure bookkeeping.
+- [x] Stage 2 closure review is `PASS`; formal delivery is completed by merging
+      this closure bookkeeping to `origin/main` and final synchronization.
