@@ -62,7 +62,7 @@ Tasks are implemented and accepted one at a time. `S02-BE-001` through
 `S02-BE-007`, `S02-FE-001`, `S02-FE-002`, `S02-FE-003`, `S02-FE-004`,
 `S02-FE-005`, `S02-FE-006`, `S02-FE-007`, and `S02-FE-008` are accepted and
 delivered. `S02-FE-009` is accepted and delivered. `S02-INT-001` is accepted
-after its corrected read-only gate passed; delivery remains pending.
+after its corrected read-only gate passed and is delivered.
 
 | Order | Task ID | Area | Short outcome | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|
@@ -82,7 +82,7 @@ after its corrected read-only gate passed; delivery remains pending.
 | 14 | `S02-FE-007` | Frontend | Activate/deactivate confirmation, in-flight protection, and refresh | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-007-platform-institution-lifecycle-actions.md` |
 | 15 | `S02-FE-008` | Frontend | Institution Admin list/create UI within Institution detail | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-008-platform-institution-admin-list-create.md` |
 | 16 | `S02-FE-009` | Frontend | Institution Admin edit/activate/deactivate UI | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-02/S02-FE-009-platform-institution-admin-update-lifecycle.md` |
-| 17 | `S02-INT-001` | Integration | Full real-stack Stage 2 end-to-end verification on Windows | `Accepted` | `PASS` | `Not started` | `tasks/integration/stage-02/S02-INT-001-stage-02-windows-real-stack-e2e-verification.md` |
+| 17 | `S02-INT-001` | Integration | Full real-stack Stage 2 end-to-end verification on Windows | `Accepted` | `PASS` | `Delivered` | `tasks/integration/stage-02/S02-INT-001-stage-02-windows-real-stack-e2e-verification.md` |
 
 After all 17 implementation tasks are accepted, run a separate Stage 2 Closure
 Review. The closure review is not itself an implementation task.
@@ -101,8 +101,8 @@ Review. The closure review is not itself an implementation task.
 - [x] `S02-BE-007` is accepted and delivered.
 - [x] `S02-FE-004` is accepted and delivered.
 - [x] `S02-FE-007` is accepted and delivered after read-only review and manual PR merge.
-- [x] `S02-FE-009` is accepted and delivered; `S02-INT-001` is accepted after
-      corrected Phase 2 PASS, with delivery pending.
+- [x] `S02-FE-009` and `S02-INT-001` are accepted and delivered; the corrected
+      S02-INT-001 Phase 2 result remains `PASS`.
 
 ## 6. Standard Task Acceptance and GitHub Delivery Workflow
 
@@ -177,6 +177,7 @@ when safe, synchronize local `main`, and verify a clean final state.
 | `2026-08-13` | Accepted `S02-FE-009` | Read-only gate passed with zero unresolved P1/P2/P3 findings; required checks and real-stack smoke passed | Codex |
 | `2026-08-13` | Accepted and delivered `S02-FE-009` | Manual PR #38 merge completed; final delivery inspection confirmed required commit `01417ae9d843c6b06f90b3d169609cfab483051a` on `origin/main`, merge commit `ce6d037e97015298788db3f4f3f73046d9674c60`, and no implementation/security/API-contract/scope contradiction | Codex |
 | `2026-08-13` | Accepted `S02-INT-001` | Corrected strictly read-only Phase 2 passed with no unresolved P1/P2/P3; Windows real-stack E2E, independent PostgreSQL oracle, owner smoke, and quality gates passed. Delivery remains pending | Codex |
+| `2026-08-13` | Accepted and delivered `S02-INT-001` | Manual PR #40 merge completed; final delivery inspection confirmed required commit `4f2c4a16f43a0958312441a9b8b3af6d2c9c84a6` on `origin/main`, merge commit `aa223890c26bb9a5f4704c7d2efe1bd92e7786e8`, and no implementation, security, evidence, or scope contradiction. Stage 2 remains not closed | Codex |
 
 ## 9. Closure Readiness
 
