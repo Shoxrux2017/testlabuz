@@ -342,6 +342,9 @@ Failed observations or limitations: none reported.
 
 ## Acceptance Gate
 
+This section records the historical pre-delivery acceptance state. The current
+authoritative delivery state is recorded in `Final GitHub Delivery` below.
+
 - Automated Phase 1 verification: PASS.
 - Mandatory human-observable Windows smoke: PASS.
 - Historical first Phase 2 read-only acceptance gate: NOT ACCEPTED.
@@ -356,4 +359,46 @@ Failed observations or limitations: none reported.
 - Independent PostgreSQL oracle and exact baseline assertion coverage: PASS.
 - Exact owner-approved prompt, UTC metadata, historical failed-review record,
   human smoke, scope, secret, and locked-document checks: PASS.
-- Task acceptance verdict: `Accepted`; delivery remains pending.
+- Historical pre-delivery task acceptance verdict: `Accepted`; delivery was
+  pending at that checkpoint.
+
+## Final GitHub Delivery
+
+This is the authoritative current delivery record for `S02-INT-001`.
+
+Documentation remediation recorded at: `2026-08-13T11:36:54Z`.
+
+### Implementation
+
+- Branch: `task/s02-int-001-stage2-windows-e2e`.
+- Accepted commit: `4f2c4a16f43a0958312441a9b8b3af6d2c9c84a6`.
+- Pull request: `#40`.
+- Implementation merge commit:
+  `aa223890c26bb9a5f4704c7d2efe1bd92e7786e8`.
+- Merge parents:
+  - `31193e557c1a2be87bbe2a9deea4430c1062d4f6`.
+  - `4f2c4a16f43a0958312441a9b8b3af6d2c9c84a6`.
+
+### Delivery Bookkeeping
+
+- Branch: `codex/s02-int-001-delivery-bookkeeping`.
+- Bookkeeping commit: `90d1aaa45c20bdb8068a57f46373b8ce0760b1b5`.
+- Pull request: `#41`.
+- Bookkeeping merge commit:
+  `f9cb4346fcab1c61f5bb43fdcda9eaedb290ee47`.
+- Merge parents:
+  - `aa223890c26bb9a5f4704c7d2efe1bd92e7786e8`.
+  - `90d1aaa45c20bdb8068a57f46373b8ce0760b1b5`.
+
+### Final Verified State
+
+- Both required commits are ancestors of `origin/main`.
+- Local `main` and `origin/main` were synchronized at
+  `f9cb4346fcab1c61f5bb43fdcda9eaedb290ee47`.
+- The working tree was clean after final delivery verification.
+- `S02-INT-001` = `Accepted / PASS / Delivered`.
+- All sixteen predecessors remain `Accepted / PASS / Delivered`.
+- Stage 2 = `In Progress / Verified / Not Closed`.
+- Stage closed = `No`.
+- Next gate = separate Stage 2 Closure Review.
+- Stage 3 was not started.
