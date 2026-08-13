@@ -7,7 +7,11 @@
 | Task ID | `S02-FE-009` |
 | Status | `Accepted` |
 | Review status | `PASS` |
-| Delivery status | `Not started` |
+| Delivery status | `Delivered` |
+| Accepted commit | `01417ae9d843c6b06f90b3d169609cfab483051a` |
+| Main before S02-FE-009 | `db4bf54d6d16554eae4c74ae19da8947b618191d` |
+| Pull request | `#38` |
+| Merge commit | `ce6d037e97015298788db3f4f3f73046d9674c60` |
 | Approved on | `2026-08-10` |
 | Stage | `Stage 2 — Multi-Institution Platform Management` |
 | Area | `Frontend / Platform Owner Institution Admin profile and lifecycle management` |
