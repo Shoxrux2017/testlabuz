@@ -8,11 +8,18 @@
 | Roadmap stage | `Stage 2 — Multi-Institution Platform Management` |
 | Area | `Integration / Windows end-to-end verification` |
 | Status | `Accepted` |
+| Review status | `PASS` |
+| Delivery status | `Delivered` |
+| Accepted commit | `4f2c4a16f43a0958312441a9b8b3af6d2c9c84a6` |
+| Main before S02-INT-001 | `31193e557c1a2be87bbe2a9deea4430c1062d4f6` |
+| Pull request | `#40` |
+| Merge commit | `aa223890c26bb9a5f4704c7d2efe1bd92e7786e8` |
 | Depends on | `S02-BE-007 — Platform Institution Admin Update/Lifecycle API (Accepted)`; `S02-FE-009 — Platform Institution Admin Update/Lifecycle UI (Accepted)` |
 | Blocks | `Stage 2 Closure Review` |
 
 This task passed its corrected, strictly read-only Phase 2 acceptance gate on
-2026-08-13. Delivery remains separate and does not close Stage 2.
+2026-08-13. Delivery completed separately through PR #40 and does not close
+Stage 2.
 
 This is the seventeenth and final Stage 2 implementation/verification task. It
 does **not** close Stage 2. A separate Stage 2 closure review must run only after
