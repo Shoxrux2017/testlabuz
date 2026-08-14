@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\ChangePasswordController;
 use App\Http\Controllers\Api\V1\Auth\CurrentUserController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
+use App\Http\Controllers\Api\V1\Institution\InstitutionDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
@@ -40,4 +41,10 @@ Route::prefix('platform')
         Route::post('institution-admins/{user}/activate', [PlatformInstitutionAdminController::class, 'activate']);
         Route::post('institution-admins/{user}/deactivate', [PlatformInstitutionAdminController::class, 'deactivate']);
         Route::get('institutions/{institution}', [PlatformInstitutionController::class, 'show']);
+    });
+
+Route::prefix('institution')
+    ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::InstitutionAdmin->value])
+    ->group(function (): void {
+        Route::get('dashboard', InstitutionDashboardController::class);
     });

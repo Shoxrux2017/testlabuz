@@ -84,7 +84,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | Order | Task ID | Area | Short outcome | Direct dependencies | Task status | Review status | Delivery status | File |
 |---:|---|---|---|---|---|---|---|---|
 | 1 | `S03-INT-001` | Integration | Stage 3 contract alignment and task control | Stage 2 closed | `Accepted` | `PASS` | `Delivered` | `tasks/integration/stage-03/S03-INT-001-stage-03-contract-alignment-task-control.md` |
-| 2 | `S03-BE-001` | Backend | Institution Admin dashboard API | `S03-INT-001` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-001-institution-admin-dashboard-api.md` |
+| 2 | `S03-BE-001` | Backend | Institution Admin dashboard API | `S03-INT-001` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-001-institution-admin-dashboard-api.md` |
 | 3 | `S03-BE-002` | Backend | Own Institution profile GET/PATCH API | `S03-BE-001` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-002-own-institution-profile-api.md` |
 | 4 | `S03-BE-003` | Backend | Institution User list/detail API | `S03-BE-002` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-003-institution-user-list-detail-api.md` |
 | 5 | `S03-BE-004` | Backend | Teacher/Student/Parent create API | `S03-BE-003` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-004-institution-user-create-api.md` |
