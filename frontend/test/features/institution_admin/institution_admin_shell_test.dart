@@ -1,0 +1,1068 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:testlabuz_client/app/app.dart';
+import 'package:testlabuz_client/app/device/app_device_surface.dart';
+import 'package:testlabuz_client/app/router/app_router.dart';
+import 'package:testlabuz_client/core/network/api_failure.dart';
+import 'package:testlabuz_client/core/network/api_request_exception.dart';
+import 'package:testlabuz_client/core/network/session_invalidation_signal.dart';
+import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
+import 'package:testlabuz_client/features/auth/data/auth_repository_impl.dart';
+import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
+import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
+import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
+import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_shell.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard_repository.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
+import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
+
+void main() {
+  group('Institution Admin direct routing and destination mapping', () {
+    testWidgets('all six routes use one shell and exact honest placeholders', (
+      tester,
+    ) async {
+      for (final route in _routeExpectations) {
+        final authRepository = _authenticatedRepository(_adminUser());
+        final dashboardRepository = FakePlatformDashboardRepository();
+        final listRepository = FakePlatformInstitutionListRepository();
+
+        await _pumpApp(
+          tester,
+          initialLocation: route.path,
+          authRepository: authRepository,
+          dashboardRepository: dashboardRepository,
+          listRepository: listRepository,
+        );
+        await tester.pumpAndSettle();
+
+        _expectDestination(tester, route);
+        expect(find.text(_userIdOne), findsNothing);
+        expect(find.byKey(const Key('entryRoleTitle')), findsNothing);
+        expect(find.byKey(const Key('platformOwnerShell')), findsNothing);
+        expect(authRepository.currentUserCalls, 1);
+        expect(dashboardRepository.fetchCalls, 0);
+        expect(listRepository.fetchCalls, 0);
+      }
+    });
+
+    testWidgets('two valid UUID details remain Users destinations', (
+      tester,
+    ) async {
+      for (final userId in const [_userIdOne, _userIdTwo]) {
+        final path = AppRoutePaths.institutionAdminUserDetailLocation(userId);
+        await _pumpApp(
+          tester,
+          initialLocation: path,
+          authRepository: _authenticatedRepository(_adminUser()),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), path);
+        expect(
+          _navigationRail(tester).selectedIndex,
+          InstitutionAdminShellDestination.values.indexOf(
+            InstitutionAdminShellDestination.users,
+          ),
+        );
+        expect(find.text('User Details'), findsOneWidget);
+        expect(
+          find.byKey(const Key('institutionAdminUserDetailPlaceholder')),
+          findsOneWidget,
+        );
+        expect(find.text(userId), findsNothing);
+      }
+    });
+
+    testWidgets('malformed descendants resolve safely to Dashboard', (
+      tester,
+    ) async {
+      for (final path in _malformedLocations) {
+        await _pumpApp(
+          tester,
+          initialLocation: path,
+          authRepository: _authenticatedRepository(_adminUser()),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
+        expect(
+          find.byKey(const Key('institutionAdminDashboardPlaceholder')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('institutionAdminUserDetailPlaceholder')),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull, reason: path);
+      }
+    });
+  });
+
+  group('Institution Admin guard and bootstrap matrix', () {
+    testWidgets('unauthenticated approved routes resolve to login', (
+      tester,
+    ) async {
+      for (final route in _routeExpectations) {
+        await _pumpApp(
+          tester,
+          initialLocation: route.path,
+          authRepository: FakeAuthRepository(),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), AppRoutePaths.login);
+        expect(find.text('Login'), findsOneWidget);
+        expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+      }
+    });
+
+    testWidgets(
+      'password change precedes every approved route for every role',
+      (tester) async {
+        for (final route in _routeExpectations) {
+          for (final role in UserRole.values) {
+            await _pumpApp(
+              tester,
+              initialLocation: route.path,
+              authRepository: _authenticatedRepository(
+                _user(
+                  loginName: '${role.value}-first-login',
+                  role: role,
+                  mustChangePassword: true,
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+
+            expect(_currentPath(tester), AppRoutePaths.changePassword);
+            expect(
+              find.byKey(const Key('institutionAdminShell')),
+              findsNothing,
+            );
+          }
+        }
+      },
+    );
+
+    testWidgets('wrong roles and devices use their canonical outcomes', (
+      tester,
+    ) async {
+      final cases = <_GuardCase>[
+        _GuardCase(
+          user: _user(loginName: 'owner', role: UserRole.platformOwner),
+          surface: AppDeviceSurface.desktop,
+          expectedPath: AppRoutePaths.platformOwner,
+        ),
+        _GuardCase(
+          user: _user(loginName: 'teacher', role: UserRole.teacher),
+          surface: AppDeviceSurface.desktop,
+          expectedPath: AppRoutePaths.teacher,
+        ),
+        _GuardCase(
+          user: _user(loginName: 'teacher', role: UserRole.teacher),
+          surface: AppDeviceSurface.mobile,
+          expectedPath: AppRoutePaths.teacher,
+        ),
+        _GuardCase(
+          user: _user(loginName: 'student', role: UserRole.student),
+          surface: AppDeviceSurface.desktop,
+          expectedPath: AppRoutePaths.student,
+        ),
+        _GuardCase(
+          user: _user(loginName: 'student', role: UserRole.student),
+          surface: AppDeviceSurface.mobile,
+          expectedPath: AppRoutePaths.student,
+        ),
+        _GuardCase(
+          user: _user(loginName: 'parent', role: UserRole.parent),
+          surface: AppDeviceSurface.mobile,
+          expectedPath: AppRoutePaths.parent,
+        ),
+        _GuardCase(
+          user: _user(loginName: 'parent', role: UserRole.parent),
+          surface: AppDeviceSurface.desktop,
+          expectedPath: AppRoutePaths.unsupportedDevice,
+        ),
+        _GuardCase(
+          user: _adminUser(),
+          surface: AppDeviceSurface.mobile,
+          expectedPath: AppRoutePaths.unsupportedDevice,
+        ),
+        _GuardCase(
+          user: _adminUser(),
+          surface: AppDeviceSurface.unsupported,
+          expectedPath: AppRoutePaths.unsupportedDevice,
+        ),
+      ];
+
+      for (final route in _routeExpectations) {
+        for (final testCase in cases) {
+          await _pumpApp(
+            tester,
+            initialLocation: route.path,
+            authRepository: _authenticatedRepository(testCase.user),
+            surface: testCase.surface,
+          );
+          await tester.pumpAndSettle();
+
+          expect(_currentPath(tester), testCase.expectedPath);
+          expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+        }
+      }
+    });
+
+    testWidgets(
+      'bootstrap preserves each exact location without identity flash',
+      (tester) async {
+        for (final route in _routeExpectations) {
+          final currentUser = Completer<AuthUser>();
+          final repository = FakeAuthRepository(
+            storedToken: 'token-a',
+            onCurrentUser: () => currentUser.future,
+          );
+
+          await _pumpApp(
+            tester,
+            initialLocation: route.path,
+            authRepository: repository,
+          );
+          await tester.pump();
+
+          expect(_currentPath(tester), route.path);
+          expect(find.byType(CircularProgressIndicator), findsOneWidget);
+          expect(find.textContaining('Admin User'), findsNothing);
+          expect(find.textContaining('Example School'), findsNothing);
+          expect(
+            find.byKey(const Key('institutionAdminNavigation')),
+            findsNothing,
+          );
+
+          currentUser.complete(_adminUser());
+          await tester.pumpAndSettle();
+          _expectDestination(tester, route);
+        }
+      },
+    );
+
+    testWidgets(
+      'bootstrap does not preserve malformed Institution Admin paths',
+      (tester) async {
+        final currentUser = Completer<AuthUser>();
+        final repository = FakeAuthRepository(
+          storedToken: 'token-a',
+          onCurrentUser: () => currentUser.future,
+        );
+
+        await _pumpApp(
+          tester,
+          initialLocation: '/institution-admin/users/not-a-uuid',
+          authRepository: repository,
+        );
+        await tester.pump();
+
+        expect(_currentPath(tester), AppRoutePaths.root);
+        expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+
+        currentUser.complete(_adminUser());
+        await tester.pumpAndSettle();
+        expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
+        expect(
+          find.byKey(const Key('institutionAdminDashboardPlaceholder')),
+          findsOneWidget,
+        );
+      },
+    );
+  });
+
+  group('Institution Admin shell content and navigation', () {
+    testWidgets('shows only approved live identity and four destinations', (
+      tester,
+    ) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdminUsers,
+        authRepository: _authenticatedRepository(
+          _adminUser(
+            loginName: 'private-login',
+            email: 'private@example.uz',
+            phone: '+998900000000',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final navigation = find.byKey(const Key('institutionAdminNavigation'));
+      expect(find.text('TestLabUz'), findsOneWidget);
+      expect(find.text('Institution Admin'), findsOneWidget);
+      expect(find.text('Current user: Admin User'), findsOneWidget);
+      expect(find.text('Institution: Example School'), findsOneWidget);
+      expect(find.text('Sign out'), findsOneWidget);
+      for (final destination in InstitutionAdminShellDestination.values) {
+        expect(
+          find.descendant(
+            of: navigation,
+            matching: find.text(destination.label),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byTooltip(destination.label), findsOneWidget);
+      }
+      expect(_navigationRail(tester).destinations, hasLength(4));
+      expect(find.text('private-login'), findsNothing);
+      expect(find.text('private@example.uz'), findsNothing);
+      expect(find.text('+998900000000'), findsNothing);
+      expect(find.text('institution-1'), findsNothing);
+      expect(find.text('Asia/Tashkent'), findsNothing);
+      _expectNoFutureScope();
+    });
+
+    testWidgets('navigation selection reselect and back are URI-driven', (
+      tester,
+    ) async {
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdmin,
+        authRepository: _authenticatedRepository(_adminUser()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_router(tester).canPop(), isFalse);
+      await _tapDestination(tester, 'Dashboard');
+      await tester.pumpAndSettle();
+      expect(_router(tester).canPop(), isFalse);
+
+      await _tapDestination(tester, 'Users');
+      await tester.pumpAndSettle();
+      expect(_currentPath(tester), AppRoutePaths.institutionAdminUsers);
+      expect(find.text('Users'), findsWidgets);
+
+      final couldPopBeforeReselect = _router(tester).canPop();
+      await _tapDestination(tester, 'Users');
+      await tester.pumpAndSettle();
+      expect(_currentPath(tester), AppRoutePaths.institutionAdminUsers);
+      expect(_router(tester).canPop(), couldPopBeforeReselect);
+
+      await _tapDestination(tester, 'Settings');
+      await tester.pumpAndSettle();
+      expect(_currentPath(tester), AppRoutePaths.institutionAdminSettings);
+      expect(find.text('Settings'), findsWidgets);
+
+      _router(tester).pop();
+      await tester.pumpAndSettle();
+      expect(_currentPath(tester), AppRoutePaths.institutionAdminUsers);
+      expect(
+        _navigationRail(tester).selectedIndex,
+        InstitutionAdminShellDestination.values.indexOf(
+          InstitutionAdminShellDestination.users,
+        ),
+      );
+    });
+
+    testWidgets('invalid live Institution context fails closed', (
+      tester,
+    ) async {
+      final invalidUsers = <AuthUser>[
+        _adminUser(isActive: false),
+        _adminUser(institutionId: ''),
+        _adminUser(institution: null, includeInstitution: false),
+        _adminUser(
+          institution: const AuthInstitution(
+            id: 'institution-2',
+            name: 'Other School',
+            status: 'active',
+            timezone: 'Asia/Tashkent',
+          ),
+        ),
+        _adminUser(
+          institution: const AuthInstitution(
+            id: 'institution-1',
+            name: 'Inactive School',
+            status: 'inactive',
+            timezone: 'Asia/Tashkent',
+          ),
+        ),
+      ];
+
+      for (final user in invalidUsers) {
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdmin,
+          authRepository: _authenticatedRepository(user),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('institutionAdminUnavailable')),
+          findsOneWidget,
+        );
+        expect(find.text('Session route unavailable'), findsOneWidget);
+        expect(find.byKey(const Key('entryLogoutButton')), findsOneWidget);
+        expect(
+          find.byKey(const Key('institutionAdminNavigation')),
+          findsNothing,
+        );
+        expect(find.textContaining(user.fullName), findsNothing);
+        expect(
+          find.byKey(const Key('institutionAdminDashboardPlaceholder')),
+          findsNothing,
+        );
+      }
+    });
+  });
+
+  group('Institution Admin responsive and accessibility behavior', () {
+    testWidgets(
+      'compact wide text-scale and long identity layouts do not overflow',
+      (tester) async {
+        addTearDown(() {
+          tester.binding.setSurfaceSize(null);
+          tester.binding.platformDispatcher.clearTextScaleFactorTestValue();
+        });
+        final longName = List.filled(10, 'LongName').join();
+        final longInstitution = List.filled(10, 'Institution').join();
+
+        for (final size in const [Size(800, 600), Size(1440, 900)]) {
+          for (final textScale in const [1.0, 2.0]) {
+            await tester.binding.setSurfaceSize(size);
+            tester.binding.platformDispatcher.textScaleFactorTestValue =
+                textScale;
+            await _pumpApp(
+              tester,
+              initialLocation: AppRoutePaths.institutionAdminSettings,
+              authRepository: _authenticatedRepository(
+                _adminUser(
+                  fullName: longName,
+                  institution: AuthInstitution(
+                    id: 'institution-1',
+                    name: longInstitution,
+                    status: 'active',
+                    timezone: 'Asia/Tashkent',
+                  ),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+
+            expect(
+              find.byKey(const Key('institutionAdminShell')),
+              findsOneWidget,
+            );
+            expect(find.byKey(const Key('entryLogoutButton')), findsOneWidget);
+            expect(_navigationRail(tester).extended, size.width >= 1100);
+            for (final destination in InstitutionAdminShellDestination.values) {
+              expect(find.byTooltip(destination.label), findsOneWidget);
+            }
+            expect(tester.takeException(), isNull);
+          }
+        }
+      },
+    );
+
+    testWidgets('Material focus keyboard activates navigation and Sign out', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repository = _authenticatedRepository(_adminUser());
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdmin,
+        authRepository: repository,
+      );
+      await tester.pumpAndSettle();
+
+      Focus.of(
+        tester.element(find.byIcon(Icons.people_outline)),
+      ).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(_currentPath(tester), AppRoutePaths.institutionAdminUsers);
+
+      Focus.of(tester.element(find.byIcon(Icons.logout))).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(_currentPath(tester), AppRoutePaths.login);
+      expect(repository.signOutCalls, 1);
+    });
+
+    testWidgets(
+      'selected state uses Material index and distinct selected icons',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdminInstitution,
+          authRepository: _authenticatedRepository(_adminUser()),
+        );
+        await tester.pumpAndSettle();
+
+        final rail = _navigationRail(tester);
+        expect(
+          rail.selectedIndex,
+          InstitutionAdminShellDestination.values.indexOf(
+            InstitutionAdminShellDestination.institution,
+          ),
+        );
+        for (final destination in InstitutionAdminShellDestination.values) {
+          expect(destination.selectedIcon, isNot(destination.icon));
+          expect(find.byTooltip(destination.label), findsOneWidget);
+        }
+        semantics.dispose();
+      },
+    );
+  });
+
+  group('Institution Admin logout and session isolation', () {
+    testWidgets(
+      'logout removes every destination and backend failure cannot restore it',
+      (tester) async {
+        for (final route in _routeExpectations) {
+          final repository = _authenticatedRepository(_adminUser());
+          repository.onSignOut = () async {
+            throw ApiRequestException(
+              ApiFailure.local(
+                kind: ApiFailureKind.connection,
+                message: 'Logout transport failed.',
+              ),
+            );
+          };
+
+          await _pumpApp(
+            tester,
+            initialLocation: route.path,
+            authRepository: repository,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('entryLogoutButton')));
+          await tester.pumpAndSettle();
+
+          expect(_currentPath(tester), AppRoutePaths.login);
+          expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+          expect(find.textContaining('Admin User'), findsNothing);
+          expect(find.textContaining('Example School'), findsNothing);
+          expect(repository.signOutCalls, 1);
+        }
+      },
+    );
+
+    testWidgets('current-token global invalidation removes shell', (
+      tester,
+    ) async {
+      final signal = SessionInvalidationSignal();
+      addTearDown(signal.dispose);
+      final repository = _authenticatedRepository(
+        _adminUser(),
+        tokenVersion: 4,
+      );
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdminSettings,
+        authRepository: repository,
+        signal: signal,
+      );
+      await tester.pumpAndSettle();
+
+      signal.authenticationRequired(tokenVersion: 4);
+      await tester.pumpAndSettle();
+
+      expect(_currentPath(tester), AppRoutePaths.login);
+      expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+      expect(repository.clearTokenIfVersionCalls, [4]);
+    });
+
+    testWidgets('Institution Admin A to B exposes only B and canonical route', (
+      tester,
+    ) async {
+      final repository = _authenticatedRepository(
+        _adminUser(fullName: 'Admin A', institutionName: 'Institution A'),
+      );
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdminSettings,
+        authRepository: repository,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('entryLogoutButton')));
+      await tester.pumpAndSettle();
+
+      repository.onSignIn = (_, _) async =>
+          _adminUser(fullName: 'Admin B', institutionName: 'Institution B');
+      await _submitLogin(tester, login: 'admin-b');
+
+      expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
+      expect(find.text('Current user: Admin B'), findsOneWidget);
+      expect(find.text('Institution: Institution B'), findsOneWidget);
+      expect(find.textContaining('Admin A'), findsNothing);
+      expect(find.text('Institution: Institution A'), findsNothing);
+    });
+
+    testWidgets('Admin to another role and another role to Admin do not leak', (
+      tester,
+    ) async {
+      final repository = _authenticatedRepository(
+        _adminUser(fullName: 'Admin A', institutionName: 'Institution A'),
+      );
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdminUsers,
+        authRepository: repository,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('entryLogoutButton')));
+      await tester.pumpAndSettle();
+
+      repository.onSignIn = (_, _) async => _user(
+        loginName: 'teacher-b',
+        fullName: 'Teacher B',
+        role: UserRole.teacher,
+      );
+      await _submitLogin(tester, login: 'teacher-b');
+      expect(_currentPath(tester), AppRoutePaths.teacher);
+      expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+      expect(find.textContaining('Admin A'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('entryLogoutButton')));
+      await tester.pumpAndSettle();
+      repository.onSignIn = (_, _) async =>
+          _adminUser(fullName: 'Admin C', institutionName: 'Institution C');
+      await _submitLogin(tester, login: 'admin-c');
+      expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
+      expect(find.text('Current user: Admin C'), findsOneWidget);
+      expect(find.textContaining('Teacher B'), findsNothing);
+    });
+
+    testWidgets('delayed prior bootstrap cannot restore the old Admin', (
+      tester,
+    ) async {
+      final oldUser = Completer<AuthUser>();
+      final repository = FakeAuthRepository(
+        storedToken: 'token-a',
+        onCurrentUser: () => oldUser.future,
+      );
+      final container = await _pumpAppWithContainer(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdminUsers,
+        authRepository: repository,
+      );
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await tester.pump();
+
+      await controller.signOut();
+      await tester.pumpAndSettle();
+      repository.onSignIn = (_, _) async =>
+          _adminUser(fullName: 'Admin B', institutionName: 'Institution B');
+      await controller.signIn(login: 'admin-b', password: 'secret');
+      await tester.pumpAndSettle();
+
+      oldUser.complete(
+        _adminUser(fullName: 'Admin A', institutionName: 'Institution A'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
+      expect(find.text('Current user: Admin B'), findsOneWidget);
+      expect(find.textContaining('Admin A'), findsNothing);
+      expect(find.text('Institution: Institution A'), findsNothing);
+    });
+  });
+}
+
+const _userIdOne = '550e8400-e29b-41d4-a716-446655440000';
+const _userIdTwo = 'A0B1C2D3-E4F5-6789-ABCD-EF0123456789';
+
+final _routeExpectations = <_RouteExpectation>[
+  const _RouteExpectation(
+    path: AppRoutePaths.institutionAdmin,
+    destination: InstitutionAdminShellDestination.dashboard,
+    title: 'Dashboard',
+    placeholderKey: 'institutionAdminDashboardPlaceholder',
+    body: 'Institution dashboard will be implemented in S03-FE-002.',
+  ),
+  const _RouteExpectation(
+    path: AppRoutePaths.institutionAdminUsers,
+    destination: InstitutionAdminShellDestination.users,
+    title: 'Users',
+    placeholderKey: 'institutionAdminUsersPlaceholder',
+    body: 'Institution user list will be implemented in S03-FE-004.',
+  ),
+  const _RouteExpectation(
+    path: AppRoutePaths.institutionAdminUserCreate,
+    destination: InstitutionAdminShellDestination.users,
+    title: 'Create User',
+    placeholderKey: 'institutionAdminUserCreatePlaceholder',
+    body: 'Institution user creation will be implemented in S03-FE-006.',
+  ),
+  _RouteExpectation(
+    path: AppRoutePaths.institutionAdminUserDetailLocation(_userIdOne),
+    destination: InstitutionAdminShellDestination.users,
+    title: 'User Details',
+    placeholderKey: 'institutionAdminUserDetailPlaceholder',
+    body: 'Institution user details will be implemented in S03-FE-005.',
+  ),
+  const _RouteExpectation(
+    path: AppRoutePaths.institutionAdminInstitution,
+    destination: InstitutionAdminShellDestination.institution,
+    title: 'Institution',
+    placeholderKey: 'institutionAdminInstitutionPlaceholder',
+    body: 'Institution profile will be implemented in S03-FE-003.',
+  ),
+  const _RouteExpectation(
+    path: AppRoutePaths.institutionAdminSettings,
+    destination: InstitutionAdminShellDestination.settings,
+    title: 'Settings',
+    placeholderKey: 'institutionAdminSettingsPlaceholder',
+    body:
+        'Assessment settings and understanding categories will be implemented in S03-FE-008 and S03-FE-009.',
+  ),
+];
+
+const _malformedLocations = <String>[
+  '/institution-admin-extra',
+  '/institution-admin/',
+  '/institution-admin/users/',
+  '/institution-admin/users/new/extra',
+  '/institution-admin/users//',
+  '/institution-admin/users/not-a-uuid',
+  '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000/extra',
+  '/institution-admin/institution/edit',
+  '/institution-admin/settings/categories',
+];
+
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  required String initialLocation,
+  required FakeAuthRepository authRepository,
+  AppDeviceSurface surface = AppDeviceSurface.desktop,
+  SessionInvalidationSignal? signal,
+  FakePlatformDashboardRepository? dashboardRepository,
+  FakePlatformInstitutionListRepository? listRepository,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      key: UniqueKey(),
+      overrides: [
+        appInitialLocationProvider.overrideWithValue(initialLocation),
+        authRepositoryProvider.overrideWithValue(authRepository),
+        appDeviceSurfaceProvider.overrideWithValue(surface),
+        platformDashboardRepositoryProvider.overrideWithValue(
+          dashboardRepository ?? FakePlatformDashboardRepository(),
+        ),
+        platformInstitutionListRepositoryProvider.overrideWithValue(
+          listRepository ?? FakePlatformInstitutionListRepository(),
+        ),
+        if (signal != null)
+          sessionInvalidationSignalProvider.overrideWithValue(signal),
+      ],
+      child: const TestLabUzApp(),
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+}
+
+Future<ProviderContainer> _pumpAppWithContainer(
+  WidgetTester tester, {
+  required String initialLocation,
+  required FakeAuthRepository authRepository,
+}) async {
+  final container = ProviderContainer(
+    overrides: [
+      appInitialLocationProvider.overrideWithValue(initialLocation),
+      authRepositoryProvider.overrideWithValue(authRepository),
+      appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
+      platformDashboardRepositoryProvider.overrideWithValue(
+        FakePlatformDashboardRepository(),
+      ),
+      platformInstitutionListRepositoryProvider.overrideWithValue(
+        FakePlatformInstitutionListRepository(),
+      ),
+    ],
+  );
+  addTearDown(container.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const TestLabUzApp(),
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+
+  return container;
+}
+
+void _expectDestination(WidgetTester tester, _RouteExpectation expected) {
+  expect(_currentPath(tester), expected.path);
+  expect(find.byKey(const Key('institutionAdminShell')), findsOneWidget);
+  expect(find.byKey(const Key('institutionAdminNavigation')), findsOneWidget);
+  expect(
+    tester
+        .widget<Text>(find.byKey(const Key('institutionAdminPageTitle')))
+        .data,
+    expected.title,
+  );
+  expect(find.byKey(Key(expected.placeholderKey)), findsOneWidget);
+  expect(find.text(expected.body), findsOneWidget);
+  expect(
+    _navigationRail(tester).selectedIndex,
+    InstitutionAdminShellDestination.values.indexOf(expected.destination),
+  );
+}
+
+NavigationRail _navigationRail(WidgetTester tester) {
+  return tester.widget<NavigationRail>(
+    find.byKey(const Key('institutionAdminNavigation')),
+  );
+}
+
+GoRouter _router(WidgetTester tester) {
+  return GoRouter.of(tester.element(find.byType(Scaffold).first));
+}
+
+String _currentPath(WidgetTester tester) {
+  return _router(tester).routeInformationProvider.value.uri.path;
+}
+
+Future<void> _tapDestination(WidgetTester tester, String label) async {
+  final navigation = find.byKey(const Key('institutionAdminNavigation'));
+  await tester.tap(find.descendant(of: navigation, matching: find.text(label)));
+}
+
+Future<void> _submitLogin(WidgetTester tester, {required String login}) async {
+  await tester.enterText(find.byKey(const Key('loginField')), login);
+  await tester.enterText(find.byKey(const Key('passwordField')), 'secret');
+  await tester.tap(find.byKey(const Key('signInButton')));
+  await tester.pumpAndSettle();
+}
+
+void _expectNoFutureScope() {
+  expect(find.text('Groups'), findsNothing);
+  expect(find.text('Reports'), findsNothing);
+  expect(find.text('Topics'), findsNothing);
+  expect(find.text('Homework'), findsNothing);
+  expect(find.text('Blitz'), findsNothing);
+  expect(find.text('Create Teacher'), findsNothing);
+  expect(find.text('Create Student'), findsNothing);
+  expect(find.text('Create Parent'), findsNothing);
+  expect(find.text('Activate'), findsNothing);
+  expect(find.text('Deactivate'), findsNothing);
+}
+
+FakeAuthRepository _authenticatedRepository(
+  AuthUser user, {
+  int tokenVersion = 0,
+}) {
+  return FakeAuthRepository(
+    storedToken: 'token-a',
+    tokenVersion: tokenVersion,
+    onCurrentUser: () async => user,
+  );
+}
+
+AuthUser _adminUser({
+  String loginName = 'admin-a',
+  String fullName = 'Admin User',
+  String? email,
+  String? phone,
+  bool isActive = true,
+  bool mustChangePassword = false,
+  String? institutionId = 'institution-1',
+  AuthInstitution? institution,
+  bool includeInstitution = true,
+  String institutionName = 'Example School',
+}) {
+  return AuthUser(
+    id: '$loginName-id',
+    institutionId: institutionId,
+    role: UserRole.institutionAdmin,
+    fullName: fullName,
+    loginName: loginName,
+    email: email,
+    phone: phone,
+    isActive: isActive,
+    mustChangePassword: mustChangePassword,
+    institution: includeInstitution
+        ? institution ??
+              AuthInstitution(
+                id: 'institution-1',
+                name: institutionName,
+                status: 'active',
+                timezone: 'Asia/Tashkent',
+              )
+        : null,
+  );
+}
+
+AuthUser _user({
+  required String loginName,
+  required UserRole role,
+  String? fullName,
+  bool mustChangePassword = false,
+}) {
+  return AuthUser(
+    id: '$loginName-id',
+    institutionId: role == UserRole.platformOwner ? null : 'institution-1',
+    role: role,
+    fullName: fullName ?? '$loginName User',
+    loginName: loginName,
+    email: null,
+    phone: null,
+    isActive: true,
+    mustChangePassword: mustChangePassword,
+    institution: role == UserRole.platformOwner
+        ? null
+        : const AuthInstitution(
+            id: 'institution-1',
+            name: 'Example School',
+            status: 'active',
+            timezone: 'Asia/Tashkent',
+          ),
+  );
+}
+
+class _RouteExpectation {
+  const _RouteExpectation({
+    required this.path,
+    required this.destination,
+    required this.title,
+    required this.placeholderKey,
+    required this.body,
+  });
+
+  final String path;
+  final InstitutionAdminShellDestination destination;
+  final String title;
+  final String placeholderKey;
+  final String body;
+}
+
+class _GuardCase {
+  const _GuardCase({
+    required this.user,
+    required this.surface,
+    required this.expectedPath,
+  });
+
+  final AuthUser user;
+  final AppDeviceSurface surface;
+  final String expectedPath;
+}
+
+class FakeAuthRepository implements AuthRepository {
+  FakeAuthRepository({
+    this.storedToken,
+    this.tokenVersion = 0,
+    this.onCurrentUser,
+  });
+
+  String? storedToken;
+  int tokenVersion;
+  Future<AuthUser> Function()? onCurrentUser;
+  Future<AuthUser> Function(String login, String password)? onSignIn;
+  Future<void> Function()? onSignOut;
+  final clearTokenIfVersionCalls = <int>[];
+  var currentUserCalls = 0;
+  var signOutCalls = 0;
+
+  @override
+  Future<AuthUser> currentUser() {
+    currentUserCalls += 1;
+
+    return onCurrentUser?.call() ?? Future.value(_adminUser());
+  }
+
+  @override
+  Future<AuthUser> signIn({required String login, required String password}) {
+    return onSignIn?.call(login, password) ?? Future.value(_adminUser());
+  }
+
+  @override
+  Future<AuthUser> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String newPasswordConfirmation,
+  }) async {
+    return _adminUser();
+  }
+
+  @override
+  Future<void> signOut() {
+    signOutCalls += 1;
+    storedToken = null;
+
+    return onSignOut?.call() ?? Future.value();
+  }
+
+  @override
+  Future<String?> readStoredToken() async => storedToken;
+
+  @override
+  Future<void> clearToken() async {
+    storedToken = null;
+    tokenVersion += 1;
+  }
+
+  @override
+  Future<bool> clearTokenIfVersion(int tokenVersion) async {
+    clearTokenIfVersionCalls.add(tokenVersion);
+    if (this.tokenVersion != tokenVersion) {
+      return false;
+    }
+
+    storedToken = null;
+    this.tokenVersion += 1;
+
+    return true;
+  }
+}
+
+class FakePlatformDashboardRepository implements PlatformDashboardRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<PlatformDashboard> fetchDashboard() async {
+    fetchCalls += 1;
+
+    return const PlatformDashboard(
+      institutions: PlatformInstitutionCounts(total: 0, active: 0, inactive: 0),
+      users: PlatformUserCounts(total: 0, active: 0),
+      recentInstitutions: [],
+    );
+  }
+}
+
+class FakePlatformInstitutionListRepository
+    implements PlatformInstitutionListRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<PlatformInstitutionListPage> fetchInstitutions(
+    PlatformInstitutionListQuery query,
+  ) async {
+    fetchCalls += 1;
+
+    return PlatformInstitutionListPage(
+      institutions: const [],
+      pagination: PlatformInstitutionPagination(
+        page: query.page,
+        perPage: query.perPage,
+        total: 0,
+        lastPage: 1,
+      ),
+    );
+  }
+}

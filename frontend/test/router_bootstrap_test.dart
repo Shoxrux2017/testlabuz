@@ -430,6 +430,20 @@ void main() {
         if (testCase.role == UserRole.platformOwner) {
           expect(find.text('Dashboard'), findsWidgets);
           expect(find.text('Institutions'), findsWidgets);
+        } else if (testCase.role == UserRole.institutionAdmin) {
+          expect(
+            find.byKey(const Key('institutionAdminShell')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('institutionAdminNavigation')),
+            findsOneWidget,
+          );
+          expect(find.text('Dashboard'), findsWidgets);
+          expect(find.text('Users'), findsOneWidget);
+          expect(find.text('Institution'), findsOneWidget);
+          expect(find.text('Settings'), findsOneWidget);
+          expect(find.text('Device: desktop'), findsNothing);
         } else {
           _expectNoFutureFeatureText();
         }

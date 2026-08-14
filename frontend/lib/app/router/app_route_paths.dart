@@ -11,6 +11,11 @@ abstract final class AppRouteNames {
       'platform-owner-institution-detail';
   static const platformOwnerInstitutionEdit = 'platform-owner-institution-edit';
   static const institutionAdmin = 'institution-admin';
+  static const institutionAdminUsers = 'institution-admin-users';
+  static const institutionAdminUserCreate = 'institution-admin-user-create';
+  static const institutionAdminUserDetail = 'institution-admin-user-detail';
+  static const institutionAdminInstitution = 'institution-admin-institution';
+  static const institutionAdminSettings = 'institution-admin-settings';
   static const teacher = 'teacher';
   static const student = 'student';
   static const parent = 'parent';
@@ -35,6 +40,21 @@ abstract final class AppRoutePaths {
   static const platformOwnerInstitutionEdit =
       '/platform-owner/institutions/:institutionId/edit';
   static const institutionAdmin = '/institution-admin';
+  static const institutionAdminUsersSegment = 'users';
+  static const institutionAdminUserCreateSegment = 'new';
+  static const institutionAdminUserIdParameter = 'userId';
+  static const institutionAdminInstitutionSegment = 'institution';
+  static const institutionAdminSettingsSegment = 'settings';
+  static const institutionAdminUsers =
+      '$institutionAdmin/$institutionAdminUsersSegment';
+  static const institutionAdminUserCreate =
+      '$institutionAdminUsers/$institutionAdminUserCreateSegment';
+  static const institutionAdminUserDetail =
+      '$institutionAdminUsers/:$institutionAdminUserIdParameter';
+  static const institutionAdminInstitution =
+      '$institutionAdmin/$institutionAdminInstitutionSegment';
+  static const institutionAdminSettings =
+      '$institutionAdmin/$institutionAdminSettingsSegment';
   static const teacher = '/teacher';
   static const student = '/student';
   static const parent = '/parent';
@@ -48,6 +68,11 @@ abstract final class AppRoutePaths {
     platformOwnerInstitutionCreate,
     platformOwnerInstitutionEdit,
     institutionAdmin,
+    institutionAdminUsers,
+    institutionAdminUserCreate,
+    institutionAdminUserDetail,
+    institutionAdminInstitution,
+    institutionAdminSettings,
     teacher,
     student,
     parent,
@@ -60,6 +85,22 @@ abstract final class AppRoutePaths {
     platformOwner,
     platformOwnerInstitutions,
   ];
+
+  static const institutionAdminPrimaryDestinations = <String>[
+    institutionAdmin,
+    institutionAdminUsers,
+    institutionAdminInstitution,
+    institutionAdminSettings,
+  ];
+
+  static const _institutionAdminStaticLocations = <String>[
+    ...institutionAdminPrimaryDestinations,
+    institutionAdminUserCreate,
+  ];
+
+  static final RegExp _institutionAdminUserIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
 
   static bool isPlatformOwnerDestination(String path) {
     return platformOwnerDestinations.contains(path);
@@ -104,5 +145,45 @@ abstract final class AppRoutePaths {
     final segment = path.substring(prefix.length, path.length - suffix.length);
 
     return segment.isNotEmpty && !segment.contains('/');
+  }
+
+  static bool isInstitutionAdminPrimaryDestination(String path) {
+    return institutionAdminPrimaryDestinations.contains(path);
+  }
+
+  static bool isInstitutionAdminUserCreatePath(String path) {
+    return path == institutionAdminUserCreate;
+  }
+
+  static bool isInstitutionAdminUserDetailPath(String path) {
+    const prefix = '$institutionAdminUsers/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final userId = path.substring(prefix.length);
+
+    return _institutionAdminUserIdPattern.hasMatch(userId);
+  }
+
+  static bool isInstitutionAdminApprovedLocation(String path) {
+    return _institutionAdminStaticLocations.contains(path) ||
+        isInstitutionAdminUserDetailPath(path);
+  }
+
+  static bool isInstitutionAdminSegment(String path) {
+    return path == institutionAdmin || path.startsWith('$institutionAdmin/');
+  }
+
+  static String institutionAdminUserDetailLocation(String userId) {
+    if (!_institutionAdminUserIdPattern.hasMatch(userId)) {
+      throw ArgumentError.value(
+        userId,
+        'userId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+
+    return '$institutionAdminUsers/${Uri.encodeComponent(userId)}';
   }
 }

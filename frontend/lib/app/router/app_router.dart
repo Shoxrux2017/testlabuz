@@ -10,6 +10,8 @@ import '../../features/auth/presentation/change_password/change_password_screen.
 import '../../features/auth/presentation/login/login_screen.dart';
 import '../../features/entry/domain/entry_route_resolver.dart';
 import '../../features/entry/presentation/role_entry_screen.dart';
+import '../../features/institution_admin/presentation/institution_admin_placeholder_screen.dart';
+import '../../features/institution_admin/presentation/institution_admin_shell.dart';
 import '../../features/platform_admin/presentation/platform_owner_dashboard_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institution_create_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institution_detail_screen.dart';
@@ -46,7 +48,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   });
 
   return GoRouter(
-    initialLocation: ref.watch(appInitialLocationProvider),
+    initialLocation: _safeInitialLocation(
+      ref.watch(appInitialLocationProvider),
+    ),
     refreshListenable: refresh,
     redirect: (context, state) => _authRedirect(
       ref.read(authSessionControllerProvider),
@@ -117,13 +121,59 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      GoRoute(
-        name: AppRouteNames.institutionAdmin,
-        path: AppRoutePaths.institutionAdmin,
-        builder: (context, state) => RoleEntryScreen(
-          expectedRole: UserRole.institutionAdmin,
-          surface: ref.read(appDeviceSurfaceProvider),
-        ),
+      ShellRoute(
+        builder: (context, state, child) =>
+            InstitutionAdminShell(locationPath: state.uri.path, child: child),
+        routes: [
+          GoRoute(
+            name: AppRouteNames.institutionAdmin,
+            path: AppRoutePaths.institutionAdmin,
+            builder: (context, state) =>
+                const InstitutionAdminDashboardPlaceholderScreen(),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminUsers,
+            path: AppRoutePaths.institutionAdminUsers,
+            builder: (context, state) =>
+                const InstitutionAdminUsersPlaceholderScreen(),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminUserCreate,
+            path: AppRoutePaths.institutionAdminUserCreate,
+            builder: (context, state) =>
+                const InstitutionAdminUserCreatePlaceholderScreen(),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminUserDetail,
+            path: AppRoutePaths.institutionAdminUserDetail,
+            builder: (context, state) {
+              if (!AppRoutePaths.isInstitutionAdminUserDetailPath(
+                state.uri.path,
+              )) {
+                return const TechnicalRootScreen();
+              }
+
+              return InstitutionAdminUserDetailPlaceholderScreen(
+                userId:
+                    state.pathParameters[AppRoutePaths
+                        .institutionAdminUserIdParameter] ??
+                    '',
+              );
+            },
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminInstitution,
+            path: AppRoutePaths.institutionAdminInstitution,
+            builder: (context, state) =>
+                const InstitutionAdminInstitutionPlaceholderScreen(),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminSettings,
+            path: AppRoutePaths.institutionAdminSettings,
+            builder: (context, state) =>
+                const InstitutionAdminSettingsPlaceholderScreen(),
+          ),
+        ],
       ),
       GoRoute(
         name: AppRouteNames.teacher,
@@ -159,6 +209,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+String _safeInitialLocation(String requestedLocation) {
+  final uri = Uri.tryParse(requestedLocation);
+  if (uri == null) {
+    return requestedLocation;
+  }
+
+  final path = uri.path;
+  if (path.length > 1 && path.endsWith('/')) {
+    final withoutFinalSlash = path.substring(0, path.length - 1);
+    if (AppRoutePaths.isInstitutionAdminSegment(withoutFinalSlash)) {
+      return AppRoutePaths.institutionAdmin;
+    }
+  }
+
+  return requestedLocation;
+}
 
 String? _authRedirect(
   AuthSessionState session,
@@ -207,6 +274,16 @@ String? _authRedirect(
     }
   }
 
+  if (_canUseInstitutionAdminDestinations(user.role, surface)) {
+    if (AppRoutePaths.isInstitutionAdminApprovedLocation(location)) {
+      return null;
+    }
+
+    if (AppRoutePaths.isInstitutionAdminSegment(location)) {
+      return AppRoutePaths.institutionAdmin;
+    }
+  }
+
   if (location == entryPath) {
     return null;
   }
@@ -218,9 +295,19 @@ bool _canUsePlatformOwnerDestinations(UserRole role, AppDeviceSurface surface) {
   return role == UserRole.platformOwner && surface == AppDeviceSurface.desktop;
 }
 
+bool _canUseInstitutionAdminDestinations(
+  UserRole role,
+  AppDeviceSurface surface,
+) {
+  return role == UserRole.institutionAdmin &&
+      surface == AppDeviceSurface.desktop;
+}
+
 bool _keepsLocationDuringBootstrap(String location) {
-  return AppRoutePaths.protected.contains(location) ||
-      AppRoutePaths.isPlatformOwnerSegment(location);
+  return (AppRoutePaths.protected.contains(location) &&
+          !AppRoutePaths.isInstitutionAdminSegment(location)) ||
+      AppRoutePaths.isPlatformOwnerSegment(location) ||
+      AppRoutePaths.isInstitutionAdminApprovedLocation(location);
 }
 
 class _AppRouterRefresh extends ChangeNotifier {
