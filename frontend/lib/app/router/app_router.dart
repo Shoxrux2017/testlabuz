@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -122,26 +122,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       ShellRoute(
-        builder: (context, state, child) =>
-            InstitutionAdminShell(locationPath: state.uri.path, child: child),
+        builder: (context, state, child) => child,
         routes: [
           GoRoute(
             name: AppRouteNames.institutionAdmin,
             path: AppRoutePaths.institutionAdmin,
-            builder: (context, state) =>
-                const InstitutionAdminDashboardPlaceholderScreen(),
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminDashboardPlaceholderScreen(),
+            ),
           ),
           GoRoute(
             name: AppRouteNames.institutionAdminUsers,
             path: AppRoutePaths.institutionAdminUsers,
-            builder: (context, state) =>
-                const InstitutionAdminUsersPlaceholderScreen(),
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminUsersPlaceholderScreen(),
+            ),
           ),
           GoRoute(
             name: AppRouteNames.institutionAdminUserCreate,
             path: AppRoutePaths.institutionAdminUserCreate,
-            builder: (context, state) =>
-                const InstitutionAdminUserCreatePlaceholderScreen(),
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminUserCreatePlaceholderScreen(),
+            ),
           ),
           GoRoute(
             name: AppRouteNames.institutionAdminUserDetail,
@@ -153,25 +158,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 return const TechnicalRootScreen();
               }
 
-              return InstitutionAdminUserDetailPlaceholderScreen(
-                userId:
-                    state.pathParameters[AppRoutePaths
-                        .institutionAdminUserIdParameter] ??
-                    '',
+              return _buildInstitutionAdminShell(
+                state,
+                InstitutionAdminUserDetailPlaceholderScreen(
+                  userId:
+                      state.pathParameters[AppRoutePaths
+                          .institutionAdminUserIdParameter] ??
+                      '',
+                ),
               );
             },
           ),
           GoRoute(
             name: AppRouteNames.institutionAdminInstitution,
             path: AppRoutePaths.institutionAdminInstitution,
-            builder: (context, state) =>
-                const InstitutionAdminInstitutionPlaceholderScreen(),
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminInstitutionPlaceholderScreen(),
+            ),
           ),
           GoRoute(
             name: AppRouteNames.institutionAdminSettings,
             path: AppRoutePaths.institutionAdminSettings,
-            builder: (context, state) =>
-                const InstitutionAdminSettingsPlaceholderScreen(),
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminSettingsPlaceholderScreen(),
+            ),
           ),
         ],
       ),
@@ -209,6 +221,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+Widget _buildInstitutionAdminShell(GoRouterState state, Widget child) {
+  return InstitutionAdminShell(locationPath: state.uri.path, child: child);
+}
 
 String _safeInitialLocation(String requestedLocation) {
   final uri = Uri.tryParse(requestedLocation);
