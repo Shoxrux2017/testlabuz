@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\ChangePasswordController;
 use App\Http\Controllers\Api\V1\Auth\CurrentUserController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
+use App\Http\Controllers\Api\V1\Institution\InstitutionAssessmentSettingsController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionDashboardController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionProfileController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
@@ -49,6 +50,8 @@ Route::prefix('institution')
     ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::InstitutionAdmin->value])
     ->group(function (): void {
         Route::get('dashboard', InstitutionDashboardController::class);
+        Route::get('settings/assessment', [InstitutionAssessmentSettingsController::class, 'show']);
+        Route::put('settings/assessment', [InstitutionAssessmentSettingsController::class, 'update']);
         Route::get('profile', [InstitutionProfileController::class, 'show']);
         Route::patch('profile', [InstitutionProfileController::class, 'update']);
         Route::get('users', [InstitutionUserController::class, 'index']);
