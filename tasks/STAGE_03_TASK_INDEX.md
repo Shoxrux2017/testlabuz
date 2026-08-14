@@ -7,7 +7,7 @@
 | Roadmap stage | `Stage 3 — Institution Administration and User Management` |
 | Status | `In Progress` |
 | Decomposition approved on | `2026-08-13` |
-| Implementation started | `Control task accepted and delivered; production implementation not started` |
+| Implementation started | `S03-BE-001 accepted and delivered; backend production implementation started` |
 | Stage closed | `No` |
 | Closure review | `Not started` |
 
@@ -73,7 +73,7 @@ a detailed task or paired prompt is planning work, not implementation.
 - [x] Stage 3 decomposition was approved on `2026-08-13`.
 - [x] `S03-INT-001` has a separately approved detailed task and prompt.
 - [x] `S03-INT-001` is `Accepted / PASS / Delivered`.
-- [ ] `S03-BE-001` has a separately reviewed and approved detailed task/prompt
+- [x] `S03-BE-001` has a separately reviewed and approved detailed task/prompt
       pair after `S03-INT-001` delivery.
 
 Production implementation must not start until the current task and every
@@ -102,7 +102,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 17 | `S03-FE-009` | Frontend | Understanding-category range editor | `S03-FE-008`, `S03-BE-007` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-009-understanding-category-range-editor.md` |
 | 18 | `S03-INT-002` | Integration | Stage 3 Windows real-stack E2E verification | All Stage 3 backend/frontend tasks | `Draft` | `Not started` | `Not started` | `tasks/integration/stage-03/S03-INT-002-stage-03-windows-real-stack-e2e-verification.md` |
 
-`S03-INT-001` is the only accepted and delivered Stage 3 task. The other 17
+`S03-INT-001` and `S03-BE-001` are `Accepted / PASS / Delivered`. The remaining 16
 rows are planned paths and remain `Draft` until each detailed task/prompt pair
 is separately reviewed, approved, and placed in the project.
 
