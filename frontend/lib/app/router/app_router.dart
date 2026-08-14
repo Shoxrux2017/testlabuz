@@ -10,6 +10,7 @@ import '../../features/auth/presentation/change_password/change_password_screen.
 import '../../features/auth/presentation/login/login_screen.dart';
 import '../../features/entry/domain/entry_route_resolver.dart';
 import '../../features/entry/presentation/role_entry_screen.dart';
+import '../../features/institution_admin/presentation/institution_admin_dashboard_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_placeholder_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_shell.dart';
 import '../../features/platform_admin/presentation/platform_owner_dashboard_screen.dart';
@@ -129,7 +130,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.institutionAdmin,
             builder: (context, state) => _buildInstitutionAdminShell(
               state,
-              const InstitutionAdminDashboardPlaceholderScreen(),
+              const InstitutionAdminDashboardScreen(),
             ),
           ),
           GoRoute(
