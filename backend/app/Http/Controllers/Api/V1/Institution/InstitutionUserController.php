@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers\Api\V1\Institution;
 
+use App\Actions\Institution\ChangeInstitutionUserLifecycle;
 use App\Actions\Institution\CreateInstitutionUser;
 use App\Actions\Institution\ListInstitutionUsers;
 use App\Actions\Institution\ShowInstitutionUser;
+use App\Actions\Institution\UpdateInstitutionUser;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Institution\InstitutionUserCreateRequest;
 use App\Http\Requests\Institution\InstitutionUserIndexRequest;
+use App\Http\Requests\Institution\InstitutionUserLifecycleRequest;
 use App\Http\Requests\Institution\InstitutionUserShowRequest;
+use App\Http\Requests\Institution\InstitutionUserUpdateRequest;
 use App\Http\Resources\Institution\InstitutionUserCollection;
 use App\Http\Resources\Institution\InstitutionUserResource;
 use App\Models\User;
@@ -70,5 +74,53 @@ class InstitutionUserController extends Controller
         $actor = $request->user();
 
         return new InstitutionUserResource($showInstitutionUser($actor, $user));
+    }
+
+    public function update(
+        InstitutionUserUpdateRequest $request,
+        string $user,
+        UpdateInstitutionUser $updateInstitutionUser,
+    ): JsonResponse {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        $updatedUser = $updateInstitutionUser($actor, $user, $request->profileAttributes());
+
+        return (new InstitutionUserResource($updatedUser))
+            ->additional(['message' => 'Institution user updated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function activate(
+        InstitutionUserLifecycleRequest $request,
+        string $user,
+        ChangeInstitutionUserLifecycle $changeInstitutionUserLifecycle,
+    ): JsonResponse {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        $activatedUser = $changeInstitutionUserLifecycle->activate($actor, $user);
+
+        return (new InstitutionUserResource($activatedUser))
+            ->additional(['message' => 'Institution user activated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function deactivate(
+        InstitutionUserLifecycleRequest $request,
+        string $user,
+        ChangeInstitutionUserLifecycle $changeInstitutionUserLifecycle,
+    ): JsonResponse {
+        /** @var User $actor */
+        $actor = $request->user();
+
+        $deactivatedUser = $changeInstitutionUserLifecycle->deactivate($actor, $user);
+
+        return (new InstitutionUserResource($deactivatedUser))
+            ->additional(['message' => 'Institution user deactivated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
     }
 }
