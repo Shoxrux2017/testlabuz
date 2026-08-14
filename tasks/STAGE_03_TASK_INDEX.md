@@ -103,11 +103,11 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 18 | `S03-INT-002` | Integration | Stage 3 Windows real-stack E2E verification | All Stage 3 backend/frontend tasks | `Draft` | `Not started` | `Not started` | `tasks/integration/stage-03/S03-INT-002-stage-03-windows-real-stack-e2e-verification.md` |
 
 `S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, `S03-BE-004`,
-`S03-BE-005`, `S03-BE-006`, `S03-BE-007`, `S03-FE-001`, and `S03-FE-002` are
-`Accepted / PASS / Delivered`. The remaining 8 rows are
+`S03-BE-005`, `S03-BE-006`, `S03-BE-007`, `S03-FE-001`, `S03-FE-002`, and
+`S03-FE-003` are `Accepted / PASS / Delivered`. The remaining 7 rows are
 planned paths and remain `Draft` until each detailed task/prompt pair is
 separately reviewed, approved, and placed in the project. The next
-implementation gate is `S03-FE-003`.
+implementation gate is `S03-FE-004`.
 
 ```text
 Task/prompt file prepared ≠ implementation started
