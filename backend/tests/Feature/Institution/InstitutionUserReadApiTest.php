@@ -35,7 +35,7 @@ class InstitutionUserReadApiTest extends TestCase
             ->filter(fn (array $route): bool => in_array($route['uri'], [
                 'api/v1/institution/users',
                 'api/v1/institution/users/{user}',
-            ], true))
+            ], true) && in_array('GET', $route['methods'], true))
             ->values()
             ->all();
 

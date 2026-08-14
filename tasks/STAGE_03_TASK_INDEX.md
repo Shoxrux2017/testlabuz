@@ -87,7 +87,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 2 | `S03-BE-001` | Backend | Institution Admin dashboard API | `S03-INT-001` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-001-institution-admin-dashboard-api.md` |
 | 3 | `S03-BE-002` | Backend | Own Institution profile GET/PATCH API | `S03-BE-001` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-002-own-institution-profile-api.md` |
 | 4 | `S03-BE-003` | Backend | Institution User list/detail API | `S03-BE-002` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-003-institution-user-list-detail-api.md` |
-| 5 | `S03-BE-004` | Backend | Teacher/Student/Parent create API | `S03-BE-003` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-004-institution-user-create-api.md` |
+| 5 | `S03-BE-004` | Backend | Teacher/Student/Parent create API | `S03-BE-003` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-004-institution-user-create-api.md` |
 | 6 | `S03-BE-005` | Backend | Institution User update and lifecycle API | `S03-BE-004` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-005-institution-user-update-lifecycle-api.md` |
 | 7 | `S03-BE-006` | Backend | Assessment settings GET/PUT API | `S03-BE-005` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-006-institution-assessment-settings-api.md` |
 | 8 | `S03-BE-007` | Backend | Understanding-category persistence and API | `S03-BE-006` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-007-understanding-category-persistence-api.md` |
@@ -102,11 +102,11 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 17 | `S03-FE-009` | Frontend | Understanding-category range editor | `S03-FE-008`, `S03-BE-007` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-009-understanding-category-range-editor.md` |
 | 18 | `S03-INT-002` | Integration | Stage 3 Windows real-stack E2E verification | All Stage 3 backend/frontend tasks | `Draft` | `Not started` | `Not started` | `tasks/integration/stage-03/S03-INT-002-stage-03-windows-real-stack-e2e-verification.md` |
 
-`S03-INT-001`, `S03-BE-001`, `S03-BE-002`, and `S03-BE-003` are
-`Accepted / PASS / Delivered`. The remaining 14 rows are planned paths and
+`S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, and `S03-BE-004` are
+`Accepted / PASS / Delivered`. The remaining 13 rows are planned paths and
 remain `Draft` until each detailed task/prompt pair is separately reviewed,
 approved, and placed in the project. The next implementation gate is
-`S03-BE-004`.
+`S03-BE-005`.
 
 ```text
 Task/prompt file prepared ≠ implementation started

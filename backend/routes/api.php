@@ -52,5 +52,6 @@ Route::prefix('institution')
         Route::get('profile', [InstitutionProfileController::class, 'show']);
         Route::patch('profile', [InstitutionProfileController::class, 'update']);
         Route::get('users', [InstitutionUserController::class, 'index']);
+        Route::post('users', [InstitutionUserController::class, 'store']);
         Route::get('users/{user}', [InstitutionUserController::class, 'show']);
     });
