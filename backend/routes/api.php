@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionDashboardController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionProfileController;
+use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
@@ -50,4 +51,6 @@ Route::prefix('institution')
         Route::get('dashboard', InstitutionDashboardController::class);
         Route::get('profile', [InstitutionProfileController::class, 'show']);
         Route::patch('profile', [InstitutionProfileController::class, 'update']);
+        Route::get('users', [InstitutionUserController::class, 'index']);
+        Route::get('users/{user}', [InstitutionUserController::class, 'show']);
     });
