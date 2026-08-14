@@ -56,29 +56,32 @@ class InstitutionAdminShell extends ConsumerWidget {
         return Scaffold(
           key: const Key('institutionAdminShell'),
           body: SafeArea(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _InstitutionAdminNavigation(
-                  locationPath: locationPath,
-                  selectedDestination: destination!,
-                  isExpanded: isExpanded,
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _InstitutionAdminHeader(
-                        pageTitle: pageTitle!,
-                        user: user,
-                      ),
-                      const Divider(height: 1),
-                      Expanded(child: child),
-                    ],
+            child: FocusTraversalGroup(
+              policy: WidgetOrderTraversalPolicy(),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _InstitutionAdminNavigation(
+                    locationPath: locationPath,
+                    selectedDestination: destination!,
+                    isExpanded: isExpanded,
                   ),
-                ),
-              ],
+                  const VerticalDivider(width: 1),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _InstitutionAdminHeader(
+                          pageTitle: pageTitle!,
+                          user: user,
+                        ),
+                        const Divider(height: 1),
+                        Expanded(child: child),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

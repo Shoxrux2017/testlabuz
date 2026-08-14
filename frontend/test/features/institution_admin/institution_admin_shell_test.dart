@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -468,11 +471,15 @@ void main() {
       },
     );
 
-    testWidgets('Material focus keyboard activates navigation and Sign out', (
+    testWidgets('Tab and Shift+Tab follow the logical shell focus order', (
       tester,
     ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       await tester.binding.setSurfaceSize(const Size(800, 600));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.binding.setSurfaceSize(null);
+      });
       final repository = _authenticatedRepository(_adminUser());
 
       await _pumpApp(
@@ -482,47 +489,231 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      Focus.of(
-        tester.element(find.byIcon(Icons.people_outline)),
-      ).requestFocus();
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pumpAndSettle();
-      expect(_currentPath(tester), AppRoutePaths.institutionAdminUsers);
+      for (final destination in InstitutionAdminShellDestination.values) {
+        await _sendTab(tester);
+        _expectDestinationFocused(tester, destination);
+        _expectDashboardSessionUnchanged(tester, repository);
+      }
 
-      Focus.of(tester.element(find.byIcon(Icons.logout))).requestFocus();
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.space);
-      await tester.pumpAndSettle();
-      expect(_currentPath(tester), AppRoutePaths.login);
-      expect(repository.signOutCalls, 1);
+      await _sendTab(tester);
+      _expectSignOutFocused(tester);
+      _expectDashboardSessionUnchanged(tester, repository);
+
+      for (final destination
+          in InstitutionAdminShellDestination.values.reversed) {
+        await _sendShiftTab(tester);
+        _expectDestinationFocused(tester, destination);
+        _expectDashboardSessionUnchanged(tester, repository);
+      }
+
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
     });
 
     testWidgets(
-      'selected state uses Material index and distinct selected icons',
+      'selected destination exposes exact Material semantics and icon state',
       (tester) async {
         final semantics = tester.ensureSemantics();
+        try {
+          for (final selected in InstitutionAdminShellDestination.values) {
+            await _pumpApp(
+              tester,
+              initialLocation: selected.path,
+              authRepository: _authenticatedRepository(_adminUser()),
+            );
+            await tester.pumpAndSettle();
+
+            expect(
+              _navigationRail(tester).selectedIndex,
+              InstitutionAdminShellDestination.values.indexOf(selected),
+            );
+            for (final destination in InstitutionAdminShellDestination.values) {
+              final destinationIndex = InstitutionAdminShellDestination.values
+                  .indexOf(destination);
+              final semanticsLabel =
+                  '${destination.label}\nTab ${destinationIndex + 1} of 4';
+              final semanticsNode = tester.getSemantics(
+                find.bySemanticsLabel(semanticsLabel),
+              );
+
+              expect(semanticsNode.label, semanticsLabel);
+              expect(
+                semanticsNode.flagsCollection.isSelected,
+                isNot(Tristate.none),
+              );
+              expect(
+                semanticsNode.flagsCollection.isSelected,
+                destination == selected ? Tristate.isTrue : Tristate.isFalse,
+                reason:
+                    '${destination.label} selection semantics for ${selected.label}',
+              );
+              expect(
+                semanticsNode.flagsCollection.isSelected == Tristate.isTrue,
+                destination == selected,
+                reason:
+                    '${destination.label} isSelected flag for ${selected.label}',
+              );
+              expect(find.byTooltip(destination.label), findsOneWidget);
+              expect(destination.selectedIcon, isNot(destination.icon));
+              expect(
+                find.byIcon(
+                  destination == selected
+                      ? destination.selectedIcon
+                      : destination.icon,
+                ),
+                findsOneWidget,
+              );
+              expect(
+                find.byIcon(
+                  destination == selected
+                      ? destination.icon
+                      : destination.selectedIcon,
+                ),
+                findsNothing,
+              );
+            }
+
+            final signOutSemantics = tester.getSemantics(
+              find.bySemanticsLabel('Sign out'),
+            );
+            expect(signOutSemantics.label, 'Sign out');
+            expect(signOutSemantics.flagsCollection.isButton, isTrue);
+            expect(
+              signOutSemantics.flagsCollection.isEnabled,
+              isNot(Tristate.none),
+            );
+            expect(signOutSemantics.flagsCollection.isEnabled, Tristate.isTrue);
+          }
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+
+    testWidgets('Enter activates a Tab-focused navigation destination', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.binding.setSurfaceSize(null);
+      });
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdmin,
+        authRepository: _authenticatedRepository(_adminUser()),
+      );
+      await tester.pumpAndSettle();
+
+      await _sendTab(tester);
+      _expectDestinationFocused(
+        tester,
+        InstitutionAdminShellDestination.dashboard,
+      );
+      await _sendTab(tester);
+      _expectDestinationFocused(tester, InstitutionAdminShellDestination.users);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter, platform: 'windows');
+      await tester.pumpAndSettle();
+
+      _expectDestination(tester, _routeExpectations[1]);
+
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    testWidgets('Space activates a Tab-focused navigation destination', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.binding.setSurfaceSize(null);
+      });
+
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.institutionAdmin,
+        authRepository: _authenticatedRepository(_adminUser()),
+      );
+      await tester.pumpAndSettle();
+
+      for (final destination in const [
+        InstitutionAdminShellDestination.dashboard,
+        InstitutionAdminShellDestination.users,
+        InstitutionAdminShellDestination.institution,
+      ]) {
+        await _sendTab(tester);
+        _expectDestinationFocused(tester, destination);
+      }
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space, platform: 'windows');
+      await tester.pumpAndSettle();
+
+      _expectDestination(tester, _routeExpectations[4]);
+
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    testWidgets('Enter and Space activate Tab-focused Sign out immediately', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      await tester.binding.setSurfaceSize(const Size(800, 600));
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        tester.binding.setSurfaceSize(null);
+      });
+
+      for (final activationKey in const [
+        LogicalKeyboardKey.enter,
+        LogicalKeyboardKey.space,
+      ]) {
+        final repository = _authenticatedRepository(_adminUser());
+        if (activationKey == LogicalKeyboardKey.space) {
+          repository.onSignOut = () async {
+            throw ApiRequestException(
+              ApiFailure.local(
+                kind: ApiFailureKind.connection,
+                message: 'Logout transport failed.',
+              ),
+            );
+          };
+        }
         await _pumpApp(
           tester,
-          initialLocation: AppRoutePaths.institutionAdminInstitution,
-          authRepository: _authenticatedRepository(_adminUser()),
+          initialLocation: AppRoutePaths.institutionAdminSettings,
+          authRepository: repository,
         );
         await tester.pumpAndSettle();
 
-        final rail = _navigationRail(tester);
-        expect(
-          rail.selectedIndex,
-          InstitutionAdminShellDestination.values.indexOf(
-            InstitutionAdminShellDestination.institution,
-          ),
-        );
-        for (final destination in InstitutionAdminShellDestination.values) {
-          expect(destination.selectedIcon, isNot(destination.icon));
-          expect(find.byTooltip(destination.label), findsOneWidget);
+        for (var index = 0; index < 5; index += 1) {
+          await _sendTab(tester);
         }
-        semantics.dispose();
-      },
-    );
+        _expectSignOutFocused(tester);
+
+        await tester.sendKeyEvent(activationKey, platform: 'windows');
+        await tester.pump();
+
+        expect(_currentPath(tester), AppRoutePaths.login);
+        expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+        expect(find.textContaining('Admin User'), findsNothing);
+        expect(find.textContaining('Example School'), findsNothing);
+        expect(repository.signOutCalls, 1);
+        await tester.pumpAndSettle();
+        expect(_currentPath(tester), AppRoutePaths.login);
+        expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+        expect(find.textContaining('Admin User'), findsNothing);
+        expect(find.textContaining('Example School'), findsNothing);
+      }
+
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    });
   });
 
   group('Institution Admin logout and session isolation', () {
@@ -840,6 +1031,86 @@ String _currentPath(WidgetTester tester) {
 Future<void> _tapDestination(WidgetTester tester, String label) async {
   final navigation = find.byKey(const Key('institutionAdminNavigation'));
   await tester.tap(find.descendant(of: navigation, matching: find.text(label)));
+}
+
+Finder _navigationDestinationIcon(
+  WidgetTester tester,
+  InstitutionAdminShellDestination destination,
+) {
+  final selectedIndex = _navigationRail(tester).selectedIndex;
+  final destinationIndex = InstitutionAdminShellDestination.values.indexOf(
+    destination,
+  );
+
+  return find.descendant(
+    of: find.byKey(const Key('institutionAdminNavigation')),
+    matching: find.byIcon(
+      selectedIndex == destinationIndex
+          ? destination.selectedIcon
+          : destination.icon,
+    ),
+  );
+}
+
+Future<void> _sendTab(WidgetTester tester) async {
+  await tester.sendKeyEvent(LogicalKeyboardKey.tab, platform: 'windows');
+  await tester.pump();
+}
+
+Future<void> _sendShiftTab(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.shift, platform: 'windows');
+  await tester.sendKeyEvent(LogicalKeyboardKey.tab, platform: 'windows');
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.shift, platform: 'windows');
+  await tester.pump();
+}
+
+void _expectDestinationFocused(
+  WidgetTester tester,
+  InstitutionAdminShellDestination destination,
+) {
+  final destinationIcon = _navigationDestinationIcon(tester, destination);
+  expect(destinationIcon, findsOneWidget);
+  expect(
+    Focus.of(tester.element(destinationIcon)).hasFocus,
+    isTrue,
+    reason: '${destination.label} should own keyboard focus',
+  );
+}
+
+void _expectSignOutFocused(WidgetTester tester) {
+  final signOutIcon = find.byIcon(Icons.logout);
+  expect(signOutIcon, findsOneWidget);
+  expect(
+    Focus.of(tester.element(signOutIcon)).hasFocus,
+    isTrue,
+    reason: 'Sign out should own keyboard focus',
+  );
+}
+
+void _expectDashboardSessionUnchanged(
+  WidgetTester tester,
+  FakeAuthRepository repository,
+) {
+  expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
+  expect(
+    _navigationRail(tester).selectedIndex,
+    InstitutionAdminShellDestination.values.indexOf(
+      InstitutionAdminShellDestination.dashboard,
+    ),
+  );
+  expect(
+    tester
+        .widget<Text>(find.byKey(const Key('institutionAdminPageTitle')))
+        .data,
+    'Dashboard',
+  );
+  expect(
+    find.byKey(const Key('institutionAdminDashboardPlaceholder')),
+    findsOneWidget,
+  );
+  expect(find.text('Current user: Admin User'), findsOneWidget);
+  expect(find.text('Institution: Example School'), findsOneWidget);
+  expect(repository.signOutCalls, 0);
 }
 
 Future<void> _submitLogin(WidgetTester tester, {required String login}) async {
