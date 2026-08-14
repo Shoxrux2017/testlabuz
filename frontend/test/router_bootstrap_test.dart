@@ -17,6 +17,9 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboard.dart';
@@ -768,6 +771,9 @@ Future<void> _pumpApp(
         platformInstitutionListRepositoryProvider.overrideWithValue(
           FakePlatformInstitutionListRepository(),
         ),
+        institutionDashboardRepositoryProvider.overrideWithValue(
+          FakeInstitutionDashboardRepository(),
+        ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
       ],
@@ -794,6 +800,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       platformInstitutionListRepositoryProvider.overrideWithValue(
         FakePlatformInstitutionListRepository(),
+      ),
+      institutionDashboardRepositoryProvider.overrideWithValue(
+        FakeInstitutionDashboardRepository(),
       ),
     ],
   );
@@ -1013,6 +1022,14 @@ class FakePlatformDashboardRepository implements PlatformDashboardRepository {
         ),
       ],
     );
+  }
+}
+
+class FakeInstitutionDashboardRepository
+    implements InstitutionDashboardRepository {
+  @override
+  Future<InstitutionDashboard> fetchDashboard() async {
+    return const InstitutionDashboard(teachers: 0, students: 0, parents: 0);
   }
 }
 

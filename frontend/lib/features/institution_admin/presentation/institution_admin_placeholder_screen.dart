@@ -3,18 +3,6 @@ import 'package:flutter/material.dart';
 const _placeholderPadding = 24.0;
 const _placeholderMaxWidth = 720.0;
 
-class InstitutionAdminDashboardPlaceholderScreen extends StatelessWidget {
-  const InstitutionAdminDashboardPlaceholderScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _InstitutionAdminPlaceholder(
-      placeholderKey: Key('institutionAdminDashboardPlaceholder'),
-      message: 'Institution dashboard will be implemented in S03-FE-002.',
-    );
-  }
-}
-
 class InstitutionAdminUsersPlaceholderScreen extends StatelessWidget {
   const InstitutionAdminUsersPlaceholderScreen({super.key});
 

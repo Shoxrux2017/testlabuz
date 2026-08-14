@@ -20,6 +20,9 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_shell.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
@@ -31,7 +34,7 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_institu
 
 void main() {
   group('Institution Admin direct routing and destination mapping', () {
-    testWidgets('all six routes use one shell and exact honest placeholders', (
+    testWidgets('all six routes use one shell and exact honest content', (
       tester,
     ) async {
       for (final route in _routeExpectations) {
@@ -99,7 +102,7 @@ void main() {
 
         expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
         expect(
-          find.byKey(const Key('institutionAdminDashboardPlaceholder')),
+          find.byKey(const Key('institutionDashboardData')),
           findsOneWidget,
         );
         expect(
@@ -280,7 +283,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
         expect(
-          find.byKey(const Key('institutionAdminDashboardPlaceholder')),
+          find.byKey(const Key('institutionDashboardData')),
           findsOneWidget,
         );
       },
@@ -415,10 +418,7 @@ void main() {
           findsNothing,
         );
         expect(find.textContaining(user.fullName), findsNothing);
-        expect(
-          find.byKey(const Key('institutionAdminDashboardPlaceholder')),
-          findsNothing,
-        );
+        expect(find.byKey(const Key('institutionDashboardData')), findsNothing);
       }
     });
   });
@@ -880,8 +880,8 @@ final _routeExpectations = <_RouteExpectation>[
     path: AppRoutePaths.institutionAdmin,
     destination: InstitutionAdminShellDestination.dashboard,
     title: 'Dashboard',
-    placeholderKey: 'institutionAdminDashboardPlaceholder',
-    body: 'Institution dashboard will be implemented in S03-FE-002.',
+    placeholderKey: 'institutionDashboardData',
+    body: 'Institution Dashboard',
   ),
   const _RouteExpectation(
     path: AppRoutePaths.institutionAdminUsers,
@@ -941,6 +941,7 @@ Future<void> _pumpApp(
   SessionInvalidationSignal? signal,
   FakePlatformDashboardRepository? dashboardRepository,
   FakePlatformInstitutionListRepository? listRepository,
+  FakeInstitutionDashboardRepository? institutionDashboardRepository,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -954,6 +955,10 @@ Future<void> _pumpApp(
         ),
         platformInstitutionListRepositoryProvider.overrideWithValue(
           listRepository ?? FakePlatformInstitutionListRepository(),
+        ),
+        institutionDashboardRepositoryProvider.overrideWithValue(
+          institutionDashboardRepository ??
+              FakeInstitutionDashboardRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -980,6 +985,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       platformInstitutionListRepositoryProvider.overrideWithValue(
         FakePlatformInstitutionListRepository(),
+      ),
+      institutionDashboardRepositoryProvider.overrideWithValue(
+        FakeInstitutionDashboardRepository(),
       ),
     ],
   );
@@ -1104,10 +1112,7 @@ void _expectDashboardSessionUnchanged(
         .data,
     'Dashboard',
   );
-  expect(
-    find.byKey(const Key('institutionAdminDashboardPlaceholder')),
-    findsOneWidget,
-  );
+  expect(find.byKey(const Key('institutionDashboardData')), findsOneWidget);
   expect(find.text('Current user: Admin User'), findsOneWidget);
   expect(find.text('Institution: Example School'), findsOneWidget);
   expect(repository.signOutCalls, 0);
@@ -1313,6 +1318,18 @@ class FakePlatformDashboardRepository implements PlatformDashboardRepository {
       users: PlatformUserCounts(total: 0, active: 0),
       recentInstitutions: [],
     );
+  }
+}
+
+class FakeInstitutionDashboardRepository
+    implements InstitutionDashboardRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<InstitutionDashboard> fetchDashboard() async {
+    fetchCalls += 1;
+
+    return const InstitutionDashboard(teachers: 0, students: 0, parents: 0);
   }
 }
 
