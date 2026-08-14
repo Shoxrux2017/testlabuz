@@ -91,7 +91,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 6 | `S03-BE-005` | Backend | Institution User update and lifecycle API | `S03-BE-004` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-005-institution-user-update-lifecycle-api.md` |
 | 7 | `S03-BE-006` | Backend | Assessment settings GET/PUT API | `S03-BE-005` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-006-institution-assessment-settings-api.md` |
 | 8 | `S03-BE-007` | Backend | Understanding-category persistence and API | `S03-BE-006` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-007-understanding-category-persistence-api.md` |
-| 9 | `S03-FE-001` | Frontend | Institution Admin desktop shell/navigation | `S03-BE-007` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-001-institution-admin-desktop-shell-navigation.md` |
+| 9 | `S03-FE-001` | Frontend | Institution Admin desktop shell/navigation | `S03-BE-007` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-001-institution-admin-desktop-shell-navigation.md` |
 | 10 | `S03-FE-002` | Frontend | Institution dashboard real-data UI | `S03-FE-001`, `S03-BE-001` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-002-institution-dashboard-real-data-states.md` |
 | 11 | `S03-FE-003` | Frontend | Institution profile view/edit UI | `S03-FE-002`, `S03-BE-002` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-003-own-institution-profile-view-edit.md` |
 | 12 | `S03-FE-004` | Frontend | User list/search/filter/sort/pagination UI | `S03-FE-003`, `S03-BE-003` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-004-institution-user-list-search-filters-pagination.md` |
@@ -103,10 +103,11 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 18 | `S03-INT-002` | Integration | Stage 3 Windows real-stack E2E verification | All Stage 3 backend/frontend tasks | `Draft` | `Not started` | `Not started` | `tasks/integration/stage-03/S03-INT-002-stage-03-windows-real-stack-e2e-verification.md` |
 
 `S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, `S03-BE-004`,
-`S03-BE-005`, `S03-BE-006`, and `S03-BE-007` are `Accepted / PASS / Delivered`. The remaining 10 rows are
+`S03-BE-005`, `S03-BE-006`, `S03-BE-007`, and `S03-FE-001` are
+`Accepted / PASS / Delivered`. The remaining 9 rows are
 planned paths and remain `Draft` until each detailed task/prompt pair is
 separately reviewed, approved, and placed in the project. The next
-implementation gate is `S03-FE-001`.
+implementation gate is `S03-FE-002`.
 
 ```text
 Task/prompt file prepared ≠ implementation started
@@ -195,6 +196,7 @@ current approved task.
 |---|---|---|---|
 | `2026-08-13` | Approved the 18-task Stage 3 decomposition and `S03-INT-001` contract/control entry gate | Establish exact Stage 3 contract and sequential task control before production implementation | Project owner |
 | `2026-08-14` | Accepted and delivered `S03-INT-001` | Read-only gate passed and the Stage 3 contract/control result was prepared for delivery to `origin/main` | Codex |
+| `2026-08-14` | Accepted and delivered `S03-FE-001` | Read-only gate passed and the Institution Admin desktop shell/navigation result was prepared for delivery to `origin/main` | Codex |
 
 ## 11. Closure Readiness
 
