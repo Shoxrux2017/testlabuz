@@ -210,6 +210,7 @@ multi-institution isolation rules in the applicable `AGENTS.md` files.
 | Stage 0 — Project Preparation and Technical Planning | `Closed` | See `STAGE_00_CLOSURE_REVIEW.md` |
 | Stage 1 — Authentication and Role-Based Entry | `Closed` | See `STAGE_01_CLOSURE_REVIEW.md`; next gate is Stage 2 decomposition/planning only |
 | Stage 2 — Multi-Institution Platform Management | `Closed` | See `STAGE_02_CLOSURE_REVIEW.md` and `STAGE_02_TASK_INDEX.md`; all 17 tasks are `Accepted / PASS / Delivered`, and the closure review is `PASS`; next gate is Stage 3 decomposition/planning only |
+| Stage 3 — Institution Administration and User Management | `In Progress` | See `STAGE_03_TASK_INDEX.md`; `S03-INT-001` is `Accepted / PASS / Delivered`; next implementation gate is `S03-BE-001` |
 
 Historical pre-delivery context: before implementation PR `#40` and delivery-
 bookkeeping PR `#41` were merged, `S02-INT-001` had passed verification but its
@@ -219,5 +220,8 @@ current task or Stage 2 status.
 Current authoritative state: `S02-INT-001` and all 17 Stage 2 tasks are
 `Accepted / PASS / Delivered`. The renewed Stage 2 Closure Review passed at
 audited main `8b43abc614fdd5c66760c4f26f48aab4e8947f9d`, and Stage 2 is `Closed`.
-The next gate is Stage 3 decomposition/planning only; Stage 3 implementation
-was not started by this closure review.
+Stage 3 is `In Progress` with only `S03-INT-001` accepted and delivered. Stage
+3 production implementation has not started; the next implementation gate is
+`S03-BE-001`. Stage 3 is not closed, and Stage 4 has not started and remains
+blocked until the separate Stage 3 Closure Review is delivered with
+`FINAL STATUS: STAGE CLOSED`.
