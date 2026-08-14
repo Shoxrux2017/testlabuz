@@ -90,7 +90,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 5 | `S03-BE-004` | Backend | Teacher/Student/Parent create API | `S03-BE-003` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-004-institution-user-create-api.md` |
 | 6 | `S03-BE-005` | Backend | Institution User update and lifecycle API | `S03-BE-004` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-005-institution-user-update-lifecycle-api.md` |
 | 7 | `S03-BE-006` | Backend | Assessment settings GET/PUT API | `S03-BE-005` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-006-institution-assessment-settings-api.md` |
-| 8 | `S03-BE-007` | Backend | Understanding-category persistence and API | `S03-BE-006` | `Draft` | `Not started` | `Not started` | `tasks/backend/stage-03/S03-BE-007-understanding-category-persistence-api.md` |
+| 8 | `S03-BE-007` | Backend | Understanding-category persistence and API | `S03-BE-006` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-007-understanding-category-persistence-api.md` |
 | 9 | `S03-FE-001` | Frontend | Institution Admin desktop shell/navigation | `S03-BE-007` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-001-institution-admin-desktop-shell-navigation.md` |
 | 10 | `S03-FE-002` | Frontend | Institution dashboard real-data UI | `S03-FE-001`, `S03-BE-001` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-002-institution-dashboard-real-data-states.md` |
 | 11 | `S03-FE-003` | Frontend | Institution profile view/edit UI | `S03-FE-002`, `S03-BE-002` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-003-own-institution-profile-view-edit.md` |
@@ -103,10 +103,10 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 18 | `S03-INT-002` | Integration | Stage 3 Windows real-stack E2E verification | All Stage 3 backend/frontend tasks | `Draft` | `Not started` | `Not started` | `tasks/integration/stage-03/S03-INT-002-stage-03-windows-real-stack-e2e-verification.md` |
 
 `S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, `S03-BE-004`,
-`S03-BE-005`, and `S03-BE-006` are `Accepted / PASS / Delivered`. The remaining 11 rows are
+`S03-BE-005`, `S03-BE-006`, and `S03-BE-007` are `Accepted / PASS / Delivered`. The remaining 10 rows are
 planned paths and remain `Draft` until each detailed task/prompt pair is
 separately reviewed, approved, and placed in the project. The next
-implementation gate is `S03-BE-007`.
+implementation gate is `S03-FE-001`.
 
 ```text
 Task/prompt file prepared ≠ implementation started

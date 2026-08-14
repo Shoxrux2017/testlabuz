@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionAssessmentSettingsController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionDashboardController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionProfileController;
+use App\Http\Controllers\Api\V1\Institution\InstitutionUnderstandingCategoryController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
@@ -52,6 +53,8 @@ Route::prefix('institution')
         Route::get('dashboard', InstitutionDashboardController::class);
         Route::get('settings/assessment', [InstitutionAssessmentSettingsController::class, 'show']);
         Route::put('settings/assessment', [InstitutionAssessmentSettingsController::class, 'update']);
+        Route::get('understanding-categories', [InstitutionUnderstandingCategoryController::class, 'index']);
+        Route::put('understanding-categories', [InstitutionUnderstandingCategoryController::class, 'update']);
         Route::get('profile', [InstitutionProfileController::class, 'show']);
         Route::patch('profile', [InstitutionProfileController::class, 'update']);
         Route::get('users', [InstitutionUserController::class, 'index']);
