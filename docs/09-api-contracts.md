@@ -1159,29 +1159,169 @@ POST /api/v1/platform/institution-admins/{user}/deactivate
 
 ---
 
-# 8. Institution Admin User APIs
+# 8. Institution Admin Profile and User APIs
 
-Require:
+All endpoints in this section require the middleware order:
 
 ```text
-role = institution_admin
+auth:sanctum
+→ active.account
+→ password.changed
+→ role:institution_admin
 ```
 
-All records must belong to authenticated Institution Admin's institution.
+The backend derives Institution scope exclusively from the authenticated
+Institution Admin. No query, body, path, or header value may select or replace
+that Institution scope.
 
 ---
 
-## 8.1 User List
+## 8.1 Institution Profile
+
+```text
+GET   /api/v1/institution/profile
+PATCH /api/v1/institution/profile
+```
+
+Both endpoints operate only on the authenticated Institution Admin's own
+Institution. They accept no client-supplied `institution_id` or Institution
+UUID.
+
+The exact public Institution profile resource is:
+
+```json
+{
+  "id": "institution-uuid",
+  "name": "Example School",
+  "type": "school",
+  "status": "active",
+  "contact_email": "info@example.uz",
+  "contact_phone": "+998...",
+  "address": "Samarkand",
+  "description": "Optional notes",
+  "created_at": "2026-08-07T15:00:00Z",
+  "updated_at": "2026-08-07T15:00:00Z"
+}
+```
+
+`GET /api/v1/institution/profile` accepts no query parameters or request body.
+Either form of extra input returns `422 validation_failed`. Success returns
+`200 OK` with the complete resource in the normal single-resource envelope and
+no `message`.
+
+`PATCH /api/v1/institution/profile` is a partial update. It accepts a JSON
+object containing one or more of exactly:
+
+```text
+name
+contact_email
+contact_phone
+address
+description
+```
+
+Validation and update rules:
+
+```text
+name: when present, required, trimmed, non-empty string, maximum 200
+contact_email: when present, nullable string, valid email when non-null, maximum 254
+contact_phone: when present, nullable string, maximum 50
+address: when present, nullable string
+description: when present, nullable string
+```
+
+- Query parameters are rejected with `422 validation_failed`.
+- An empty, malformed, scalar, or array JSON body is rejected with
+  `422 validation_failed`.
+- Unknown and protected JSON keys are rejected with `422 validation_failed`;
+  the backend does not ignore them and partially apply allowed fields.
+- Omitted allowed fields retain their stored values.
+- Explicit JSON `null` clears `contact_email`, `contact_phone`, `address`, or
+  `description`; `name` cannot be null.
+- `id`, `type`, `status`, `created_by_user_id`, `deactivated_at`, `created_at`,
+  `updated_at`, Institution settings, user counts, and every other field are
+  read-only/backend-controlled for this endpoint.
+- An exact no-op returns `200 OK` with the current resource and does not change
+  `updated_at`.
+- A real update is atomic and changes no lifecycle state, Institution type,
+  settings, users, counts, creator data, or learning records.
+
+PATCH success returns `200 OK`, the complete current profile resource, and:
+
+```text
+message = Institution profile updated successfully.
+```
+
+---
+
+## 8.2 Shared Institution User Resource
+
+All Institution User operations are scoped to the authenticated Institution
+before any filter, lookup, ordering, pagination, or mutation. Eligible target
+roles are exactly:
+
+```text
+teacher
+student
+parent
+```
+
+A missing User, a User from another Institution, or a User with role
+`platform_owner` or `institution_admin` returns the same scope-safe
+`404 resource_not_found` response. Client input can never replace the
+authenticated Institution scope.
+
+List, create, detail, update, activate, and deactivate use the same exact User
+resource:
+
+```json
+{
+  "id": "user-uuid",
+  "role": "teacher",
+  "full_name": "Teacher Name",
+  "login_name": "teacher01",
+  "email": null,
+  "phone": "+998...",
+  "is_active": true,
+  "must_change_password": true,
+  "last_login_at": null,
+  "deactivated_at": null,
+  "created_at": "2026-08-07T15:00:00Z",
+  "updated_at": "2026-08-07T15:00:00Z"
+}
+```
+
+The resource never exposes:
+
+```text
+institution_id
+created_by_user_id
+creator resource
+password or password hash
+remember token
+Sanctum token
+permissions
+Institution settings
+relationship graph
+learning records, answers, scores, or results
+```
+
+The Institution is implicit from authenticated tenant scope. `role` is
+included because the shared list contains all three allowed roles.
+
+---
+
+## 8.3 User List
 
 ```text
 GET /api/v1/institution/users
 ```
 
-### Query
+The only accepted query keys are:
 
 ```text
-role=teacher|student|parent
-status=active|inactive
+role
+status
 search
 page
 per_page
@@ -1189,117 +1329,203 @@ sort
 direction
 ```
 
-### Role Filter
+Rules:
 
-For this endpoint, only:
+- `role` is an optional single value `teacher|student|parent`; omission
+  includes all three allowed roles.
+- `status` is an optional single value `active|inactive`; omission includes
+  both active and inactive Users.
+- `active` maps to `is_active = true`; `inactive` maps to
+  `is_active = false`.
+- `search` is optional, trimmed, and limited to 254 characters. A blank value
+  after trimming behaves as no search filter.
+- Search is a case-insensitive literal substring match across `full_name`,
+  `login_name`, `email`, and `phone`. `%` and `_` are literal input, not SQL
+  wildcard expansion.
+- `page` is an integer with minimum 1 and default 1.
+- `per_page` is an integer with minimum 1, maximum 100, and default 20.
+- `sort` is `full_name|login_name|created_at|updated_at`, with default
+  `full_name`.
+- `direction` is `asc|desc`, with default `asc`.
+- `full_name` and `login_name` ordering is case-insensitive.
+- Every sort uses the User UUID as a deterministic tie-break in the same
+  direction.
+- Unknown query keys, unsupported values, and invalid pagination return
+  `422 validation_failed`.
+- A request body is rejected with `422 validation_failed`.
+- Scope is applied before all filtering, search, ordering, and pagination.
 
-```text
-teacher
-student
-parent
-```
-
-are valid.
-
-Institution Admin must not query/create:
-
-```text
-platform_owner
-institution_admin
-```
-
-through this endpoint.
+Success returns `200 OK` with shared User resources and the Section 6
+pagination envelope. It does not add a success `message`.
 
 ---
 
-## 8.2 Create User
+## 8.4 Create User
 
 ```text
 POST /api/v1/institution/users
 ```
 
-### Request
-
-```json
-{
-  "role": "teacher",
-  "full_name": "Teacher Name",
-  "login_name": "teacher01",
-  "email": null,
-  "phone": "+998...",
-  "password": "initial-password"
-}
-```
-
-### Allowed Roles
+The endpoint accepts a JSON object containing exactly:
 
 ```text
-teacher
-student
-parent
+role
+full_name
+login_name
+email
+phone
+password
 ```
 
-### Backend Derives
+Validation:
 
 ```text
-institution_id
-created_by_user_id
+role: required, one of teacher|student|parent
+full_name: required, trimmed, non-empty string, maximum 200
+login_name: required, trimmed, non-empty string, maximum 191, globally unique
+email: optional, nullable string, valid email when non-null, maximum 254
+phone: optional, nullable string, trimmed and non-empty when non-null, maximum 50
+password: required string, minimum 8, maximum 255
+```
+
+An empty, malformed, scalar, or array JSON body, an unknown/protected key, or
+any query parameter returns `422 validation_failed` with no User or token side
+effect. A concurrent global `login_name` conflict also returns scope-safe
+`422 validation_failed` with `errors.login_name` and no database detail.
+
+The backend atomically derives and persists:
+
+```text
+id = server-generated UUID
+institution_id = authenticated Institution
+created_by_user_id = authenticated Institution Admin
+is_active = true
 must_change_password = true
+last_login_at = null
+deactivated_at = null
+password = secure Laravel hash of the validated password
+created_at and updated_at = server timestamps
 ```
 
-### Success — 201
+Creation does not log in the new User, create a Sanctum token, generate or
+return a password, create relationships, or alter settings or learning data.
 
-Returns User resource.
+Success returns `201 Created`, the complete shared User resource, and:
+
+```text
+message = Institution user created successfully.
+```
 
 ---
 
-## 8.3 User Detail
+## 8.5 User Detail
 
 ```text
 GET /api/v1/institution/users/{user}
 ```
 
+The path UUID is the only accepted input. Query parameters or a request body
+return `422 validation_failed`. Success returns `200 OK` with the complete
+shared User resource in the normal single-resource envelope and no `message`.
+
 ---
 
-## 8.4 Update User
+## 8.6 Update User
 
 ```text
 PATCH /api/v1/institution/users/{user}
 ```
 
-### Request
+The endpoint accepts a non-empty partial JSON object containing only:
 
-```json
-{
-  "full_name": "Updated Name",
-  "email": "user@example.uz",
-  "phone": "+998..."
-}
+```text
+full_name
+email
+phone
 ```
 
-Role is not self-editable through this endpoint.
+Validation:
 
-Changing a user between Teacher/Student/Parent roles is not part of the normal MVP edit contract.
+```text
+full_name: when present, required, trimmed, non-empty string, maximum 200
+email: when present, nullable string, valid email when non-null, maximum 254
+phone: when present, nullable string, trimmed and non-empty when non-null, maximum 50
+```
+
+- Omitted fields retain their stored values.
+- Explicit JSON `null` clears `email` or `phone`; `full_name` cannot be null.
+- Empty, malformed, scalar, or array JSON bodies, unknown/protected keys, and
+  query parameters return `422 validation_failed` with no partial mutation.
+- `role`, `login_name`, password, Institution, lifecycle state,
+  `must_change_password`, creator, token state, and timestamps are not editable.
+- An authorized Institution Admin may update an active or inactive eligible
+  User.
+- An exact no-op returns the current resource without changing `updated_at`.
+- A real update is atomic and cannot change lifecycle fields.
+
+Success returns `200 OK`, the complete shared User resource, and:
+
+```text
+message = Institution user updated successfully.
+```
 
 ---
 
-## 8.5 Activate User
+## 8.7 Activate User
 
 ```text
 POST /api/v1/institution/users/{user}/activate
 ```
 
+The activate and deactivate endpoints in Sections 8.7 and 8.8 accept either no
+body or an empty JSON object `{}`, and no query parameters. A non-empty object,
+malformed JSON, scalar/array root, or query parameter returns
+`422 validation_failed` with no mutation.
+
+Required lifecycle state machine:
+
+| Endpoint | Current state | Required result |
+|---|---|---|
+| `activate` | inactive | Set `is_active = true`, clear `deactivated_at`, and advance `updated_at` once |
+| `activate` | active | Idempotent `200`; no write and preserve `updated_at` |
+| `deactivate` | active | Set `is_active = false`, set `deactivated_at` to authoritative server time, and advance `updated_at` once |
+| `deactivate` | inactive | Idempotent `200`; no write and preserve the original `deactivated_at` and `updated_at` |
+
+Real lifecycle transitions are atomic. Concurrent same-target
+update/activate/deactivate operations serialize safely so a stale write cannot
+overwrite unrelated current profile or lifecycle state.
+
+Lifecycle operations preserve the User's password, `must_change_password`,
+`last_login_at`, creator/history, Institution and role, relationships, learning
+data, and stored Sanctum tokens. Deactivation immediately blocks new login and
+existing-token access through the accepted active-account enforcement. It does
+not delete stored tokens. Reactivation does not create, delete, replace, or
+restore token records; reset a password; clear `must_change_password`; update
+`last_login_at`; or bypass an inactive Institution, role, relationship,
+permission, or device gate. A previously stored valid token may resume only
+otherwise-authorized access.
+
+Activate success returns `200 OK`, the complete shared User resource, and:
+
+```text
+message = Institution user activated successfully.
+```
+
 ---
 
-## 8.6 Deactivate User
+## 8.8 Deactivate User
 
 ```text
 POST /api/v1/institution/users/{user}/deactivate
 ```
 
-### Rule
+The shared input, state-machine, concurrency, access-enforcement, token, and
+history-preservation rules in Section 8.7 apply. Deactivate success returns
+`200 OK`, the complete shared User resource, and:
 
-Historical learning data remains.
+```text
+message = Institution user deactivated successfully.
+```
 
 ---
 
@@ -4720,7 +4946,11 @@ Require Institution Admin.
 GET /api/v1/institution/dashboard
 ```
 
-Possible MVP summary:
+The endpoint accepts no query parameters or request body. Either form of extra
+input returns `422 validation_failed`. Scope is always the authenticated
+Institution Admin's own Institution.
+
+The exact Stage 3 response is:
 
 ```json
 {
@@ -4729,19 +4959,19 @@ Possible MVP summary:
       "teachers": 30,
       "students": 600,
       "parents": 450
-    },
-    "groups": {
-      "active": 25
-    },
-    "learning": {
-      "active_topics": 80,
-      "waiting_for_teacher_review": 45,
-      "needs_revision": 110,
-      "needs_teacher_support": 32
     }
   }
 }
 ```
+
+Counting rules:
+
+- Count only own-Institution Users with role `teacher`, `student`, or `parent`.
+- Each value is the total of active and inactive accounts for that role.
+- Exclude Institution Admin and Platform Owner accounts.
+- Stage 3 includes no active-count split, Group metrics, or Learning metrics.
+- Later stages may add Group or Learning dashboard blocks additively without
+  changing this Stage 3 `users` contract.
 
 ---
 
@@ -5318,6 +5548,9 @@ POST  /api/v1/platform/institution-admins/{user}/deactivate
 
 ```text
 GET   /api/v1/institution/dashboard
+
+GET   /api/v1/institution/profile
+PATCH /api/v1/institution/profile
 
 GET   /api/v1/institution/users
 POST  /api/v1/institution/users
