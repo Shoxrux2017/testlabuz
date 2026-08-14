@@ -7,8 +7,10 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/session_invalidation_signal.dart';
 import '../data/auth_repository_impl.dart';
+import '../domain/auth_institution.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_user.dart';
+import '../domain/user_role.dart';
 import 'auth_password_change_result.dart';
 import 'auth_session_state.dart';
 
@@ -178,6 +180,56 @@ class AuthSessionController extends Notifier<AuthSessionState> {
 
       state = AuthSessionState.unauthenticated(failure: exception.failure);
     }
+  }
+
+  bool reconcileInstitutionNameFromServer({
+    required String expectedUserId,
+    required String expectedInstitutionId,
+    required String institutionName,
+  }) {
+    final user = state.user;
+    final institution = user?.institution;
+    if (state.status != AuthSessionStatus.authenticated ||
+        user == null ||
+        user.id != expectedUserId ||
+        user.role != UserRole.institutionAdmin ||
+        !user.isActive ||
+        user.mustChangePassword ||
+        user.institutionId == null ||
+        user.institutionId!.trim().isEmpty ||
+        user.institutionId != expectedInstitutionId ||
+        institution == null ||
+        institution.id != expectedInstitutionId ||
+        institution.status != 'active') {
+      return false;
+    }
+
+    if (institution.name == institutionName) {
+      return true;
+    }
+
+    final reconciledInstitution = AuthInstitution(
+      id: institution.id,
+      name: institutionName,
+      status: institution.status,
+      timezone: institution.timezone,
+    );
+    state = AuthSessionState.authenticated(
+      AuthUser(
+        id: user.id,
+        institutionId: user.institutionId,
+        role: user.role,
+        fullName: user.fullName,
+        loginName: user.loginName,
+        email: user.email,
+        phone: user.phone,
+        isActive: user.isActive,
+        mustChangePassword: user.mustChangePassword,
+        institution: reconciledInstitution,
+      ),
+    );
+
+    return true;
   }
 
   Future<AuthPasswordChangeResult> _refreshAfterPasswordChange(
