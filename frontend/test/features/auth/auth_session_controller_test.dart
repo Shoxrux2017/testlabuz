@@ -426,6 +426,204 @@ void main() {
     });
   });
 
+  group('AuthSessionController institution name reconciliation', () {
+    test(
+      'updates only the matching eligible cached institution name',
+      () async {
+        final repository = FakeAuthRepository(storedToken: 'token-a');
+        repository.onCurrentUser = () async =>
+            _user(loginName: 'admin01', role: UserRole.institutionAdmin);
+        final container = _container(repository: repository);
+        addTearDown(container.dispose);
+        final controller = container.read(
+          authSessionControllerProvider.notifier,
+        );
+        await pumpEventQueue();
+        final before = container.read(authSessionControllerProvider).user!;
+
+        final accepted = controller.reconcileInstitutionNameFromServer(
+          expectedUserId: before.id,
+          expectedInstitutionId: 'institution-1',
+          institutionName: 'Renamed Institution',
+        );
+
+        final after = container.read(authSessionControllerProvider).user!;
+        expect(accepted, isTrue);
+        expect(after.institution?.name, 'Renamed Institution');
+        expect(after.id, before.id);
+        expect(after.institutionId, before.institutionId);
+        expect(after.role, before.role);
+        expect(after.fullName, before.fullName);
+        expect(after.loginName, before.loginName);
+        expect(after.email, before.email);
+        expect(after.phone, before.phone);
+        expect(after.isActive, before.isActive);
+        expect(after.mustChangePassword, before.mustChangePassword);
+        expect(after.institution?.id, before.institution?.id);
+        expect(after.institution?.status, before.institution?.status);
+        expect(after.institution?.timezone, before.institution?.timezone);
+        expect(repository.currentUserCalls, 1);
+        expect(repository.clearTokenCalls, 0);
+        expect(repository.clearTokenIfVersionCalls, isEmpty);
+        expect(repository.signOutCalls, 0);
+        expect(repository.storedToken, 'token-a');
+      },
+    );
+
+    test('same name is accepted without emitting a new auth state', () async {
+      final repository = FakeAuthRepository(storedToken: 'token-a');
+      repository.onCurrentUser = () async =>
+          _user(loginName: 'admin01', role: UserRole.institutionAdmin);
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+      final controller = container.read(authSessionControllerProvider.notifier);
+      await pumpEventQueue();
+      var emissions = 0;
+      final subscription = container.listen(
+        authSessionControllerProvider,
+        (_, _) => emissions += 1,
+      );
+      addTearDown(subscription.close);
+
+      final accepted = controller.reconcileInstitutionNameFromServer(
+        expectedUserId: 'admin01-id',
+        expectedInstitutionId: 'institution-1',
+        institutionName: 'Example School',
+      );
+
+      expect(accepted, isTrue);
+      expect(emissions, 0);
+    });
+
+    test('rejects stale identity and every ineligible session', () async {
+      final users = [
+        _user(loginName: 'teacher01'),
+        _user(
+          loginName: 'admin-inactive',
+          role: UserRole.institutionAdmin,
+          isActive: false,
+        ),
+        _user(
+          loginName: 'admin-first-login',
+          role: UserRole.institutionAdmin,
+          mustChangePassword: true,
+        ),
+        _user(
+          loginName: 'admin-inactive-institution',
+          role: UserRole.institutionAdmin,
+          institutionStatus: 'inactive',
+        ),
+        _user(
+          loginName: 'admin-missing-institution',
+          role: UserRole.institutionAdmin,
+          includeInstitution: false,
+        ),
+        _user(
+          loginName: 'admin-mismatched-institution',
+          role: UserRole.institutionAdmin,
+          nestedInstitutionId: 'institution-2',
+        ),
+      ];
+
+      for (final user in users) {
+        final repository = FakeAuthRepository(storedToken: 'token-a');
+        repository.onCurrentUser = () async => user;
+        final container = _container(repository: repository);
+        addTearDown(container.dispose);
+        final controller = container.read(
+          authSessionControllerProvider.notifier,
+        );
+        await pumpEventQueue();
+        final before = container.read(authSessionControllerProvider);
+
+        final accepted = controller.reconcileInstitutionNameFromServer(
+          expectedUserId: user.id,
+          expectedInstitutionId: user.institutionId ?? 'institution-1',
+          institutionName: 'Injected Name',
+        );
+
+        expect(accepted, isFalse);
+        expect(container.read(authSessionControllerProvider).user, before.user);
+      }
+
+      final repository = FakeAuthRepository(storedToken: 'token-a');
+      repository.onCurrentUser = () async =>
+          _user(loginName: 'admin01', role: UserRole.institutionAdmin);
+      final staleContainer = _container(repository: repository);
+      addTearDown(staleContainer.dispose);
+      final staleController = staleContainer.read(
+        authSessionControllerProvider.notifier,
+      );
+      await pumpEventQueue();
+      expect(
+        staleController.reconcileInstitutionNameFromServer(
+          expectedUserId: 'wrong-user',
+          expectedInstitutionId: 'institution-1',
+          institutionName: 'Injected Name',
+        ),
+        isFalse,
+      );
+      expect(
+        staleController.reconcileInstitutionNameFromServer(
+          expectedUserId: 'admin01-id',
+          expectedInstitutionId: 'institution-2',
+          institutionName: 'Injected Name',
+        ),
+        isFalse,
+      );
+
+      final noToken = _container(repository: FakeAuthRepository());
+      addTearDown(noToken.dispose);
+      final noTokenController = noToken.read(
+        authSessionControllerProvider.notifier,
+      );
+      await pumpEventQueue();
+      expect(
+        noTokenController.reconcileInstitutionNameFromServer(
+          expectedUserId: 'any',
+          expectedInstitutionId: 'any',
+          institutionName: 'Injected Name',
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+      'a prior same-role account response cannot rename the newer session',
+      () async {
+        final repository = FakeAuthRepository(storedToken: 'token-a');
+        repository.onCurrentUser = () async =>
+            _user(loginName: 'admin-a', role: UserRole.institutionAdmin);
+        repository.onSignIn = (login, _) async =>
+            _user(loginName: login, role: UserRole.institutionAdmin);
+        final container = _container(repository: repository);
+        addTearDown(container.dispose);
+        final controller = container.read(
+          authSessionControllerProvider.notifier,
+        );
+        await pumpEventQueue();
+
+        await controller.signIn(login: 'admin-b', password: 'secret');
+        final before = container.read(authSessionControllerProvider);
+        final accepted = controller.reconcileInstitutionNameFromServer(
+          expectedUserId: 'admin-a-id',
+          expectedInstitutionId: 'institution-1',
+          institutionName: 'Old Institution Secret',
+        );
+
+        expect(accepted, isFalse);
+        expect(container.read(authSessionControllerProvider).user, before.user);
+        expect(
+          container.read(authSessionControllerProvider).user?.institution?.name,
+          'Example School',
+        );
+        expect(repository.clearTokenCalls, 0);
+        expect(repository.clearTokenIfVersionCalls, isEmpty);
+        expect(repository.signOutCalls, 0);
+      },
+    );
+  });
+
   group('AuthSessionController invalidation and races', () {
     test(
       'authentication_required signal clears active session without logout',
@@ -604,23 +802,28 @@ AuthUser _user({
   required String loginName,
   UserRole role = UserRole.teacher,
   bool mustChangePassword = false,
+  bool isActive = true,
+  String institutionStatus = 'active',
+  String? institutionId = 'institution-1',
+  String nestedInstitutionId = 'institution-1',
+  bool includeInstitution = true,
 }) {
   return AuthUser(
     id: '$loginName-id',
-    institutionId: role == UserRole.platformOwner ? null : 'institution-1',
+    institutionId: role == UserRole.platformOwner ? null : institutionId,
     role: role,
     fullName: 'Test User',
     loginName: loginName,
     email: null,
     phone: null,
-    isActive: true,
+    isActive: isActive,
     mustChangePassword: mustChangePassword,
-    institution: role == UserRole.platformOwner
+    institution: role == UserRole.platformOwner || !includeInstitution
         ? null
-        : const AuthInstitution(
-            id: 'institution-1',
+        : AuthInstitution(
+            id: nestedInstitutionId,
             name: 'Example School',
-            status: 'active',
+            status: institutionStatus,
             timezone: 'Asia/Tashkent',
           ),
   );

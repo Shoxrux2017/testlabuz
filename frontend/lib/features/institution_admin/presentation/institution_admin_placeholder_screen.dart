@@ -44,18 +44,6 @@ class InstitutionAdminUserDetailPlaceholderScreen extends StatelessWidget {
   }
 }
 
-class InstitutionAdminInstitutionPlaceholderScreen extends StatelessWidget {
-  const InstitutionAdminInstitutionPlaceholderScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _InstitutionAdminPlaceholder(
-      placeholderKey: Key('institutionAdminInstitutionPlaceholder'),
-      message: 'Institution profile will be implemented in S03-FE-003.',
-    );
-  }
-}
-
 class InstitutionAdminSettingsPlaceholderScreen extends StatelessWidget {
   const InstitutionAdminSettingsPlaceholderScreen({super.key});
 

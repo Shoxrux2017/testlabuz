@@ -21,8 +21,12 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_profile_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_profile.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_profile_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_profile_update.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_shell.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
@@ -112,6 +116,82 @@ void main() {
         expect(tester.takeException(), isNull, reason: path);
       }
     });
+
+    testWidgets(
+      'only the profile route owns fresh auto-disposed profile state',
+      (tester) async {
+        final profileRepository = FakeInstitutionProfileRepository();
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdmin,
+          authRepository: _authenticatedRepository(_adminUser()),
+          institutionProfileRepository: profileRepository,
+        );
+        await tester.pumpAndSettle();
+        expect(profileRepository.fetchCalls, 0);
+        expect(profileRepository.updateCalls, 0);
+
+        _router(tester).go(AppRoutePaths.institutionAdminInstitution);
+        await tester.pumpAndSettle();
+        expect(profileRepository.fetchCalls, 1);
+        expect(find.byKey(const Key('institutionProfileData')), findsOneWidget);
+
+        _router(tester).go(AppRoutePaths.institutionAdminUsers);
+        await tester.pumpAndSettle();
+        expect(profileRepository.fetchCalls, 1);
+        expect(find.byKey(const Key('institutionProfileData')), findsNothing);
+
+        _router(tester).go(AppRoutePaths.institutionAdminInstitution);
+        await tester.pumpAndSettle();
+        expect(profileRepository.fetchCalls, 2);
+        expect(profileRepository.updateCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'verified profile load and PATCH update reconcile shell name without extra auth or profile requests',
+      (tester) async {
+        final authRepository = _authenticatedRepository(_adminUser());
+        final profileRepository = FakeInstitutionProfileRepository(
+          onFetch: (_) async => _institutionProfile(name: 'Loaded School'),
+          onUpdate: (_, request) async {
+            expect(request.toJson(), {'name': 'Renamed Shell School'});
+            return InstitutionProfileUpdateResult(
+              profile: _institutionProfile(name: 'Renamed Shell School'),
+            );
+          },
+        );
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdminInstitution,
+          authRepository: authRepository,
+          institutionProfileRepository: profileRepository,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Institution: Loaded School'), findsOneWidget);
+        expect(authRepository.currentUserCalls, 1);
+        expect(profileRepository.fetchCalls, 1);
+        await tester.tap(find.byKey(const Key('institutionProfileEditButton')));
+        await tester.pump();
+        await tester.enterText(
+          find.byKey(const Key('institutionProfileNameField')),
+          'Renamed Shell School',
+        );
+        final save = find.byKey(const Key('institutionProfileSaveButton'));
+        await tester.ensureVisible(save);
+        await tester.tap(save);
+        await tester.pumpAndSettle();
+
+        expect(_currentPath(tester), AppRoutePaths.institutionAdminInstitution);
+        expect(find.text('Institution: Renamed Shell School'), findsOneWidget);
+        expect(find.text('Institution: Loaded School'), findsNothing);
+        expect(find.text('Institution profile updated.'), findsOneWidget);
+        expect(authRepository.currentUserCalls, 1);
+        expect(profileRepository.fetchCalls, 1);
+        expect(profileRepository.updateCalls, 1);
+      },
+    );
   });
 
   group('Institution Admin guard and bootstrap matrix', () {
@@ -775,6 +855,60 @@ void main() {
       expect(repository.clearTokenIfVersionCalls, [4]);
     });
 
+    testWidgets(
+      'current-token invalidation rejects a late profile response while stale-token invalidation preserves the newer session',
+      (tester) async {
+        final signal = SessionInvalidationSignal();
+        addTearDown(signal.dispose);
+        final pendingProfile = Completer<InstitutionProfile>();
+        final repository = _authenticatedRepository(
+          _adminUser(fullName: 'Admin A', institutionName: 'Institution A'),
+          tokenVersion: 4,
+        );
+        final profileRepository = FakeInstitutionProfileRepository(
+          onFetch: (_) => pendingProfile.future,
+        );
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdminInstitution,
+          authRepository: repository,
+          signal: signal,
+          institutionProfileRepository: profileRepository,
+        );
+        await tester.pump();
+
+        signal.authenticationRequired(tokenVersion: 4);
+        await tester.pumpAndSettle();
+        expect(_currentPath(tester), AppRoutePaths.login);
+        expect(find.byKey(const Key('institutionAdminShell')), findsNothing);
+
+        pendingProfile.complete(
+          _institutionProfile(name: 'Late Institution A Secret'),
+        );
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Late Institution A Secret'), findsNothing);
+        expect(profileRepository.fetchCalls, 1);
+        expect(profileRepository.updateCalls, 0);
+
+        repository.onSignIn = (_, _) async => _adminUser(
+          loginName: 'admin-b',
+          fullName: 'Admin B',
+          institutionName: 'Institution B',
+        );
+        await _submitLogin(tester, login: 'admin-b');
+        expect(find.text('Institution: Institution B'), findsOneWidget);
+
+        signal.authenticationRequired(tokenVersion: 4);
+        await tester.pumpAndSettle();
+        expect(_currentPath(tester), AppRoutePaths.institutionAdmin);
+        expect(find.text('Current user: Admin B'), findsOneWidget);
+        expect(find.text('Institution: Institution B'), findsOneWidget);
+        expect(find.text('Institution: Institution A'), findsNothing);
+        expect(find.textContaining('Late Institution A Secret'), findsNothing);
+        expect(repository.clearTokenIfVersionCalls, [4, 4]);
+      },
+    );
+
     testWidgets('Institution Admin A to B exposes only B and canonical route', (
       tester,
     ) async {
@@ -908,8 +1042,8 @@ final _routeExpectations = <_RouteExpectation>[
     path: AppRoutePaths.institutionAdminInstitution,
     destination: InstitutionAdminShellDestination.institution,
     title: 'Institution',
-    placeholderKey: 'institutionAdminInstitutionPlaceholder',
-    body: 'Institution profile will be implemented in S03-FE-003.',
+    placeholderKey: 'institutionProfileData',
+    body: 'Institution Profile',
   ),
   const _RouteExpectation(
     path: AppRoutePaths.institutionAdminSettings,
@@ -942,6 +1076,7 @@ Future<void> _pumpApp(
   FakePlatformDashboardRepository? dashboardRepository,
   FakePlatformInstitutionListRepository? listRepository,
   FakeInstitutionDashboardRepository? institutionDashboardRepository,
+  FakeInstitutionProfileRepository? institutionProfileRepository,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -959,6 +1094,9 @@ Future<void> _pumpApp(
         institutionDashboardRepositoryProvider.overrideWithValue(
           institutionDashboardRepository ??
               FakeInstitutionDashboardRepository(),
+        ),
+        institutionProfileRepositoryProvider.overrideWithValue(
+          institutionProfileRepository ?? FakeInstitutionProfileRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -988,6 +1126,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       institutionDashboardRepositoryProvider.overrideWithValue(
         FakeInstitutionDashboardRepository(),
+      ),
+      institutionProfileRepositoryProvider.overrideWithValue(
+        FakeInstitutionProfileRepository(),
       ),
     ],
   );
@@ -1331,6 +1472,51 @@ class FakeInstitutionDashboardRepository
 
     return const InstitutionDashboard(teachers: 0, students: 0, parents: 0);
   }
+}
+
+class FakeInstitutionProfileRepository implements InstitutionProfileRepository {
+  FakeInstitutionProfileRepository({this.onFetch, this.onUpdate});
+
+  final Future<InstitutionProfile> Function(int call)? onFetch;
+  final Future<InstitutionProfileUpdateResult> Function(
+    int call,
+    InstitutionProfileUpdateRequest request,
+  )?
+  onUpdate;
+  var fetchCalls = 0;
+  var updateCalls = 0;
+
+  @override
+  Future<InstitutionProfile> fetchProfile() async {
+    fetchCalls += 1;
+
+    return onFetch?.call(fetchCalls) ?? _institutionProfile();
+  }
+
+  @override
+  Future<InstitutionProfileUpdateResult> updateProfile(
+    InstitutionProfileUpdateRequest request,
+  ) async {
+    updateCalls += 1;
+
+    return onUpdate?.call(updateCalls, request) ??
+        (throw StateError('Shell tests do not submit profile updates.'));
+  }
+}
+
+InstitutionProfile _institutionProfile({String name = 'Example School'}) {
+  return InstitutionProfile(
+    id: 'institution-1',
+    name: name,
+    type: InstitutionProfileType.school,
+    status: InstitutionProfileStatus.active,
+    contactEmail: null,
+    contactPhone: null,
+    address: null,
+    description: null,
+    createdAt: DateTime.utc(2026, 8, 1),
+    updatedAt: DateTime.utc(2026, 8, 7),
+  );
 }
 
 class FakePlatformInstitutionListRepository

@@ -93,7 +93,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 8 | `S03-BE-007` | Backend | Understanding-category persistence and API | `S03-BE-006` | `Accepted` | `PASS` | `Delivered` | `tasks/backend/stage-03/S03-BE-007-understanding-category-persistence-api.md` |
 | 9 | `S03-FE-001` | Frontend | Institution Admin desktop shell/navigation | `S03-BE-007` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-001-institution-admin-desktop-shell-navigation.md` |
 | 10 | `S03-FE-002` | Frontend | Institution dashboard real-data UI | `S03-FE-001`, `S03-BE-001` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-002-institution-dashboard-real-data-states.md` |
-| 11 | `S03-FE-003` | Frontend | Institution profile view/edit UI | `S03-FE-002`, `S03-BE-002` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-003-own-institution-profile-view-edit.md` |
+| 11 | `S03-FE-003` | Frontend | Institution profile view/edit UI | `S03-FE-002`, `S03-BE-002` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-003-own-institution-profile-view-edit.md` |
 | 12 | `S03-FE-004` | Frontend | User list/search/filter/sort/pagination UI | `S03-FE-003`, `S03-BE-003` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-004-institution-user-list-search-filters-pagination.md` |
 | 13 | `S03-FE-005` | Frontend | Institution User detail UI | `S03-FE-004`, `S03-BE-003` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-005-institution-user-detail.md` |
 | 14 | `S03-FE-006` | Frontend | Teacher/Student/Parent create UI | `S03-FE-005`, `S03-BE-004` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-006-institution-user-create.md` |
