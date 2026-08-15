@@ -32,20 +32,9 @@ class InstitutionUserCreateController
   InstitutionUserCreateSnapshot? _activeSnapshot;
   int _operationGeneration = 0;
   int _passwordWipeGeneration = 0;
-  var _isDisposed = false;
-  var _disposeRegistered = false;
 
   @override
   InstitutionUserCreateState build() {
-    _isDisposed = false;
-    if (!_disposeRegistered) {
-      _disposeRegistered = true;
-      ref.onDispose(() {
-        _isDisposed = true;
-        _invalidateOperation();
-      });
-    }
-
     final sessionKey = InstitutionUserCreateSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -366,8 +355,7 @@ class InstitutionUserCreateController
     InstitutionUserCreateSessionKey sessionKey,
     InstitutionUserCreateSnapshot snapshot,
   ) {
-    return !_isDisposed &&
-        ref.mounted &&
+    return ref.mounted &&
         generation == _operationGeneration &&
         _activeSnapshot == snapshot &&
         _activeSessionKey == sessionKey &&
@@ -375,8 +363,7 @@ class InstitutionUserCreateController
   }
 
   bool _matchesSession(InstitutionUserCreateSessionKey key) {
-    return !_isDisposed &&
-        ref.mounted &&
+    return ref.mounted &&
         _activeSessionKey == key &&
         InstitutionUserCreateSessionSnapshot.fromSession(
               ref.read(authSessionControllerProvider),

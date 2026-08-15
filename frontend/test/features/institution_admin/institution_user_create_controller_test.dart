@@ -100,6 +100,50 @@ void main() {
   );
 
   test(
+    'equivalent authenticated state with the same AuthUser preserves '
+    'Submitting POST',
+    () async {
+      final response = Completer<InstitutionUser>();
+      final sessionUser = _admin();
+      final auth = _FakeAuthSessionController(
+        AuthSessionState.authenticated(sessionUser),
+      );
+      final create = _FakeCreateRepository(onCreate: (_) => response.future);
+      final container = _container(create: create, auth: auth);
+      final subscription = _listen(container);
+      final controller = container.read(
+        institutionUserCreateControllerProvider.notifier,
+      );
+      _fill(controller);
+
+      final operation = controller.submit(password: 'private-password');
+      expect(create.requests, hasLength(1));
+      expect(
+        subscription.read().status,
+        InstitutionUserCreateStatus.submitting,
+      );
+
+      auth.setSession(AuthSessionState.authenticated(sessionUser));
+      await _flush();
+
+      expect(create.requests, hasLength(1));
+      expect(
+        subscription.read().status,
+        InstitutionUserCreateStatus.submitting,
+      );
+      response.complete(_createdUser());
+      await operation;
+
+      expect(create.requests, hasLength(1));
+      expect(
+        subscription.read().status,
+        InstitutionUserCreateStatus.confirmedSuccess,
+      );
+      expect(subscription.read().confirmedUserId, _userId);
+    },
+  );
+
+  test(
     'uses safe local validation copy and never exposes backend messages',
     () async {
       final failure = ApiFailure(
@@ -181,6 +225,68 @@ void main() {
       );
       expect(subscription.read().confirmedUserId, isNull);
       expect(subscription.read().canSubmit, isFalse);
+    },
+  );
+
+  test(
+    'equivalent authenticated state with the same AuthUser preserves '
+    'Reconciliation diagnostic GET',
+    () async {
+      final diagnostic = Completer<InstitutionUserListPage>();
+      final sessionUser = _admin();
+      final auth = _FakeAuthSessionController(
+        AuthSessionState.authenticated(sessionUser),
+      );
+      final create = _FakeCreateRepository(
+        onCreate: (_) =>
+            Future.error(const InstitutionUserCreateOutcomeUnknownException()),
+      );
+      final users = _FakeListRepository(onFetch: (_) => diagnostic.future);
+      final container = _container(create: create, users: users, auth: auth);
+      final subscription = _listen(container);
+      final controller = container.read(
+        institutionUserCreateControllerProvider.notifier,
+      );
+      _fill(controller);
+
+      final operation = controller.submit(password: 'private-password');
+      await _flush();
+      expect(create.requests, hasLength(1));
+      expect(users.queries, hasLength(1));
+      expect(
+        subscription.read().status,
+        InstitutionUserCreateStatus.reconcilingUnknown,
+      );
+
+      auth.setSession(AuthSessionState.authenticated(sessionUser));
+      await _flush();
+
+      expect(create.requests, hasLength(1));
+      expect(users.queries, hasLength(1));
+      expect(
+        subscription.read().status,
+        InstitutionUserCreateStatus.reconcilingUnknown,
+      );
+      diagnostic.complete(
+        InstitutionUserListPage(
+          users: [_createdUser()],
+          pagination: const InstitutionUserListPagination(
+            page: 1,
+            perPage: 100,
+            total: 1,
+            lastPage: 1,
+          ),
+        ),
+      );
+      await operation;
+
+      expect(create.requests, hasLength(1));
+      expect(users.queries, hasLength(1));
+      expect(
+        subscription.read().status,
+        InstitutionUserCreateStatus.unknownPossibleMatch,
+      );
+      expect(subscription.read().confirmedUserId, isNull);
     },
   );
 
