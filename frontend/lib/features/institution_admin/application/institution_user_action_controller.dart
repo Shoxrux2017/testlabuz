@@ -34,20 +34,9 @@ class InstitutionUserActionController
   _InstitutionUserOperation? _operation;
   InstitutionUserActionFocusKey? _restorableFocusKey;
   int _operationGeneration = 0;
-  var _isDisposed = false;
-  var _disposeRegistered = false;
 
   @override
   InstitutionUserActionState build() {
-    _isDisposed = false;
-    if (!_disposeRegistered) {
-      _disposeRegistered = true;
-      ref.onDispose(() {
-        _isDisposed = true;
-        _invalidateOperation();
-      });
-    }
-
     final key = InstitutionUserDetailSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -165,7 +154,7 @@ class InstitutionUserActionController
       _InstitutionUserOperationKind.edit => key._lifecycleAction == null,
       _InstitutionUserOperationKind.lifecycle => key._lifecycleAction != null,
     };
-    return !_isDisposed &&
+    return ref.mounted &&
         identical(_restorableFocusKey, key) &&
         key._generation > 0 &&
         key._generation <= _operationGeneration &&
@@ -531,7 +520,7 @@ class InstitutionUserActionController
   };
 
   bool _canPublish(_InstitutionUserOperation operation) {
-    return !_isDisposed &&
+    return ref.mounted &&
         identical(_operation, operation) &&
         operation.generation == _operationGeneration &&
         identical(_activeSelected, operation.selected) &&
@@ -540,7 +529,7 @@ class InstitutionUserActionController
   }
 
   bool _matchesSession(InstitutionUserDetailSessionKey key) {
-    return !_isDisposed &&
+    return ref.mounted &&
         InstitutionUserDetailSessionSnapshot.fromSession(
               ref.read(authSessionControllerProvider),
               ref.read(appDeviceSurfaceProvider),
