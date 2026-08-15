@@ -31,20 +31,9 @@ class InstitutionUserDetailController
   String? _activeTarget;
   String? _inFlightTarget;
   int _operationGeneration = 0;
-  var _isDisposed = false;
-  var _disposeRegistered = false;
 
   @override
   InstitutionUserDetailState build() {
-    _isDisposed = false;
-    if (!_disposeRegistered) {
-      _disposeRegistered = true;
-      ref.onDispose(() {
-        _isDisposed = true;
-        _invalidateOperations();
-      });
-    }
-
     final session = ref.watch(authSessionControllerProvider);
     final surface = ref.watch(appDeviceSurfaceProvider);
     final sessionKey = InstitutionUserDetailSessionSnapshot.fromSession(
@@ -221,7 +210,7 @@ class InstitutionUserDetailController
     InstitutionUserDetailSessionKey sessionKey,
     String target,
   ) {
-    return !_isDisposed &&
+    return ref.mounted &&
         generation == _operationGeneration &&
         _inFlightTarget == target &&
         _activeTarget == target &&
@@ -230,7 +219,7 @@ class InstitutionUserDetailController
   }
 
   bool _matchesSession(InstitutionUserDetailSessionKey key) {
-    return !_isDisposed &&
+    return ref.mounted &&
         _activeSessionKey == key &&
         InstitutionUserDetailSessionSnapshot.fromSession(
               ref.read(authSessionControllerProvider),

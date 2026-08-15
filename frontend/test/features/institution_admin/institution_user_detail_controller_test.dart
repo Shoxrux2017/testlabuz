@@ -48,6 +48,72 @@ void main() {
     },
   );
 
+  for (final presentation in _EquivalentAuthUpdatePresentation.values) {
+    test('equivalent authenticated state with the same AuthUser preserves '
+        '${presentation.name} request', () async {
+      final request = Completer<InstitutionUser>();
+      final sessionUser = _sessionUser();
+      final auth = _FakeAuthSessionController(
+        AuthSessionState.authenticated(sessionUser),
+      );
+      final repository = _FakeDetailRepository(
+        onFetch: (target, call) {
+          if (presentation == _EquivalentAuthUpdatePresentation.refresh &&
+              call == 1) {
+            return Future.value(_user(id: target));
+          }
+          if (presentation == _EquivalentAuthUpdatePresentation.retry &&
+              call == 1) {
+            return Future.error(
+              ApiRequestException(
+                ApiFailure.local(
+                  kind: ApiFailureKind.connection,
+                  message: 'Initial retryable failure.',
+                ),
+              ),
+            );
+          }
+          return request.future;
+        },
+      );
+      final container = _container(repository, auth: auth);
+      final subscription = _listen(container, _userId);
+      await _flush();
+
+      final controller = container.read(
+        institutionUserDetailControllerProvider(_userId).notifier,
+      );
+      switch (presentation) {
+        case _EquivalentAuthUpdatePresentation.initial:
+          break;
+        case _EquivalentAuthUpdatePresentation.refresh:
+          controller.refresh();
+        case _EquivalentAuthUpdatePresentation.retry:
+          controller.retry();
+      }
+
+      final expectedCalls =
+          presentation == _EquivalentAuthUpdatePresentation.initial ? 1 : 2;
+      expect(repository.fetchCalls, expectedCalls);
+      expect(
+        subscription.read().status,
+        presentation == _EquivalentAuthUpdatePresentation.refresh
+            ? InstitutionUserDetailStatus.refreshing
+            : InstitutionUserDetailStatus.loading,
+      );
+
+      auth.setSession(AuthSessionState.authenticated(sessionUser));
+      await _flush();
+
+      expect(repository.fetchCalls, expectedCalls);
+      request.complete(_user(id: _userId, fullName: 'Completed User'));
+      await _flush();
+
+      expect(subscription.read().status, InstitutionUserDetailStatus.data);
+      expect(subscription.read().user?.fullName, 'Completed User');
+    });
+  }
+
   test('complete ineligible session matrix issues no request', () async {
     final localFailure = ApiFailure.local(
       kind: ApiFailureKind.connection,
@@ -695,3 +761,5 @@ class _FakeAuthSessionController extends AuthSessionController {
     state = nextState;
   }
 }
+
+enum _EquivalentAuthUpdatePresentation { initial, refresh, retry }
