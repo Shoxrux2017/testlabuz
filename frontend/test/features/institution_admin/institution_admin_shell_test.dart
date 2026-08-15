@@ -31,6 +31,9 @@ import 'package:testlabuz_client/features/institution_admin/domain/institution_p
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_query.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_user_detail_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_detail_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_shell.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
@@ -60,7 +63,9 @@ void main() {
         await tester.pumpAndSettle();
 
         _expectDestination(tester, route);
-        expect(find.text(_userIdOne), findsNothing);
+        if (!AppRoutePaths.isInstitutionAdminUserDetailPath(route.path)) {
+          expect(find.text(_userIdOne), findsNothing);
+        }
         expect(find.byKey(const Key('entryRoleTitle')), findsNothing);
         expect(find.byKey(const Key('platformOwnerShell')), findsNothing);
         expect(authRepository.currentUserCalls, 1);
@@ -78,6 +83,8 @@ void main() {
           tester,
           initialLocation: path,
           authRepository: _authenticatedRepository(_adminUser()),
+          institutionUserDetailRepository:
+              FakeInstitutionUserDetailRepository(),
         );
         await tester.pumpAndSettle();
 
@@ -90,10 +97,10 @@ void main() {
         );
         expect(find.text('User Details'), findsOneWidget);
         expect(
-          find.byKey(const Key('institutionAdminUserDetailPlaceholder')),
+          find.byKey(const Key('institutionUserDetailHeading')),
           findsOneWidget,
         );
-        expect(find.text(userId), findsNothing);
+        expect(find.text(userId), findsOneWidget);
       }
     });
 
@@ -1039,8 +1046,8 @@ final _routeExpectations = <_RouteExpectation>[
     path: AppRoutePaths.institutionAdminUserDetailLocation(_userIdOne),
     destination: InstitutionAdminShellDestination.users,
     title: 'User Details',
-    placeholderKey: 'institutionAdminUserDetailPlaceholder',
-    body: 'Institution user details will be implemented in S03-FE-005.',
+    placeholderKey: 'institutionUserDetailHeading',
+    body: 'User details',
   ),
   const _RouteExpectation(
     path: AppRoutePaths.institutionAdminInstitution,
@@ -1082,6 +1089,7 @@ Future<void> _pumpApp(
   FakeInstitutionDashboardRepository? institutionDashboardRepository,
   FakeInstitutionProfileRepository? institutionProfileRepository,
   FakeInstitutionUserListRepository? institutionUserListRepository,
+  FakeInstitutionUserDetailRepository? institutionUserDetailRepository,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -1105,6 +1113,10 @@ Future<void> _pumpApp(
         ),
         institutionUserListRepositoryProvider.overrideWithValue(
           institutionUserListRepository ?? FakeInstitutionUserListRepository(),
+        ),
+        institutionUserDetailRepositoryProvider.overrideWithValue(
+          institutionUserDetailRepository ??
+              FakeInstitutionUserDetailRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -1533,6 +1545,27 @@ class FakeInstitutionUserListRepository
         total: 0,
         lastPage: 1,
       ),
+    );
+  }
+}
+
+class FakeInstitutionUserDetailRepository
+    implements InstitutionUserDetailRepository {
+  @override
+  Future<InstitutionUser> fetchUser(String userId) async {
+    return InstitutionUser(
+      id: userId,
+      role: InstitutionUserRole.teacher,
+      fullName: 'Detail User',
+      loginName: 'detail-user',
+      email: null,
+      phone: null,
+      isActive: true,
+      mustChangePassword: false,
+      lastLoginAt: null,
+      deactivatedAt: null,
+      createdAt: DateTime.utc(2026, 8, 7, 15),
+      updatedAt: DateTime.utc(2026, 8, 7, 16),
     );
   }
 }

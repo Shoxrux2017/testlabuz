@@ -17,10 +17,12 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_list_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_user_detail_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_query.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_detail_repository.dart';
 
 void main() {
   group('InstitutionAdminUsersScreen', () {
@@ -392,7 +394,7 @@ void main() {
         AppRoutePaths.institutionAdminUserDetailLocation(_userIdOne),
       );
       expect(
-        find.byKey(const Key('institutionAdminUserDetailPlaceholder')),
+        find.byKey(const Key('institutionUserDetailHeading')),
         findsOneWidget,
       );
     });
@@ -486,6 +488,9 @@ Future<void> _pumpApp(
           _FakeAuthRepository(user: _admin()),
         ),
         institutionUserListRepositoryProvider.overrideWithValue(repository),
+        institutionUserDetailRepositoryProvider.overrideWithValue(
+          _FakeUserDetailRepository(),
+        ),
       ],
       child: const TestLabUzApp(),
     ),
@@ -600,6 +605,13 @@ class _FakeUserListRepository implements InstitutionUserListRepository {
     queries.add(query);
 
     return onFetch?.call(query) ?? Future.value(_page(page: query.page));
+  }
+}
+
+class _FakeUserDetailRepository implements InstitutionUserDetailRepository {
+  @override
+  Future<InstitutionUser> fetchUser(String userId) async {
+    return _user(id: userId);
   }
 }
 
