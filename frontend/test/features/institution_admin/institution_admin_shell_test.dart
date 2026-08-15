@@ -1049,8 +1049,8 @@ final _routeExpectations = <_RouteExpectation>[
     path: AppRoutePaths.institutionAdminUserCreate,
     destination: InstitutionAdminShellDestination.users,
     title: 'Create User',
-    placeholderKey: 'institutionAdminUserCreatePlaceholder',
-    body: 'Institution user creation will be implemented in S03-FE-006.',
+    placeholderKey: 'institutionUserCreateHeading',
+    body: 'The user must change this password at first login.',
   ),
   _RouteExpectation(
     path: AppRoutePaths.institutionAdminUserDetailLocation(_userIdOne),

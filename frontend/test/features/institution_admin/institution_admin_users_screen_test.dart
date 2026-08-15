@@ -377,7 +377,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(_currentPath(tester), AppRoutePaths.institutionAdminUserCreate);
       expect(
-        find.byKey(const Key('institutionAdminUserCreatePlaceholder')),
+        find.byKey(const Key('institutionAdminUserCreateScreen')),
         findsOneWidget,
       );
 
