@@ -12,6 +12,7 @@ import '../../auth/domain/auth_user.dart';
 import '../../auth/domain/user_role.dart';
 import '../data/institution_user_detail_repository_impl.dart';
 import '../data/dto/institution_user_dto.dart';
+import '../domain/institution_user.dart';
 import 'institution_user_detail_state.dart';
 
 final institutionUserDetailControllerProvider = NotifierProvider.autoDispose
@@ -110,9 +111,40 @@ class InstitutionUserDetailController
     );
   }
 
+  bool replaceFromMutation(InstitutionUser selected, InstitutionUser returned) {
+    final target = _activeTarget;
+    if (target == null ||
+        !_hasOwnedCurrentUser(selected, target) ||
+        returned.id.toLowerCase() != target.toLowerCase()) {
+      return false;
+    }
+    state = InstitutionUserDetailState.data(target: target, user: returned);
+    return true;
+  }
+
+  bool markNotFoundFromMutation(InstitutionUser selected) {
+    final target = _activeTarget;
+    if (target == null || !_hasOwnedCurrentUser(selected, target)) {
+      return false;
+    }
+    _invalidateOperations();
+    state = InstitutionUserDetailState.notFound(target: target);
+    return true;
+  }
+
   void clearForRouteExit() {
     _clearActiveSession();
     state = const InstitutionUserDetailState.initial();
+  }
+
+  bool _hasOwnedCurrentUser(InstitutionUser selected, String target) {
+    final current = state.user;
+    return ref.mounted &&
+        _activeSessionKey != null &&
+        current != null &&
+        identical(current, selected) &&
+        selected.id.toLowerCase() == target.toLowerCase() &&
+        _matchesSession(_activeSessionKey!);
   }
 
   void _startLoad(

@@ -16,8 +16,11 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_detail_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_user_mutation_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_detail_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_mutation.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_mutation_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_user_detail_screen.dart';
 
 void main() {
@@ -65,7 +68,7 @@ void main() {
     );
     expect(userIdField, findsOneWidget);
     expect(tester.widget(userIdField), isA<SelectableText>());
-    _expectNoMutationControls();
+    _expectUserActions(active: true);
     expect(tester.takeException(), isNull);
   });
 
@@ -98,7 +101,7 @@ void main() {
     ]) {
       expect(find.text(text), findsOneWidget, reason: text);
     }
-    _expectNoMutationControls();
+    _expectUserActions(active: false);
   });
 
   testWidgets('scope-safe not found reveals no target and has no Retry', (
@@ -401,12 +404,174 @@ void main() {
     );
     expect(find.text('Canonical Users destination'), findsOneWidget);
   });
+
+  testWidgets(
+    'Edit dialog exposes exactly three fields and no-op sends no PATCH',
+    (tester) async {
+      final mutation = _FakeMutationRepository();
+      await _pumpScreen(tester, _FakeDetailRepository(), mutation: mutation);
+
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      final dialog = find.byKey(const Key('institutionUserEditDialog'));
+      expect(dialog, findsOneWidget);
+      expect(
+        find.descendant(of: dialog, matching: find.byType(TextField)),
+        findsNWidgets(3),
+      );
+      for (final label in const ['Full name *', 'Email', 'Phone']) {
+        expect(
+          find.descendant(of: dialog, matching: find.text(label)),
+          findsOneWidget,
+        );
+      }
+      for (final forbidden in const [
+        'Role',
+        'Login name',
+        'Password',
+        'Status',
+      ]) {
+        expect(
+          find.descendant(of: dialog, matching: find.text(forbidden)),
+          findsNothing,
+        );
+      }
+
+      await tester.tap(find.text('Save changes'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('No user changes to save.'), findsOneWidget);
+      expect(
+        tester
+            .widget<Focus>(
+              find.byKey(const Key('institutionUserEditFormFeedbackFocus')),
+            )
+            .focusNode!
+            .hasFocus,
+        isTrue,
+      );
+      expect(mutation.updateCalls, 0);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(dialog, findsNothing);
+      expect(mutation.updateCalls, 0);
+    },
+  );
+
+  testWidgets('Escape cancels edit and lifecycle before any request', (
+    tester,
+  ) async {
+    final mutation = _FakeMutationRepository();
+    await _pumpScreen(tester, _FakeDetailRepository(), mutation: mutation);
+
+    await tester.tap(find.byKey(const Key('institutionUserEditAction')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('institutionUserEditDialog')), findsNothing);
+    expect(mutation.updateCalls, 0);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const Key('institutionUserEditAction')),
+          )
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const Key('institutionUserLifecycleAction')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('institutionUserLifecycleDialog')),
+      findsNothing,
+    );
+    expect(mutation.lifecycleCalls, 0);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('institutionUserLifecycleAction')),
+          )
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+  });
+
+  testWidgets('confirmed lifecycle uses explicit dialog and returned state', (
+    tester,
+  ) async {
+    final mutation = _FakeMutationRepository();
+    await _pumpScreen(tester, _FakeDetailRepository(), mutation: mutation);
+
+    await tester.tap(find.text('Deactivate'));
+    await tester.pumpAndSettle();
+    expect(find.text('Deactivate user'), findsWidgets);
+    expect(
+      find.textContaining('normal login and protected access'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('are not deleted'), findsOneWidget);
+    expect(mutation.lifecycleCalls, 0);
+
+    await tester.tap(find.byKey(const Key('institutionUserLifecycleConfirm')));
+    await tester.pumpAndSettle();
+    expect(mutation.lifecycleCalls, 1);
+    expect(mutation.lastAction, InstitutionUserLifecycleAction.deactivate);
+    expect(find.text('User deactivated successfully.'), findsOneWidget);
+    expect(find.text('Activate'), findsOneWidget);
+    expect(find.text('Deactivate'), findsNothing);
+  });
+
+  testWidgets('action dialogs scroll at 800 by 600 with text scale 2', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    final longValue = List.filled(12, 'Long User Value').join(' ');
+    await _pumpScreen(
+      tester,
+      _FakeDetailRepository(
+        user: _user(fullName: longValue, loginName: longValue),
+      ),
+      mutation: _FakeMutationRepository(),
+    );
+
+    await tester.ensureVisible(find.text('Edit'));
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('institutionUserEditDialog')),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.text('Cancel'));
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Deactivate'));
+    await tester.tap(find.text('Deactivate'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('institutionUserLifecycleDialog')),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpScreen(
   WidgetTester tester,
   _FakeDetailRepository repository, {
   bool setDefaultSurface = true,
+  _FakeMutationRepository? mutation,
 }) async {
   if (setDefaultSurface) {
     await tester.binding.setSurfaceSize(const Size(800, 600));
@@ -419,6 +584,7 @@ Future<void> _pumpScreen(
   await tester.pumpWidget(
     _providerScope(
       repository,
+      mutation: mutation,
       child: const MaterialApp(
         home: InstitutionAdminUserDetailScreen(userId: _userId),
       ),
@@ -429,6 +595,7 @@ Future<void> _pumpScreen(
 
 Widget _providerScope(
   _FakeDetailRepository repository, {
+  _FakeMutationRepository? mutation,
   required Widget child,
 }) {
   return ProviderScope(
@@ -438,6 +605,8 @@ Widget _providerScope(
         () => _FakeAuthSessionController(_admin()),
       ),
       institutionUserDetailRepositoryProvider.overrideWithValue(repository),
+      if (mutation != null)
+        institutionUserMutationRepositoryProvider.overrideWithValue(mutation),
     ],
     child: child,
   );
@@ -458,6 +627,15 @@ void _expectNoMutationControls() {
     'Delete',
     'Reset password',
   ]) {
+    expect(find.text(label), findsNothing, reason: label);
+  }
+}
+
+void _expectUserActions({required bool active}) {
+  expect(find.text('Edit'), findsOneWidget);
+  expect(find.text(active ? 'Deactivate' : 'Activate'), findsOneWidget);
+  expect(find.text(active ? 'Activate' : 'Deactivate'), findsNothing);
+  for (final label in const ['Create', 'Delete', 'Reset password']) {
     expect(find.text(label), findsNothing, reason: label);
   }
 }
@@ -543,4 +721,44 @@ class _FakeAuthSessionController extends AuthSessionController {
 
   @override
   AuthSessionState build() => session;
+}
+
+class _FakeMutationRepository implements InstitutionUserMutationRepository {
+  var updateCalls = 0;
+  var lifecycleCalls = 0;
+  InstitutionUserLifecycleAction? lastAction;
+
+  @override
+  Future<InstitutionUser> updateUser(
+    String userId,
+    InstitutionUser selected,
+    InstitutionUserEditRequest request,
+  ) async {
+    updateCalls += 1;
+    return selected;
+  }
+
+  @override
+  Future<InstitutionUser> changeLifecycle(
+    String userId,
+    InstitutionUser selected,
+    InstitutionUserLifecycleAction action,
+  ) async {
+    lifecycleCalls += 1;
+    lastAction = action;
+    return InstitutionUser(
+      id: selected.id,
+      role: selected.role,
+      fullName: selected.fullName,
+      loginName: selected.loginName,
+      email: selected.email,
+      phone: selected.phone,
+      isActive: action.desiredActive,
+      mustChangePassword: selected.mustChangePassword,
+      lastLoginAt: selected.lastLoginAt,
+      deactivatedAt: action.desiredActive ? null : DateTime.utc(2026, 8, 15, 8),
+      createdAt: selected.createdAt,
+      updatedAt: DateTime.utc(2026, 8, 15, 8),
+    );
+  }
 }
