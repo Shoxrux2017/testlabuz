@@ -171,101 +171,92 @@ void main() {
     },
   );
 
-  test(
-    'equivalent authenticated state with the same AuthUser preserves '
-    'lifecycle POST',
-    () async {
-      final response = Completer<InstitutionUser>();
-      final sessionUser = _admin();
-      final auth = _FakeAuthSessionController(sessionUser);
-      final mutation = _FakeMutationRepository(
-        onLifecycle: (_, _, _) => response.future,
-      );
-      final fixture = await _fixture(mutation: mutation, auth: auth);
+  test('equivalent authenticated state with the same AuthUser preserves '
+      'lifecycle POST', () async {
+    final response = Completer<InstitutionUser>();
+    final sessionUser = _admin();
+    final auth = _FakeAuthSessionController(sessionUser);
+    final mutation = _FakeMutationRepository(
+      onLifecycle: (_, _, _) => response.future,
+    );
+    final fixture = await _fixture(mutation: mutation, auth: auth);
 
-      expect(fixture.controller.beginLifecycle(fixture.initial), isTrue);
-      final operation = fixture.controller.confirmLifecycle();
-      expect(mutation.lifecycleCalls, 1);
-      expect(
-        fixture.action.read().status,
-        InstitutionUserActionStatus.submitting,
-      );
+    expect(fixture.controller.beginLifecycle(fixture.initial), isTrue);
+    final operation = fixture.controller.confirmLifecycle();
+    expect(mutation.lifecycleCalls, 1);
+    expect(
+      fixture.action.read().status,
+      InstitutionUserActionStatus.submitting,
+    );
 
-      auth.setUser(sessionUser);
-      await _flush();
+    auth.setUser(sessionUser);
+    await _flush();
 
-      expect(mutation.lifecycleCalls, 1);
-      expect(
-        fixture.action.read().status,
-        InstitutionUserActionStatus.submitting,
-      );
-      response.complete(
-        _user(
-          isActive: false,
-          deactivatedAt: DateTime.utc(2026, 8, 15, 8),
-        ),
-      );
-      await operation;
+    expect(mutation.lifecycleCalls, 1);
+    expect(
+      fixture.action.read().status,
+      InstitutionUserActionStatus.submitting,
+    );
+    response.complete(
+      _user(isActive: false, deactivatedAt: DateTime.utc(2026, 8, 15, 8)),
+    );
+    await operation;
 
-      expect(mutation.lifecycleCalls, 1);
-      expect(
-        fixture.action.read().status,
-        InstitutionUserActionStatus.confirmedDirectSuccess,
-      );
-      expect(fixture.detail.read().user!.isActive, isFalse);
-    },
-  );
+    expect(mutation.lifecycleCalls, 1);
+    expect(
+      fixture.action.read().status,
+      InstitutionUserActionStatus.confirmedDirectSuccess,
+    );
+    expect(fixture.detail.read().user!.isActive, isFalse);
+  });
 
-  test(
-    'equivalent authenticated state with the same AuthUser preserves '
-    'reconciliation GET',
-    () async {
-      final diagnostic = Completer<InstitutionUser>();
-      final sessionUser = _admin();
-      final auth = _FakeAuthSessionController(sessionUser);
-      final detail = _FakeDetailRepository([_user(), diagnostic.future]);
-      final mutation = _FakeMutationRepository(
-        onUpdate: (_, _, _) async =>
-            throw const InstitutionUserMutationOutcomeUnknownException(),
-      );
-      final fixture = await _fixture(
-        mutation: mutation,
-        detail: detail,
-        auth: auth,
-      );
+  test('equivalent authenticated state with the same AuthUser preserves '
+      'reconciliation GET', () async {
+    final diagnostic = Completer<InstitutionUser>();
+    final sessionUser = _admin();
+    final auth = _FakeAuthSessionController(sessionUser);
+    final detail = _FakeDetailRepository([_user(), diagnostic.future]);
+    final mutation = _FakeMutationRepository(
+      onUpdate: (_, _, _) async =>
+          throw const InstitutionUserMutationOutcomeUnknownException(),
+    );
+    final fixture = await _fixture(
+      mutation: mutation,
+      detail: detail,
+      auth: auth,
+    );
 
-      expect(fixture.controller.beginEdit(fixture.initial), isTrue);
-      fixture.controller.updateFullName('Requested Name');
-      final operation = fixture.controller.submitEdit();
-      await _flush();
-      expect(mutation.updateCalls, 1);
-      expect(detail.fetchCalls, 2);
-      expect(
-        fixture.action.read().status,
-        InstitutionUserActionStatus.reconcilingCurrentState,
-      );
+    expect(fixture.controller.beginEdit(fixture.initial), isTrue);
+    fixture.controller.updateFullName('Requested Name');
+    final operation = fixture.controller.submitEdit();
+    await _flush();
+    expect(mutation.updateCalls, 1);
+    expect(detail.fetchCalls, 2);
+    expect(
+      fixture.action.read().status,
+      InstitutionUserActionStatus.reconcilingCurrentState,
+    );
 
-      auth.setUser(sessionUser);
-      await _flush();
+    auth.setUser(sessionUser);
+    await _flush();
 
-      expect(mutation.updateCalls, 1);
-      expect(detail.fetchCalls, 2);
-      expect(
-        fixture.action.read().status,
-        InstitutionUserActionStatus.reconcilingCurrentState,
-      );
-      diagnostic.complete(_user(fullName: 'Requested Name'));
-      await operation;
+    expect(mutation.updateCalls, 1);
+    expect(detail.fetchCalls, 2);
+    expect(
+      fixture.action.read().status,
+      InstitutionUserActionStatus.reconcilingCurrentState,
+    );
+    diagnostic.complete(_user(fullName: 'Requested Name'));
+    await operation;
 
-      expect(mutation.updateCalls, 1);
-      expect(detail.fetchCalls, 2);
-      expect(
-        fixture.action.read().status,
-        InstitutionUserActionStatus.unconfirmedCurrentState,
-      );
-      expect(fixture.detail.read().user!.fullName, 'Requested Name');
-    },
-  );
+    expect(mutation.updateCalls, 1);
+    expect(detail.fetchCalls, 2);
+    expect(
+      fixture.action.read().status,
+      InstitutionUserActionStatus.unconfirmedCurrentState,
+    );
+    expect(fixture.detail.read().user!.fullName, 'Requested Name');
+  });
 
   test(
     'local validation, no change, cancel, and duplicate intent send nothing extra',
