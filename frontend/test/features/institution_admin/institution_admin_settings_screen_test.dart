@@ -391,6 +391,110 @@ void main() {
   });
 
   testWidgets(
+    'Reset restores dropdowns and numeric fields so Save sends no PUT',
+    (tester) async {
+      final repository = _FakeRepository();
+      await _pump(tester, repository: repository);
+      await tester.tap(find.byKey(const Key('assessmentSettingsEditButton')));
+      await tester.pump();
+
+      await _selectDropdownValue(
+        tester,
+        fieldKey: const Key('assessmentSettingsTimerModeField'),
+        label: 'Individual',
+      );
+      await _selectDropdownValue(
+        tester,
+        fieldKey: const Key('assessmentSettingsStudentReleaseField'),
+        label: 'Teacher-controlled',
+      );
+      await _selectDropdownValue(
+        tester,
+        fieldKey: const Key('assessmentSettingsParentReleaseField'),
+        label: 'Hidden',
+      );
+      await tester.enterText(
+        find.byKey(const Key('assessmentSettingsScoreDifferenceField')),
+        '6',
+      );
+      await tester.enterText(
+        find.byKey(const Key('assessmentSettingsLearningLimitField')),
+        '20',
+      );
+      await tester.enterText(
+        find.byKey(const Key('assessmentSettingsSubmissionLimitField')),
+        '10',
+      );
+
+      tester
+          .widget<TextButton>(
+            find.byKey(const Key('assessmentSettingsResetButton')),
+          )
+          .onPressed!();
+      await tester.pump();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('assessmentSettingsTimerModeField')),
+          matching: find.text('Synchronized'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('assessmentSettingsStudentReleaseField')),
+          matching: find.text('Automatic'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('assessmentSettingsParentReleaseField')),
+          matching: find.text('With Student'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const Key('assessmentSettingsScoreDifferenceField')),
+            )
+            .controller!
+            .text,
+        '5',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const Key('assessmentSettingsLearningLimitField')),
+            )
+            .controller!
+            .text,
+        '25',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(const Key('assessmentSettingsSubmissionLimitField')),
+            )
+            .controller!
+            .text,
+        '15',
+      );
+
+      await _tapVisible(
+        tester,
+        find.byKey(const Key('assessmentSettingsSaveButton')),
+      );
+      await tester.pump();
+
+      expect(find.text('No changes to save.'), findsOneWidget);
+      expect(repository.fetchCalls, 1);
+      expect(repository.updateCalls, 0);
+    },
+  );
+
+  testWidgets(
     'Cancel returns keyboard focus to the configured Edit settings button',
     (tester) async {
       await _expectCancelRestoresInitiatingButtonFocus(
@@ -658,6 +762,19 @@ Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder);
   await tester.pump();
   await tester.tap(finder);
+}
+
+Future<void> _selectDropdownValue(
+  WidgetTester tester, {
+  required Key fieldKey,
+  required String label,
+}) async {
+  final field = find.byKey(fieldKey);
+  await tester.ensureVisible(field);
+  await tester.tap(field);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _expectCancelRestoresInitiatingButtonFocus(

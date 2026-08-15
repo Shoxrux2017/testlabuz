@@ -743,23 +743,26 @@ class _ModeDropdown<T> extends StatelessWidget {
   final ValueChanged<T?> onChanged;
 
   @override
-  Widget build(BuildContext context) => DropdownButtonFormField<T>(
+  Widget build(BuildContext context) => KeyedSubtree(
     key: fieldKey,
-    initialValue: value,
-    focusNode: focusNode,
-    isExpanded: true,
-    decoration: InputDecoration(
-      labelText: label,
-      helperText: description ?? _configurationRequiredText,
-      errorText: errorText,
+    child: DropdownButtonFormField<T>(
+      key: ValueKey<T?>(value),
+      initialValue: value,
+      focusNode: focusNode,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: description ?? _configurationRequiredText,
+        errorText: errorText,
+      ),
+      items: values
+          .map(
+            (item) =>
+                DropdownMenuItem<T>(value: item, child: Text(labelFor(item))),
+          )
+          .toList(growable: false),
+      onChanged: enabled ? onChanged : null,
     ),
-    items: values
-        .map(
-          (item) =>
-              DropdownMenuItem<T>(value: item, child: Text(labelFor(item))),
-        )
-        .toList(growable: false),
-    onChanged: enabled ? onChanged : null,
   );
 }
 
