@@ -85,6 +85,7 @@ class InstitutionUserListController extends Notifier<InstitutionUserListState> {
     _activeSessionKey = sessionKey;
     final retainedStore = ref.read(institutionUserListRetainedQueryProvider);
     retainedStore.clearUnlessMatches(sessionKey);
+    retainedStore.consumeStale(sessionKey);
     final retained = retainedStore.value;
     final query = retained?.matches(sessionKey) ?? false
         ? retained!.query
@@ -632,14 +633,19 @@ class InstitutionUserListSessionKey {
 
 class InstitutionUserListRetainedQueryStore {
   InstitutionUserListRetainedQuery? value;
+  final Set<InstitutionUserListSessionKey> _staleSessions = {};
 
   void clear() {
     value = null;
+    _staleSessions.clear();
   }
 
   void clearIfMatches(InstitutionUserListSessionKey? key) {
     if (key != null && value?.matches(key) == true) {
       value = null;
+    }
+    if (key != null) {
+      _staleSessions.remove(key);
     }
   }
 
@@ -647,6 +653,19 @@ class InstitutionUserListRetainedQueryStore {
     if (key == null || value?.matches(key) != true) {
       value = null;
     }
+    _staleSessions.removeWhere((staleKey) => staleKey != key);
+  }
+
+  void markStale(InstitutionUserListSessionKey key) {
+    _staleSessions.add(key);
+  }
+
+  bool isStale(InstitutionUserListSessionKey key) {
+    return _staleSessions.contains(key);
+  }
+
+  bool consumeStale(InstitutionUserListSessionKey key) {
+    return _staleSessions.remove(key);
   }
 }
 
