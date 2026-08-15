@@ -58,6 +58,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ref.read(authSessionControllerProvider),
       ref.read(appDeviceSurfaceProvider),
       state.uri.path,
+      hasQueryOrFragment: state.uri.hasQuery || state.uri.hasFragment,
     ),
     routes: [
       GoRoute(
@@ -154,9 +155,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: AppRouteNames.institutionAdminUserDetail,
             path: AppRoutePaths.institutionAdminUserDetail,
             builder: (context, state) {
-              if (!AppRoutePaths.isInstitutionAdminUserDetailPath(
-                state.uri.path,
-              )) {
+              if (state.uri.hasQuery ||
+                  state.uri.hasFragment ||
+                  !AppRoutePaths.isInstitutionAdminUserDetailPath(
+                    state.uri.path,
+                  )) {
                 return const TechnicalRootScreen();
               }
 
@@ -248,8 +251,9 @@ String _safeInitialLocation(String requestedLocation) {
 String? _authRedirect(
   AuthSessionState session,
   AppDeviceSurface surface,
-  String location,
-) {
+  String location, {
+  required bool hasQueryOrFragment,
+}) {
   final isRoot = location == AppRoutePaths.root;
   final isLogin = location == AppRoutePaths.login;
   final isChangePassword = location == AppRoutePaths.changePassword;
@@ -293,6 +297,11 @@ String? _authRedirect(
   }
 
   if (_canUseInstitutionAdminDestinations(user.role, surface)) {
+    if (AppRoutePaths.isInstitutionAdminUserDetailPath(location) &&
+        hasQueryOrFragment) {
+      return AppRoutePaths.institutionAdmin;
+    }
+
     if (AppRoutePaths.isInstitutionAdminApprovedLocation(location)) {
       return null;
     }

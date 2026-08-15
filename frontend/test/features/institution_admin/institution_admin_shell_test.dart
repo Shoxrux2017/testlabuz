@@ -52,6 +52,7 @@ void main() {
         final authRepository = _authenticatedRepository(_adminUser());
         final dashboardRepository = FakePlatformDashboardRepository();
         final listRepository = FakePlatformInstitutionListRepository();
+        final detailRepository = FakeInstitutionUserDetailRepository();
 
         await _pumpApp(
           tester,
@@ -59,6 +60,7 @@ void main() {
           authRepository: authRepository,
           dashboardRepository: dashboardRepository,
           listRepository: listRepository,
+          institutionUserDetailRepository: detailRepository,
         );
         await tester.pumpAndSettle();
 
@@ -71,6 +73,11 @@ void main() {
         expect(authRepository.currentUserCalls, 1);
         expect(dashboardRepository.fetchCalls, 0);
         expect(listRepository.fetchCalls, 0);
+        expect(
+          detailRepository.fetchCalls,
+          AppRoutePaths.isInstitutionAdminUserDetailPath(route.path) ? 1 : 0,
+          reason: route.path,
+        );
       }
     });
 
@@ -108,10 +115,12 @@ void main() {
       tester,
     ) async {
       for (final path in _malformedLocations) {
+        final detailRepository = FakeInstitutionUserDetailRepository();
         await _pumpApp(
           tester,
           initialLocation: path,
           authRepository: _authenticatedRepository(_adminUser()),
+          institutionUserDetailRepository: detailRepository,
         );
         await tester.pumpAndSettle();
 
@@ -124,6 +133,7 @@ void main() {
           find.byKey(const Key('institutionAdminUserDetailPlaceholder')),
           findsNothing,
         );
+        expect(detailRepository.fetchCalls, 0, reason: path);
         expect(tester.takeException(), isNull, reason: path);
       }
     });
@@ -1074,6 +1084,8 @@ const _malformedLocations = <String>[
   '/institution-admin/users//',
   '/institution-admin/users/not-a-uuid',
   '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000/extra',
+  '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000?include=private',
+  '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000#private',
   '/institution-admin/institution/edit',
   '/institution-admin/settings/categories',
 ];
@@ -1551,8 +1563,11 @@ class FakeInstitutionUserListRepository
 
 class FakeInstitutionUserDetailRepository
     implements InstitutionUserDetailRepository {
+  var fetchCalls = 0;
+
   @override
   Future<InstitutionUser> fetchUser(String userId) async {
+    fetchCalls += 1;
     return InstitutionUser(
       id: userId,
       role: InstitutionUserRole.teacher,
