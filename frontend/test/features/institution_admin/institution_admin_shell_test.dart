@@ -22,11 +22,15 @@ import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_profile_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_user_list_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_profile.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_profile_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_profile_update.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_query.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_shell.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_institution_list_repository_impl.dart';
@@ -1021,8 +1025,8 @@ final _routeExpectations = <_RouteExpectation>[
     path: AppRoutePaths.institutionAdminUsers,
     destination: InstitutionAdminShellDestination.users,
     title: 'Users',
-    placeholderKey: 'institutionAdminUsersPlaceholder',
-    body: 'Institution user list will be implemented in S03-FE-004.',
+    placeholderKey: 'institutionUserListGlobalEmpty',
+    body: 'No Teachers, Students, or Parents exist yet.',
   ),
   const _RouteExpectation(
     path: AppRoutePaths.institutionAdminUserCreate,
@@ -1077,6 +1081,7 @@ Future<void> _pumpApp(
   FakePlatformInstitutionListRepository? listRepository,
   FakeInstitutionDashboardRepository? institutionDashboardRepository,
   FakeInstitutionProfileRepository? institutionProfileRepository,
+  FakeInstitutionUserListRepository? institutionUserListRepository,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -1097,6 +1102,9 @@ Future<void> _pumpApp(
         ),
         institutionProfileRepositoryProvider.overrideWithValue(
           institutionProfileRepository ?? FakeInstitutionProfileRepository(),
+        ),
+        institutionUserListRepositoryProvider.overrideWithValue(
+          institutionUserListRepository ?? FakeInstitutionUserListRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -1129,6 +1137,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       institutionProfileRepositoryProvider.overrideWithValue(
         FakeInstitutionProfileRepository(),
+      ),
+      institutionUserListRepositoryProvider.overrideWithValue(
+        FakeInstitutionUserListRepository(),
       ),
     ],
   );
@@ -1501,6 +1512,28 @@ class FakeInstitutionProfileRepository implements InstitutionProfileRepository {
 
     return onUpdate?.call(updateCalls, request) ??
         (throw StateError('Shell tests do not submit profile updates.'));
+  }
+}
+
+class FakeInstitutionUserListRepository
+    implements InstitutionUserListRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<InstitutionUserListPage> fetchUsers(
+    InstitutionUserListQuery query,
+  ) async {
+    fetchCalls += 1;
+
+    return InstitutionUserListPage(
+      users: const [],
+      pagination: InstitutionUserListPagination(
+        page: query.page,
+        perPage: query.perPage,
+        total: 0,
+        lastPage: 1,
+      ),
+    );
   }
 }
 

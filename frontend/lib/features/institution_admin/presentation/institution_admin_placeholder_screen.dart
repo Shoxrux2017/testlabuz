@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'institution_admin_users_screen.dart';
+
 const _placeholderPadding = 24.0;
 const _placeholderMaxWidth = 720.0;
 
@@ -8,10 +10,7 @@ class InstitutionAdminUsersPlaceholderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _InstitutionAdminPlaceholder(
-      placeholderKey: Key('institutionAdminUsersPlaceholder'),
-      message: 'Institution user list will be implemented in S03-FE-004.',
-    );
+    return const InstitutionAdminUsersScreen();
   }
 }
 
