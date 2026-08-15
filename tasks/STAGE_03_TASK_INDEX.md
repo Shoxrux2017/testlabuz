@@ -98,7 +98,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 13 | `S03-FE-005` | Frontend | Institution User detail UI | `S03-FE-004`, `S03-BE-003` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-005-institution-user-detail.md` |
 | 14 | `S03-FE-006` | Frontend | Teacher/Student/Parent create UI | `S03-FE-005`, `S03-BE-004` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-006-institution-user-create.md` |
 | 15 | `S03-FE-007` | Frontend | Institution User edit/lifecycle UI | `S03-FE-006`, `S03-BE-005` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-007-institution-user-edit-lifecycle.md` |
-| 16 | `S03-FE-008` | Frontend | Assessment settings UI | `S03-FE-007`, `S03-BE-006` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-008-institution-assessment-settings-ui.md` |
+| 16 | `S03-FE-008` | Frontend | Assessment settings UI | `S03-FE-007`, `S03-BE-006` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-008-institution-assessment-settings-ui.md` |
 | 17 | `S03-FE-009` | Frontend | Understanding-category range editor | `S03-FE-008`, `S03-BE-007` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-009-understanding-category-range-editor.md` |
 | 18 | `S03-INT-002` | Integration | Stage 3 Windows real-stack E2E verification | All Stage 3 backend/frontend tasks | `Draft` | `Not started` | `Not started` | `tasks/integration/stage-03/S03-INT-002-stage-03-windows-real-stack-e2e-verification.md` |
 
