@@ -95,7 +95,7 @@ direct predecessor are `Accepted / PASS / Delivered`.
 | 10 | `S03-FE-002` | Frontend | Institution dashboard real-data UI | `S03-FE-001`, `S03-BE-001` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-002-institution-dashboard-real-data-states.md` |
 | 11 | `S03-FE-003` | Frontend | Institution profile view/edit UI | `S03-FE-002`, `S03-BE-002` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-003-own-institution-profile-view-edit.md` |
 | 12 | `S03-FE-004` | Frontend | User list/search/filter/sort/pagination UI | `S03-FE-003`, `S03-BE-003` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-004-institution-user-list-search-filters-pagination.md` |
-| 13 | `S03-FE-005` | Frontend | Institution User detail UI | `S03-FE-004`, `S03-BE-003` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-005-institution-user-detail.md` |
+| 13 | `S03-FE-005` | Frontend | Institution User detail UI | `S03-FE-004`, `S03-BE-003` | `Accepted` | `PASS` | `Delivered` | `tasks/frontend/stage-03/S03-FE-005-institution-user-detail.md` |
 | 14 | `S03-FE-006` | Frontend | Teacher/Student/Parent create UI | `S03-FE-005`, `S03-BE-004` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-006-institution-user-create.md` |
 | 15 | `S03-FE-007` | Frontend | Institution User edit/lifecycle UI | `S03-FE-006`, `S03-BE-005` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-007-institution-user-edit-lifecycle.md` |
 | 16 | `S03-FE-008` | Frontend | Assessment settings UI | `S03-FE-007`, `S03-BE-006` | `Draft` | `Not started` | `Not started` | `tasks/frontend/stage-03/S03-FE-008-institution-assessment-settings-ui.md` |
@@ -104,10 +104,10 @@ direct predecessor are `Accepted / PASS / Delivered`.
 
 `S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, `S03-BE-004`,
 `S03-BE-005`, `S03-BE-006`, `S03-BE-007`, `S03-FE-001`, `S03-FE-002`,
-`S03-FE-003`, and `S03-FE-004` are `Accepted / PASS / Delivered`. The remaining 6 rows are
-planned paths and remain `Draft` until each detailed task/prompt pair is
-separately reviewed, approved, and placed in the project. The next
-implementation gate is `S03-FE-005`.
+`S03-FE-003`, `S03-FE-004`, and `S03-FE-005` are `Accepted / PASS / Delivered`.
+The remaining 4 rows are planned paths and remain `Draft` until each detailed
+task/prompt pair is separately reviewed, approved, and placed in the project.
+The next implementation gate is `S03-FE-006`.
 
 ```text
 Task/prompt file prepared ≠ implementation started
