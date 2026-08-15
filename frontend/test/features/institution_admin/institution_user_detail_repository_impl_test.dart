@@ -45,9 +45,39 @@ void main() {
       );
     },
   );
+
+  test('accepts only case-equivalent forms of the requested UUID', () async {
+    final repository = InstitutionUserDetailRepositoryImpl(
+      remoteDataSource: _FakeRemoteDataSource(
+        InstitutionUserDetailDto.fromJson({
+          'data': _resource(id: _letterUserIdLower),
+        }),
+      ),
+    );
+
+    final user = await repository.fetchUser(_letterUserIdUpper);
+
+    expect(user.id, _letterUserIdLower);
+  });
+
+  test('preserves typed remote failures unchanged', () async {
+    final exception = ApiRequestException(
+      ApiFailure.local(
+        kind: ApiFailureKind.connection,
+        message: 'Private transport detail.',
+      ),
+    );
+    final repository = InstitutionUserDetailRepositoryImpl(
+      remoteDataSource: _FakeRemoteDataSource.failure(exception),
+    );
+
+    await expectLater(repository.fetchUser(_userId), throwsA(same(exception)));
+  });
 }
 
 const _userId = '00000000-0000-0000-0000-000000000001';
+const _letterUserIdLower = 'a0b1c2d3-e4f5-6789-abcd-ef0123456789';
+const _letterUserIdUpper = 'A0B1C2D3-E4F5-6789-ABCD-EF0123456789';
 
 Map<String, Object?> _resource({String id = _userId}) => {
   'id': id,
@@ -65,12 +95,22 @@ Map<String, Object?> _resource({String id = _userId}) => {
 };
 
 class _FakeRemoteDataSource implements InstitutionUserDetailRemoteDataSource {
-  _FakeRemoteDataSource(this.dto);
+  _FakeRemoteDataSource(this.dto) : exception = null;
 
-  final InstitutionUserDetailDto dto;
+  _FakeRemoteDataSource.failure(this.exception) : dto = null;
+
+  final InstitutionUserDetailDto? dto;
+  final ApiRequestException? exception;
 
   @override
-  Future<InstitutionUserDetailDto> fetchUser(String userId) async => dto;
+  Future<InstitutionUserDetailDto> fetchUser(String userId) async {
+    final failure = exception;
+    if (failure != null) {
+      throw failure;
+    }
+
+    return dto!;
+  }
 
   @override
   Dio get dio => throw UnimplementedError();

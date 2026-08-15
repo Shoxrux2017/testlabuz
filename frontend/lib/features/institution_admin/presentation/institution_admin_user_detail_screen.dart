@@ -26,7 +26,7 @@ class InstitutionAdminUserDetailScreen extends ConsumerWidget {
     return FocusTraversalGroup(
       policy: WidgetOrderTraversalPolicy(),
       child: Semantics(
-        liveRegion: true,
+        key: const Key('institutionUserDetailSemanticsContainer'),
         container: true,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(_detailPadding),
@@ -95,10 +95,7 @@ class _DetailContent extends StatelessWidget {
             onRetry: onRetry,
           ),
           InstitutionUserDetailStatus.data ||
-          InstitutionUserDetailStatus.refreshing => _UserDetails(
-            user: user!,
-            isRefreshing: isRefreshing,
-          ),
+          InstitutionUserDetailStatus.refreshing => _UserDetails(user: user!),
         },
       ],
     );
@@ -173,6 +170,7 @@ class _DetailToolbar extends StatelessWidget {
         if (isRefreshing) ...[
           const SizedBox(height: 12),
           Semantics(
+            key: const Key('institutionUserDetailRefreshAnnouncement'),
             liveRegion: true,
             label: 'Refreshing user details',
             child: LinearProgressIndicator(),
@@ -285,22 +283,15 @@ class _MessageState extends StatelessWidget {
 }
 
 class _UserDetails extends StatelessWidget {
-  const _UserDetails({required this.user, required this.isRefreshing});
+  const _UserDetails({required this.user});
 
   final InstitutionUser user;
-  final bool isRefreshing;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (isRefreshing)
-          Semantics(
-            liveRegion: true,
-            label: 'Refreshing user details',
-            child: SizedBox.shrink(),
-          ),
         _DetailSection(
           title: 'Identity',
           children: [

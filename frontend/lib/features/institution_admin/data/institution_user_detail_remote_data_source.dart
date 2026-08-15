@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
@@ -48,6 +49,17 @@ class InstitutionUserDetailRemoteDataSource {
     try {
       return await request();
     } on DioException catch (exception) {
+      if (exception.response?.statusCode == 404 &&
+          !_isValidResourceNotFoundEnvelope(exception.response?.data)) {
+        throw ApiRequestException(
+          ApiFailure.local(
+            kind: ApiFailureKind.invalidResponse,
+            statusCode: 404,
+            message: 'Invalid Institution User detail error response.',
+          ),
+        );
+      }
+
       throw ApiRequestException(failureMapper.map(exception));
     } on FormatException catch (exception) {
       throw ApiRequestException(
@@ -58,4 +70,37 @@ class InstitutionUserDetailRemoteDataSource {
       );
     }
   }
+}
+
+bool _isValidResourceNotFoundEnvelope(Object? value) {
+  if (value is! Map) {
+    return false;
+  }
+
+  final envelope = <String, Object?>{};
+  for (final entry in value.entries) {
+    if (entry.key is! String) {
+      return false;
+    }
+    envelope[entry.key as String] = entry.value;
+  }
+
+  const requiredKeys = {'message', 'code', 'errors'};
+  const allowedKeys = {...requiredKeys, 'request_id'};
+  if (!envelope.keys.toSet().containsAll(requiredKeys) ||
+      envelope.keys.any((key) => !allowedKeys.contains(key))) {
+    return false;
+  }
+
+  final message = envelope['message'];
+  final errors = envelope['errors'];
+  final requestId = envelope['request_id'];
+
+  return message is String &&
+      message.trim().isNotEmpty &&
+      envelope['code'] == ApiErrorCodes.resourceNotFound &&
+      errors is Map &&
+      errors.isEmpty &&
+      (!envelope.containsKey('request_id') ||
+          (requestId is String && requestId.isNotEmpty));
 }
