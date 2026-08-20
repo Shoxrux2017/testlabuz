@@ -21,10 +21,13 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_assessment_settings_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_profile_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_list_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_profile.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_profile_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_profile_update.dart';
@@ -1070,9 +1073,8 @@ final _routeExpectations = <_RouteExpectation>[
     path: AppRoutePaths.institutionAdminSettings,
     destination: InstitutionAdminShellDestination.settings,
     title: 'Settings',
-    placeholderKey: 'institutionAdminSettingsPlaceholder',
-    body:
-        'Assessment settings and understanding categories will be implemented in S03-FE-008 and S03-FE-009.',
+    placeholderKey: 'institutionAssessmentSettingsScreen',
+    body: 'Assessment settings',
   ),
 ];
 
@@ -1100,6 +1102,8 @@ Future<void> _pumpApp(
   FakePlatformInstitutionListRepository? listRepository,
   FakeInstitutionDashboardRepository? institutionDashboardRepository,
   FakeInstitutionProfileRepository? institutionProfileRepository,
+  FakeInstitutionAssessmentSettingsRepository?
+  institutionAssessmentSettingsRepository,
   FakeInstitutionUserListRepository? institutionUserListRepository,
   FakeInstitutionUserDetailRepository? institutionUserDetailRepository,
 }) async {
@@ -1122,6 +1126,10 @@ Future<void> _pumpApp(
         ),
         institutionProfileRepositoryProvider.overrideWithValue(
           institutionProfileRepository ?? FakeInstitutionProfileRepository(),
+        ),
+        institutionAssessmentSettingsRepositoryProvider.overrideWithValue(
+          institutionAssessmentSettingsRepository ??
+              FakeInstitutionAssessmentSettingsRepository(),
         ),
         institutionUserListRepositoryProvider.overrideWithValue(
           institutionUserListRepository ?? FakeInstitutionUserListRepository(),
@@ -1161,6 +1169,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       institutionProfileRepositoryProvider.overrideWithValue(
         FakeInstitutionProfileRepository(),
+      ),
+      institutionAssessmentSettingsRepositoryProvider.overrideWithValue(
+        FakeInstitutionAssessmentSettingsRepository(),
       ),
       institutionUserListRepositoryProvider.overrideWithValue(
         FakeInstitutionUserListRepository(),
@@ -1536,6 +1547,40 @@ class FakeInstitutionProfileRepository implements InstitutionProfileRepository {
 
     return onUpdate?.call(updateCalls, request) ??
         (throw StateError('Shell tests do not submit profile updates.'));
+  }
+}
+
+class FakeInstitutionAssessmentSettingsRepository
+    implements InstitutionAssessmentSettingsRepository {
+  var fetchCalls = 0;
+  var updateCalls = 0;
+
+  @override
+  Future<InstitutionAssessmentSettings> fetchSettings() async {
+    fetchCalls += 1;
+    return InstitutionAssessmentSettings(
+      educationalPolicyConfigured: true,
+      acceptableScoreDifference: ExactAssessmentDecimal.parseUserInput('5'),
+      blitzTimerStartMode: BlitzTimerStartMode.synchronized,
+      studentResultReleaseMode: StudentResultReleaseMode.automatic,
+      parentResultReleaseMode: ParentResultReleaseMode.withStudent,
+      timezone: 'Asia/Tashkent',
+      learningMaterialMaxMb: 25,
+      studentSubmissionMaxMb: 15,
+      platformLearningMaterialMaxMb: 25,
+      platformStudentSubmissionMaxMb: 15,
+      homeworkNormalAttempts: 3,
+      blitzNormalAttempts: 1,
+      blitzMaxAdditionalExceptionAttempts: 1,
+    );
+  }
+
+  @override
+  Future<InstitutionAssessmentSettings> updateSettings(
+    InstitutionAssessmentSettingsUpdateRequest request,
+  ) async {
+    updateCalls += 1;
+    throw StateError('Shell tests do not submit assessment settings.');
   }
 }
 
