@@ -104,11 +104,11 @@ direct predecessor are `Accepted / PASS / Delivered`.
 
 `S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, `S03-BE-004`,
 `S03-BE-005`, `S03-BE-006`, `S03-BE-007`, `S03-FE-001`, `S03-FE-002`,
-`S03-FE-003`, `S03-FE-004`, `S03-FE-005`, `S03-FE-006`, and `S03-FE-007` are
-`Accepted / PASS / Delivered`. The remaining 3 rows are planned paths and
+`S03-FE-003`, `S03-FE-004`, `S03-FE-005`, `S03-FE-006`, `S03-FE-007`, and
+`S03-FE-008` are `Accepted / PASS / Delivered`. The remaining 2 rows are planned paths and
 remain `Draft` until each detailed task/prompt pair is separately reviewed,
 approved, and placed in the project. The next implementation gate is
-`S03-FE-008`.
+`S03-FE-009`.
 
 ```text
 Task/prompt file prepared ≠ implementation started
