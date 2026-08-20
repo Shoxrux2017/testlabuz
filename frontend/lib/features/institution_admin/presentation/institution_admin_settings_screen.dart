@@ -873,7 +873,7 @@ class _SettingsChangeExplanations extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       const Text(
-        '• Runtime Learning/Homework/Blitz/result/file/category behavior is implemented in later tasks/stages, not here.',
+        '• This screen manages Institution assessment settings only. Learning, Homework, Blitz, results, files, and categories apply them through their own workflows.',
       ),
     ],
   );
