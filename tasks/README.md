@@ -210,7 +210,7 @@ multi-institution isolation rules in the applicable `AGENTS.md` files.
 | Stage 0 — Project Preparation and Technical Planning | `Closed` | See `STAGE_00_CLOSURE_REVIEW.md` |
 | Stage 1 — Authentication and Role-Based Entry | `Closed` | See `STAGE_01_CLOSURE_REVIEW.md`; next gate is Stage 2 decomposition/planning only |
 | Stage 2 — Multi-Institution Platform Management | `Closed` | See `STAGE_02_CLOSURE_REVIEW.md` and `STAGE_02_TASK_INDEX.md`; all 17 tasks are `Accepted / PASS / Delivered`, and the closure review is `PASS`; next gate is Stage 3 decomposition/planning only |
-| Stage 3 — Institution Administration and User Management | `In Progress` | See `STAGE_03_TASK_INDEX.md`; `S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, `S03-BE-004`, `S03-BE-005`, `S03-BE-006`, `S03-BE-007`, `S03-FE-001`, `S03-FE-002`, `S03-FE-003`, `S03-FE-004`, `S03-FE-005`, `S03-FE-006`, `S03-FE-007`, and `S03-FE-008` are `Accepted / PASS / Delivered`; next implementation gate is `S03-FE-009` |
+| Stage 3 — Institution Administration and User Management | `In Progress` | See `STAGE_03_TASK_INDEX.md`; `S03-INT-001`, `S03-BE-001`, `S03-BE-002`, `S03-BE-003`, `S03-BE-004`, `S03-BE-005`, `S03-BE-006`, `S03-BE-007`, `S03-FE-001`, `S03-FE-002`, `S03-FE-003`, `S03-FE-004`, `S03-FE-005`, `S03-FE-006`, `S03-FE-007`, `S03-FE-008`, and `S03-FE-009` are `Accepted / PASS / Delivered`; next implementation gate is `S03-INT-002` |
 
 Historical pre-delivery context: before implementation PR `#40` and delivery-
 bookkeeping PR `#41` were merged, `S02-INT-001` had passed verification but its
@@ -223,15 +223,16 @@ audited main `8b43abc614fdd5c66760c4f26f48aab4e8947f9d`, and Stage 2 is `Closed`
 Stage 3 is `In Progress` with `S03-INT-001`, `S03-BE-001`, `S03-BE-002`,
 `S03-BE-003`, `S03-BE-004`, `S03-BE-005`, `S03-BE-006`, `S03-BE-007`, and
 `S03-FE-001`, `S03-FE-002`, `S03-FE-003`, `S03-FE-004`, `S03-FE-005`,
-`S03-FE-006`, `S03-FE-007`, and `S03-FE-008` accepted and delivered. The
+`S03-FE-006`, `S03-FE-007`, `S03-FE-008`, and `S03-FE-009` accepted and
+delivered. The
 Institution Admin dashboard, own-profile, and Institution User list/detail/
 create/update/lifecycle, assessment-settings, and understanding-category APIs
 are delivered, along with the Institution Admin desktop shell/navigation; the
 Institution Admin dashboard real-data UI and own-Institution profile UI are also
 delivered; the Institution User list/search/filter/sort/pagination UI is also
 delivered; the Institution User create and edit/lifecycle UIs are also
-delivered; the assessment settings UI is also delivered; the next
-implementation gate is `S03-FE-009`. Stage 3 is not
+delivered; the assessment settings UI and understanding-category range editor
+are also delivered; the next implementation gate is `S03-INT-002`. Stage 3 is not
 closed, and Stage 4 has not started and remains
 blocked until the separate Stage 3 Closure Review is delivered with
 `FINAL STATUS: STAGE CLOSED`.

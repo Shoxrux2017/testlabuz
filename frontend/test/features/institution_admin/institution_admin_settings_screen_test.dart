@@ -11,12 +11,15 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_assessment_settings_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_understanding_categories_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_understanding_categories.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_understanding_categories_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_settings_screen.dart';
 
 void main() {
-  testWidgets('shows confirmed policy, fixed facts and honest categories placeholder', (
+  testWidgets('shows confirmed policy, fixed facts and category editor summary', (
     tester,
   ) async {
     final repository = _FakeRepository();
@@ -94,8 +97,16 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('Understanding categories will be implemented in S03-FE-009.'),
+      find.byKey(const Key('understandingCategoriesHeading')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('understandingCategoriesSummary')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Understanding categories will be implemented in S03-FE-009.'),
+      findsNothing,
     );
     expect(repository.fetchCalls, 1);
     expect(repository.updateCalls, 0);
@@ -818,6 +829,9 @@ Future<void> _pump(
         institutionAssessmentSettingsRepositoryProvider.overrideWithValue(
           repository ?? _FakeRepository(),
         ),
+        institutionUnderstandingCategoriesRepositoryProvider.overrideWithValue(
+          _FakeCategoriesRepository(),
+        ),
       ],
       child: MaterialApp(
         home: MediaQuery(
@@ -855,6 +869,18 @@ class _FakeRepository implements InstitutionAssessmentSettingsRepository {
     updateCalls += 1;
     return _settings(score: request.acceptableScoreDifference.canonical);
   }
+}
+
+class _FakeCategoriesRepository
+    implements InstitutionUnderstandingCategoriesRepository {
+  @override
+  Future<InstitutionUnderstandingCategoryConfiguration>
+  fetchCategories() async => _categories();
+
+  @override
+  Future<InstitutionUnderstandingCategoryConfiguration> replaceCategories(
+    InstitutionUnderstandingCategoryUpdateRequest request,
+  ) async => _categories();
 }
 
 class _FailingRepository extends _FakeRepository {
@@ -1015,3 +1041,32 @@ InstitutionAssessmentSettings _partiallyConfiguredSettings() =>
       blitzNormalAttempts: 1,
       blitzMaxAdditionalExceptionAttempts: 1,
     );
+
+InstitutionUnderstandingCategoryConfiguration _categories() =>
+    InstitutionUnderstandingCategoryConfiguration.configured(const [
+      InstitutionUnderstandingCategory(
+        definition: UnderstandingCategoryDefinition.understoodWell,
+        minScore: 86,
+        maxScore: 100,
+      ),
+      InstitutionUnderstandingCategory(
+        definition: UnderstandingCategoryDefinition.partiallyUnderstood,
+        minScore: 71,
+        maxScore: 85,
+      ),
+      InstitutionUnderstandingCategory(
+        definition: UnderstandingCategoryDefinition.needsRevision,
+        minScore: 51,
+        maxScore: 70,
+      ),
+      InstitutionUnderstandingCategory(
+        definition: UnderstandingCategoryDefinition.needsTeacherSupport,
+        minScore: 0,
+        maxScore: 50,
+      ),
+      InstitutionUnderstandingCategory(
+        definition: UnderstandingCategoryDefinition.notCompleted,
+        minScore: null,
+        maxScore: null,
+      ),
+    ]);

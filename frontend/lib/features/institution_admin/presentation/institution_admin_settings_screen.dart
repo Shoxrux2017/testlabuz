@@ -6,6 +6,7 @@ import '../../auth/application/auth_session_controller.dart';
 import '../application/institution_assessment_settings_controller.dart';
 import '../application/institution_assessment_settings_state.dart';
 import '../domain/institution_assessment_settings.dart';
+import 'institution_understanding_categories_section.dart';
 
 const _settingsSpacing = 16.0;
 const _settingsPadding = 24.0;
@@ -126,7 +127,7 @@ class _InstitutionAdminSettingsScreenState
         else if (state.settings != null)
           _SettingsSummary(settings: state.settings!),
         const SizedBox(height: _settingsSpacing),
-        const _UnderstandingCategoriesPlaceholder(),
+        InstitutionUnderstandingCategoriesSection(routePath: widget.routePath),
       ],
     );
   }
@@ -873,20 +874,6 @@ class _SettingsChangeExplanations extends StatelessWidget {
       const SizedBox(height: 8),
       const Text(
         '• Runtime Learning/Homework/Blitz/result/file/category behavior is implemented in later tasks/stages, not here.',
-      ),
-    ],
-  );
-}
-
-class _UnderstandingCategoriesPlaceholder extends StatelessWidget {
-  const _UnderstandingCategoriesPlaceholder();
-  @override
-  Widget build(BuildContext context) => const _SettingsCard(
-    title: 'Understanding categories',
-    children: [
-      Text(
-        'Understanding categories will be implemented in S03-FE-009.',
-        key: Key('understandingCategoriesPlaceholder'),
       ),
     ],
   );
