@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 3 — Institution Administration and User Management` |
-| Status | `In Progress` |
+| Status | `Closed` |
 | Decomposition approved on | `2026-08-13` |
 | Implementation started | `S03-BE-001 accepted and delivered; backend production implementation started` |
-| Stage closed | `No` |
-| Closure review | `Not started` |
+| Stage closed | `Yes — 2026-08-20` |
+| Closure review | `PASS — tasks/STAGE_03_CLOSURE_REVIEW.md` |
 
 This index records the approved 18-task Stage 3 decomposition. It organizes
 implementation and dependency control; it does not add or reinterpret product
@@ -106,10 +106,10 @@ direct predecessor are `Accepted / PASS / Delivered`.
 `S03-BE-005`, `S03-BE-006`, `S03-BE-007`, `S03-FE-001`, `S03-FE-002`,
 `S03-FE-003`, `S03-FE-004`, `S03-FE-005`, `S03-FE-006`, `S03-FE-007`,
 `S03-FE-008`, `S03-FE-009`, and `S03-INT-002` are
-`Accepted / PASS / Delivered`. All 18 Stage 3 task rows are delivered. The next
-gate is the separate Stage 3 Closure Review; Stage 3 remains open and Stage 4
-remains blocked until that review is delivered with
-`FINAL STATUS: STAGE CLOSED`.
+`Accepted / PASS / Delivered`. All 18 Stage 3 task rows are delivered, the
+separate Stage 3 Closure Review is `PASS`, and Stage 3 is `Closed`. The next
+permitted gate is Stage 4 planning/decomposition only; Stage 4 implementation
+has not started.
 
 ```text
 Task/prompt file prepared ≠ implementation started
@@ -155,18 +155,18 @@ blocked until delivery is completed and verified.
 | Understanding-category API | `S03-FE-009` | `S03-BE-007` is `Accepted / PASS / Delivered` |
 | Every Stage 3 backend/frontend task | `S03-INT-002` | Tasks 2–17 are `Accepted / PASS / Delivered` |
 | Stage 3 E2E verification and all 18 task deliveries | Separate Stage 3 Closure Review | All Stage 3 task rows are `Accepted / PASS / Delivered` |
-| Delivered Stage 3 Closure Review with `FINAL STATUS: STAGE CLOSED` | Any Stage 4 task | Closure bookkeeping is on `origin/main`, local `main` matches, and the tree is clean |
+| Delivered Stage 3 Closure Review with `FINAL STATUS: STAGE CLOSED` | Stage 4 planning/decomposition | Closure bookkeeping is on `origin/main`, local `main` matches, and the tree is clean |
 
 ## 8. Stage-Wide Verification Map
 
 | Roadmap acceptance outcome | Task(s) that implement it | Task(s) that verify it | Status |
 |---|---|---|---|
-| Institution Admin sees exact own-Institution Teacher/Student/Parent totals. | `S03-BE-001`, `S03-FE-002` | `S03-INT-002`, Closure Review | `S03-INT-002 PASS; Closure Review pending` |
-| Institution Admin views and edits only approved own-Institution profile fields. | `S03-BE-002`, `S03-FE-003` | `S03-INT-002`, Closure Review | `S03-INT-002 PASS; Closure Review pending` |
-| Teacher/Student/Parent accounts can be listed, viewed, created, edited, activated, and deactivated inside one Institution. | `S03-BE-003`–`S03-BE-005`, `S03-FE-004`–`S03-FE-007` | `S03-INT-002`, Closure Review | `S03-INT-002 PASS; Closure Review pending` |
-| Approved Institution learning settings are manageable without changing fixed attempt rules. | `S03-BE-006`, `S03-BE-007`, `S03-FE-008`, `S03-FE-009` | `S03-INT-002`, Closure Review | `S03-INT-002 PASS; Closure Review pending` |
-| Cross-Institution access, disallowed roles, protected fields, and stale-session disclosure are blocked. | All Stage 3 backend/frontend tasks | `S03-INT-002`, Closure Review | `S03-INT-002 PASS; Closure Review pending` |
-| Complete Stage 3 behavior works through the real Windows/Laravel/PostgreSQL stack. | Tasks 2–17 | `S03-INT-002`, Closure Review | `S03-INT-002 PASS; Closure Review pending` |
+| Institution Admin sees exact own-Institution Teacher/Student/Parent totals. | `S03-BE-001`, `S03-FE-002` | `S03-INT-002`, Closure Review | `PASS` |
+| Institution Admin views and edits only approved own-Institution profile fields. | `S03-BE-002`, `S03-FE-003` | `S03-INT-002`, Closure Review | `PASS` |
+| Teacher/Student/Parent accounts can be listed, viewed, created, edited, activated, and deactivated inside one Institution. | `S03-BE-003`–`S03-BE-005`, `S03-FE-004`–`S03-FE-007` | `S03-INT-002`, Closure Review | `PASS` |
+| Approved Institution learning settings are manageable without changing fixed attempt rules. | `S03-BE-006`, `S03-BE-007`, `S03-FE-008`, `S03-FE-009` | `S03-INT-002`, Closure Review | `PASS` |
+| Cross-Institution access, disallowed roles, protected fields, and stale-session disclosure are blocked. | All Stage 3 backend/frontend tasks | `S03-INT-002`, Closure Review | `PASS` |
+| Complete Stage 3 behavior works through the real Windows/Laravel/PostgreSQL stack. | Tasks 2–17 | `S03-INT-002`, Closure Review | `PASS` |
 
 ## 9. Stage Risks and Stop Conditions
 
@@ -184,8 +184,8 @@ blocked until delivery is completed and verified.
 - Assessment settings/category contracts must not drift during unrelated User
   work, and fixed Homework/Blitz attempt rules must remain unchanged.
 - Task preparation must not be mistaken for implementation or acceptance.
-- Stage 4 remains blocked until the separate Stage 3 Closure Review is
-  delivered with `FINAL STATUS: STAGE CLOSED`.
+- Stage 4 implementation has not started. Only Stage 4 planning/decomposition
+  is permitted after this closure is delivered.
 
 Stop affected work for a locked-contract conflict, missing dependency,
 unapproved task authority, tenant/security gap, application scope drift, failed
@@ -201,20 +201,23 @@ current approved task.
 | `2026-08-14` | Accepted and delivered `S03-FE-001` | Read-only gate passed and the Institution Admin desktop shell/navigation result was prepared for delivery to `origin/main` | Codex |
 | `2026-08-14` | Accepted and delivered `S03-FE-002` | Read-only gate passed and the Institution Admin dashboard real-data UI result was prepared for delivery to `origin/main` | Codex |
 | `2026-08-20` | Accepted and delivered `S03-INT-002` | Corrected read-only Phase 2 passed with `P1=0`, `P2=0`, and `P3=0`; Windows real-stack E2E, full persisted token-row comparisons, frozen unrelated-state comparisons, restart persistence, Project Owner smoke, and required quality gates passed. Stage 3 remains open | Codex |
+| `2026-08-20` | Passed and delivered the separate Stage 3 Closure Review; marked Stage 3 `Closed` | Independent read-only audit found `P1=0`, `P2=0`, and `P3=0`; all 18 tasks, locked scope, contracts, security, persistence, verification evidence, and Git/GitHub bookkeeping passed | Codex |
 
 ## 11. Closure Readiness
 
 - [x] Every one of the 18 Stage 3 tasks is `Accepted / PASS / Delivered`.
-- [ ] Local `main` matches `origin/main` and the working tree is clean.
-- [ ] Dashboard, profile, User, settings, and category contracts agree across
+- [x] Local `main` matches `origin/main` and the working tree is clean at the
+      audited closure baseline.
+- [x] Dashboard, profile, User, settings, and category contracts agree across
       Laravel and Flutter.
 - [x] Required backend, frontend, integration, and real-stack checks pass.
 - [x] Cross-Institution, wrong-role, lifecycle, validation, historical, and
       session-isolation checks pass.
 - [x] No Stage 4+ production behavior was introduced.
-- [ ] A separate Stage 3 Closure Review has returned and been delivered as
+- [x] A separate Stage 3 Closure Review has returned and been delivered as
       `FINAL STATUS: STAGE CLOSED`.
-- [ ] Stage 3 is explicitly marked `Closed` only after closure delivery.
+- [x] Stage 3 is explicitly marked `Closed` by the closure delivery.
 
-The closure review is separate from the 18 tasks in this index. Stage 4 must
-not start before that separate closure gate is fully delivered.
+The closure review is separate from the 18 tasks in this index. Stage 3 is
+`Closed`. Stage 4 is the next permitted planning/decomposition gate only;
+Stage 4 implementation has not started.
