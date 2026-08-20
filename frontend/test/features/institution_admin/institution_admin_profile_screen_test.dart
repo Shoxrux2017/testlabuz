@@ -528,37 +528,23 @@ void main() {
   );
 
   testWidgets(
-    'definite PATCH failure copy matrix retains draft and never exposes transport or backend details',
+    'uncertain PATCH failure matrix reconciles once and never confirms stale draft or raw details',
     (tester) async {
-      final cases = <ApiRequestException, String>{
-        _kindFailure(
-          ApiFailureKind.connection,
-        ): 'The institution profile could not be updated. No changes were confirmed.',
-        _kindFailure(
-          ApiFailureKind.timeout,
-        ): 'The institution profile could not be updated. No changes were confirmed.',
-        _kindFailure(
-          ApiFailureKind.invalidResponse,
-        ): 'The institution profile could not be updated. No changes were confirmed.',
-        _kindFailure(
-          ApiFailureKind.cancelled,
-        ): 'The institution profile could not be updated. No changes were confirmed.',
-        _serverFailure(
-          ApiErrorCodes.serverError,
-          statusCode: 500,
-        ): 'The institution profile could not be updated. No changes were confirmed.',
-        _serverFailure(
-          'unexpected_conflict',
-          statusCode: 409,
-        ): 'The institution profile could not be updated. No changes were confirmed.',
-        _kindFailure(
-          ApiFailureKind.unknown,
-        ): 'A secure connection to the server could not be established. No changes were confirmed.',
-      };
+      final cases = <ApiRequestException>[
+        _kindFailure(ApiFailureKind.connection),
+        _kindFailure(ApiFailureKind.timeout),
+        _kindFailure(ApiFailureKind.invalidResponse),
+        _kindFailure(ApiFailureKind.cancelled),
+        _serverFailure(ApiErrorCodes.serverError, statusCode: 500),
+        _serverFailure('unexpected_conflict', statusCode: 409),
+        _kindFailure(ApiFailureKind.unknown),
+      ];
 
-      for (final entry in cases.entries) {
+      for (final failure in cases) {
         final repository = FakeProfileRepository(
-          onUpdate: (_, _) async => throw entry.key,
+          onFetch: (call) async =>
+              call == 1 ? _profile() : _profile(name: 'Current Server School'),
+          onUpdate: (_, _) async => throw failure,
         );
         await _pump(tester, repository: repository);
         await tester.pumpAndSettle();
@@ -572,33 +558,32 @@ void main() {
         await _tapVisible(tester, 'institutionProfileSaveButton');
         await tester.pumpAndSettle();
 
-        expect(find.text(entry.value), findsOneWidget);
         expect(
-          find.byKey(const Key('institutionProfileEditForm')),
+          find.byKey(const Key('institutionProfileUnconfirmedCurrentState')),
           findsOneWidget,
         );
         expect(
-          tester
-              .widget<TextField>(
-                find.byKey(const Key('institutionProfileNameField')),
-              )
-              .controller
-              ?.text,
-          'Retained Draft',
+          find.text(
+            'Current server profile differs from your submitted changes. This request result could not be confirmed.',
+          ),
+          findsOneWidget,
         );
+        expect(find.text('Current Server School'), findsOneWidget);
         expect(
-          tester
-              .widget<FilledButton>(
-                find.byKey(const Key('institutionProfileSaveButton')),
-              )
-              .onPressed,
-          isNotNull,
+          find.byKey(const Key('institutionProfileEditForm')),
+          findsNothing,
         );
+        expect(find.text('Retained Draft'), findsNothing);
+        expect(
+          find.byKey(const Key('institutionProfileConfirmedDirectSuccess')),
+          findsNothing,
+        );
+        expect(find.text('Institution profile updated.'), findsNothing);
         expect(find.textContaining('Raw private'), findsNothing);
         expect(find.textContaining('private-request-id'), findsNothing);
         expect(find.textContaining(_institutionId), findsNothing);
         expect(repository.updateCalls, 1);
-        expect(repository.fetchCalls, 1);
+        expect(repository.fetchCalls, 2);
       }
     },
   );

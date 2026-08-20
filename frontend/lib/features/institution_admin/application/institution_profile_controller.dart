@@ -241,7 +241,8 @@ class InstitutionProfileController extends Notifier<InstitutionProfileState> {
         return;
       }
 
-      if (result.profile.id != identity.institutionId) {
+      if (result.profile.id != identity.institutionId ||
+          !request.matchesProfile(result.profile)) {
         await _reconcileUnknownUpdate(
           generation: generation,
           identity: identity,
@@ -276,23 +277,35 @@ class InstitutionProfileController extends Notifier<InstitutionProfileState> {
         return;
       }
 
-      _handleDefiniteMutationFailure(
-        failure: exception.failure,
-        profile: profile,
-        form: form,
-        baseline: baseline,
-      );
+      if (_isDefiniteMutationFailure(exception.failure)) {
+        _handleDefiniteMutationFailure(
+          failure: exception.failure,
+          profile: profile,
+          form: form,
+          baseline: baseline,
+        );
+      } else {
+        await _reconcileUnknownUpdate(
+          generation: generation,
+          identity: identity,
+          request: request,
+          previousProfile: profile,
+          form: form,
+          baseline: baseline,
+        );
+      }
     } catch (_) {
       if (!_canComplete(generation, identity)) {
         return;
       }
 
-      state = InstitutionProfileState.mutationFailure(
-        profile: profile,
+      await _reconcileUnknownUpdate(
+        generation: generation,
+        identity: identity,
+        request: request,
+        previousProfile: profile,
         form: form,
         baseline: baseline,
-        formError:
-            'The institution profile could not be updated. No changes were confirmed.',
       );
     } finally {
       if (_inFlightGeneration == generation) {
@@ -569,6 +582,24 @@ class InstitutionProfileController extends Notifier<InstitutionProfileState> {
       institutionId: _providerKey.institutionId,
     );
   }
+}
+
+bool _isDefiniteMutationFailure(ApiFailure failure) {
+  final code = failure.serverCode;
+  final expected = switch (failure.statusCode) {
+    401 => code == ApiErrorCodes.authenticationRequired,
+    403 =>
+      code == ApiErrorCodes.forbidden ||
+          code == ApiErrorCodes.passwordChangeRequired ||
+          code == ApiErrorCodes.userInactive ||
+          code == ApiErrorCodes.institutionInactive,
+    404 => code == ApiErrorCodes.resourceNotFound,
+    422 => code == ApiErrorCodes.validationFailed,
+    429 => code == ApiErrorCodes.rateLimited,
+    _ => false,
+  };
+
+  return expected && (failure.statusCode == 422 || failure.fieldErrors.isEmpty);
 }
 
 class InstitutionProfileSessionSnapshot {

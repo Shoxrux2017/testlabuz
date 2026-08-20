@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
@@ -118,36 +119,93 @@ void main() {
       },
     );
 
-    test(
-      'classifies HTTP and certificate PATCH failures as definite',
-      () async {
-        final server = _source(
-          RecordingAdapter(
-            (_) => _jsonResponse(403, {
-              'message': 'Raw backend text.',
-              'code': 'forbidden',
-              'errors': <String, Object?>{},
-              'request_id': 'private',
-            }),
+    test('only exact allowed status and code pairs are definite', () async {
+      final cases = <(int, String)>[
+        (401, ApiErrorCodes.authenticationRequired),
+        (403, ApiErrorCodes.forbidden),
+        (403, ApiErrorCodes.passwordChangeRequired),
+        (403, ApiErrorCodes.userInactive),
+        (403, ApiErrorCodes.institutionInactive),
+        (404, ApiErrorCodes.resourceNotFound),
+        (422, ApiErrorCodes.validationFailed),
+        (429, ApiErrorCodes.rateLimited),
+      ];
+
+      for (final fixture in cases) {
+        final adapter = RecordingAdapter(
+          (_) => _jsonResponse(
+            fixture.$1,
+            _errorEnvelope(
+              fixture.$2,
+              errors: fixture.$1 == 422
+                  ? {
+                      'name': ['Review the name.'],
+                    }
+                  : const {},
+            ),
           ),
         );
-        await expectLater(
-          server.updateProfile(_request()),
-          throwsA(isA<ApiRequestException>()),
-        );
 
-        final certificate = _source(
-          RecordingAdapter((options) {
-            throw DioException(
-              requestOptions: options,
-              type: DioExceptionType.badCertificate,
-            );
-          }),
-        );
         await expectLater(
-          certificate.updateProfile(_request()),
-          throwsA(isA<ApiRequestException>()),
+          _source(adapter).updateProfile(_request()),
+          throwsA(
+            isA<ApiRequestException>()
+                .having(
+                  (error) => error.failure.statusCode,
+                  'status',
+                  fixture.$1,
+                )
+                .having(
+                  (error) => error.failure.serverCode,
+                  'code',
+                  fixture.$2,
+                ),
+          ),
+          reason: '${fixture.$1}/${fixture.$2}',
         );
+        expect(adapter.requests, hasLength(1));
+      }
+    });
+
+    test(
+      '500 and unknown or malformed 4xx responses are unknown without replay',
+      () async {
+        final fixtures = <(int, Object?)>[
+          (500, _errorEnvelope(ApiErrorCodes.serverError)),
+          (401, _errorEnvelope(ApiErrorCodes.forbidden)),
+          (403, _errorEnvelope(ApiErrorCodes.resourceNotFound)),
+          (404, _errorEnvelope(ApiErrorCodes.forbidden)),
+          (409, _errorEnvelope('unexpected_conflict')),
+          (422, _errorEnvelope(ApiErrorCodes.forbidden)),
+          (429, _errorEnvelope(ApiErrorCodes.forbidden)),
+          (403, {'message': 'Missing fields.'}),
+          (
+            403,
+            {..._errorEnvelope(ApiErrorCodes.forbidden), 'unexpected': true},
+          ),
+          (
+            403,
+            _errorEnvelope(
+              ApiErrorCodes.forbidden,
+              errors: {
+                'name': ['Must be empty for non-validation errors.'],
+              },
+            ),
+          ),
+          (422, _errorEnvelope(ApiErrorCodes.validationFailed, errors: 'bad')),
+        ];
+
+        for (final fixture in fixtures) {
+          final adapter = RecordingAdapter(
+            (_) => _jsonResponse(fixture.$1, fixture.$2),
+          );
+          await expectLater(
+            _source(adapter).updateProfile(_request()),
+            throwsA(isA<InstitutionProfileUpdateOutcomeUnknownException>()),
+            reason: '${fixture.$1}/${fixture.$2}',
+          );
+          expect(adapter.requests, hasLength(1));
+        }
       },
     );
 
@@ -160,6 +218,7 @@ void main() {
           DioExceptionType.receiveTimeout,
           DioExceptionType.transformTimeout,
           DioExceptionType.connectionError,
+          DioExceptionType.badCertificate,
           DioExceptionType.cancel,
           DioExceptionType.unknown,
         ];
@@ -186,6 +245,19 @@ void main() {
             'data': _resource(),
             'message': 'Almost correct',
           }),
+          _jsonResponse(200, {
+            'data': _resource(),
+            'message': institutionProfileUpdateSuccessMessage,
+          }),
+          _jsonResponse(200, {
+            'data': _resource(),
+            'message': institutionProfileUpdateSuccessMessage,
+            'unexpected': true,
+          }),
+          _jsonResponse(200, {
+            'data': _resource()..['unexpected'] = true,
+            'message': institutionProfileUpdateSuccessMessage,
+          }),
         ];
         for (final body in ambiguousBodies) {
           final adapter = RecordingAdapter((_) => body);
@@ -198,6 +270,18 @@ void main() {
       },
     );
   });
+}
+
+Map<String, Object?> _errorEnvelope(
+  String code, {
+  Object errors = const <String, Object?>{},
+}) {
+  return {
+    'message': 'Controlled error.',
+    'code': code,
+    'errors': errors,
+    'request_id': 'request-1',
+  };
 }
 
 const _institutionId = '550e8400-e29b-41d4-a716-446655440000';

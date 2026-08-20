@@ -23,6 +23,7 @@ import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_assessment_settings_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_profile_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_user_create_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_list_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
@@ -36,6 +37,8 @@ import 'package:testlabuz_client/features/institution_admin/domain/institution_u
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_detail_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_create.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_create_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_user_detail_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_shell.dart';
 import 'package:testlabuz_client/features/platform_admin/data/platform_dashboard_repository_impl.dart';
@@ -477,6 +480,83 @@ void main() {
         ),
       );
     });
+
+    testWidgets(
+      'busy User Create disables mouse and keyboard rail navigation until its single detail transition',
+      (tester) async {
+        final createCompletion = Completer<InstitutionUser>();
+        final createRepository = FakeInstitutionUserCreateRepository(
+          onCreate: (_) => createCompletion.future,
+        );
+        final detailRepository = FakeInstitutionUserDetailRepository();
+        final dashboardRepository = FakeInstitutionDashboardRepository();
+
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdminUserCreate,
+          authRepository: _authenticatedRepository(_adminUser()),
+          institutionDashboardRepository: dashboardRepository,
+          institutionUserCreateRepository: createRepository,
+          institutionUserDetailRepository: detailRepository,
+        );
+        await tester.pumpAndSettle();
+        await _fillInstitutionUserCreateForm(tester);
+
+        final submit = tester.widget<FilledButton>(
+          find.byKey(const Key('institutionUserCreateSubmitButton')),
+        );
+        submit.onPressed!();
+        await tester.pump();
+
+        final router = _router(tester);
+        final visitedPaths = <String>[];
+        void recordPath() {
+          visitedPaths.add(router.routeInformationProvider.value.uri.path);
+        }
+
+        router.routeInformationProvider.addListener(recordPath);
+        addTearDown(
+          () => router.routeInformationProvider.removeListener(recordPath),
+        );
+        expect(createRepository.requests, hasLength(1));
+        expect(_navigationRail(tester).onDestinationSelected, isNull);
+
+        await _tapDestination(tester, 'Dashboard');
+        await tester.pump();
+        await tester.sendKeyEvent(
+          LogicalKeyboardKey.enter,
+          platform: 'windows',
+        );
+        await tester.sendKeyEvent(
+          LogicalKeyboardKey.space,
+          platform: 'windows',
+        );
+        await tester.pump();
+
+        expect(_currentPath(tester), AppRoutePaths.institutionAdminUserCreate);
+        expect(visitedPaths, isEmpty);
+        expect(dashboardRepository.fetchCalls, 0);
+
+        createCompletion.complete(_createdInstitutionUser(_userIdOne));
+        await tester.pumpAndSettle();
+
+        final detailPath = AppRoutePaths.institutionAdminUserDetailLocation(
+          _userIdOne,
+        );
+        expect(_currentPath(tester), detailPath);
+        expect(visitedPaths, [detailPath]);
+        expect(detailRepository.fetchCalls, 1);
+        expect(createRepository.requests, hasLength(1));
+        expect(dashboardRepository.fetchCalls, 0);
+
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(_currentPath(tester), detailPath);
+        expect(visitedPaths, [detailPath]);
+        expect(detailRepository.fetchCalls, 1);
+        expect(dashboardRepository.fetchCalls, 0);
+      },
+    );
 
     testWidgets('invalid live Institution context fails closed', (
       tester,
@@ -1105,6 +1185,7 @@ Future<void> _pumpApp(
   FakeInstitutionAssessmentSettingsRepository?
   institutionAssessmentSettingsRepository,
   FakeInstitutionUserListRepository? institutionUserListRepository,
+  FakeInstitutionUserCreateRepository? institutionUserCreateRepository,
   FakeInstitutionUserDetailRepository? institutionUserDetailRepository,
 }) async {
   await tester.pumpWidget(
@@ -1133,6 +1214,10 @@ Future<void> _pumpApp(
         ),
         institutionUserListRepositoryProvider.overrideWithValue(
           institutionUserListRepository ?? FakeInstitutionUserListRepository(),
+        ),
+        institutionUserCreateRepositoryProvider.overrideWithValue(
+          institutionUserCreateRepository ??
+              FakeInstitutionUserCreateRepository(),
         ),
         institutionUserDetailRepositoryProvider.overrideWithValue(
           institutionUserDetailRepository ??
@@ -1226,6 +1311,25 @@ String _currentPath(WidgetTester tester) {
 Future<void> _tapDestination(WidgetTester tester, String label) async {
   final navigation = find.byKey(const Key('institutionAdminNavigation'));
   await tester.tap(find.descendant(of: navigation, matching: find.text(label)));
+}
+
+Future<void> _fillInstitutionUserCreateForm(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('institutionUserCreateRoleField')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Teacher').last);
+  await tester.enterText(
+    find.byKey(const Key('institutionUserCreateFullNameField')),
+    'Teacher Name',
+  );
+  await tester.enterText(
+    find.byKey(const Key('institutionUserCreateLoginNameField')),
+    'teacher01',
+  );
+  await tester.enterText(
+    find.byKey(const Key('institutionUserCreatePasswordField')),
+    'private-password',
+  );
+  await tester.pump();
 }
 
 Finder _navigationDestinationIcon(
@@ -1606,6 +1710,23 @@ class FakeInstitutionUserListRepository
   }
 }
 
+class FakeInstitutionUserCreateRepository
+    implements InstitutionUserCreateRepository {
+  FakeInstitutionUserCreateRepository({this.onCreate});
+
+  final Future<InstitutionUser> Function(InstitutionUserCreateRequest request)?
+  onCreate;
+  final requests = <InstitutionUserCreateRequest>[];
+
+  @override
+  Future<InstitutionUser> createUser(
+    InstitutionUserCreateRequest request,
+  ) async {
+    requests.add(request);
+    return onCreate?.call(request) ?? _createdInstitutionUser(_userIdOne);
+  }
+}
+
 class FakeInstitutionUserDetailRepository
     implements InstitutionUserDetailRepository {
   var fetchCalls = 0;
@@ -1613,21 +1734,25 @@ class FakeInstitutionUserDetailRepository
   @override
   Future<InstitutionUser> fetchUser(String userId) async {
     fetchCalls += 1;
-    return InstitutionUser(
-      id: userId,
-      role: InstitutionUserRole.teacher,
-      fullName: 'Detail User',
-      loginName: 'detail-user',
-      email: null,
-      phone: null,
-      isActive: true,
-      mustChangePassword: false,
-      lastLoginAt: null,
-      deactivatedAt: null,
-      createdAt: DateTime.utc(2026, 8, 7, 15),
-      updatedAt: DateTime.utc(2026, 8, 7, 16),
-    );
+    return _createdInstitutionUser(userId);
   }
+}
+
+InstitutionUser _createdInstitutionUser(String userId) {
+  return InstitutionUser(
+    id: userId,
+    role: InstitutionUserRole.teacher,
+    fullName: 'Detail User',
+    loginName: 'detail-user',
+    email: null,
+    phone: null,
+    isActive: true,
+    mustChangePassword: false,
+    lastLoginAt: null,
+    deactivatedAt: null,
+    createdAt: DateTime.utc(2026, 8, 7, 15),
+    updatedAt: DateTime.utc(2026, 8, 7, 16),
+  );
 }
 
 InstitutionProfile _institutionProfile({String name = 'Example School'}) {

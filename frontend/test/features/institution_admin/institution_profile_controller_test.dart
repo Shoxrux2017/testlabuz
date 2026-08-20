@@ -596,7 +596,7 @@ void main() {
     test(
       'GET definite failure matrix keeps load semantics and safe state',
       () async {
-        for (final failureCase in _definiteFailureCases()) {
+        for (final failureCase in _failureCases()) {
           final harness = _harness(
             repository: FakeInstitutionProfileRepository(
               onFetch: (_) async => throw failureCase.exception,
@@ -637,9 +637,11 @@ void main() {
     );
 
     test(
-      'PATCH definite failure matrix preserves operation-specific state and never retries',
+      'exact allowed PATCH failures preserve operation-specific state and never retry',
       () async {
-        for (final failureCase in _definiteFailureCases()) {
+        for (final failureCase in _failureCases().where(
+          (fixture) => fixture.definiteMutation,
+        )) {
           final harness = _harness(
             repository: FakeInstitutionProfileRepository(
               onUpdate: (_, _) async => throw failureCase.exception,
@@ -704,6 +706,49 @@ void main() {
               reason: failureCase.name,
             );
           }
+        }
+      },
+    );
+
+    test(
+      '500 and other uncertain PATCH failures reconcile once without PATCH replay',
+      () async {
+        for (final failureCase in _failureCases().where(
+          (fixture) => !fixture.definiteMutation,
+        )) {
+          final repository = FakeInstitutionProfileRepository(
+            onFetch: (call) async => call == 1
+                ? _profile()
+                : _profile(name: 'Current after ${failureCase.name}'),
+            onUpdate: (_, _) async => throw failureCase.exception,
+          );
+          final harness = _harness(repository: repository);
+          await _flush();
+          harness.controller.beginEditing();
+          harness.controller.updateField(
+            InstitutionProfileEditField.name,
+            'Draft ${failureCase.name}',
+          );
+
+          await harness.controller.submit();
+
+          expect(repository.updateCalls, 1, reason: failureCase.name);
+          expect(repository.fetchCalls, 2, reason: failureCase.name);
+          expect(
+            harness.read().status,
+            InstitutionProfileViewStatus.unconfirmedCurrentState,
+            reason: failureCase.name,
+          );
+          expect(
+            harness.read().notice,
+            contains('could not be confirmed'),
+            reason: failureCase.name,
+          );
+          expect(
+            harness.read().status,
+            isNot(InstitutionProfileViewStatus.confirmedDirectSuccess),
+            reason: failureCase.name,
+          );
         }
       },
     );
@@ -1178,7 +1223,7 @@ ApiRequestException _validationFailure(Map<String, List<String>> fieldErrors) {
   );
 }
 
-List<_FailureCase> _definiteFailureCases() {
+List<_FailureCase> _failureCases() {
   return [
     _FailureCase(
       name: 'authentication_required',
@@ -1188,6 +1233,7 @@ List<_FailureCase> _definiteFailureCases() {
       ),
       serverCode: ApiErrorCodes.authenticationRequired,
       clearsForSession: true,
+      definiteMutation: true,
     ),
     _FailureCase(
       name: 'password_change_required',
@@ -1198,6 +1244,7 @@ List<_FailureCase> _definiteFailureCases() {
       serverCode: ApiErrorCodes.passwordChangeRequired,
       clearsForSession: true,
       bootstraps: true,
+      definiteMutation: true,
     ),
     _FailureCase(
       name: 'user_inactive',
@@ -1205,6 +1252,7 @@ List<_FailureCase> _definiteFailureCases() {
       serverCode: ApiErrorCodes.userInactive,
       clearsForSession: true,
       bootstraps: true,
+      definiteMutation: true,
     ),
     _FailureCase(
       name: 'institution_inactive',
@@ -1215,11 +1263,13 @@ List<_FailureCase> _definiteFailureCases() {
       serverCode: ApiErrorCodes.institutionInactive,
       clearsForSession: true,
       bootstraps: true,
+      definiteMutation: true,
     ),
     _FailureCase(
       name: 'forbidden',
       exception: _serverFailure(ApiErrorCodes.forbidden, statusCode: 403),
       serverCode: ApiErrorCodes.forbidden,
+      definiteMutation: true,
     ),
     _FailureCase(
       name: 'resource_not_found',
@@ -1228,11 +1278,19 @@ List<_FailureCase> _definiteFailureCases() {
         statusCode: 404,
       ),
       serverCode: ApiErrorCodes.resourceNotFound,
+      definiteMutation: true,
     ),
     _FailureCase(
       name: 'validation_failed',
       exception: _validationFailure(const {}),
       serverCode: ApiErrorCodes.validationFailed,
+      definiteMutation: true,
+    ),
+    _FailureCase(
+      name: 'rate_limited',
+      exception: _serverFailure(ApiErrorCodes.rateLimited, statusCode: 429),
+      serverCode: ApiErrorCodes.rateLimited,
+      definiteMutation: true,
     ),
     _FailureCase(
       name: 'connection',
@@ -1330,6 +1388,7 @@ class _FailureCase {
     this.serverCode,
     this.clearsForSession = false,
     this.bootstraps = false,
+    this.definiteMutation = false,
   });
 
   final String name;
@@ -1337,6 +1396,7 @@ class _FailureCase {
   final String? serverCode;
   final bool clearsForSession;
   final bool bootstraps;
+  final bool definiteMutation;
 }
 
 class _SessionBoundary {

@@ -8,6 +8,7 @@ import '../../auth/application/auth_session_controller.dart';
 import '../../auth/application/auth_session_state.dart';
 import '../../auth/domain/auth_user.dart';
 import '../../auth/domain/user_role.dart';
+import '../application/institution_user_create_controller.dart';
 
 const _compactRailWidth = 136.0;
 const _expandedRailWidth = 256.0;
@@ -49,6 +50,14 @@ class InstitutionAdminShell extends ConsumerWidget {
       return const _InstitutionAdminShellUnavailable();
     }
 
+    final navigationEnabled =
+        !AppRoutePaths.isInstitutionAdminUserCreatePath(locationPath) ||
+        !ref.watch(
+          institutionUserCreateControllerProvider.select(
+            (state) => state.isBusy,
+          ),
+        );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isExpanded = constraints.maxWidth >= _expandedRailBreakpoint;
@@ -65,6 +74,7 @@ class InstitutionAdminShell extends ConsumerWidget {
                     locationPath: locationPath,
                     selectedDestination: destination!,
                     isExpanded: isExpanded,
+                    enabled: navigationEnabled,
                   ),
                   const VerticalDivider(width: 1),
                   Expanded(
@@ -196,11 +206,13 @@ class _InstitutionAdminNavigation extends StatelessWidget {
     required this.locationPath,
     required this.selectedDestination,
     required this.isExpanded,
+    required this.enabled,
   });
 
   final String locationPath;
   final InstitutionAdminShellDestination selectedDestination;
   final bool isExpanded;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -215,14 +227,16 @@ class _InstitutionAdminNavigation extends StatelessWidget {
         minExtendedWidth: _expandedRailWidth,
         labelType: isExpanded ? null : NavigationRailLabelType.all,
         selectedIndex: destinations.indexOf(selectedDestination),
-        onDestinationSelected: (index) {
-          final destination = destinations[index];
-          if (destination.path == locationPath) {
-            return;
-          }
+        onDestinationSelected: enabled
+            ? (index) {
+                final destination = destinations[index];
+                if (destination.path == locationPath) {
+                  return;
+                }
 
-          router.push(destination.path);
-        },
+                router.push(destination.path);
+              }
+            : null,
         destinations: [
           for (final destination in destinations)
             NavigationRailDestination(
