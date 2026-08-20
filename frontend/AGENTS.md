@@ -1,657 +1,236 @@
-# TestLabUz Frontend — Codex Instructions
+# TestLabUz Frontend Engineering Rules
 
-## Scope
+## 1. Scope
 
-This file applies to `frontend/`.
+This file applies automatically to implementation work that changes files under `frontend/`.
 
-It supplements the root `AGENTS.md`.
+Read it together with the root `AGENTS.md`.
 
-The locked `docs/01–09` define product behavior. Flutter must not reinterpret backend-authoritative rules.
+The approved implementation contract defines the required UX behavior, routes, API contract, state transitions, validation, accessibility, tests, and verification commands. This file defines the Flutter engineering standard for implementing that contract.
 
----
+The root `AGENTS.md` remains authoritative for general engineering, security, verification, context-discipline, Git, and repository-safety rules. This file adds frontend-specific rules and must not be used to infer missing product behavior.
 
-# 1. Flutter Baseline
+If the approved implementation contract is materially incomplete or conflicts with this file or the current frontend implementation, report the exact blocker instead of making a product, UX, API, architecture, security, or lifecycle decision.
 
-Follow `docs/07-architecture.md`.
+## 2. Frontend Architecture
 
-Recommended locked baseline:
+Use the existing Flutter architecture and established project patterns.
 
-- Flutter
-- Riverpod
-- GoRouter
-- Dio
-- `json_serializable` or equivalent DTO serialization
-- Secure platform storage for authentication credentials/tokens where required
-
-Use a feature-first layered structure.
-
----
-
-# 2. Feature-First Structure
-
-Preferred logical shape:
+Prefer feature-first organization with the applicable responsibility flow:
 
 ```text
-lib/
-  app/
-  core/
-    config/
-    auth/
-    network/
-    routing/
-    errors/
-    storage/
-    time/
-    ui/
-    utils/
-
-  features/
-    auth/
-    platform_admin/
-    institution_admin/
-    groups/
-    topics/
-    materials/
-    homework/
-    blitz/
-    submissions/
-    results/
-    reports/
-
-  shared/
+Presentation
+  -> Application / Controller / Notifier
+  -> Repository contract
+  -> Data source / DTO / configured Dio client
 ```
 
-Each feature normally separates:
+Use `data / domain / presentation` separation where it provides a real boundary.
 
-```text
-data/
-domain/
-presentation/
-```
+Create only the files and abstractions needed for the current approved implementation contract.
 
-Do not create one giant global:
+Do not introduce a second router, state-management framework, HTTP client, serialization approach, design system, storage abstraction, or competing application architecture unless the approved implementation contract explicitly requires it.
 
-```text
-screens/
-services/
-models/
-```
+## 3. Presentation Responsibilities
 
-folder containing unrelated features.
+Widgets and screens are responsible for:
 
-Create only the folders/classes needed for the current task.
+- rendering;
+- user interaction;
+- forms;
+- layout;
+- focus and keyboard behavior;
+- accessibility semantics;
+- presentation-specific formatting;
+- displaying application state.
 
----
+Widgets must not:
 
-# 3. Layer Boundaries
+- call Dio directly;
+- build raw API URLs;
+- parse raw JSON;
+- own persistent storage;
+- implement authoritative authorization or business rules;
+- coordinate unrelated features;
+- mutate repositories or global state outside the approved application boundary.
 
-## Presentation
+Keep screens understandable. Extract focused widgets when they own a reusable or independently testable presentation responsibility.
 
-Responsible for:
+Do not split simple UI into meaningless tiny widgets or create one universal widget controlled by many unrelated flags.
 
-- Screens
-- Widgets
-- Forms
-- Local view state
-- User actions
-- Loading/error/empty/success presentation
+## 4. Application State and Riverpod
 
-## Domain
+Use Riverpod according to the existing project pattern.
 
-Responsible for client-side models/use-case contracts needed by UI.
+Controllers/Notifiers/providers should own one focused feature or use-case state boundary.
 
-Do not place authoritative scoring/timing/authorization rules here.
+Do not create:
 
-## Data
+- global mutable singleton state;
+- God Notifiers that coordinate unrelated features;
+- parallel caches for the same resource without an explicit task requirement;
+- hidden state shared through static fields;
+- provider dependency cycles.
 
-Responsible for:
+Keep dependencies injectable and testable.
 
-- DTOs
-- API calls
-- Serialization
-- Repository implementations
-- Remote failure mapping
+State models should communicate meaningful states rather than relying on loosely related booleans.
 
-Presentation code must not call Dio directly.
+Use sealed classes/enums/value objects only when they improve correctness and readability; do not create a complex state machine for a simple task without a concrete risk.
 
-Required flow:
+## 5. Async Ownership and Stale Completion Safety
 
-```text
-Screen / Controller / Notifier
-  ↓
-Repository
-  ↓
-API data source
-  ↓
-Dio
-```
+Apply request/session/target ownership safeguards when asynchronous work can outlive its current route, resource, session, controller, or operation.
 
----
+Relevant safeguards may include:
 
-# 4. Backend Authority
+- immutable request/operation keys;
+- generation counters;
+- target/session identity checks;
+- mounted/disposed checks;
+- cancellation or stale-result rejection;
+- duplicate mutation suppression.
 
-Flutter must never be authoritative for:
+A stale completion must not overwrite current data, publish feedback to a newer session/target, close the wrong dialog, restore focus to an obsolete control, or navigate from an obsolete operation.
 
-- Role
-- Institution ownership
-- Permission
-- Attempt availability
-- Deadline validity
-- Blitz availability
-- Blitz timeout
-- Official Attempt selection
-- Official Homework/Blitz score
-- Final score
-- Calculation method
-- Consistency
-- Understanding category
-- Result status
-- Result closure
-- Result release eligibility
+Async ownership must be anchored to the actual operation/session/target identity, not only to Widget mounted state when the controller/provider can outlive the originating Widget.
 
-Flutter may optimistically improve UX only where that cannot create a business-state decision.
+Equivalent state rebuilds must not invalidate a still-current operation unless the approved implementation contract defines that behavior.
 
-Backend response remains final.
+Do not introduce elaborate ownership machinery when the approved implementation contract has no asynchronous lifetime risk.
 
----
+## 6. Routing and Navigation
 
-# 5. Authentication and Route Guards
+Use the existing GoRouter structure, route names, helpers, guards, and canonical path conventions unless the approved implementation contract explicitly changes them.
 
-Use the authenticated server identity (`/api/v1/auth/me`) as the authoritative session profile.
+Do not create duplicate route families or ad-hoc navigation paths.
 
-Do not treat locally cached role as permanent authority.
+Route parsing and target identity must remain explicit and testable.
 
-Route guards should consider:
+Direct route entry must fail safely when the location or session context is invalid.
 
-- Authentication
-- Role
-- `must_change_password`
-- Approved device/shell boundary
+UI route guards improve UX only. They do not replace backend authorization.
 
-Backend still re-authorizes every data request.
+Navigation after mutation/read completion must occur only when the originating session, route, target, and operation are still current.
 
----
+Do not navigate from stale async completions.
 
-# 6. Mandatory First-Login Password Change
+## 7. Data Layer and Dio
 
-Administrator-created Institution Admin/Teacher/Student/Parent accounts require password change before normal app use.
+Use the existing configured Dio/API client.
 
-If:
+Feature code must not recreate:
 
-```text
-must_change_password = true
-```
+- base URL handling;
+- authentication headers;
+- timeout configuration;
+- common envelope parsing;
+- global auth/session reconciliation;
+- shared safe logging;
+- common transport failure mapping.
 
-route the user only to the approved password-change/auth flow.
+Data sources own HTTP method/path/query/body/header construction.
 
-Do not expose normal role navigation as usable.
+Repositories expose typed application-facing operations and failure semantics.
 
-If backend rejects a stale normal request because password change is required, reconcile frontend state and route accordingly.
+Widgets must not know transport details.
 
----
+Do not log bearer tokens, credentials, private payloads, or raw sensitive response bodies.
 
-# 7. Role / Device UX Boundaries
+Do not add automatic retry/replay for mutations unless the implementation task explicitly defines a safe retry contract.
 
-MVP roles:
+## 8. DTOs, Parsing, and Public Contracts
 
-```text
-platform_owner
-institution_admin
-teacher
-student
-parent
-```
+Use typed DTOs and models.
 
-Approved device model:
+Do not pass raw `Map<String, dynamic>` through Widgets or application state when a typed boundary is appropriate.
 
-- Platform Owner: desktop
-- Institution Admin: desktop
-- Teacher: desktop + mobile
-- Student: desktop + mobile
-- Parent: mobile
+Transport DTOs should validate the exact contract required by the approved implementation contract, including relevant:
 
-Teacher desktop is the main authoring/review surface.
+- required keys;
+- extra/unknown keys;
+- types;
+- nullability;
+- identifier formats;
+- timestamp formats;
+- enum values;
+- cross-field invariants.
 
-Teacher mobile is for quick classroom/monitoring workflows such as:
+Do not silently accept malformed success payloads as valid data.
 
-- Assigned Groups
-- Topic status
-- Homework status
-- Blitz activation
-- Blitz monitoring
-- Basic result review
+Keep API machine values separate from localized or human-readable labels, and never use display labels as application control values.
 
-Do not copy every desktop editor to Teacher mobile unless the task/spec explicitly requires it.
+Do not expose raw JSON or protected transport fields to presentation code unless the approved implementation contract explicitly requires them.
 
-Parent UI is read-only.
+Generated serialization code must not be edited manually. Run the established generator only when the approved implementation contract requires generated output.
 
----
+## 9. Domain and Backend Authority
 
-# 8. API Client
+The frontend presents server state and submits user intent.
 
-Use one configured API client boundary for:
+Do not move backend-authoritative decisions into Flutter for convenience.
 
-- Base URL
-- Authorization header
-- Response decoding
-- Failure mapping
-- Timeouts
-- Safe development logging
+The frontend may perform contract-defined local validation and presentation formatting, but it must not independently decide authoritative:
 
-Feature repositories must not each recreate auth/header/envelope logic.
+- ownership;
+- permission;
+- lifecycle state;
+- server time validity;
+- final business outcome;
+- protected relationship scope;
+- persistent mutation success.
 
-Do not log bearer tokens.
+Local UI hiding is not authorization.
 
----
+Optimistic UI is allowed only when the approved implementation contract explicitly permits it and it cannot create a false authoritative state.
 
-# 9. API Envelopes and Failures
+When the backend rejects or contradicts local assumptions, reconcile to the server-defined state.
 
-Follow `docs/09-api-contracts.md`.
+## 10. Failure Mapping and Error UX
 
-Flutter must understand:
+Use typed failures or established structured error mapping.
 
-- Single-resource `data`
-- Collection `data + meta.pagination`
-- `204 No Content`
-- Error `message`
-- Stable machine-readable `code`
-- Validation `errors`
+Application branching must use stable transport/error categories defined by the task and existing infrastructure, not human-readable message parsing.
 
-Do not parse human-readable `message` to decide business behavior.
+Keep distinct where relevant:
 
-Map stable backend codes into typed application failures/state.
+- validation failure;
+- authentication/session failure;
+- authorization failure;
+- not found;
+- business/state conflict;
+- rate limit;
+- transport uncertainty;
+- malformed/unexpected response;
+- server failure.
 
-Examples include:
+Do not display stack traces, raw exception text, URLs containing private identifiers, tokens, SQL, or protected payloads.
 
-```text
-validation_failed
-authentication_required
-invalid_credentials
-user_inactive
-institution_inactive
-forbidden
-resource_not_found
-group_not_assigned
-assessment_not_assigned
-attempts_exhausted
-deadline_passed
-blitz_not_active
-blitz_time_expired
-submission_locked
-manual_review_incomplete
-result_closed
-result_not_visible
-idempotency_key_reused
-```
+Do not swallow errors or leave the UI permanently loading/disabled after failure.
 
-Use the exact contract as source of truth.
+When an outcome is uncertain, do not present confirmed success unless the approved implementation contract defines evidence that proves success.
 
----
+## 11. Forms and Local Validation
 
-# 10. Client Ownership Boundary
+Keep form state controlled and deterministic.
 
-Do not authoritatively send fields the backend must derive.
+Implement only the normalization and validation explicitly required by the approved implementation contract.
 
-Examples:
+Do not silently trim, rewrite, normalize, or coerce user input beyond the approved contract.
 
-```text
-institution_id
-role
-created_by_user_id
-uploaded_by_user_id
-official_homework_score
-official_blitz_score
-score_difference
-final_score
-calculation_method
-consistency
-category_code
-result_status
-calculated_at
-server timer validity
-```
+Keep field-level and form-level errors distinct where relevant.
 
-Only send IDs explicitly allowed by the current endpoint contract.
+Prevent duplicate submission while an operation is active.
 
----
+Cancel, close, Escape, reset, and focus restoration must follow the approved implementation contract.
 
-# 11. Student Assessment Security
+A reset must update both the visible controls and the authoritative draft state.
 
-Student Homework/Blitz payloads must never expose answer-key fields.
+Do not send empty or unchanged mutations when the approved implementation contract defines no-op behavior.
 
-Do not expect or render:
+## 12. Loading, Empty, Data, and Mutation States
 
-```text
-is_correct
-correct_value
-accepted_answers
-correct_position
-match_key
-```
-
-before/while answering.
-
-Do not build UI logic that depends on hidden correct-answer data.
-
----
-
-# 12. Attempts UX
-
-## Homework
-
-Display the backend-provided effective state for:
-
-- 3 normal attempts
-- Used attempts
-- Remaining attempts
-- Attempt number
-- Deadline
-- Whether a new Attempt is currently allowed
-
-Official Homework score selection happens on backend:
-
-- Highest valid completed score
-- Tie → earliest tied attempt (`lowest attempt_number`)
-
-Flutter must not choose the official Attempt.
-
-## Blitz
-
-Display:
-
-- One normal attempt
-- Any backend-authorized Student-specific exception/replacement state
-- Current Attempt number
-- Current authoritative timer state
-
-Do not create a task-wide “extra attempt” control.
-
-Teacher exception UX, when implemented, must require a reason and use the exact API contract.
-
----
-
-# 13. Required Idempotency Keys
-
-Flutter must generate/send:
-
-```http
-Idempotency-Key: <client-generated-uuid>
-```
-
-for exactly the five locked high-risk client mutations:
-
-1. Start Homework Attempt
-2. Start Blitz Attempt
-3. Final Attempt Submit
-4. Blitz Activate
-5. Blitz attempt exception grant
-
-Retry rules:
-
-- Retry of the same logical action must reuse the same key.
-- A new distinct logical action must use a new key.
-- Do not reuse one key with a materially different payload.
-
-Handle:
-
-```text
-409 idempotency_key_reused
-```
-
-as a contract conflict, not as a generic network error.
-
----
-
-# 14. Duplicate Mutation Prevention
-
-While a mutation is in flight:
-
-- Disable/restrict duplicate user triggers where appropriate.
-- Keep UI state deterministic.
-- Do not rely on UI disabling as the backend concurrency guard.
-
-For final submit:
-
-- Do not fire a second logical submit because a response is slow.
-- Safe network retry uses the same Idempotency-Key.
-
----
-
-# 15. Time and Timezone UX
-
-Backend time is authoritative.
-
-Institution has one IANA timezone.
-
-New Institution default:
-
-```text
-Asia/Tashkent
-```
-
-Educational dates/deadlines are entered/displayed in Institution local time.
-
-Backend stores/validates absolute UTC instants.
-
-Flutter may:
-
-- Convert server timestamps for display.
-- Show countdowns.
-- Show deadline/schedule forms in Institution local time.
-
-Flutter must not:
-
-- Extend eligibility because device clock is wrong.
-- Decide that a late write is valid.
-- Assume device timezone equals Institution timezone.
-
-When backend says expired/closed/late, reconcile UI immediately.
-
----
-
-# 16. Blitz Timer UX
-
-There is one whole-Blitz timer.
-
-No per-question timer exists in the MVP.
-
-Institution mode:
-
-```text
-synchronized
-individual
-```
-
-Teacher configures whole-Blitz duration.
-
-Frontend displays backend-provided authoritative timing.
-
-For synchronized mode, all assigned Students share the activation window.
-
-For individual mode, each Student's timer is based on that Student's Attempt start after activation.
-
-Countdown is a UX projection of server data, not the source of truth.
-
----
-
-# 17. Timeout / Deadline / Task-Close Reconciliation
-
-Backend may finalize an Attempt because of:
-
-```text
-homework_deadline_auto_submit
-task_closed_auto_finalize
-Blitz timeout finalization
-```
-
-Flutter must handle these server transitions even if the screen was open while the transition occurred.
-
-After reconciliation:
-
-- Stop editing.
-- Refresh Attempt status.
-- Preserve already saved answers as returned by backend.
-- Show waiting-for-review if manual answers remain.
-- Do not fabricate an explicit Student submission timestamp when `submitted_at` is null.
-- Do not create a fake Attempt for never-started Students.
-
-A late explicit submit that receives `submission_locked`/deadline conflict must refresh current server state instead of retrying as a new logical action.
-
----
-
-# 18. Answer Input Models
-
-Implement typed UI/data models for the nine question types:
-
-```text
-single_choice
-multiple_choice
-true_false
-short_written
-open_written
-file_based
-matching
-ordering
-fill_in_blank
-```
-
-Do not push unrelated answer types into one uncontrolled `Map<String, dynamic>` through the presentation layer.
-
-DTO boundary may deserialize configuration/payload shapes as needed, but presentation/domain models should remain typed enough to prevent invalid UI behavior.
-
----
-
-# 19. Multiple-Choice Selection Cap
-
-The backend contract limits Student Multiple-choice selection count to:
-
-```text
-number of correct options
-```
-
-Student payload must not reveal which options are correct.
-
-API must therefore provide the allowed maximum selection count as non-secret Student-facing configuration when needed by UI.
-
-Do not derive it from hidden `is_correct` values.
-
-Backend remains authoritative if the client submits too many selections.
-
----
-
-# 20. Short Written UX
-
-Automatic Short Written checking is exact normalized matching on backend.
-
-Do not show fuzzy/AI-match expectations.
-
-Do not normalize in UI in a way that changes the Student's stored answer.
-
-Frontend may trim only where the endpoint/form contract explicitly treats it as input sanitation; the backend checker remains authoritative.
-
----
-
-# 21. Score Display
-
-Backend calculation uses unrounded precision.
-
-Frontend display rule:
-
-```text
-one decimal place
-```
-
-Do not round values before sending them back to any backend calculation endpoint.
-
-Understanding category is returned by backend.
-
-Do not derive category from displayed one-decimal score.
-
----
-
-# 22. Result State vs Visibility
-
-Keep distinct UI concepts for:
-
-- Result calculation status
-- Student visibility
-- Parent visibility
-
-A calculated result can be unreleased.
-
-Unreleased is not incomplete.
-
-Waiting for Teacher review is not Not completed.
-
-Student release modes:
-
-```text
-automatic
-manual_teacher
-```
-
-Parent modes:
-
-```text
-with_student
-manual_teacher
-hidden
-```
-
-Parent visibility never precedes Student visibility.
-
-Do not infer visibility only from `result_status`.
-
----
-
-# 23. Result Closure UX
-
-A closed Student+Topic Result is read-only for scoring/recalculation flows.
-
-Do not show enabled controls for:
-
-- Score correction
-- Blitz exception grant
-- Pair/cohort changes
-- Recalculation
-
-when backend says Result is closed.
-
-Visibility controls remain separate only where the API contract allows them.
-
----
-
-# 24. File UX
-
-Supported MVP file types:
-
-```text
-pdf
-docx
-ppt
-pptx
-```
-
-Platform hard maxima:
-
-- Learning material: 25 MB/file
-- Student submission: 15 MB/file
-
-Institution may configure lower limits.
-
-Flutter may perform an early size/type pre-check for UX.
-
-Backend validation remains authoritative.
-
-Do not expose raw private storage paths/keys.
-
-Use the protected file download API.
-
----
-
-# 25. Loading / Empty / Error / Success States
-
-Every data-driven screen should have predictable states:
+Data-driven UI should intentionally handle the states required by the task, typically:
 
 ```text
 loading
@@ -660,342 +239,153 @@ empty
 error
 ```
 
-Mutation flows should distinguish:
+Mutation flows should intentionally handle the states required by the task, such as:
 
 ```text
 idle
+editing / confirming
 submitting
 success
 failure
+reconciliation
 ```
 
-Avoid permanently showing stale optimistic success if backend rejects the mutation.
+Do not reuse stale data as current confirmed data without an explicit stale-state presentation.
 
-After state-conflict errors, refresh authoritative server state where appropriate.
+Do not show actions that require confirmed current data while the view is loading, failed, stale, not found, or ineligible.
 
----
+Do not create unnecessary state variants that have no distinct behavior or presentation.
 
-# 26. Routing
+## 13. Caching and Invalidation
 
-Use GoRouter for declarative role-aware navigation.
+Reuse existing repository/provider cache ownership.
 
-Route guards may improve UX, but they do not replace backend authorization.
+Do not create a second cache for the same resource unless explicitly required.
 
-Direct route entry must handle backend denial safely.
+Invalidation must be narrow and contract-defined.
 
-Conceptual role areas:
+Preserve retained query/filter/sort/page state when the approved implementation contract requires it.
 
-```text
-/auth
-/platform-admin/...
-/institution-admin/...
-/teacher/...
-/student/...
-/parent/...
-```
+Do not optimistically patch list ordering, pagination totals, aggregates, or unrelated screens unless the approved implementation contract explicitly permits that behavior.
 
-Exact route strings should follow the implemented frontend contract/task.
+A mutation that may have committed before an uncertain response must not leave downstream cached data falsely authoritative.
 
----
+## 14. UI Quality, Accessibility, and Responsiveness
 
-# 27. State Management
+Follow the existing theme and design-system conventions.
 
-Use Riverpod for dependency injection/application state as defined by architecture.
+Use shared design tokens for genuinely repeated colors, spacing, typography, radii, and breakpoints. Keep one-off layout values local when they have no shared meaning.
 
-Keep:
+Do not hardcode API values or machine codes in Widgets.
 
-- API client
-- repositories
-- session state
-- feature state
+When relevant to the task, support:
 
-testable and replaceable.
+- keyboard operation;
+- predictable focus order;
+- visible focus;
+- Escape/Cancel behavior;
+- semantic labels and announcements;
+- associated field errors;
+- progress/busy semantics;
+- text scaling;
+- long content;
+- supported desktop window sizes;
+- scrolling without overflow or focus traps;
+- status communication that does not rely on color alone.
 
-Do not use global mutable singleton state as a shortcut around the architecture.
+Accessibility behavior must be testable when it is part of the approved implementation contract.
 
----
-
-# 28. DTO / Domain Separation
-
-Do not leak raw JSON maps through widgets.
-
-Use DTOs for transport.
-
-Use domain/UI models when API representation and presentation needs differ.
-
-A DTO field may mirror backend values exactly; UI labels/localization should not replace machine codes in domain/network logic.
-
----
-
-# 29. Reports and Lists
-
-Server-side pagination/filtering is authoritative.
-
-Use:
-
-```text
-page
-per_page
-search
-allowed filters
-sort
-direction
-```
-
-only as defined per endpoint.
-
-Do not fetch all institutions/users/topics/submissions/results and filter tenant-sensitive data only in Flutter.
-
-Report filters must be sent to authorized server endpoints.
-
----
-
-# 30. Parent UI
-
-Parent experience is mobile, read-only, and limited to explicitly connected children.
-
-Do not provide:
-
-- Task submission
-- Answer editing
-- Score editing
-- Topic/task management
-- Institution settings
-
-If Parent has multiple children, use the connected-children endpoint and keep each child context explicit.
-
----
-
-# 31. Teacher UI
-
-Teacher may manage only assigned Groups/Students/Topics.
-
-Desktop is the primary surface for:
-
-- Topic authoring
-- Material management
-- Homework builder
-- Blitz builder
-- Manual checking
-- Detailed results/reports
-
-Mobile should stay focused on approved quick classroom/monitoring actions.
-
-Do not expose Institution Admin policy settings in Teacher UI.
-
----
-
-# 32. Student UI
-
-Student may access only:
-
-- Assigned Topics
-- Learning materials
-- Assigned Homework
-- Active/eligible Blitz
-- Own Attempts/submissions
-- Own allowed/released results
-- Own progress
-
-Do not expose another Student's identity/data through list caching, direct-route state, or stale repository responses.
-
----
-
-# 33. Error UX
-
-Human-readable backend `message` may be displayed when appropriate.
-
-Application branching must use stable error `code`.
-
-Examples:
-
-- `must_change_password`/auth state → route reconciliation
-- `deadline_passed` → stop editing and refresh
-- `blitz_time_expired` → stop timer/editing and refresh
-- `submission_locked` → refresh Attempt
-- `attempts_exhausted` → disable new Attempt action
-- `result_not_visible` → show appropriate unavailable state
-- `resource_not_found` → privacy-safe not-found state
-
-Do not display server stack traces/raw exception text.
-
----
-
-# 34. Tests
-
-Flutter unit tests should cover relevant:
-
-- DTO serialization/mapping
-- Repository failure mapping
-- Session/bootstrap
-- Role routing
-- First-login password gate
-- View-state logic
-- Idempotency-Key retention for retries
-- Timer presentation from server timestamps
-- Score one-decimal formatting
-- Visibility-state mapping
-
-Widget tests should cover important:
-
-- Loading
-- Empty
-- Error
-- Permission denied
-- Form validation
-- Mutation in-flight state
-- Attempt state
-- Timer display
-- Result visibility
-- Parent/Student read-only boundaries where relevant
-
-Do not duplicate backend result formulas in Flutter tests.
-
-Test that UI trusts backend result/category rather than recomputing it.
-
----
-
-# 35. Required Flutter Quality Gates
-
-Run:
-
-```text
-flutter analyze
-flutter test
-```
-
-Run the repository-configured formatting check.
-
-Do not invent or add a formatter/linter package merely to satisfy a task unless the task/architecture explicitly requires it.
-
-A failed required check blocks completion.
-
----
-
-# 36. Package Rule
-
-Do not add a Flutter package unless the current task genuinely needs it and the change is reviewed against architecture.
-
-Prefer existing project infrastructure.
-
-Do not introduce a second competing:
-
-- Router
-- State-management framework
-- HTTP client
-- Serialization approach
-
-inside a focused feature task.
-
----
-
-# 37. Clean Code and Frontend Quality Rules
-
-These rules supplement the root Clean Code rules.
-
-## 37.1 Widget Responsibility
-
-A Widget should primarily describe presentation and user interaction.
-
-Do not place raw Dio calls, tenant authorization logic, official scoring logic, API JSON parsing, complex cross-feature orchestration, or persistent-storage implementation details in Widgets.
-
-Extract focused Widgets when a screen becomes difficult to understand, but do not split every few lines into unnecessary components.
-
-## 37.2 Avoid God Notifiers / Controllers
-
-Riverpod Notifiers/Controllers should manage one feature/use-case state boundary.
-
-Do not create one global controller that manages unrelated auth, topics, Homework, Blitz, results, and reports. Keep state close to the owning feature.
-
-## 37.3 UI Constants and Design Tokens
-
-Do not scatter repeated colors, spacing, radii, text sizes, durations, and breakpoints through Widgets when they are part of the shared design language.
-
-Use the project theme/design-system/token location. A one-off layout value may stay local when it has no reusable design meaning.
-
-Do not hardcode API URLs or backend machine codes in Widgets.
-
-## 37.4 Reusable Widgets
-
-Create reusable Widgets for genuinely repeated UI behavior/patterns.
-
-Do not build one giant universal Widget with many flags for unrelated screens. Prefer focused components with clear inputs. Keep feature-specific UI inside its feature unless it is truly shared.
-
-## 37.5 DTO and State Naming
-
-Name DTOs, domain models, providers, notifiers, and states according to the represented feature.
-
-Prefer:
-
-```text
-TopicDto
-TopicRepository
-StudentHomeworkState
-BlitzAttemptNotifier
-TopicResultViewModel
-```
-
-Avoid vague names such as `DataModel`, `CommonState`, `MainProvider`, `Manager`, or `ApiHelper2`.
-
-## 37.6 Async State Quality
-
-Async flows must handle initial loading, refresh, empty data, mutation in progress, server validation failure, business conflict, auth/session invalidation, and retry/reconciliation where allowed.
-
-Do not leave UI permanently disabled/spinning after an exception. Do not catch and discard backend failures.
-
-## 37.7 Formatting and Display Logic
+## 15. Presentation Formatting
 
 Presentation formatting may live in focused formatter/view-model helpers.
 
-Valid presentation logic includes one-decimal score formatting, localized date display, and human-readable status labels.
+Valid examples include:
 
-Do not move backend-authoritative calculations into formatters. Invalid examples include recalculating Topic final score, selecting official Attempt, or independently deriving Understanding Category.
+- localized labels;
+- date/time display;
+- number formatting;
+- status text;
+- responsive display decisions.
 
-## 37.8 Frontend Test Readability
+Formatting code must not become a hidden business-rule engine.
 
-Name tests by behavior.
+Do not recompute server-authoritative outcomes from display values.
 
-Prefer:
+Keep raw machine values available to application/data logic and map them to UI labels only at the presentation boundary.
 
-```text
-shows_error_when_homework_attempts_are_exhausted
-routes_to_password_change_when_required
-does_not_render_parent_result_before_student_visibility
-```
+## 16. Package and Platform Changes
 
-Avoid vague test names. Keep reusable setup explicit enough that role, scope, and state remain understandable.
+Do not add or change Flutter packages unless explicitly required by the task.
 
----
+Do not change `pubspec.lock` without a real dependency change.
 
-# 38. Frontend Completion Checklist
+Do not alter Android, iOS, Windows, Linux, macOS, or web platform files unless the approved implementation contract requires that platform change.
 
-Before completing a frontend task:
+Do not regenerate unrelated platform files.
 
-- [ ] Feature follows `data/domain/presentation` boundaries where applicable.
-- [ ] Names are specific and feature/domain-aligned.
-- [ ] Widgets/Notifiers have focused responsibilities.
-- [ ] Repeated design values use established theme/tokens where appropriate.
-- [ ] No giant catch-all Widget/provider/helper was introduced.
-- [ ] Widgets do not call Dio directly.
-- [ ] Server remains authoritative for security/business logic.
-- [ ] Correct role/device boundary is respected.
-- [ ] `must_change_password` gating is respected where relevant.
-- [ ] Student payloads do not expose answer keys.
-- [ ] Required Idempotency-Key behavior is implemented where relevant.
-- [ ] Timer/deadline UX uses server-authoritative data.
-- [ ] Scores display one decimal without client category recomputation.
-- [ ] Result calculation state and visibility are kept separate.
-- [ ] Error branching uses stable backend codes.
-- [ ] Loading/empty/error/mutation states are handled.
-- [ ] DTO/domain mapping is typed and tested.
-- [ ] Relevant widget/unit tests pass.
-- [ ] `flutter analyze` passes.
-- [ ] `flutter test` passes.
-- [ ] Formatting check passes.
-- [ ] No unrelated refactor/package addition was introduced.
+Do not introduce a new code generator, linter, formatter, or build tool merely to complete a focused task.
 
----
+## 17. Frontend Tests
 
-# Final Frontend Rule
+Use focused unit, repository/data-source, controller/notifier, router, and widget tests according to the changed responsibility defined by the approved implementation contract.
 
-> Flutter is the role-appropriate user interface over the locked Laravel contract. Keep it typed, feature-scoped, server-authoritative, retry-safe, privacy-safe, and free of duplicated backend business logic.
+Test the real boundary that owns the behavior.
+
+Relevant coverage may include:
+
+- strict DTO parsing;
+- request method/path/query/body/header construction;
+- repository failure mapping;
+- controller/notifier state transitions;
+- duplicate request suppression;
+- session/target/disposal stale completion rejection;
+- route parsing and direct entry;
+- form normalization/validation;
+- loading/empty/error/data presentation;
+- mutation feedback;
+- cache invalidation;
+- focus/keyboard/accessibility behavior;
+- responsive layout and overflow.
+
+Keep tests deterministic:
+
+- use fake/injected repositories and clients;
+- control async completion explicitly;
+- use fake clocks/timestamps when needed;
+- avoid arbitrary sleeps;
+- do not call real external networks;
+- do not depend on uncontrolled device time or locale.
+
+Do not duplicate backend-authoritative business formulas in frontend tests.
+
+Do not weaken existing tests to accommodate incorrect implementation.
+
+## 18. Frontend Verification Boundary
+
+Per-task verification is governed by the approved implementation contract and the root `AGENTS.md`.
+
+Frontend engineering rules do not independently expand verification into the full frontend suite, full build, or broad E2E. Those are Stage checkpoint/integration activities unless the approved implementation contract explicitly requires broader verification for a concrete regression risk.
+
+Narrow diagnostic test runs or focused reruns are allowed when needed to understand a failure.
+
+## 19. Frontend Diff Review
+
+In addition to the root diff review, verify:
+
+- feature-first placement is correct;
+- Widgets do not call Dio or parse JSON;
+- DTOs/repositories/controllers have focused responsibilities;
+- no competing router/client/state/cache abstraction was introduced;
+- session/target/operation ownership is sufficient but not overengineered;
+- stale completions cannot affect current state;
+- machine values remain separate from UI labels;
+- backend-authoritative behavior was not reimplemented;
+- loading/error/mutation states cannot become stuck;
+- invalidation is narrow and preserves required retained state;
+- accessibility/focus/responsive behavior required by the task is covered;
+- generated/platform/lock files changed only when justified;
+- focused frontend tests cover the actual contract.
+
+## Final Frontend Rule
+
+> Implement the approved frontend contract with feature-first boundaries, typed transport/data models, focused Riverpod state, safe asynchronous ownership, accessible UI, deterministic tests, and no client-side reinvention of backend authority.

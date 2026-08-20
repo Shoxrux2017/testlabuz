@@ -1,69 +1,150 @@
-# TestLabUz Codex Tasks
+# TestLabUz Implementation Workflow
 
-This directory controls implementation work for the locked TestLabUz MVP.
-It organizes small Codex tasks; it does not define or change product behavior.
+This directory stores Stage indexes, implementation contracts, checkpoint
+reviews, integration evidence, and Stage closure records for the locked
+TestLabUz MVP.
 
-## 1. Authority
+This workflow applies to **Stage 4 and later**.
 
-The authoritative product and technical specification is `docs/01–09` from
-`TestLabUz-MVP-Specifications-LOCKED`.
+Historical Stage 0–3 task, review, delivery, and closure files remain valid
+audit evidence. They are not rewritten retroactively to match this workflow.
 
-Before implementing a task, follow this order:
+---
 
-1. Read the root `AGENTS.md`.
-2. Read the nearest backend or frontend `AGENTS.md` when applicable.
-3. Read the approved task file.
-4. Read only the task's referenced sections from `docs/01–09`.
-5. Inspect the existing code and tests affected by the task.
+## 1. Authority and Responsibility
 
-If a task conflicts with a locked specification, stop and report the exact
-conflict. A task may narrow implementation scope, but it must never create,
-reinterpret, or remove business behavior.
+The project uses the following responsibility split:
+
+```text
+ChatGPT = requirements, architecture, task design, review, and Stage closure
+Codex   = implementation and required verification
+```
+
+### 1.1 Product and technical authority
+
+The locked MVP product and technical specification remains:
+
+```text
+docs/
+  01-business-overview.md
+  02-user-roles.md
+  03-features.md
+  04-user-flows.md
+  05-business-rules.md
+  06-roadmap.md
+  07-architecture.md
+  08-database.md
+  09-api-contracts.md
+```
+
+These documents define approved product behavior, roles, workflows, business
+rules, Stage scope, architecture, persistence, and API contracts.
+
+### 1.2 ChatGPT responsibility
+
+ChatGPT must read and reconcile the relevant repository inputs before planning
+or approving implementation:
+
+- current `origin/main`;
+- relevant locked `docs/01–09`;
+- roadmap Stage scope and Definition of Done;
+- root and applicable nested `AGENTS.md`;
+- relevant current implementation and tests;
+- current Stage/task status;
+- previous closure evidence needed to establish dependencies.
+
+ChatGPT owns:
+
+- requirements engineering;
+- software architecture and system design;
+- business and lifecycle decisions;
+- API and database design;
+- authorization, security, and tenant-isolation rules;
+- Stage/task decomposition;
+- implementation-readiness decisions;
+- acceptance criteria and test strategy;
+- proportional verification scope;
+- implementation contracts;
+- backend/frontend Phase 2 checkpoint reviews;
+- integration review;
+- Stage Closure Review.
+
+GitHub is the source of truth. ChatGPT must re-check current repository state
+when preparing a task, checkpoint review, integration gate, or closure review
+instead of relying only on previous chat memory.
+
+### 1.3 Codex responsibility
+
+Codex is primarily an implementation agent.
+
+Codex receives one approved, compact, self-contained implementation contract
+and may inspect only:
+
+1. the current approved implementation contract;
+2. root `AGENTS.md`;
+3. the applicable nested `backend/AGENTS.md` and/or `frontend/AGENTS.md`;
+4. source code, tests, migrations, configuration, and infrastructure directly
+   required by the assigned change;
+5. immediately related implementation patterns required for consistency.
+
+Codex must not read product specifications, roadmap files, architecture or
+database/API specification documents, previous task files, Stage history, or
+closure reviews to determine what to implement.
+
+Codex must not make product, business, architecture, public API, database,
+security, tenant-isolation, lifecycle, concurrency, idempotency, or unresolved
+UX decisions.
+
+If the approved implementation contract is materially incomplete or conflicts
+with the current implementation or applicable `AGENTS.md`, Codex must report
+the exact blocker instead of inventing a reconciliation.
+
+---
 
 ## 2. Directory Structure
 
 ```text
 tasks/
   README.md
-  STAGE_00_CLOSURE_REVIEW.md
-  STAGE_01_TASK_INDEX.md
+  STAGE_<NN>_TASK_INDEX.md
+  STAGE_<NN>_CLOSURE_REVIEW.md
 
   templates/
     CODEX_TASK_TEMPLATE.md
+    BLOCK_REVIEW_TEMPLATE.md
     STAGE_TASK_INDEX_TEMPLATE.md
-    TASK_REVIEW_TEMPLATE.md
     STAGE_CLOSURE_REVIEW_TEMPLATE.md
+    TASK_REVIEW_TEMPLATE.md
 
   backend/
+    stage-<NN>/
+
   frontend/
+    stage-<NN>/
+
   integration/
+    stage-<NN>/
 ```
 
-Stage directories are created only after that stage is approved for
-decomposition, for example:
+### 2.1 Task areas
 
-```text
-tasks/backend/stage-01/
-tasks/frontend/stage-01/
-tasks/integration/stage-01/
-```
-
-Stage 1 has an approved task index at `tasks/STAGE_01_TASK_INDEX.md`.
-Detailed task files are created only when their individual scopes are approved.
-
-## 3. Task Areas
-
-| Area | Contains |
+| Area | Primary ownership |
 |---|---|
-| `backend/` | Laravel, PostgreSQL, server-side authorization, domain rules, storage, and backend tests |
-| `frontend/` | Flutter data, domain, presentation, routing, state management, and frontend tests |
-| `integration/` | Laravel–Flutter contract verification, cross-layer workflows, and end-to-end smoke checks |
+| `backend/` | Laravel, PostgreSQL, server-side authorization, domain rules, persistence, storage, and backend tests |
+| `frontend/` | Flutter data/domain/presentation, routing, state, API integration, accessibility, and frontend tests |
+| `integration/` | Laravel–Flutter contract verification, real-stack/E2E workflows, cross-layer security, and tenant verification |
 
-A task belongs to the area that owns its main change. Cross-layer work should
-be a separate integration task rather than silently expanding a backend or
-frontend task.
+A task belongs to the area that owns its principal change.
 
-## 4. Naming Convention
+Do not silently expand a backend or frontend task into cross-layer integration
+work. Cross-layer behavior must be assigned to an explicit integration task or
+an explicitly approved shared-infrastructure task.
+
+---
+
+## 3. Naming Convention
+
+Implementation task files use:
 
 ```text
 S<stage>-<area>-<number>-<short-description>.md
@@ -72,156 +153,566 @@ S<stage>-<area>-<number>-<short-description>.md
 Examples:
 
 ```text
-S01-BE-001-short-description.md
-S01-FE-001-short-description.md
-S01-INT-001-short-description.md
+S04-BE-001-short-description.md
+S04-FE-001-short-description.md
+S04-INT-001-short-description.md
 ```
 
 Area codes:
 
-- `BE` — backend
-- `FE` — frontend
-- `INT` — integration
+- `BE` — backend;
+- `FE` — frontend;
+- `INT` — integration.
 
-These examples define naming only; they are not Stage 1 tasks.
-
-## 5. Task Lifecycle
-
-Use these statuses consistently:
-
-| Status | Meaning |
-|---|---|
-| `Draft` | Proposed but not approved for implementation |
-| `Approved` | Scope and task contract approved; ready for Codex |
-| `In Progress` | Codex is implementing the task |
-| `Accepted` | Read-only acceptance passed, approved delivery is on `origin/main`, local `main` matches it, and the working tree is clean |
-| `Not Accepted` | Read-only acceptance found a blocking or material issue; no commit, push, merge, or later task may proceed from that result |
-| `Delivery Blocked` | Read-only acceptance passed, but safe GitHub delivery could not be completed |
-| `Blocked` | Work cannot safely continue without an approved decision or dependency |
-
-Only one small, precise implementation task should normally be `In Progress`.
-Do not mark a task `Accepted` only because work was implemented or reviewed.
-Acceptance requires the approved result to be delivered to `origin/main`.
-
-Review status values:
-
-| Status | Meaning |
-|---|---|
-| `Not started` | The read-only acceptance gate has not run |
-| `PASS` | The read-only acceptance gate found no blocking or material issue |
-| `NOT ACCEPTED` | The read-only acceptance gate found a blocking or material issue |
-
-Delivery status values:
-
-| Status | Meaning |
-|---|---|
-| `Not started` | No post-acceptance GitHub delivery has started |
-| `Not applicable` | Delivery does not apply to the specific pre-baseline task |
-| `Delivered` | The accepted result is present on `origin/main` and local `main` is synchronized |
-| `Blocked` | Safe GitHub delivery could not be completed |
-
-## 6. Approved Workflow
-
-1. Discuss and approve a roadmap stage for decomposition.
-2. Create its stage task index from `STAGE_TASK_INDEX_TEMPLATE.md`.
-3. Agree on the small task list, order, and dependencies.
-4. Create or approve one detailed task from `CODEX_TASK_TEMPLATE.md`.
-5. Give Codex that one task.
-6. Run the task through the four required phases below.
-7. If necessary, create a focused fix task; do not silently expand the original.
-8. Continue with the next approved task only after the current task is
-   `Accepted` and delivered.
-9. After all tasks pass, run `STAGE_CLOSURE_REVIEW_TEMPLATE.md` and explicitly
-    close the stage before starting the next stage.
-
-### 6.1 Required Task Phases
-
-Every implementation task uses these phases unless its approved task file
-defines a stricter baseline exception.
+Checkpoint and closure files should identify the Stage and review boundary
+clearly, for example:
 
 ```text
-PHASE 0 - Git Preflight
-PHASE 1 - Implementation
-PHASE 2 - Read-Only Acceptance Gate
-PHASE 3 - Post-Acceptance Git Delivery
+STAGE_04_BACKEND_BLOCK_REVIEW.md
+STAGE_04_FRONTEND_BLOCK_REVIEW.md
+STAGE_04_CLOSURE_REVIEW.md
 ```
 
-Phase 0 requires a clean repository, synchronized `main`, one task branch from
-`origin/main`, confirmed dependencies, and safe GitHub state.
+---
 
-Phase 1 implements only the approved task and runs the required checks. Do not
-push implementation work during this phase.
+## 4. Stage Planning and Decomposition
 
-Phase 2 is read-only. Review the complete result against the task contract,
-acceptance criteria, security requirements, and relevant locked specifications.
-Do not edit files, stage changes, commit, push, merge, or fix findings during
-this gate. If the gate fails, return `FINAL STATUS: NOT ACCEPTED` and stop.
+Before Stage implementation begins:
 
-Phase 3 runs only after Phase 2 returns `PASS`. Update acceptance bookkeeping,
-rerun final safe checks, create one focused commit, push the task branch, open a
-Pull Request to `main` when tooling permits, merge only with required checks
-passing, resynchronize local `main`, and verify local `main == origin/main` with
-a clean working tree. Only then return `FINAL STATUS: ACCEPTED`.
+1. ChatGPT verifies the previous Stage is explicitly closed.
+2. ChatGPT verifies current `origin/main`.
+3. ChatGPT reads the roadmap Stage scope and relevant locked contracts.
+4. ChatGPT inspects the relevant current implementation and tests.
+5. ChatGPT resolves architecture, business behavior, API/database behavior,
+   security, tenant isolation, lifecycle, and cross-layer dependencies.
+6. ChatGPT proposes the Stage task decomposition and implementation order.
+7. The project owner reviews and approves the decomposition.
+8. The Stage task index records tasks, dependencies, checkpoints, integration,
+   and closure mapping.
 
-If Phase 2 passes but safe GitHub delivery cannot finish, return
-`FINAL STATUS: DELIVERY BLOCKED` and stop.
+Implementation normally proceeds one task at a time.
 
-### 6.2 GitHub Delivery Rules
+The Stage index may list future tasks and dependencies, but detailed
+implementation contracts should be prepared or hardened in execution order.
+Do not create unnecessary detailed files for future tasks merely to populate
+the entire Stage in advance.
 
-- Future production tasks use a task branch and Pull Request; direct pushes to
-  `main` are allowed only for the approved initial empty-repository baseline.
-- Do not commit or push before the read-only acceptance gate passes.
-- Do not force-push, rewrite shared history, bypass hooks/checks with
-  `--no-verify`, or merge with failing required checks.
-- Do not use destructive cleanup such as `git reset --hard` or destructive
-  `git clean` unless a separate approved recovery task explicitly requires it.
-- Do not modify global Git configuration.
-- Do not replace an unexpected `origin` silently.
-- Do not commit credentials, tokens, environment secrets, private keys, or
-  certificate artifacts.
-- `ACCEPTED` means the accepted result is on `origin/main`, local `main` matches
-  it, and `git status --short` is empty.
+---
 
-## 7. Non-Negotiable Task Rules
+## 5. Implementation Readiness Gate
 
-Every implementation task must include:
+A task may become `Approved` only when ChatGPT has resolved every relevant
+implementation decision.
+
+The implementation contract must define, where applicable:
 
 - one clear goal;
-- included scope and explicit non-goals;
-- relevant files;
-- exact specification references;
-- relevant business rules;
-- functional and architectural requirements;
-- server-side authorization and tenant-isolation requirements where applicable;
+- included scope;
+- explicit non-goals;
+- current implementation context;
+- exact business behavior;
+- exact API request/response behavior;
+- persistence and schema behavior;
+- lifecycle and state transitions;
+- validation and normalization;
+- authorization;
+- tenant isolation and existence privacy;
+- error behavior;
+- edge cases;
+- concurrency, transactions, locking, uniqueness, and idempotency;
 - acceptance criteria;
-- automated tests and negative/security cases;
-- quality gates and manual smoke checks where applicable;
-- stop conditions;
-- the required Codex completion report.
+- required focused tests;
+- required negative/security tests;
+- proportional verification commands;
+- allowed files/areas and scope boundaries;
+- delivery expectations;
+- required Codex completion evidence.
 
-All implementation must follow the locked architecture, Clean Code, proper
-separation of concerns, focused responsibilities, testing, security, and strict
-multi-institution isolation rules in the applicable `AGENTS.md` files.
+Codex must not need to choose between competing product, architecture, API,
+database, security, lifecycle, or UX behaviors.
 
-## 8. Stage Status
+If such a decision remains unresolved, the task stays `Draft` or becomes
+`Blocked`.
 
-| Stage | Status | Evidence / next gate |
+---
+
+## 6. Implementation Contract Rules
+
+Each implementation task is the complete task-specific contract given to
+Codex.
+
+It must be compact and self-contained. It should include only the context and
+requirements Codex needs to implement and verify the assigned change.
+
+Do not create a second large `CODEX-PROMPT` file that duplicates the detailed
+task.
+
+Product-document references may be retained as provenance for ChatGPT and
+review, but Codex must not be instructed to open those documents to discover
+implementation behavior.
+
+The implementation contract must not delegate product, architecture, API,
+database, security, tenant, lifecycle, concurrency, idempotency, or unresolved
+UX decisions to Codex.
+
+---
+
+## 7. Task Lifecycle
+
+Stage 4+ implementation tasks use these statuses:
+
+| Status | Meaning |
+|---|---|
+| `Draft` | Proposed task; implementation-readiness gate has not passed |
+| `Approved` | Complete implementation contract approved and ready for Codex |
+| `In Progress` | Codex is implementing or verifying the task |
+| `Accepted` | Contract satisfied, required focused verification passed, approved delivery completed, accepted result is on `origin/main`, and local `main` is synchronized and clean |
+| `Blocked` | Implementation cannot safely continue without a planning, dependency, environment, or contract decision |
+| `Delivery Blocked` | Implementation and required verification passed, but safe GitHub delivery could not be completed |
+
+Delivery tracking may use:
+
+| Delivery status | Meaning |
+|---|---|
+| `Not started` | No GitHub delivery started |
+| `Delivered` | Accepted result is present on `origin/main` |
+| `Blocked` | Safe delivery could not complete |
+| `Not applicable` | Delivery does not apply to the item |
+
+`Accepted` is a **task-level implementation and delivery state**.
+
+It does not mean that the complete backend or frontend Stage block has passed
+Phase 2. A later block review may identify a cross-task defect in already
+accepted work. That defect must be corrected through a focused fix, and the
+affected checkpoint must be re-verified.
+
+---
+
+## 8. Per-Task Implementation Workflow
+
+Each normal implementation task follows:
+
+```text
+A. Git Preflight
+B. Implementation
+C. Focused Verification
+D. Scope/Diff Self-Check
+E. GitHub Delivery
+F. Task Acceptance
+```
+
+There is no individual Phase 2 Read-Only Review after every Stage 4+ task.
+
+### 8.1 A — Git Preflight
+
+Before editing:
+
+1. verify the task status is `Approved`;
+2. verify required dependencies are accepted and delivered;
+3. verify local `main` is clean;
+4. fetch and verify local `main == origin/main`;
+5. verify `origin` is the expected repository;
+6. create one focused task branch from current `main`;
+7. inspect and preserve pre-existing user work and untracked files;
+8. stop if safe isolation would require force-push, history rewrite,
+   destructive cleanup, or bypassing checks.
+
+### 8.2 B — Implementation
+
+Codex:
+
+- implements only the approved contract;
+- follows root and applicable nested `AGENTS.md`;
+- inspects only directly relevant source code and tests;
+- adds or updates focused tests required by the contract;
+- preserves explicit non-goals;
+- avoids unrelated refactoring, formatting churn, speculative infrastructure,
+  dependency changes, generated output, or documentation changes.
+
+### 8.3 C — Focused Verification
+
+The implementation contract defines the minimum sufficient verification.
+
+After each task, Codex must run:
+
+- focused tests for changed functionality;
+- necessary formatter/linter/static checks;
+- specifically named directly affected regression tests when justified;
+- `git diff --check`.
+
+Additional narrow diagnostic commands or focused reruns are allowed when needed
+to understand a failure.
+
+Do not independently run full backend/frontend suites, full builds, broad E2E,
+or unrelated regression areas unless the contract explicitly requires them for
+a concrete regression risk.
+
+If implementation reveals that shared infrastructure was necessarily changed
+outside the contract's verification assumptions, Codex must report the mismatch
+or material regression risk.
+
+### 8.4 D — Scope/Diff Self-Check
+
+Before delivery, Codex inspects the complete diff and verifies:
+
+- every changed file is necessary;
+- implementation matches the contract;
+- acceptance criteria have evidence;
+- non-goals remain excluded;
+- no unrelated refactor or formatting churn exists;
+- no public API/schema/route/serialization behavior changed unintentionally;
+- authorization and tenant boundaries remain intact;
+- no test was weakened to hide a defect;
+- no debug code, secrets, generated junk, or temporary artifacts are included;
+- existing user work remains untouched.
+
+### 8.5 E — GitHub Delivery
+
+GitHub delivery occurs only when the current implementation contract or active
+workflow explicitly assigns it.
+
+Normal delivery:
+
+1. stage only task-owned files;
+2. run staged diff and secret/safety checks required by the contract;
+3. create one focused commit;
+4. push the task branch;
+5. open or update a Pull Request to `main`;
+6. merge only when required checks pass and merge is permitted;
+7. fetch and resynchronize local `main`;
+8. verify local `main == origin/main`;
+9. verify ahead/behind is `0/0`;
+10. verify the working tree is clean.
+
+If implementation and focused verification pass but safe delivery cannot
+complete, use `Delivery Blocked` and stop.
+
+### 8.6 F — Task Acceptance
+
+A task becomes `Accepted` only after:
+
+- its implementation contract is satisfied;
+- required focused verification passes;
+- `git diff --check` passes;
+- focused scope/diff self-check passes;
+- approved delivery completes;
+- accepted result is on `origin/main`;
+- local `main` matches `origin/main`;
+- the working tree is clean.
+
+No per-task Phase 2 verdict is required for Stage 4+ task acceptance.
+
+---
+
+## 9. Backend Phase 2 Checkpoint
+
+Run the backend Phase 2 checkpoint only after all approved backend Stage tasks
+are accepted and delivered.
+
+Phase 2 is a read-only block review of the complete backend Stage scope.
+
+ChatGPT owns the review scope, architecture/security analysis, findings, and
+final verdict. Codex may execute explicitly assigned read-only commands and
+collect verification evidence, but must not make missing product or
+architecture decisions.
+
+The backend checkpoint must include:
+
+- current `origin/main` verification;
+- complete backend Stage-scope review;
+- full backend regression suite;
+- required backend format/static checks;
+- architecture and responsibility-boundary review;
+- API contract consistency;
+- persistence, migrations, constraints, indexes, and query behavior;
+- transactions, concurrency, idempotency, and lifecycle behavior where
+  relevant;
+- authorization and tenant isolation;
+- existence privacy and cross-tenant negative behavior;
+- cross-task interactions;
+- regression risk to previous Stages;
+- complete diff/scope review of the backend block.
+
+During the read-only review:
+
+- do not edit implementation files;
+- do not fix findings;
+- do not stage, commit, push, or merge review-time changes.
+
+Checkpoint verdicts:
+
+- `PASS`;
+- `NOT ACCEPTED`.
+
+`PASS` requires:
+
+- no P1 findings;
+- no P2 findings;
+- required full backend verification passes;
+- no unresolved architecture, API, database, security, tenant, lifecycle, or
+  cross-task conflict.
+
+If the verdict is `NOT ACCEPTED`:
+
+1. record findings by severity;
+2. create one or more focused fix contracts;
+3. implement, verify, and deliver the fixes;
+4. re-run the affected backend checkpoint checks;
+5. obtain `PASS` before frontend implementation proceeds.
+
+---
+
+## 10. Frontend Phase 2 Checkpoint
+
+Run the frontend Phase 2 checkpoint only after:
+
+- the backend checkpoint is `PASS`, when the Stage has a backend block;
+- all approved frontend Stage tasks are accepted and delivered.
+
+Phase 2 is a read-only block review of the complete frontend Stage scope.
+
+ChatGPT owns the review scope, architecture/API/state analysis, findings, and
+final verdict. Codex may execute explicitly assigned read-only commands and
+collect verification evidence, but must not make missing product, UX, or
+architecture decisions.
+
+The frontend checkpoint must include:
+
+- current `origin/main` verification;
+- complete frontend Stage-scope review;
+- full frontend test suite;
+- required static analysis and format checks;
+- required target build;
+- feature/module/layer responsibility review;
+- API, DTO, error, and transport integration;
+- authentication/session/routing/state handling;
+- stale async completion safety;
+- loading/error/empty/success and mutation states;
+- cache ownership and invalidation;
+- accessibility, keyboard, focus, responsiveness, and overflow behavior where
+  required;
+- backend-authoritative rule boundaries;
+- cross-task interactions;
+- regression risk to previous Stages;
+- complete diff/scope review of the frontend block.
+
+During the read-only review:
+
+- do not edit implementation files;
+- do not fix findings;
+- do not stage, commit, push, or merge review-time changes.
+
+Checkpoint verdicts:
+
+- `PASS`;
+- `NOT ACCEPTED`.
+
+`PASS` requires:
+
+- no P1 findings;
+- no P2 findings;
+- required full frontend tests/static checks/build pass;
+- no unresolved architecture, API integration, session, routing, state, or
+  cross-task conflict.
+
+If the verdict is `NOT ACCEPTED`:
+
+1. record findings by severity;
+2. create one or more focused fix contracts;
+3. implement, verify, and deliver the fixes;
+4. re-run the affected frontend checkpoint checks;
+5. obtain `PASS` before Stage integration proceeds.
+
+---
+
+## 11. Finding Severity
+
+Block-level reviews use:
+
+| Severity | Meaning |
+|---|---|
+| `P1` | Security, tenant isolation, data loss/corruption, secret exposure, or core public-contract breach |
+| `P2` | Material functional, architecture, lifecycle, integration, or regression defect that blocks the checkpoint |
+| `P3` | Non-blocking maintainability, clarity, or test-quality improvement |
+
+P3 findings do not automatically expand Stage scope. Record them separately
+unless the project owner approves a focused correction.
+
+---
+
+## 12. Integration Gate
+
+Stage integration begins only after required backend and frontend checkpoints
+are `PASS`.
+
+The approved integration task must define:
+
+- real Laravel–Flutter workflow scope;
+- real-stack environment and fixtures;
+- exact API/DTO/error boundaries;
+- authentication/session behavior;
+- lifecycle/state progression;
+- cross-layer security and tenant-isolation cases;
+- real-stack/E2E commands;
+- required manual smoke steps;
+- acceptance criteria;
+- focused cleanup and delivery rules.
+
+Integration verification must include, where applicable:
+
+- real backend and frontend working together;
+- request/response/error contract agreement;
+- role and active-state behavior;
+- direct-ID and cross-tenant denial;
+- routing/session/state behavior;
+- lifecycle transitions;
+- persistence effects;
+- required Windows/desktop/mobile target behavior;
+- required manual smoke flow.
+
+Integration findings must be fixed and the affected integration checks rerun
+before Stage closure begins.
+
+The accepted integration state must be delivered to `origin/main`.
+
+---
+
+## 13. Stage Closure Review
+
+Stage Closure Review begins only after:
+
+- all approved tasks are accepted and delivered;
+- backend Phase 2 checkpoint is `PASS` or justified `N/A`;
+- frontend Phase 2 checkpoint is `PASS` or justified `N/A`;
+- integration gate is `PASS` or justified `N/A`;
+- required fixes are delivered;
+- current `origin/main` contains the complete accepted Stage result.
+
+ChatGPT performs the closure review against:
+
+- current `origin/main`;
+- roadmap Stage scope and acceptance criteria;
+- Stage Definition of Done;
+- relevant locked `docs/01–09`;
+- Stage task index;
+- current implementation and tests;
+- backend/frontend checkpoint evidence;
+- integration/E2E evidence;
+- GitHub delivery evidence;
+- documentation and task bookkeeping state.
+
+Closure must verify:
+
+- every roadmap acceptance criterion;
+- approved business behavior;
+- backend/frontend contract agreement;
+- permissions and tenant isolation;
+- validation and error behavior;
+- required checkpoint verification;
+- required real-stack/E2E and manual smoke evidence;
+- absence of blocking regression;
+- current documentation/task status;
+- final Git state.
+
+Do not rerun broad suites during closure when fresh checkpoint/integration
+evidence remains valid, unless a later change materially invalidated that
+evidence.
+
+Closure verdicts:
+
+- `STAGE CLOSED`;
+- `FIXES REQUIRED BEFORE CLOSURE`;
+- `CLOSURE BLOCKED`.
+
+A Stage is closed only when all required implementation, verification,
+checkpoint, integration, fix, delivery, and closure gates pass.
+
+The next Stage may enter planning/decomposition only after the current Stage is
+explicitly closed.
+
+---
+
+## 14. Git and Repository Safety
+
+Never:
+
+- force-push shared history;
+- rewrite `main`;
+- bypass hooks or checks with `--no-verify`;
+- silently replace an unexpected `origin`;
+- modify global Git configuration as part of a task;
+- use destructive `git reset --hard` or destructive `git clean` as normal
+  workflow;
+- commit passwords, tokens, credentials, private keys, certificates,
+  environment secrets, local-only files, or sensitive generated artifacts;
+- overwrite, stage, revert, format, move, or delete unrelated user work.
+
+If repository state is unsafe or cannot be isolated without destructive action,
+stop and report the exact condition.
+
+---
+
+## 15. Templates
+
+Stage 4+ uses:
+
+| Template | Purpose |
+|---|---|
+| `CODEX_TASK_TEMPLATE.md` | Compact, implementation-ready Codex contract |
+| `BLOCK_REVIEW_TEMPLATE.md` | Backend or frontend Phase 2 read-only checkpoint |
+| `STAGE_TASK_INDEX_TEMPLATE.md` | Stage task/dependency/checkpoint/integration map |
+| `STAGE_CLOSURE_REVIEW_TEMPLATE.md` | Final Stage closure review |
+| `TASK_REVIEW_TEMPLATE.md` | Legacy reference for Stage 0–3 individual task reviews |
+
+`TASK_REVIEW_TEMPLATE.md` must not be used as the normal Stage 4+ per-task
+workflow.
+
+---
+
+## 16. Historical Compatibility
+
+Stage 0–3 used an earlier workflow with individual task-level read-only
+acceptance reviews.
+
+Those historical files remain correct evidence of how those Stages were
+implemented and closed.
+
+Do not:
+
+- rewrite Stage 0–3 tasks to match Stage 4+ terminology;
+- remove historical review/delivery evidence;
+- reinterpret old `Accepted`, `PASS`, or delivery statuses;
+- regenerate old prompts or closure files.
+
+This workflow governs new Stage 4+ work only.
+
+---
+
+## 17. Current Project State
+
+| Stage | Status | Next permitted gate |
 |---|---|---|
-| Stage 0 — Project Preparation and Technical Planning | `Closed` | See `STAGE_00_CLOSURE_REVIEW.md` |
-| Stage 1 — Authentication and Role-Based Entry | `Closed` | See `STAGE_01_CLOSURE_REVIEW.md`; next gate is Stage 2 decomposition/planning only |
-| Stage 2 — Multi-Institution Platform Management | `Closed` | See `STAGE_02_CLOSURE_REVIEW.md` and `STAGE_02_TASK_INDEX.md`; all 17 tasks are `Accepted / PASS / Delivered`, and the closure review is `PASS`; next gate is Stage 3 decomposition/planning only |
-| Stage 3 — Institution Administration and User Management | `Closed` | See `STAGE_03_CLOSURE_REVIEW.md` and `STAGE_03_TASK_INDEX.md`; all 18 tasks are `Accepted / PASS / Delivered`, and the closure review is `PASS`; next gate is Stage 4 planning/decomposition only |
+| Stage 0 — Project Preparation and Technical Planning | `Closed` | Historical |
+| Stage 1 — Authentication and Role-Based Entry | `Closed` | Historical |
+| Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
+| Stage 3 — Institution Administration and User Management | `Closed` | Historical |
+| Stage 4 | `Not started` | Workflow documentation alignment, repository synchronization, then approved Stage 4 implementation |
 
-Historical pre-delivery context: before implementation PR `#40` and delivery-
-bookkeeping PR `#41` were merged, `S02-INT-001` had passed verification but its
-delivery was pending. That state is retained only as history; it is not the
-current task or Stage 2 status.
+Before Stage 4 implementation begins:
 
-Current authoritative state: `S02-INT-001` and all 17 Stage 2 tasks are
-`Accepted / PASS / Delivered`. The renewed Stage 2 Closure Review passed at
-audited main `8b43abc614fdd5c66760c4f26f48aab4e8947f9d`, and Stage 2 is `Closed`.
-All 18 Stage 3 tasks from `S03-INT-001` through `S03-INT-002` are
-`Accepted / PASS / Delivered`. The separate Stage 3 Closure Review passed at
-audited main `cd84fd3c189118ea8067cafa0b9516ad9df0d1fe`, and Stage 3 is
-`Closed`. Stage 4 has not started; the next permitted action is Stage 4
-planning/decomposition only, not implementation.
+- this workflow and the applicable `AGENTS.md` files must be delivered to
+  `origin/main`;
+- local `main` must match `origin/main`;
+- the Stage 4 task index and current approved implementation contract must be
+  present and consistent;
+- the first task must pass the Implementation Readiness Gate.
+
+---
+
+## Core Principle
+
+> ChatGPT designs and verifies the solution. Codex implements the exact approved
+> contract and runs proportional verification. Context and verification are
+> reduced only where duplication is unnecessary; architecture quality, security,
+> tenant isolation, acceptance criteria, and final Stage assurance are never
+> reduced.

@@ -1,869 +1,328 @@
-# TestLabUz Backend — Codex Instructions
+# TestLabUz Backend Engineering Rules
 
-## Scope
+## 1. Scope
 
-This file applies to `backend/`.
+This file applies automatically to implementation work that changes files under `backend/`.
 
-It supplements the root `AGENTS.md`.
+Read it together with the root `AGENTS.md`.
 
-If this file and the root file appear to conflict, follow the stricter rule unless that would contradict the locked `docs/01–09`. Product behavior is always controlled by the locked specifications.
+The approved implementation contract defines the required behavior, API, schema, validation, authorization, lifecycle, concurrency, tests, and verification commands. This file defines the Laravel/PostgreSQL engineering standard for implementing that contract.
 
----
+The root `AGENTS.md` remains authoritative for general engineering, security, verification, context-discipline, Git, and repository-safety rules. This file adds backend-specific rules and must not be used to infer missing product behavior.
 
-# 1. Backend Baseline
+If the approved implementation contract is materially incomplete or conflicts with this file or the current backend implementation, report the exact blocker instead of making a product, API, database, security, or lifecycle decision.
 
-Use the architecture defined in `docs/07-architecture.md`:
+## 2. Backend Architecture
 
-```text
-Laravel REST API
-PostgreSQL
-Laravel Sanctum
-Modular monolith
-Private file storage through Laravel filesystem abstraction
-```
+Use the existing Laravel modular-monolith structure and established repository conventions.
 
-The backend is authoritative for all business state and security decisions.
-
-Do not move authoritative business logic to Flutter.
-
----
-
-# 2. Recommended Backend Layering
-
-Use the established responsibility flow:
+Prefer the responsibility flow:
 
 ```text
-HTTP Layer
-  ↓
-Application / Action Layer
-  ↓
-Domain Rules / Services
-  ↓
-Persistence / Infrastructure
+HTTP boundary
+  -> focused Application/Action use case
+  -> Domain rule/service when reusable stateful logic is needed
+  -> Eloquent / database / infrastructure
 ```
 
-Recommended logical areas:
+Create only the classes and directories needed for the current approved implementation contract.
 
-```text
-app/
-  Actions/
-  Domain/
-  Enums/
-  Exceptions/
-  Http/
-    Controllers/Api/V1/
-    Middleware/
-    Requests/
-    Resources/
-  Models/
-  Policies/
-  Services/
-  Support/
-```
+Do not introduce a new architectural style, package, framework, repository layer, command bus, event system, or generic service framework unless the approved implementation contract explicitly requires it.
 
-Create directories only when needed by an implemented feature. Do not generate empty architecture for future stages.
+## 3. HTTP Boundary
 
----
-
-# 3. Controllers
-
-Controllers must stay thin.
+Controllers must remain thin.
 
 A controller should normally:
 
-1. Receive already validated request data.
-2. Resolve authenticated context.
-3. Authorize/call one application action.
-4. Return a Resource/contract response.
+1. receive an already validated request;
+2. resolve the authenticated actor/context;
+3. call one focused Action/use case;
+4. return an existing Resource/response type.
 
-Do not implement complex rules directly in controllers, including:
+Do not place complex tenant scoping, authorization, lifecycle decisions, transactions, row locking, or multi-step persistence directly in controllers.
 
-- Tenant filtering
-- Attempt policies
-- Timer/deadline rules
-- Question scoring
-- Official-score selection
-- Topic-result calculation
-- Category assignment
-- File authorization
-- Complex lifecycle transitions
+Use method/constructor injection and existing Laravel dependency resolution. Do not use a service locator as a shortcut.
 
----
+Routes must use the existing versioning, middleware, naming, and ordering conventions. Do not add aliases or duplicate route families unless the approved implementation contract requires them.
 
-# 4. Request Validation vs Business Rules
+## 4. Request Validation
 
-Use Form Requests for request-shape validation:
+Use Form Requests for request-shape rules such as:
 
-- Required fields
-- Types
-- Formats
-- UUID syntax
-- Allowed enum values
-- Simple numeric ranges
-- File type/size preconditions
+- accepted body/query keys;
+- required/optional fields;
+- types and formats;
+- enum membership;
+- UUID syntax;
+- simple length/range constraints;
+- body/query prohibition.
 
-Use Actions/Domain services for stateful business rules:
+Reject unknown or protected input when the approved implementation contract requires a strict input shape.
 
-- User/Institution active state
-- Teacher assignment
-- Student eligibility
-- Parent-child relationship
-- Task lifecycle
-- Attempt availability
-- Deadline/timer authority
-- Result closure
-- Release policy
-- Historical protection
+Keep normalization explicit and contract-aligned. Do not silently rewrite values beyond the approved contract.
 
-Do not duplicate the same rule in many controllers.
+Form Requests must not become a hidden domain-service layer. Rules that depend on persisted records, actor scope, lifecycle, concurrency, or cross-record state belong in focused Actions/domain logic.
 
----
+## 5. Actions and Domain Logic
 
-# 5. PostgreSQL Rules
+Each Action/service must represent one clear use case or cohesive reusable rule.
 
-Follow `docs/08-database.md`.
+Prefer focused responsibilities over broad classes such as:
 
-Key rules:
+```text
+GeneralService
+InstitutionManager
+CommonRepository
+DatabaseHelper
+```
 
-- Domain primary keys use UUIDs.
-- Stored instants use PostgreSQL `timestamptz`.
-- Business statuses use constrained `varchar + CHECK` unless the locked DB contract says otherwise.
-- High-risk institution-owned tables carry direct `institution_id`.
-- Foreign keys and indexes must follow the locked schema.
-- Historical domain relationships default to restrictive deletion.
-- Use migrations for every schema change.
-- Do not manually mutate production schema as normal workflow.
-- Do not add PostgreSQL RLS unless the architecture is explicitly revised; Laravel authorization is the MVP authority.
+Do not duplicate one authoritative rule across Controllers, Form Requests, Models, Resources, and tests.
 
-Do not change a table/column/constraint from `08-database.md` simply because another shape appears easier.
+Use a Domain service/value object only when it provides a real reusable boundary. Do not create abstractions mechanically for simple contract-local behavior.
 
----
+Eloquent Models may own relationships, casts, focused query scopes, and model-level representation concerns. They should not become catch-all workflow managers.
 
-# 6. Tenant Scoping
+## 6. Authorization and Tenant Isolation
 
-Every institution-owned query must start from trusted authenticated scope.
+Start institution-owned access from trusted authenticated context.
 
-Unsafe:
+Required query concept:
+
+```text
+authenticated scope
+  -> tenant-scoped query
+  -> role/relationship/lifecycle rule
+  -> read or mutation
+```
+
+Avoid:
 
 ```text
 Model::find($id)
-then trust the record
+  -> then decide whether the actor may see it
 ```
 
-Required concept:
+when a scoped query can prevent existence disclosure.
 
-```text
-resolve authenticated scope
-→ query within institution
-→ authorize role/relationship
-→ apply lifecycle/business rule
-→ read/write
-```
+A valid UUID is not authorization.
 
-Never trust request `institution_id` as ownership authority.
+Apply tenant scope before:
 
-For high-risk creates, derive ownership from:
+- search;
+- filtering;
+- sorting;
+- pagination;
+- aggregates;
+- eager loading;
+- mutation;
+- relationship resolution.
 
-- Authenticated user
-- Authorized parent resource
-- Explicit platform-level path/resource
+Cross-tenant reads, writes, joins, and relationships must remain impossible through direct IDs, nested resources, filters, or route-model binding.
 
-Cross-institution relationship creation must be rejected transactionally.
+Route-model binding must not resolve an institution-owned record outside the trusted authenticated scope and then rely on a later authorization check when a scope-safe resolution strategy is available.
 
----
+Use the contract-defined privacy-safe not-found/forbidden behavior. Do not leak whether an inaccessible record exists.
 
-# 7. Authorization
+Do not accept a client-supplied ownership field as authority.
 
-Use Policies and/or focused authorization services consistently.
+## 7. Eloquent and Query Quality
 
-Apply all relevant checks:
+Keep tenant scoping explicit and reviewable.
 
-- Authentication
-- Active user
-- Active institution
-- Role capability
-- Institution ownership
-- Teacher-group relationship
-- Student assignment
-- Parent-child relationship
-- Record lifecycle
-- Deadline/time
-- Attempts
-- View vs edit
+Select only the fields needed by the use case.
 
-Do not treat navigation visibility as security.
+Avoid:
 
-When disclosure of resource existence would leak private data, use the scope-safe API behavior required by `09-api-contracts.md`.
+- N+1 queries;
+- unnecessary large eager-loaded graphs;
+- loading all rows and filtering/sorting/paginating in PHP;
+- unbounded collection reads for list endpoints;
+- generic “without scope” helpers in normal feature code;
+- hidden queries inside Resources that cause N+1 behavior.
 
----
+Use server-side filtering, sorting, pagination, and aggregates.
 
-# 8. Authentication and Password Gate
+Use deterministic ordering for paginated results when required by the approved implementation contract.
 
-Use Laravel Sanctum as defined in the locked architecture/API contract.
+Add or use indexes that support the approved query shape. Performance changes must never weaken tenant safety or correctness.
 
-Administrator-created Institution Admin/Teacher/Student/Parent accounts must require first-login password change.
+Do not create repository interfaces around every Eloquent Model. Introduce a query/repository abstraction only when it provides a genuine reusable persistence boundary.
 
-While:
+## 8. Persistence and Migrations
 
-```text
-must_change_password = true
-```
+Use migrations for every schema change.
 
-normal protected application actions must be blocked except the approved authentication/password-change path.
+Follow the repository's existing UUID, timestamp, foreign-key, naming, and index conventions unless the approved implementation contract explicitly defines a different contract.
 
-Do not let a valid token bypass this gate.
+Structural invariants belong in the database when practical:
 
----
+- foreign keys;
+- uniqueness;
+- check constraints;
+- non-null constraints;
+- indexes.
 
-# 9. Institution Initialization
+Application validation remains required when the rule depends on actor/context/state.
 
-New Institution safe operational initialization must follow the locked contract:
+Migration rules:
 
-- Timezone: `Asia/Tashkent`
-- Learning-material maximum: 25 MB/file
-- Student-submission maximum: 15 MB/file
+- preserve existing data;
+- do not silently drop, rename, reinterpret, or destructively rewrite existing columns/tables;
+- do not edit already-delivered migrations when a new forward migration is appropriate;
+- make rollback safe where practical;
+- account for existing rows before adding `NOT NULL`, uniqueness, or new constraints;
+- use PostgreSQL-compatible SQL and behavior;
+- do not substitute SQLite assumptions for PostgreSQL-specific behavior;
+- do not add PostgreSQL RLS unless explicitly required.
 
-Institutions may configure lower file limits only.
+Do not manually mutate a shared/production schema as normal workflow.
 
-Do not invent educational-policy defaults for required Institution Admin settings such as:
+Do not place secrets or environment-specific values in migrations.
 
-- Acceptable score-difference threshold
-- Blitz timer-start mode
-- Student/Parent result release modes
-- Numeric understanding-category ranges
+## 9. Mass Assignment, Casting, and Serialization
 
-Dependent operations must return the documented validation/business conflict until configuration is complete.
+Keep writable attributes explicit.
 
----
+Do not allow request payloads to mass-assign ownership, creator, lifecycle, security, or protected technical fields.
 
-# 10. Transactions
+Use casts/enums/value objects according to existing project conventions for stable machine values and timestamps.
 
-Use database transactions for multi-record business actions.
+Do not expose internal columns through default model serialization.
 
-Examples:
+Public API fields must be selected intentionally through Resources or the existing response boundary.
 
-- Create/update Assessment + Questions + type configuration
-- Snapshot official cohort
-- Start Attempt
-- Finalize/submit Attempt + Answers + checking state
-- Manual review + Attempt score update
-- Official-score selection
-- Blitz exception grant
-- Result calculation + snapshots
-- Result closure
-- Release mutation where required
+Resources serialize already-resolved application state; they must not contain business decisions, authorization, persistence writes, or hidden query orchestration.
 
-A partial write must not leave invalid educational state.
+## 10. Transactions and Concurrency
 
----
+Use a database transaction when one logical operation:
 
-# 11. Attempt Rules
+- performs multiple dependent writes;
+- changes lifecycle state;
+- requires a consistent read-modify-write decision;
+- must prevent partial persistent state.
 
-## Homework
+Use row locks, uniqueness constraints, idempotency/state guards, or compare-and-set behavior only when the approved implementation contract identifies a concrete race or invariant.
 
-- Exactly 3 normal attempts.
-- No Homework exception.
-- Every Attempt is a first-class historical record.
-- Official score = highest valid completed normalized score.
-- Equal highest-score tie → lowest `attempt_number`.
+When row locking is required:
 
-## Blitz
+- acquire it inside a transaction;
+- scope the target to the authenticated tenant before locking;
+- reload fresh state under the lock;
+- make the final decision from locked current state.
 
-- Exactly 1 normal attempt.
-- Exactly 1 additional Student-specific Teacher-approved exception may be granted.
-- Valid reason is required.
-- Original interrupted/invalid Attempt remains historical.
-- Original affected Attempt is ineligible for official score.
-- Valid replacement Attempt becomes official source.
-- No task-wide limit increase.
+Do not use locks as a substitute for database constraints.
 
-Centralize these policies. Do not scatter attempt-number logic through controllers.
+Do not add unnecessary locking to simple operations without a real consistency requirement.
 
----
+Expected conflicts must map through the existing application/API error boundary rather than leaking database exceptions.
 
-# 12. Attempt Concurrency
+## 11. Error Handling and API Responses
 
-Starting an Attempt must be atomic.
+Use the existing exception, validation, error-envelope, Resource, and pagination conventions.
 
-Protect the unique:
+Known failures should use specific exceptions/result types or established framework behavior.
 
-```text
-assessment_id + student_id + attempt_number
-```
+Do not:
 
-Use transaction/locking/state guards so concurrent requests cannot create duplicate Attempt numbers.
+- throw generic exceptions for expected conditions;
+- branch on human-readable messages;
+- expose stack traces, SQL, table/column details, internal class names, tokens, or secrets;
+- return inconsistent endpoint-specific envelope shapes;
+- catch and discard unexpected programming errors.
 
-Required Idempotency-Key behavior must also be honored.
+Database constraint violations that can occur concurrently must be converted into the contract-defined safe response without leaking database details.
 
----
+Keep HTTP status, machine code, message, and error fields aligned with the approved implementation contract.
 
-# 13. Required Public Idempotency Contract
+## 12. Configuration and Infrastructure
 
-Exactly these five client mutations require:
+Use `config()` in application code.
 
-```http
-Idempotency-Key: <client-generated-uuid>
-```
+Use `env()` only in configuration files unless an existing project convention explicitly requires otherwise.
 
-1. Start Homework Attempt
-2. Start Blitz Attempt
-3. Final Attempt Submit
-4. Blitz Activate
-5. Blitz attempt exception grant
+Do not hardcode deployment-specific URLs, credentials, storage paths, ports, or environment values.
 
-Contract:
+Reuse existing filesystem, queue, cache, clock/time, authentication, and API infrastructure.
 
-- Missing key → `422 validation_failed`
-- Same key + same request identity → same logical result
-- Same key + materially different request → `409 idempotency_key_reused`
+Do not introduce an external service or infrastructure dependency unless explicitly required by the approved implementation contract.
 
-Do not add this public requirement to manual review/result calculation/release unless `09-api-contracts.md` is explicitly revised.
+## 13. Logging and Sensitive Data
 
-Institution activate/deactivate endpoints are idempotent by state.
+Logs must be useful but minimal.
 
----
-
-# 14. Homework Deadline Finalization
-
-Homework deadline is backend-authoritative.
-
-At the authoritative deadline:
-
-1. Block new Attempts.
-2. Block further Student writes.
-3. Finalize every existing `in_progress` Homework Attempt from saved answers.
-4. Score unanswered components as zero.
-5. Evaluate saved objective answers normally.
-6. Leave answered manual-review Questions pending Teacher review.
-7. Set:
-   ```text
-   finalization_reason = homework_deadline_auto_submit
-   ```
-8. Keep:
-   ```text
-   submitted_at = null
-   ```
-9. Set server:
-   ```text
-   finalized_at
-   ```
-10. Do not create Attempt rows for never-started Students.
-11. Remove unused remaining Homework attempt availability.
-12. After checking completes, keep the finalized Attempt eligible for the standard highest-valid-completed official Homework score resolver.
-
-Laravel Scheduler and request-time reconciliation must call the same idempotent finalization action.
-
-Scheduler delay must not extend Student write eligibility.
-
-At the deadline boundary, exactly one terminal transition must win between Student explicit submit and server finalization.
-
----
-
-# 15. Teacher Task-Close Finalization
-
-Closing active Homework or Blitz must auto-finalize existing `in_progress` Attempts from saved answers.
-
-Use:
-
-```text
-finalization_reason = task_closed_auto_finalize
-```
-
-- Unanswered components = zero.
-- Saved answers are evaluated normally.
-- Manual-review answers remain pending review.
-- Never-started Students get no fabricated Attempt.
-- Later Student writes are blocked.
-
-Implement task close and finalization transactionally/idempotently.
-
----
-
-# 16. Blitz Timing
-
-There is one whole-Blitz timer, never a per-question timer.
-
-Institution setting:
-
-```text
-synchronized
-individual
-```
-
-Teacher sets whole-Blitz duration.
-
-## Synchronized
-
-Authoritative end is based on Teacher activation.
-
-## Individual
-
-Authoritative end is based on each Student Attempt start after activation.
-
-Persist/return server-authoritative timing as defined in database/API contracts.
-
-Never trust client device time to authorize writes.
-
----
-
-# 17. Blitz Timeout
-
-At authoritative timeout:
-
-- Reject later Student edits.
-- Auto-finalize saved answers.
-- Unanswered components = zero.
-- Score saved objective answers normally.
-- Keep answered manual-review Questions pending Teacher review.
-
-Timeout reconciliation must be idempotent.
-
-A later explicit submit must not create another logical submission.
-
----
-
-# 18. Question Checking
-
-Use typed checking services/strategies.
-
-Do not implement one uncontrolled generic JSON scoring function.
-
-Locked rules:
-
-### Single-choice
-
-```text
-all-or-nothing
-```
-
-### True/false
-
-```text
-all-or-nothing
-```
-
-### Multiple-choice
-
-- Selection cap = correct-option count.
-- Awarded fraction = correctly selected / total correct.
-
-### Matching
-
-```text
-correct pairs / total pairs
-```
-
-### Ordering
-
-```text
-correctly positioned items / total items
-```
-
-### Fill-in-the-blank
-
-```text
-correct blanks / total blanks
-```
-
-### Short Written Automatic
-
-Exact normalized matching only:
-
-- Unicode normalize
-- Trim
-- Collapse whitespace
-- Case-insensitive
-- Normalize Uzbek apostrophe variants
-- Preserve punctuation
-- No fuzzy matching
-- No AI
-
-### Short Written Manual / Open Written / File-Based
-
-Teacher review assigns points within allowed Question points.
-
----
-
-# 19. Assessment Activation
-
-Draft Assessment may temporarily have zero scoreable points.
-
-Before Homework/Blitz activation:
-
-1. Recalculate server-side total possible points.
-2. Require:
-   ```text
-   total_possible_points > 0
-   ```
-3. Validate every Question-type configuration.
-4. Validate assignment/cohort rules.
-5. Validate required Institution educational configuration.
-
-Do not trust a client-supplied total-points value.
-
----
-
-# 20. Official Pair and Cohort
-
-A Topic may have many tasks.
-
-Only one whole-group Homework and one whole-group Blitz are the designated result-bearing pair.
-
-Selected-Student tasks are practice-only.
-
-The official cohort:
-
-- Is snapshotted on first official-task activation.
-- Is reused by both designated tasks.
-- Must not be silently regenerated from later Group membership.
-- Must not be replaced with the pair after Student attempt activity begins.
-
-Result calculation consumes only the designated pair.
-
----
-
-# 21. Scoring and Result Engine
-
-Centralize final calculation in the backend.
-
-Do not calculate final Topic result in controllers, Resources, or reports.
-
-Use unrounded precision for:
-
-- Question points where applicable
-- Attempt/task normalized score
-- Official task score
-- Homework–Blitz difference
-- Threshold comparison
-- Final score
-
-User-facing display is one decimal.
-
-Understanding category uses integer `category_score`:
-
-- Fraction `.0`–`.5` → down
-- Fraction `>.5` → up
-
-Result formula is fixed by root `AGENTS.md` and `05-business-rules.md`.
-
-Do not allow client-supplied:
-
-- Official Homework score
-- Official Blitz score
-- Difference
-- Final score
-- Calculation method
-- Consistency
-- Category
-- Result status
-
----
-
-# 22. Manual Review
-
-Teacher may update only review metadata/score fields allowed by the contract.
-
-Teacher must not rewrite Student answer content.
-
-If any required manual review remains:
-
-- Attempt official score is not ready.
-- Topic final numeric result is not ready.
-
-Manual corrections before Result closure must recalculate dependent Attempt/official/result state transactionally.
-
-Closed Topic Result blocks normal review corrections that would alter the result.
-
----
-
-# 23. Result Closure
-
-A Student+Topic Result can close only if terminal:
-
-- Fully calculated with both official scores, all manual review complete, and no relevant in-progress/pending replacement Attempt; or
-- Definitively `not_completed`.
-
-Waiting states cannot close.
-
-After closure:
-
-- Scoring changes blocked.
-- Exception grant blocked.
-- Pair/cohort change blocked.
-- Recalculation blocked.
-
-Release/visibility remains separate as specified.
-
----
-
-# 24. Result Release
-
-Use the locked Institution policies:
-
-Student:
-
-```text
-automatic
-manual_teacher
-```
-
-Parent:
-
-```text
-with_student
-manual_teacher
-hidden
-```
-
-Parent must never become visible before Student.
-
-Release action changes visibility only, never scoring/calculation state.
-
----
-
-# 25. Files
-
-Use Laravel filesystem abstraction.
-
-Files are private by default.
-
-Supported MVP types:
-
-```text
-pdf
-docx
-ppt
-pptx
-```
-
-Platform hard maxima:
-
-- Learning material: 25 MB/file
-- Student submission: 15 MB/file
-
-Institution may configure lower limits.
-
-Effective limit:
-
-```text
-min(platform maximum, institution configured limit)
-```
-
-Persist metadata in PostgreSQL and bytes in private storage.
-
-Do not use the original filename as the physical storage key.
-
-Protected download must authorize the connected Topic/Assessment/Student relationship.
-
----
-
-# 26. API Response Contract
-
-Follow `docs/09-api-contracts.md` exactly.
-
-Do not invent endpoint-specific envelope shapes.
-
-Expected categories:
-
-- `200/201` resource response
-- `204` when contract says no content
-- `401` unauthenticated
-- `403` authorization/account/institution state where specified
-- `404` scope-safe not found
-- `409` business conflict
-- `422` validation
-- `429` rate limit
-- `500` generic server failure
-
-Stable machine-readable error `code` is part of the contract.
-
-Do not expose stack traces, SQL details, tokens, or private record existence.
-
----
-
-# 27. Reports
-
-Reports are read/query models.
-
-Do not reimplement Topic-result formulas in report queries.
-
-Prefer reading persisted calculated result state.
-
-Every report filter remains institution/role scoped.
-
-A filter must not reveal data the requester cannot open directly.
-
----
-
-# 28. Logging
-
-Useful metadata may include:
-
-- Request/correlation ID when configured
-- Authenticated user ID
-- Institution ID
-- Action
-- Record IDs
-- Error category
+Safe operational metadata may include identifiers and action/error categories only when appropriate.
 
 Do not log:
 
-- Passwords
-- Tokens
-- Full private Student answers by default
-- Raw uploaded file contents
+- passwords;
+- bearer/plain-text tokens;
+- credentials or secrets;
+- private keys;
+- raw sensitive request/response bodies;
+- SQL containing private values;
+- full private student/user content by default.
 
----
+Do not add debug logging that remains in production code.
 
-# 29. Tests
+## 14. Backend Tests
 
-Backend unit tests should cover deterministic domain logic such as:
+Use focused PHPUnit/Laravel tests matching the approved implementation contract.
 
-- Question checking
-- Short Written normalization
-- Homework official-score resolver
-- Blitz exception policy
-- Timer policy
-- Deadline/timeout/task-close finalizers
-- Score normalization
-- Category-score conversion
-- TopicResultEngine
-- Release policy
-- State transitions
+Feature tests should verify the real HTTP/middleware/validation/action/persistence/Resource boundary when the approved implementation contract exposes an API.
 
-Feature tests should cover:
+Add unit/domain tests only when there is isolated reusable logic worth testing separately.
 
-- Auth/password gate
-- API validation
-- Authorization
-- Cross-institution denial
-- Group/Parent relationships
-- Task lifecycle
-- Attempt lifecycle
-- File authorization
-- Manual review
-- Result visibility
-- Reports
-- Required Idempotency-Key behavior
-- Concurrency-sensitive transitions
+For new or changed institution-owned behavior, include cross-tenant negative coverage when that tenant boundary is part of the changed responsibility. Existing coverage may be reused only when it directly exercises the same authorization/scoping boundary and the approved implementation contract permits that verification scope.
 
-For every institution-owned feature, add at least one cross-institution negative test.
+Test relevant:
 
----
+- happy path;
+- strict validation/input shape;
+- authentication/authorization;
+- tenant isolation and existence privacy;
+- lifecycle/state conflicts;
+- database constraints;
+- transaction rollback;
+- concurrency/idempotency when specified;
+- no-op/timestamp behavior when specified;
+- response status/envelope/resource shape.
 
-# 30. Clean Code and Backend Quality Rules
+Keep tests deterministic:
 
-These rules supplement the root Clean Code rules.
+- use the configured test database;
+- use time-travel/frozen clock helpers instead of sleeps;
+- do not call real external networks;
+- do not hide database behavior behind mocks when persistence is the subject of the test.
 
-## 30.1 Focused Actions and Services
+Do not weaken existing tests to accommodate incorrect implementation.
 
-Each Action should represent one clear application use case.
+## 15. Backend Verification Boundary
 
-Prefer focused names such as:
+Per-task verification is governed by the approved implementation contract and the root `AGENTS.md`.
 
-```text
-StartHomeworkAttempt
-FinalizeHomeworkAtDeadline
-GrantBlitzAttemptException
-CalculateTopicResult
-ReleaseTopicResult
-```
+Backend engineering rules do not independently expand verification into the full backend suite. Full backend regression is a Stage checkpoint activity unless the approved implementation contract explicitly requires broader verification for a concrete regression risk.
 
-over broad services such as `AssessmentManager`, `SchoolService`, or `GeneralLearningService` that accumulate unrelated responsibilities.
+Narrow diagnostic test runs or reruns are allowed when needed to understand a failure.
 
-Domain services may coordinate several technical steps when those steps form one business operation.
+## 16. Backend Diff Review
 
-## 30.2 Repositories and Queries
+In addition to the root diff review, verify:
 
-Do not create repository abstractions mechanically around every Eloquent model.
+- Controllers are thin;
+- request validation and stateful rules are separated;
+- tenant scope precedes record exposure;
+- Models/Resources do not contain hidden workflow logic;
+- queries avoid obvious N+1/unbounded reads;
+- migrations preserve data and match the approved implementation contract;
+- constraints/indexes support the required invariants/query shape;
+- multi-write operations are atomic where required;
+- locks/transactions are scoped and justified;
+- API responses do not leak internal fields;
+- focused backend tests cover the actual contract;
+- no unrelated dependency, config, migration, or generated-file change exists.
 
-Introduce a dedicated query/repository/service abstraction when it provides a real boundary, for example complex reusable scoped queries, domain-specific persistence behavior, multi-write domain persistence, or a testable infrastructure boundary.
+## Final Backend Rule
 
-Avoid both extremes: Controllers directly owning every query and repository interfaces for every trivial CRUD operation.
-
-## 30.3 Eloquent Scope Safety
-
-Tenant scoping must remain explicit and testable enough that reviewers can verify it.
-
-When creating reusable scopes/query objects, name them according to the access rule, avoid a generic normal-use “without scope” escape hatch, and test cross-Institution denial.
-
-## 30.4 Domain Constants and Enums
-
-Stable machine values such as roles, statuses, finalization reasons, calculation methods, consistency values, and error codes should use focused enums/constants/value objects according to the established Laravel pattern.
-
-Do not repeat raw strings across Controllers/services/tests when one shared domain representation is appropriate. Do not create one giant unrelated constants file.
-
-## 30.5 Database Query Quality
-
-Avoid obvious N+1 query patterns and unnecessary large eager-loaded graphs.
-
-Select/eager-load only the data needed by the use case, use indexes defined in `08-database.md`, and use server-side filtering/sorting/pagination/aggregates for lists and reports.
-
-Performance optimization must never weaken tenant scoping or correctness.
-
-## 30.6 Validation Reuse
-
-Extract reusable validation rules only when the same rule genuinely applies in multiple requests.
-
-Do not copy-paste complex validation/business conditions between Form Requests. Do not move stateful business authorization into generic validators merely to reuse code.
-
-## 30.7 Exception Quality
-
-Use specific expected domain/application exceptions or result types.
-
-Avoid generic known-condition handling such as:
-
-```php
-throw new Exception('Something went wrong');
-```
-
-Known conditions must map predictably to the stable API error contract.
-
-## 30.8 Test Readability
-
-Tests are production-quality code too.
-
-Prefer descriptive behavior names such as:
-
-```text
-teacher_cannot_access_topic_from_another_institution
-homework_deadline_finalizes_in_progress_attempt
-highest_score_uses_earliest_attempt_when_tied
-```
-
-Avoid vague names such as `test1`, `works`, or `topic_test`.
-
-Avoid giant tests that validate unrelated behaviors. Use focused factories/builders/helpers when they improve readability without hiding important scope/state setup.
-
----
-
-# 31. Backend Completion Checklist
-
-Before completing a backend task:
-
-- [ ] Controller remains thin.
-- [ ] Names are specific and domain-aligned.
-- [ ] Actions/services have focused responsibilities.
-- [ ] Shared domain rules are not duplicated.
-- [ ] Stable machine values use the established enum/constant pattern.
-- [ ] Query shape avoids obvious N+1 and unnecessary loading.
-- [ ] Request validation is separated from business rules.
-- [ ] Institution scope is derived server-side.
-- [ ] Authorization covers role + relationship + lifecycle.
-- [ ] Multi-record writes use appropriate transaction/state guards.
-- [ ] Historical records are preserved.
-- [ ] Locked attempt/timing/scoring/release rules are unchanged.
-- [ ] Required idempotency/concurrency rules are implemented.
-- [ ] API envelope/error codes match `09-api-contracts.md`.
-- [ ] Database shape/constraints match `08-database.md`.
-- [ ] Unit/feature tests cover the change.
-- [ ] Cross-institution negative test exists where relevant.
-- [ ] Backend tests pass.
-- [ ] Configured static/style checks pass.
-- [ ] No unrelated refactor or package addition was introduced.
-
----
-
-# Final Backend Rule
-
-> Laravel is the authoritative enforcement layer. Every write and protected read must remain tenant-safe, state-safe, deterministic, historically traceable, and compliant with the locked database/API/business contracts.
+> Implement the approved backend contract with thin HTTP boundaries, explicit tenant-safe queries, focused use cases, safe PostgreSQL persistence, deterministic tests, and no speculative architecture.
