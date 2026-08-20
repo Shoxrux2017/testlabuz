@@ -1,129 +1,122 @@
-# Read-Only Task Review: [Task ID — Task Title]
+# Legacy Individual Task Review Template
 
-## 1. Review Metadata
+## Status
 
-| Field | Value |
-|---|---|
-| Roadmap stage | `[Stage number and name]` |
-| Task file | `[relative path]` |
-| Implementation reference | `[commit, branch, diff, or worktree state]` |
-| Review mode | `Read-only` |
-| Review date | `[YYYY-MM-DD]` |
-| Gate result | `[Pending]` |
+`LEGACY — STAGE 0–3 ONLY`
 
-This review inspects and reports. It does not modify code, task scope, or locked
-specifications. The reviewer must not stage, commit, push, merge, update Git
-configuration, or fix findings during this gate. Any required correction becomes
-a separate approved focused-fix task.
+This template is preserved as historical workflow documentation for TestLabUz
+Stages 0–3.
 
-## 2. Review Inputs
+It must not be used as the normal review workflow for Stage 4 or later.
 
-- [ ] Root `AGENTS.md`
-- [ ] Applicable nested `AGENTS.md`
-- [ ] Approved implementation task
-- [ ] Every specification section referenced by the task
-- [ ] Changed code and tests
-- [ ] Relevant existing implementation and regression surface
+---
 
-## 3. Scope and Change Audit
+## 1. Historical Purpose
 
-| Check | Result | Evidence / note |
-|---|---|---|
-| Changed files match the approved scope | `[Pass/Fail]` | `[Details]` |
-| No unrelated behavior changed | `[Pass/Fail]` | `[Details]` |
-| Explicit non-goals remain excluded | `[Pass/Fail]` | `[Details]` |
-| No locked specification was changed by implementation | `[Pass/Fail]` | `[Details]` |
-| No hidden placeholder, duplicate path, or dead code remains | `[Pass/Fail]` | `[Details]` |
+Stages 0–3 used an earlier implementation workflow in which each individual
+implementation task passed a separate read-only acceptance review before final
+delivery and acceptance.
 
-## 4. Requirement and Acceptance-Criteria Review
+Historical task/review/closure files created under that workflow remain valid
+audit evidence.
 
-| Requirement / criterion | Result | Evidence |
-|---|---|---|
-| `[Task requirement or AC]` | `[Pass/Fail/Not verified]` | `[File, test, or observed behavior]` |
+Do not rewrite those historical records to match the Stage 4+ workflow.
 
-Every acceptance criterion from the task must have a row. Missing evidence is
-not a pass.
+---
 
-## 5. Architecture and Code Quality
+## 2. Stage 4+ Replacement
 
-- [ ] Responsibilities are in the correct layer/module.
-- [ ] Controllers/widgets remain thin and focused.
-- [ ] Business rules are centralized rather than duplicated.
-- [ ] Names and abstractions communicate intent.
-- [ ] Error, DTO/resource, repository, and state patterns follow project rules.
-- [ ] No unnecessary refactor or over-engineering expanded the task.
-- [ ] Code is clean, maintainable, formatted, and free of debug/dead code.
+For Stage 4 and later:
 
-Evidence and notes:
+### Per implementation task
 
-[Findings or `No issue found`.]
+Use:
 
-## 6. Authorization, Security, and Tenant Isolation
+```text
+approved implementation contract
+→ Git preflight
+→ implementation
+→ focused verification
+→ scope/diff self-check
+→ GitHub delivery
+→ task Accepted
+```
 
-| Check | Result | Evidence |
-|---|---|---|
-| Authentication and active-state rules | `[Pass/N/A/Fail]` | `[Details]` |
-| Correct-role positive case | `[Pass/N/A/Fail]` | `[Details]` |
-| Wrong-role/unauthenticated negative case | `[Pass/N/A/Fail]` | `[Details]` |
-| Institution/relationship scope | `[Pass/N/A/Fail]` | `[Details]` |
-| Cross-institution/direct-ID negative case | `[Pass/N/A/Fail]` | `[Details]` |
-| Lifecycle, timing, attempt, or visibility rule | `[Pass/N/A/Fail]` | `[Details]` |
-| Sensitive data, logging, and error exposure | `[Pass/N/A/Fail]` | `[Details]` |
+There is no normal individual Phase 2 Read-Only Review after every task.
 
-Any `N/A` must include a reason. A critical authorization or tenant-isolation
-gap is always blocking.
+### After the backend task block
 
-## 7. Tests and Verification
+Use:
 
-| Command or check | Expected | Actual result | Status |
-|---|---|---|---|
-| `[focused test command]` | `[Expected result]` | `[Observed output]` | `[Pass/Fail/Not run]` |
-| `[lint/static analysis]` | `[Expected result]` | `[Observed output]` | `[Pass/Fail/Not run]` |
-| `[broader regression command]` | `[Expected result]` | `[Observed output]` | `[Pass/Fail/Not run]` |
-| `[manual smoke check]` | `[Expected result]` | `[Observed behavior]` | `[Pass/Fail/Not run]` |
+```text
+tasks/templates/BLOCK_REVIEW_TEMPLATE.md
+```
 
-Distinguish verified results from claims in the implementation report. Record
-pre-existing failures separately from task-caused failures.
+for the Backend Phase 2 Read-Only Checkpoint.
 
-## 8. Findings
+### After the frontend task block
 
-List findings from highest to lowest severity.
+Use:
 
-| ID | Severity | Finding | Evidence | Required correction |
-|---|---|---|---|---|
-| `[F-01]` | `[Critical/High/Medium/Low]` | `[Problem]` | `[Location/test]` | `[Focused correction]` |
+```text
+tasks/templates/BLOCK_REVIEW_TEMPLATE.md
+```
 
-If none: `No findings.`
+for the Frontend Phase 2 Read-Only Checkpoint.
 
-Severity guidance:
+### After integration
 
-- `Critical` — security, cross-tenant access, data loss, or core contract breach.
-- `High` — acceptance criterion fails or required behavior is unusable.
-- `Medium` — maintainability, validation, or test gap that prevents acceptance.
-- `Low` — non-blocking improvement; must not be used to expand scope.
+Use:
 
-## 9. Acceptance Gate Result
+```text
+tasks/templates/STAGE_CLOSURE_REVIEW_TEMPLATE.md
+```
 
-Choose exactly one:
+for the final Stage Closure Review.
 
-- `PASS`
-- `NOT ACCEPTED`
+---
 
-`PASS` means there are no blocking or material findings and every task
-acceptance criterion has evidence.
+## 3. Current Workflow Authority
 
-`NOT ACCEPTED` means at least one blocking/material finding, failed required
-check, unsafe Git/security condition, scope breach, or unverified required
-criterion remains. Do not commit, push, merge, or start another task from a
-`NOT ACCEPTED` result.
+For Stage 4+ implementation and review flow, follow:
 
-**Gate result:** `[Pending]`
+```text
+AGENTS.md
+backend/AGENTS.md
+frontend/AGENTS.md
+tasks/README.md
+tasks/templates/CODEX_TASK_TEMPLATE.md
+tasks/templates/BLOCK_REVIEW_TEMPLATE.md
+tasks/templates/STAGE_TASK_INDEX_TEMPLATE.md
+tasks/templates/STAGE_CLOSURE_REVIEW_TEMPLATE.md
+```
 
-**Reason:** [Concise evidence-based explanation.]
+The current approved implementation contract defines the task-specific
+requirements given to Codex.
 
-## 10. Required Follow-Up
+Codex must not use this legacy file to infer current review or delivery
+requirements.
 
-- [None, or the precise focused-fix/planning action required]
+---
 
-Do not close the task when a blocking finding, required test failure, or
-unverified acceptance criterion remains.
+## 4. Historical Compatibility Rules
+
+Do not:
+
+- delete this file while Stage 0–3 history depends on the old workflow;
+- reinterpret historical `PASS`, `NOT ACCEPTED`, `Accepted`, or delivery status
+  using Stage 4+ semantics;
+- regenerate historical task-review files;
+- rewrite Stage 0–3 closure evidence;
+- instruct Codex to run this legacy template for new implementation tasks.
+
+This file exists only to explain the historical review model and prevent it
+from being accidentally reused.
+
+---
+
+## Final Rule
+
+> Stage 0–3 individual task reviews remain valid historical evidence.
+> Stage 4+ uses proportional per-task verification plus backend/frontend
+> block-level Phase 2 reviews.
