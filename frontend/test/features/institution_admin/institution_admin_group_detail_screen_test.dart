@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,41 +9,187 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_group_detail_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_group_mutation_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_detail_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_mutation.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_mutation_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_group_detail_screen.dart';
 
 import 'institution_group_test_support.dart';
 
 void main() {
-  testWidgets('renders exact authoritative fields and no future actions', (
+  testWidgets(
+    'renders exact authoritative fields and active lifecycle actions',
+    (tester) async {
+      await _pump(tester, _FakeDetailRepository());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Group Details'), findsOneWidget);
+      expect(find.text('Advanced Mathematics'), findsWidgets);
+      for (final label in const [
+        'Name',
+        'Status',
+        'Level',
+        'Subject direction',
+        'Description',
+        'Teachers',
+        'Students',
+        'Archived at',
+        'Created',
+        'Updated',
+      ]) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('2026-08-15 08:00 UTC'), findsOneWidget);
+      expect(find.text('2026-08-15 09:30 UTC'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(find.text('Archive Group'), findsOneWidget);
+      expect(find.textContaining('Manage'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'archived Group is explicitly read-only without lifecycle actions',
+    (tester) async {
+      await _pump(
+        tester,
+        _FakeDetailRepository(
+          group: testGroup(
+            status: InstitutionGroupStatus.archived,
+            archivedAt: DateTime.utc(2026, 8, 21, 10),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Archived groups are read-only.'), findsOneWidget);
+      expect(find.text('Edit'), findsNothing);
+      expect(find.text('Archive Group'), findsNothing);
+      expect(find.textContaining('Reactivate'), findsNothing);
+      expect(find.textContaining('Delete'), findsNothing);
+    },
+  );
+
+  testWidgets('Edit dialog initializes fields and local no-op remains open', (
     tester,
   ) async {
     await _pump(tester, _FakeDetailRepository());
     await tester.pumpAndSettle();
 
-    expect(find.text('Group Details'), findsOneWidget);
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Group'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('institutionGroupEditName')))
+          .controller!
+          .text,
+      'Advanced Mathematics',
+    );
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const Key('institutionGroupEditDescription')),
+          )
+          .textInputAction,
+      TextInputAction.newline,
+    );
+
+    await tester.tap(find.text('Save changes'));
+    await tester.pump();
+    expect(find.text('No group changes to save.'), findsOneWidget);
+    expect(find.text('Edit Group'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('institutionGroupEditName')),
+      '10-B',
+    );
+    await tester.pump();
+    expect(find.text('No group changes to save.'), findsNothing);
+  });
+
+  testWidgets('Archive confirmation is exact and blocks dismissal while busy', (
+    tester,
+  ) async {
+    final archiveResult = Completer<InstitutionGroup>();
+    await _pump(
+      tester,
+      _FakeDetailRepository(),
+      mutation: _FakeMutationRepository(onArchive: () => archiveResult.future),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Archive Group'));
+    await tester.pumpAndSettle();
+    expect(find.text('Archive group?'), findsOneWidget);
     expect(find.text('Advanced Mathematics'), findsWidgets);
-    for (final label in const [
-      'Name',
-      'Status',
-      'Level',
-      'Subject direction',
-      'Description',
-      'Teachers',
-      'Students',
-      'Archived at',
-      'Created',
-      'Updated',
-    ]) {
-      expect(find.text(label), findsOneWidget);
-    }
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.text('2026-08-15 08:00 UTC'), findsOneWidget);
-    expect(find.text('2026-08-15 09:30 UTC'), findsOneWidget);
-    expect(find.text('Edit'), findsNothing);
-    expect(find.text('Archive'), findsNothing);
-    expect(find.textContaining('Manage'), findsNothing);
+    expect(
+      find.text(
+        'Archiving makes this group read-only for future management. Historical relationships and learning records are preserved. Groups cannot be reactivated in the current MVP.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('institutionGroupArchiveConfirm')));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('institutionGroupArchiveDialog')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<TextButton>(
+            find.byKey(const Key('institutionGroupArchiveCancel')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const Key('institutionGroupDetailRefreshButton')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const Key('institutionGroupEditAction')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('institutionGroupArchiveAction')),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tapAt(const Offset(2, 2));
+    await tester.pump();
+    expect(
+      find.byKey(const Key('institutionGroupArchiveDialog')),
+      findsOneWidget,
+    );
+
+    archiveResult.complete(
+      testGroup(
+        status: InstitutionGroupStatus.archived,
+        archivedAt: DateTime.utc(2026, 8, 21, 10),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('institutionGroupArchiveDialog')),
+      findsNothing,
+    );
+    expect(find.text('Group archived successfully.'), findsOneWidget);
+    expect(find.text('Archived groups are read-only.'), findsOneWidget);
   });
 
   testWidgets(
@@ -103,6 +251,7 @@ Future<void> _pump(
   _FakeDetailRepository repository, {
   String target = testGroupId,
   TextScaler textScaler = TextScaler.noScaling,
+  _FakeMutationRepository? mutation,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -112,6 +261,10 @@ Future<void> _pump(
         ),
         appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
         institutionGroupDetailRepositoryProvider.overrideWithValue(repository),
+        if (mutation != null)
+          institutionGroupMutationRepositoryProvider.overrideWithValue(
+            mutation,
+          ),
       ],
       child: MaterialApp(
         home: MediaQuery(
@@ -124,6 +277,25 @@ Future<void> _pump(
     ),
   );
   await tester.pump();
+}
+
+class _FakeMutationRepository implements InstitutionGroupMutationRepository {
+  _FakeMutationRepository({required this.onArchive});
+
+  final Future<InstitutionGroup> Function() onArchive;
+
+  @override
+  Future<InstitutionGroup> archiveGroup(
+    String groupId,
+    InstitutionGroup selected,
+  ) => onArchive();
+
+  @override
+  Future<InstitutionGroup> updateGroup(
+    String groupId,
+    InstitutionGroup selected,
+    InstitutionGroupEditRequest request,
+  ) => Future.value(selected);
 }
 
 class _FakeDetailRepository implements InstitutionGroupDetailRepository {

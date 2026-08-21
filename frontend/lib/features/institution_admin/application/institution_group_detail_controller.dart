@@ -12,6 +12,7 @@ import '../../auth/domain/auth_user.dart';
 import '../../auth/domain/user_role.dart';
 import '../data/dto/institution_group_dto.dart';
 import '../data/institution_group_detail_repository_impl.dart';
+import '../domain/institution_group.dart';
 import 'institution_group_detail_state.dart';
 
 final institutionGroupDetailControllerProvider = NotifierProvider.autoDispose
@@ -104,6 +105,66 @@ class InstitutionGroupDetailController
       sessionKey: sessionKey,
       presentation: _DetailLoadPresentation.retry,
     );
+  }
+
+  bool replaceFromMutation(
+    InstitutionGroup selected,
+    InstitutionGroup returned,
+  ) {
+    final target = _activeTarget;
+    if (target == null ||
+        !_hasOwnedCurrentGroup(selected, target) ||
+        returned.id.toLowerCase() != target.toLowerCase()) {
+      return false;
+    }
+    _invalidateOperations();
+    state = InstitutionGroupDetailState.data(target: target, group: returned);
+    return true;
+  }
+
+  bool markNotFoundFromMutation(InstitutionGroup selected) {
+    final target = _activeTarget;
+    if (target == null || !_hasOwnedCurrentGroup(selected, target)) {
+      return false;
+    }
+    _invalidateOperations();
+    state = InstitutionGroupDetailState.notFound(target: target);
+    return true;
+  }
+
+  bool markErrorFromMutation(InstitutionGroup selected, ApiFailure failure) {
+    final target = _activeTarget;
+    if (target == null || !_hasOwnedCurrentGroup(selected, target)) {
+      return false;
+    }
+    _invalidateOperations();
+    state = InstitutionGroupDetailState.error(
+      target: target,
+      failure: failure,
+      isRetryable: true,
+    );
+    return true;
+  }
+
+  bool clearForMutationSessionFailure(InstitutionGroup selected) {
+    final target = _activeTarget;
+    if (target == null || !_hasOwnedCurrentGroup(selected, target)) {
+      return false;
+    }
+    _clearActiveSession();
+    state = InstitutionGroupDetailState.initial(target: target);
+    return true;
+  }
+
+  bool _hasOwnedCurrentGroup(InstitutionGroup selected, String target) {
+    final current = state.group;
+    final sessionKey = _activeSessionKey;
+    return ref.mounted &&
+        sessionKey != null &&
+        current != null &&
+        identical(current, selected) &&
+        selected.id.toLowerCase() == target.toLowerCase() &&
+        _matchesSession(sessionKey);
   }
 
   void _startLoad(
