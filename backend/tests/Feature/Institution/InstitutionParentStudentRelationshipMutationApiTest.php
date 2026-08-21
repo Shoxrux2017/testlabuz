@@ -54,6 +54,7 @@ class InstitutionParentStudentRelationshipMutationApiTest extends TestCase
         CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-20 10:00:00', 'UTC'));
         $repeated = $this->connect($actor, $parent, $student);
         $repeated->assertOk();
+        $this->assertSame(self::RESOURCE_KEYS, array_keys($repeated->json('data')));
         $this->assertSame($relationship->id, $repeated->json('data.id'));
         $this->assertSame($initialTimestamps, $this->timestamps($relationship->refresh()));
         $this->assertDatabaseCount('parent_student_relationships', 1);

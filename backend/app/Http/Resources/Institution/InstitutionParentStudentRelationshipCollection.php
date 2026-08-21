@@ -7,7 +7,7 @@ use Illuminate\Http\Resources\Json\ResourceCollection;
 
 class InstitutionParentStudentRelationshipCollection extends ResourceCollection
 {
-    public $collects = InstitutionParentStudentRelationshipResource::class;
+    public $collects = InstitutionParentStudentRelationshipListResource::class;
 
     /**
      * @param  array<string, mixed>  $paginated

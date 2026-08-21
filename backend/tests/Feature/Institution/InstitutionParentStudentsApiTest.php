@@ -3,7 +3,7 @@
 namespace Tests\Feature\Institution;
 
 use App\Actions\Institution\ListInstitutionParentStudents;
-use App\Http\Resources\Institution\InstitutionParentStudentRelationshipResource;
+use App\Http\Resources\Institution\InstitutionParentStudentRelationshipListResource;
 use App\Models\Institution;
 use App\Models\ParentStudentRelationship;
 use App\Models\User;
@@ -19,7 +19,9 @@ class InstitutionParentStudentsApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const RESOURCE_KEYS = ['id', 'parent_id', 'student_id', 'started_at', 'ended_at'];
+    private const RESOURCE_KEYS = ['id', 'parent_id', 'student_id', 'started_at', 'ended_at', 'related_user'];
+
+    private const RELATED_USER_KEYS = ['id', 'full_name', 'login_name', 'email', 'phone', 'is_active'];
 
     protected function tearDown(): void
     {
@@ -106,6 +108,15 @@ class InstitutionParentStudentsApiTest extends TestCase
         $this->assertSame($first->id, $default->json('data.0.student_id'));
         $this->assertSame('2026-08-19T10:00:00Z', $default->json('data.0.started_at'));
         $this->assertNull($default->json('data.0.ended_at'));
+        $this->assertSame([
+            'id' => $first->id,
+            'full_name' => 'beta Same',
+            'login_name' => 'student_literal_%_!',
+            'email' => null,
+            'phone' => null,
+            'is_active' => true,
+        ], $default->json('data.0.related_user'));
+        $this->assertSame($default->json('data.0.student_id'), $default->json('data.0.related_user.id'));
 
         $this->assertSame([$firstRelationship->id], $this->ids($this->requestAs(
             $actor,
@@ -113,12 +124,15 @@ class InstitutionParentStudentsApiTest extends TestCase
             $this->uri($parent),
             query: ['status' => 'active'],
         )));
-        $this->assertSame([$secondRelationship->id], $this->ids($this->requestAs(
+        $inactive = $this->requestAs(
             $actor,
             'GET',
             $this->uri($parent),
             query: ['status' => 'inactive'],
-        )));
+        );
+        $this->assertSame([$secondRelationship->id], $this->ids($inactive));
+        $this->assertSame($second->id, $inactive->json('data.0.related_user.id'));
+        $this->assertFalse($inactive->json('data.0.related_user.is_active'));
         $this->assertSame([$firstRelationship->id], $this->ids($this->requestAs(
             $actor,
             'GET',
@@ -159,7 +173,7 @@ class InstitutionParentStudentsApiTest extends TestCase
                     perPage: 100,
                 );
                 foreach ($paginator->items() as $relationship) {
-                    (new InstitutionParentStudentRelationshipResource($relationship))->toArray(Request::create('/'));
+                    (new InstitutionParentStudentRelationshipListResource($relationship))->toArray(Request::create('/'));
                 }
 
                 return ['queries' => DB::getQueryLog(), 'item_count' => count($paginator->items())];
@@ -286,6 +300,7 @@ class InstitutionParentStudentsApiTest extends TestCase
     private function assertRelationshipResource(array $resource): void
     {
         $this->assertSame(self::RESOURCE_KEYS, array_keys($resource));
+        $this->assertSame(self::RELATED_USER_KEYS, array_keys($resource['related_user']));
         $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $resource['started_at']);
 
         foreach (['institution_id', 'connected_by_user_id', 'created_at', 'updated_at', 'full_name', 'password'] as $protected) {

@@ -63,6 +63,12 @@ class ListInstitutionStudentParents
                 'parent_student_relationships.student_id',
                 'parent_student_relationships.started_at',
                 'parent_student_relationships.ended_at',
+                'parents.id as related_user_id',
+                'parents.full_name as related_user_full_name',
+                'parents.login_name as related_user_login_name',
+                'parents.email as related_user_email',
+                'parents.phone as related_user_phone',
+                'parents.is_active as related_user_is_active',
             ])
             ->join('users as parents', function (JoinClause $join): void {
                 $join

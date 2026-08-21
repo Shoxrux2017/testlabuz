@@ -3,7 +3,7 @@
 namespace Tests\Feature\Institution;
 
 use App\Actions\Institution\ListInstitutionStudentParents;
-use App\Http\Resources\Institution\InstitutionParentStudentRelationshipResource;
+use App\Http\Resources\Institution\InstitutionParentStudentRelationshipListResource;
 use App\Models\Institution;
 use App\Models\ParentStudentRelationship;
 use App\Models\User;
@@ -18,7 +18,9 @@ class InstitutionStudentParentsApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const RESOURCE_KEYS = ['id', 'parent_id', 'student_id', 'started_at', 'ended_at'];
+    private const RESOURCE_KEYS = ['id', 'parent_id', 'student_id', 'started_at', 'ended_at', 'related_user'];
+
+    private const RELATED_USER_KEYS = ['id', 'full_name', 'login_name', 'email', 'phone', 'is_active'];
 
     protected function tearDown(): void
     {
@@ -37,6 +39,8 @@ class InstitutionStudentParentsApiTest extends TestCase
         $first = User::factory()->parent($institution)->create([
             'full_name' => 'alpha Same',
             'login_name' => 'parent_literal_%_!',
+            'email' => null,
+            'phone' => null,
         ]);
         $second = User::factory()->parent($institution)->inactive()->create([
             'full_name' => 'Alpha Same',
@@ -60,10 +64,19 @@ class InstitutionStudentParentsApiTest extends TestCase
         $default = $this->requestAs($actor, 'GET', $this->uri($student));
         $default->assertOk();
         $this->assertSame([$firstRelationship->id, $secondRelationship->id], $this->ids($default));
-        $this->assertSame(self::RESOURCE_KEYS, array_keys($default->json('data.0')));
+        $this->assertRelationshipResource($default->json('data.0'));
         $this->assertSame($first->id, $default->json('data.0.parent_id'));
         $this->assertSame($student->id, $default->json('data.0.student_id'));
         $this->assertNull($default->json('data.0.ended_at'));
+        $this->assertSame([
+            'id' => $first->id,
+            'full_name' => 'alpha Same',
+            'login_name' => 'parent_literal_%_!',
+            'email' => null,
+            'phone' => null,
+            'is_active' => true,
+        ], $default->json('data.0.related_user'));
+        $this->assertSame($default->json('data.0.parent_id'), $default->json('data.0.related_user.id'));
 
         $this->assertSame([$firstRelationship->id], $this->ids($this->requestAs(
             $actor,
@@ -71,12 +84,15 @@ class InstitutionStudentParentsApiTest extends TestCase
             $this->uri($student),
             query: ['status' => 'active'],
         )));
-        $this->assertSame([$secondRelationship->id], $this->ids($this->requestAs(
+        $inactive = $this->requestAs(
             $actor,
             'GET',
             $this->uri($student),
             query: ['status' => 'inactive'],
-        )));
+        );
+        $this->assertSame([$secondRelationship->id], $this->ids($inactive));
+        $this->assertSame($second->id, $inactive->json('data.0.related_user.id'));
+        $this->assertFalse($inactive->json('data.0.related_user.is_active'));
         $this->assertSame([$firstRelationship->id], $this->ids($this->requestAs(
             $actor,
             'GET',
@@ -114,7 +130,7 @@ class InstitutionStudentParentsApiTest extends TestCase
                     perPage: 100,
                 );
                 foreach ($paginator->items() as $relationship) {
-                    (new InstitutionParentStudentRelationshipResource($relationship))->toArray(Request::create('/'));
+                    (new InstitutionParentStudentRelationshipListResource($relationship))->toArray(Request::create('/'));
                 }
 
                 return ['queries' => DB::getQueryLog(), 'item_count' => count($paginator->items())];
@@ -231,5 +247,13 @@ class InstitutionStudentParentsApiTest extends TestCase
     private function ids(TestResponse $response): array
     {
         return collect($response->json('data'))->pluck('id')->all();
+    }
+
+    /** @param array<string, mixed> $resource */
+    private function assertRelationshipResource(array $resource): void
+    {
+        $this->assertSame(self::RESOURCE_KEYS, array_keys($resource));
+        $this->assertSame(self::RELATED_USER_KEYS, array_keys($resource['related_user']));
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $resource['started_at']);
     }
 }
