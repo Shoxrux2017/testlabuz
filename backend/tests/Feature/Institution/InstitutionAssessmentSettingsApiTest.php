@@ -576,7 +576,6 @@ class InstitutionAssessmentSettingsApiTest extends TestCase
             );
             $this->assertSame([1, 0], [$sameRace['first']['updates'], $sameRace['second']['updates']]);
             $this->assertSame($sameRace['first']['state'], $sameRace['second']['state']);
-            $this->assertGreaterThanOrEqual(0.30, $sameRace['second_elapsed_seconds']);
 
             $distinctRace = $this->runRace(
                 $workerPath,
@@ -590,7 +589,6 @@ class InstitutionAssessmentSettingsApiTest extends TestCase
             $this->assertSame('America/New_York', $distinctRace['second']['state']['timezone']);
             $this->assertSame($ids['actors']['first'], $distinctRace['first']['state']['updated_by_user_id']);
             $this->assertSame($ids['actors']['second'], $distinctRace['second']['state']['updated_by_user_id']);
-            $this->assertGreaterThanOrEqual(0.30, $distinctRace['second_elapsed_seconds']);
 
             $final = InstitutionSetting::query()->findOrFail($ids['institution']);
             $this->assertSame('90.87654321', $final->acceptable_score_difference);
@@ -1010,7 +1008,7 @@ class InstitutionAssessmentSettingsApiTest extends TestCase
         });
     }
 
-    /** @return array{first: array{updates: int, state: array<string, mixed>}, second: array{updates: int, state: array<string, mixed>}, second_elapsed_seconds: float} */
+    /** @return array{first: array{updates: int, state: array<string, mixed>}, second: array{updates: int, state: array<string, mixed>}} */
     private function runRace(
         string $workerPath,
         string $firstActorId,
@@ -1018,46 +1016,120 @@ class InstitutionAssessmentSettingsApiTest extends TestCase
         string $firstOperation,
         string $secondOperation,
     ): array {
-        $signalPath = tempnam(sys_get_temp_dir(), 's03_be_006_signal_');
-        $this->assertIsString($signalPath);
-        unlink($signalPath);
+        $lockedPath = $this->unusedTempPath('s03_be_006_locked_');
+        $releasePath = $this->unusedTempPath('s03_be_006_release_');
+        $firstAttemptPath = $this->unusedTempPath('s03_be_006_attempt_first_');
+        $secondAttemptPath = $this->unusedTempPath('s03_be_006_attempt_second_');
+        $first = null;
 
-        $first = $this->startWorker([
-            $workerPath,
-            base_path(),
-            'run',
-            $firstActorId,
-            $firstOperation,
-            'hold',
-            $signalPath,
-        ]);
-        $deadline = microtime(true) + 3;
+        try {
+            $first = $this->startWorker([
+                $workerPath,
+                base_path(),
+                'run',
+                $firstActorId,
+                $firstOperation,
+                'hold',
+                $lockedPath,
+                $releasePath,
+                $firstAttemptPath,
+            ]);
+            $second = null;
 
-        while (! file_exists($signalPath) && microtime(true) < $deadline) {
-            usleep(10_000);
+            try {
+                $this->waitForFile($lockedPath, 'First worker did not acquire and hold the PostgreSQL settings row lock.');
+                $second = $this->startWorker([
+                    $workerPath,
+                    base_path(),
+                    'run',
+                    $secondActorId,
+                    $secondOperation,
+                    'normal',
+                    $lockedPath,
+                    $releasePath,
+                    $secondAttemptPath,
+                ]);
+                $this->waitForFile($secondAttemptPath, 'Second worker did not begin its settings-row locking operation.');
+                $this->waitForPostgresLock(
+                    (int) file_get_contents($secondAttemptPath),
+                    $firstOperation.' -> '.$secondOperation.' for institution assessment settings',
+                );
+            } catch (\Throwable $exception) {
+                file_put_contents($releasePath, 'release');
+                $secondOutput = $second === null ? '<not started>' : $this->finishWorker($second);
+                $firstOutput = $this->finishWorker($first);
+                $this->fail($exception->getMessage()."\nFirst: ".$firstOutput."\nSecond: ".$secondOutput);
+            }
+
+            file_put_contents($releasePath, 'release');
+            $secondResult = json_decode($this->finishWorker($second), true, flags: JSON_THROW_ON_ERROR);
+            $firstResult = json_decode($this->finishWorker($first), true, flags: JSON_THROW_ON_ERROR);
+
+            return [
+                'first' => $firstResult,
+                'second' => $secondResult,
+            ];
+        } finally {
+            if ($first !== null && ! file_exists($releasePath)) {
+                file_put_contents($releasePath, 'release');
+            }
+
+            $this->removeTempPaths([$lockedPath, $releasePath, $firstAttemptPath, $secondAttemptPath]);
         }
+    }
 
-        $this->assertFileExists($signalPath, 'First worker did not acquire and hold the PostgreSQL settings row lock.');
-        $secondStartedAt = microtime(true);
-        $second = $this->startWorker([
-            $workerPath,
-            base_path(),
-            'run',
-            $secondActorId,
-            $secondOperation,
-            'normal',
-            $signalPath,
-        ]);
-        $secondResult = json_decode($this->finishWorker($second), true, flags: JSON_THROW_ON_ERROR);
-        $secondElapsed = microtime(true) - $secondStartedAt;
-        $firstResult = json_decode($this->finishWorker($first), true, flags: JSON_THROW_ON_ERROR);
-        unlink($signalPath);
+    private function unusedTempPath(string $prefix): string
+    {
+        $path = tempnam(sys_get_temp_dir(), $prefix);
+        $this->assertIsString($path);
+        unlink($path);
 
-        return [
-            'first' => $firstResult,
-            'second' => $secondResult,
-            'second_elapsed_seconds' => $secondElapsed,
-        ];
+        return $path;
+    }
+
+    private function waitForFile(string $path, string $failureMessage): void
+    {
+        $deadline = microtime(true) + 10;
+
+        do {
+            clearstatcache(true, $path);
+
+            if (file_exists($path) && filesize($path) > 0) {
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail($failureMessage);
+    }
+
+    private function waitForPostgresLock(int $backendPid, string $scenario): void
+    {
+        $deadline = microtime(true) + 10;
+        $lastActivity = null;
+
+        do {
+            DB::select('select pg_stat_clear_snapshot()');
+            $lastActivity = DB::selectOne(
+                'select wait_event_type, wait_event from pg_stat_activity where pid = ?',
+                [$backendPid],
+            );
+
+            if ($lastActivity !== null && $lastActivity->wait_event_type === 'Lock') {
+                $this->assertNotNull($lastActivity->wait_event);
+
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail(sprintf(
+            'Second worker never entered a PostgreSQL settings row-lock wait during %s. Last activity: %s',
+            $scenario,
+            json_encode($lastActivity, JSON_THROW_ON_ERROR),
+        ));
     }
 
     /** @return array{process: resource, pipes: array<int, resource>} */
@@ -1092,6 +1164,16 @@ class InstitutionAssessmentSettingsApiTest extends TestCase
     private function runWorker(array $arguments): string
     {
         return $this->finishWorker($this->startWorker($arguments));
+    }
+
+    /** @param list<string> $paths */
+    private function removeTempPaths(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
     }
 
     private function postgresConcurrencyWorkerSource(): string
@@ -1149,7 +1231,9 @@ if ($mode === 'cleanup') {
 $actor = User::query()->findOrFail($argv[3]);
 $operation = $argv[4];
 $hold = $argv[5] === 'hold';
-$signalPath = $argv[6];
+$lockedPath = $argv[6];
+$releasePath = $argv[7];
+$attemptPath = $argv[8];
 $payload = match ($operation) {
     'same' => [
         'score' => '50.12345678',
@@ -1180,6 +1264,8 @@ $payload = match ($operation) {
     ],
 };
 
+$pid = DB::selectOne('select pg_backend_pid() as pid')->pid;
+file_put_contents($attemptPath, (string) $pid);
 DB::flushQueryLog();
 DB::enableQueryLog();
 
@@ -1201,8 +1287,25 @@ try {
     $queries = DB::getQueryLog();
 
     if ($hold) {
-        file_put_contents($signalPath, 'locked');
-        usleep(500_000);
+        file_put_contents($lockedPath, 'locked');
+        $deadline = microtime(true) + 10;
+
+        do {
+            clearstatcache(true, $releasePath);
+
+            if (file_exists($releasePath)) {
+                break;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        if (! file_exists($releasePath)) {
+            DB::rollBack();
+            fwrite(STDERR, 'Timed out waiting for deterministic assessment settings race release.');
+            exit(1);
+        }
+
         DB::commit();
     }
 
