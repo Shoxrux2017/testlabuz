@@ -126,29 +126,46 @@ class InstitutionGroupTeacherMembershipApiTest extends TestCase
         $this->teacherMembership($institution, $archivedGroup, $first, $actor);
         $this->requestAs($actor, 'GET', $this->teachersUri($archivedGroup))->assertOk()->assertJsonCount(1, 'data');
 
-        DB::flushQueryLog();
-        DB::enableQueryLog();
-        try {
-            $paginator = app(ListInstitutionGroupTeachers::class)(
-                actor: $actor,
-                group: $group->id,
-                search: 'alpha',
-                isActive: null,
-                sort: 'full_name',
-                direction: 'asc',
-                page: 1,
-                perPage: 20,
-            );
-            foreach ($paginator->items() as $teacher) {
-                (new InstitutionGroupTeacherMembershipResource($teacher))->toArray(Request::create('/'));
+        $measureQueries = function () use ($actor, $group): array {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            try {
+                $paginator = app(ListInstitutionGroupTeachers::class)(
+                    actor: $actor,
+                    group: $group->id,
+                    search: 'alpha',
+                    isActive: null,
+                    sort: 'full_name',
+                    direction: 'asc',
+                    page: 1,
+                    perPage: 100,
+                );
+                foreach ($paginator->items() as $teacher) {
+                    (new InstitutionGroupTeacherMembershipResource($teacher))->toArray(Request::create('/'));
+                }
+
+                return ['queries' => DB::getQueryLog(), 'item_count' => count($paginator->items())];
+            } finally {
+                DB::disableQueryLog();
             }
-            $queries = DB::getQueryLog();
-        } finally {
-            DB::disableQueryLog();
+        };
+
+        $smallMeasurement = $measureQueries();
+        $this->assertSame(2, $smallMeasurement['item_count']);
+
+        for ($index = 0; $index < 20; $index++) {
+            $additionalTeacher = User::factory()->teacher($institution)->create([
+                'full_name' => 'alpha Growth '.$index,
+            ]);
+            $this->teacherMembership($institution, $group, $additionalTeacher, $actor);
         }
 
-        $this->assertCount(3, $queries);
-        $listSql = strtolower($queries[2]['query']);
+        $largeMeasurement = $measureQueries();
+        $this->assertSame(22, $largeMeasurement['item_count']);
+        $this->assertCount(3, $smallMeasurement['queries']);
+        $this->assertSame(count($smallMeasurement['queries']), count($largeMeasurement['queries']));
+        $this->assertCount(3, $largeMeasurement['queries']);
+        $listSql = strtolower($largeMeasurement['queries'][2]['query']);
         $this->assertStringContainsString('group_teacher_memberships', $listSql);
         $this->assertStringContainsString('"users"."institution_id" = ?', $listSql);
         $this->assertStringContainsString('"group_teacher_memberships"."institution_id" = ?', $listSql);
@@ -350,6 +367,35 @@ class InstitutionGroupTeacherMembershipApiTest extends TestCase
             ->assertUnprocessable()->assertJsonPath('code', 'validation_failed');
         $this->requestAs($actor, 'DELETE', $this->teachersUri($group).'/'.$valid->id, query: ['unknown' => '1'])
             ->assertUnprocessable()->assertJsonPath('code', 'validation_failed');
+    }
+
+    public function test_teacher_delete_target_resolution_is_existence_private_and_preserves_membership_history(): void
+    {
+        $institution = Institution::factory()->create();
+        $foreignInstitution = Institution::factory()->create();
+        $actor = $this->institutionAdmin($institution);
+        $group = $this->group($institution, $actor);
+        $currentTeacher = User::factory()->teacher($institution)->create();
+        $wrongRole = User::factory()->student($institution)->create();
+        $foreignTeacher = User::factory()->teacher($foreignInstitution)->create();
+        $this->teacherMembership($institution, $group, $currentTeacher, $actor);
+        $membershipSnapshot = DB::table('group_teacher_memberships')->orderBy('id')->get()
+            ->map(fn (object $row): array => (array) $row)->all();
+        $notFoundEnvelopes = [];
+
+        foreach (['11111111-1111-4111-8111-111111111111', $wrongRole->id, $foreignTeacher->id] as $target) {
+            $response = $this->requestAs($actor, 'DELETE', $this->teachersUri($group).'/'.$target);
+            $response->assertNotFound()->assertJsonPath('code', 'resource_not_found');
+            $notFoundEnvelopes[] = $response->json();
+            $this->assertSame(
+                $membershipSnapshot,
+                DB::table('group_teacher_memberships')->orderBy('id')->get()
+                    ->map(fn (object $row): array => (array) $row)->all(),
+            );
+        }
+
+        $this->assertSame($notFoundEnvelopes[0], $notFoundEnvelopes[1]);
+        $this->assertSame($notFoundEnvelopes[1], $notFoundEnvelopes[2]);
     }
 
     public function test_teacher_membership_endpoints_enforce_all_institution_admin_middleware_gates(): void

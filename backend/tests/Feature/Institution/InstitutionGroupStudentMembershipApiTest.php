@@ -41,13 +41,17 @@ class InstitutionGroupStudentMembershipApiTest extends TestCase
 
     public function test_student_membership_routes_are_registered_once_with_exact_methods_and_middleware(): void
     {
+        $expectedUris = [
+            'api/v1/institution/groups/{group}/students',
+            'api/v1/institution/groups/{group}/students/{student}',
+        ];
         $routes = collect(Route::getRoutes())
             ->map(fn ($route): array => [
                 'methods' => array_values(array_diff($route->methods(), ['HEAD'])),
                 'uri' => $route->uri(),
                 'middleware' => $route->middleware(),
             ])
-            ->filter(fn (array $route): bool => str_contains($route['uri'], '/students'))
+            ->filter(fn (array $route): bool => in_array($route['uri'], $expectedUris, true))
             ->values()
             ->all();
 
@@ -125,29 +129,46 @@ class InstitutionGroupStudentMembershipApiTest extends TestCase
         $this->studentMembership($institution, $archived, $first, $actor);
         $this->requestAs($actor, 'GET', $this->studentsUri($archived))->assertOk()->assertJsonCount(1, 'data');
 
-        DB::flushQueryLog();
-        DB::enableQueryLog();
-        try {
-            $paginator = app(ListInstitutionGroupStudents::class)(
-                actor: $actor,
-                group: $group->id,
-                search: 'beta',
-                isActive: null,
-                sort: 'full_name',
-                direction: 'asc',
-                page: 1,
-                perPage: 20,
-            );
-            foreach ($paginator->items() as $student) {
-                (new InstitutionGroupStudentMembershipResource($student))->toArray(Request::create('/'));
+        $measureQueries = function () use ($actor, $group): array {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            try {
+                $paginator = app(ListInstitutionGroupStudents::class)(
+                    actor: $actor,
+                    group: $group->id,
+                    search: 'beta',
+                    isActive: null,
+                    sort: 'full_name',
+                    direction: 'asc',
+                    page: 1,
+                    perPage: 100,
+                );
+                foreach ($paginator->items() as $student) {
+                    (new InstitutionGroupStudentMembershipResource($student))->toArray(Request::create('/'));
+                }
+
+                return ['queries' => DB::getQueryLog(), 'item_count' => count($paginator->items())];
+            } finally {
+                DB::disableQueryLog();
             }
-            $queries = DB::getQueryLog();
-        } finally {
-            DB::disableQueryLog();
+        };
+
+        $smallMeasurement = $measureQueries();
+        $this->assertSame(2, $smallMeasurement['item_count']);
+
+        for ($index = 0; $index < 20; $index++) {
+            $additionalStudent = User::factory()->student($institution)->create([
+                'full_name' => 'beta Growth '.$index,
+            ]);
+            $this->studentMembership($institution, $group, $additionalStudent, $actor);
         }
 
-        $this->assertCount(3, $queries);
-        $listSql = strtolower($queries[2]['query']);
+        $largeMeasurement = $measureQueries();
+        $this->assertSame(22, $largeMeasurement['item_count']);
+        $this->assertCount(3, $smallMeasurement['queries']);
+        $this->assertSame(count($smallMeasurement['queries']), count($largeMeasurement['queries']));
+        $this->assertCount(3, $largeMeasurement['queries']);
+        $listSql = strtolower($largeMeasurement['queries'][2]['query']);
         $this->assertStringContainsString('group_student_memberships', $listSql);
         $this->assertStringContainsString('"users"."institution_id" = ?', $listSql);
         $this->assertStringContainsString('"group_student_memberships"."institution_id" = ?', $listSql);
@@ -316,6 +337,35 @@ class InstitutionGroupStudentMembershipApiTest extends TestCase
             ->assertUnprocessable()->assertJsonPath('code', 'validation_failed');
         $this->requestAs($actor, 'DELETE', $this->studentsUri($group).'/'.$valid->id, query: ['x' => '1'])
             ->assertUnprocessable()->assertJsonPath('code', 'validation_failed');
+    }
+
+    public function test_student_delete_target_resolution_is_existence_private_and_preserves_membership_history(): void
+    {
+        $institution = Institution::factory()->create();
+        $foreignInstitution = Institution::factory()->create();
+        $actor = $this->institutionAdmin($institution);
+        $group = $this->group($institution, $actor);
+        $currentStudent = User::factory()->student($institution)->create();
+        $wrongRole = User::factory()->teacher($institution)->create();
+        $foreignStudent = User::factory()->student($foreignInstitution)->create();
+        $this->studentMembership($institution, $group, $currentStudent, $actor);
+        $membershipSnapshot = DB::table('group_student_memberships')->orderBy('id')->get()
+            ->map(fn (object $row): array => (array) $row)->all();
+        $notFoundEnvelopes = [];
+
+        foreach (['11111111-1111-4111-8111-111111111111', $wrongRole->id, $foreignStudent->id] as $target) {
+            $response = $this->requestAs($actor, 'DELETE', $this->studentsUri($group).'/'.$target);
+            $response->assertNotFound()->assertJsonPath('code', 'resource_not_found');
+            $notFoundEnvelopes[] = $response->json();
+            $this->assertSame(
+                $membershipSnapshot,
+                DB::table('group_student_memberships')->orderBy('id')->get()
+                    ->map(fn (object $row): array => (array) $row)->all(),
+            );
+        }
+
+        $this->assertSame($notFoundEnvelopes[0], $notFoundEnvelopes[1]);
+        $this->assertSame($notFoundEnvelopes[1], $notFoundEnvelopes[2]);
     }
 
     public function test_student_membership_endpoints_enforce_authentication_role_account_institution_and_password_gates(): void

@@ -99,29 +99,46 @@ class InstitutionStudentParentsApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(0, 'data');
 
-        DB::flushQueryLog();
-        DB::enableQueryLog();
-        try {
-            $paginator = app(ListInstitutionStudentParents::class)(
-                actor: $actor,
-                student: $student->id,
-                search: 'alpha',
-                isActive: null,
-                sort: 'full_name',
-                direction: 'asc',
-                page: 1,
-                perPage: 20,
-            );
-            foreach ($paginator->items() as $relationship) {
-                (new InstitutionParentStudentRelationshipResource($relationship))->toArray(Request::create('/'));
+        $measureQueries = function () use ($actor, $student): array {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            try {
+                $paginator = app(ListInstitutionStudentParents::class)(
+                    actor: $actor,
+                    student: $student->id,
+                    search: 'alpha',
+                    isActive: null,
+                    sort: 'full_name',
+                    direction: 'asc',
+                    page: 1,
+                    perPage: 100,
+                );
+                foreach ($paginator->items() as $relationship) {
+                    (new InstitutionParentStudentRelationshipResource($relationship))->toArray(Request::create('/'));
+                }
+
+                return ['queries' => DB::getQueryLog(), 'item_count' => count($paginator->items())];
+            } finally {
+                DB::disableQueryLog();
             }
-            $queries = DB::getQueryLog();
-        } finally {
-            DB::disableQueryLog();
+        };
+
+        $smallMeasurement = $measureQueries();
+        $this->assertSame(2, $smallMeasurement['item_count']);
+
+        for ($index = 0; $index < 20; $index++) {
+            $additionalParent = User::factory()->parent($institution)->create([
+                'full_name' => 'alpha Growth '.$index,
+            ]);
+            $this->relationship($institution, $additionalParent, $student, $actor);
         }
 
-        $this->assertCount(3, $queries);
-        $listSql = strtolower($queries[2]['query']);
+        $largeMeasurement = $measureQueries();
+        $this->assertSame(22, $largeMeasurement['item_count']);
+        $this->assertCount(3, $smallMeasurement['queries']);
+        $this->assertSame(count($smallMeasurement['queries']), count($largeMeasurement['queries']));
+        $this->assertCount(3, $largeMeasurement['queries']);
+        $listSql = strtolower($largeMeasurement['queries'][2]['query']);
         $this->assertStringContainsString('inner join "users" as "parents"', $listSql);
         $this->assertStringContainsString("ilike ? escape '!'", $listSql);
         $this->assertStringContainsString(
