@@ -7,7 +7,7 @@
 | Task ID | `S04-BE-003` |
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Area | Backend |
-| Status | `Draft` |
+| Status | `Approved` |
 | Direct dependencies | `S04-BE-001` and `S04-BE-002` are `Accepted` and `Delivered`; both results are present on `origin/main` |
 | Delivery | `Implementation + GitHub delivery` |
 | Implementation gate | Stage 4 decomposition/task index is approved, dependencies are accepted/delivered, and local `main` is clean and synchronized with `origin/main` before Codex starts |
