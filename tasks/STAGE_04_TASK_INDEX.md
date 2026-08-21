@@ -9,7 +9,7 @@
 | Backend implementation | `S04-BE-001…005 Accepted / Delivered` |
 | Complete Backend Phase 2 | `PASS` |
 | Frontend decomposition | `Approved — 5 implementation tasks` |
-| Frontend contracts | `FE-001 Approved; FE-002…005 Draft / Review pending` |
+| Frontend contracts | `FE-001 Approved; FE-002 Approved; FE-003…005 Draft / Review pending` |
 | Frontend implementation | `FE-001 ready to start` |
 | Frontend Build Runner | `Prepared — approval-gated orchestration only` |
 | Frontend Phase 2 | `Pending all FE-001…005 Accepted / Delivered` |
@@ -92,7 +92,7 @@ Status = Approved
 | Order | Task | Title | Dependency | Planning status | Implementation state |
 |---:|---|---|---|---|---|
 | 1 | `S04-FE-001` | Institution Group Navigation and List | Complete Backend Phase 2 `PASS` | `Approved` | `Ready to start` |
-| 2 | `S04-FE-002` | Institution Group Create and Detail | `FE-001 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
+| 2 | `S04-FE-002` | Institution Group Create and Detail | `FE-001 Accepted / Delivered` | `Approved` | `Dependency pending` |
 | 3 | `S04-FE-003` | Institution Group Edit and Archive Lifecycle | `FE-002 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
 | 4 | `S04-FE-004` | Teacher and Student Group Membership Management | `FE-003 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
 | 5 | `S04-FE-005` | Parent–Student Relationship Management | `FE-004 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
@@ -104,7 +104,7 @@ Backend Phase 2 PASS
     ↓
 FE-001 Approved
     ↓ Accepted / Delivered
-FE-002 must be Approved
+FE-002 Approved
     ↓ Accepted / Delivered
 FE-003 must be Approved
     ↓ Accepted / Delivered
@@ -124,15 +124,10 @@ The approved working model for the frontend block is:
 ```text
 1. Store all five task files + Build Runner in the repository.
 2. Start Codex implementation of FE-001 only because FE-001 is Approved.
-3. While Codex implements FE-001, ChatGPT performs read-only review of FE-002.
-4. If FE-002 review finds issues:
-      fix the task contract;
-      keep it Draft until findings are resolved.
-5. When FE-002 passes review:
-      change FE-002 to Approved;
-      deliver the planning update to main.
-6. When FE-001 is Accepted / Delivered:
-      Codex may start FE-002 only if synchronized main shows FE-002 Approved.
+3. FE-002 review is complete and FE-002 is Approved.
+4. Deliver the FE-002 approval update to main while FE-001 implementation continues.
+5. When FE-001 is Accepted / Delivered, Codex may start FE-002 automatically after synchronizing main.
+6. While Codex implements FE-002, ChatGPT reviews FE-003.
 7. Repeat the same pattern for FE-003, FE-004, FE-005.
 ```
 
@@ -154,17 +149,23 @@ Codex still implements one task at a time.
 
 ---
 
-## 6. FE-001 Current Gate
+## 6. Current Frontend Gates
 
-`S04-FE-001` has completed the additional review/fix cycle and is the only current implementation-authorized frontend task.
+`S04-FE-001` and `S04-FE-002` have completed their review/fix cycles.
 
-State:
+Current repository planning state:
 
 ```text
 S04-FE-001:
 Status = Approved
-Implementation = Not started
+Implementation delivery = not yet present on current main
 Gate = OPEN
+
+S04-FE-002:
+Status = Approved
+Review = Complete
+Implementation = blocked until S04-FE-001 Accepted / Delivered
+Gate = DEPENDENCY PENDING
 ```
 
 Scope remains:
@@ -182,15 +183,15 @@ No create/detail/edit/archive/membership behavior is authorized in FE-001.
 Current state:
 
 ```text
-S04-FE-002 = Draft / Review pending
+S04-FE-002 = Approved / Review complete
 S04-FE-003 = Draft / Review pending
 S04-FE-004 = Draft / Review pending
 S04-FE-005 = Draft / Review pending
 ```
 
-These files may be committed to `main` now for review continuity.
+FE-002 has separately passed ChatGPT read-only review and is now `Approved`. It is still blocked from implementation until FE-001 is Accepted / Delivered.
 
-They must not be given to Codex for implementation until each has separately passed ChatGPT read-only review and has been changed to:
+FE-003…005 may remain committed to `main` for review continuity. They must not be implemented until each separately passes review and changes to:
 
 ```text
 Status = Approved
@@ -359,7 +360,7 @@ frontend block
 | Backend implementation | `Complete` |
 | Backend Phase 2 | `PASS` |
 | `S04-FE-001` | `Approved / Ready to start` |
-| `S04-FE-002` | `Draft / Review pending` |
+| `S04-FE-002` | `Approved / Dependency pending` |
 | `S04-FE-003` | `Draft / Review pending` |
 | `S04-FE-004` | `Draft / Review pending` |
 | `S04-FE-005` | `Draft / Review pending` |
@@ -381,7 +382,7 @@ S04-FE-001 — Institution Group Navigation and List
 Next planning/review work may proceed concurrently:
 
 ```text
-S04-FE-002 read-only contract review
+S04-FE-003 read-only contract review
 ```
 
 Safe execution sequence:
@@ -390,7 +391,8 @@ Safe execution sequence:
 Commit/store the complete frontend planning package on main
 → verify main sync/clean
 → start FE-001 implementation
-→ concurrently review/fix FE-002
-→ approve FE-002 only after review PASS
+→ FE-002 already Approved; deliver its planning update to main
+→ when FE-001 is delivered, continue FE-002 automatically
+→ concurrently review/fix FE-003
 → continue sequentially
 ```

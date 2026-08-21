@@ -16,13 +16,13 @@ Current planning expectation at initial launch:
 
 ```text
 S04-FE-001 = Approved
-S04-FE-002 = Draft / Review pending
+S04-FE-002 = Approved
 S04-FE-003 = Draft / Review pending
 S04-FE-004 = Draft / Review pending
 S04-FE-005 = Draft / Review pending
 ```
 
-This lets Codex start S04-FE-001 immediately while ChatGPT continues reviewing later task files in parallel.
+This lets Codex start S04-FE-001 immediately. After S04-FE-001 is Accepted / Delivered, S04-FE-002 may continue automatically because it has completed review and is Approved; later Draft tasks remain approval-gated.
 
 Queue:
 
