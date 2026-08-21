@@ -350,7 +350,7 @@ void main() {
       await tester.pumpAndSettle();
 
       const refreshButtonKey = Key('institutionDashboardRefreshButton');
-      final refreshFinder = find.byKey(refreshButtonKey);
+
       bool refreshHasPrimaryFocus() {
         final focusContext = FocusManager.instance.primaryFocus?.context;
         if (focusContext == null) {
