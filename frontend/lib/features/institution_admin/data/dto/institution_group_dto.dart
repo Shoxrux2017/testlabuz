@@ -80,6 +80,10 @@ class InstitutionGroupDto {
   }
 }
 
+bool isCanonicalInstitutionGroupId(String value) {
+  return _canonicalUuidPattern.hasMatch(value);
+}
+
 const _groupKeys = <String>{
   'id',
   'name',

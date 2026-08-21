@@ -8,6 +8,7 @@ import '../../auth/application/auth_session_controller.dart';
 import '../../auth/application/auth_session_state.dart';
 import '../../auth/domain/auth_user.dart';
 import '../../auth/domain/user_role.dart';
+import '../application/institution_group_create_controller.dart';
 import '../application/institution_user_create_controller.dart';
 
 const _compactRailWidth = 136.0;
@@ -51,12 +52,19 @@ class InstitutionAdminShell extends ConsumerWidget {
     }
 
     final navigationEnabled =
-        !AppRoutePaths.isInstitutionAdminUserCreatePath(locationPath) ||
-        !ref.watch(
-          institutionUserCreateControllerProvider.select(
-            (state) => state.isBusy,
-          ),
-        );
+        AppRoutePaths.isInstitutionAdminUserCreatePath(locationPath)
+        ? !ref.watch(
+            institutionUserCreateControllerProvider.select(
+              (state) => state.isBusy,
+            ),
+          )
+        : AppRoutePaths.isInstitutionAdminGroupCreatePath(locationPath)
+        ? !ref.watch(
+            institutionGroupCreateControllerProvider.select(
+              (state) => state.isRouteBlocking,
+            ),
+          )
+        : true;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -156,6 +164,11 @@ enum InstitutionAdminShellDestination {
       return InstitutionAdminShellDestination.users;
     }
 
+    if (AppRoutePaths.isInstitutionAdminGroupCreatePath(path) ||
+        AppRoutePaths.isInstitutionAdminGroupDetailPath(path)) {
+      return InstitutionAdminShellDestination.groups;
+    }
+
     return null;
   }
 }
@@ -193,6 +206,12 @@ String? _pageTitleForPath(String path) {
   }
   if (path == AppRoutePaths.institutionAdminGroups) {
     return 'Groups';
+  }
+  if (AppRoutePaths.isInstitutionAdminGroupCreatePath(path)) {
+    return 'Create Group';
+  }
+  if (AppRoutePaths.isInstitutionAdminGroupDetailPath(path)) {
+    return 'Group Details';
   }
   if (AppRoutePaths.isInstitutionAdminUserCreatePath(path)) {
     return 'Create User';

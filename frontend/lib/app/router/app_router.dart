@@ -11,6 +11,8 @@ import '../../features/auth/presentation/login/login_screen.dart';
 import '../../features/entry/domain/entry_route_resolver.dart';
 import '../../features/entry/presentation/role_entry_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_dashboard_screen.dart';
+import '../../features/institution_admin/presentation/institution_admin_group_create_screen.dart';
+import '../../features/institution_admin/presentation/institution_admin_group_detail_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_groups_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_profile_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_placeholder_screen.dart';
@@ -152,6 +154,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               state,
               const InstitutionAdminGroupsScreen(),
             ),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminGroupCreate,
+            path: AppRoutePaths.institutionAdminGroupCreate,
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminGroupCreateScreen(),
+            ),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminGroupDetail,
+            path: AppRoutePaths.institutionAdminGroupDetail,
+            builder: (context, state) {
+              if (state.uri.hasQuery ||
+                  state.uri.hasFragment ||
+                  !AppRoutePaths.isInstitutionAdminGroupDetailPath(
+                    state.uri.path,
+                  )) {
+                return const TechnicalRootScreen();
+              }
+
+              return _buildInstitutionAdminShell(
+                state,
+                InstitutionAdminGroupDetailScreen(
+                  groupId:
+                      state.pathParameters[AppRoutePaths
+                          .institutionAdminGroupIdParameter] ??
+                      '',
+                ),
+              );
+            },
           ),
           GoRoute(
             name: AppRouteNames.institutionAdminUserCreate,
@@ -307,7 +340,8 @@ String? _authRedirect(
   }
 
   if (_canUseInstitutionAdminDestinations(user.role, surface)) {
-    if (AppRoutePaths.isInstitutionAdminUserDetailPath(location) &&
+    if ((AppRoutePaths.isInstitutionAdminUserDetailPath(location) ||
+            AppRoutePaths.isInstitutionAdminGroupDetailPath(location)) &&
         hasQueryOrFragment) {
       return AppRoutePaths.institutionAdmin;
     }

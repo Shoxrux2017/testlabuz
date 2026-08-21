@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/app_route_paths.dart';
 import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/institution_group_list_controller.dart';
@@ -58,11 +60,40 @@ class _InstitutionAdminGroupsScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Groups',
-              key: const Key('institutionGroupListHeading'),
-              style: Theme.of(context).textTheme.headlineMedium,
+            Wrap(
+              key: const Key('institutionGroupListHeader'),
+              spacing: _controlSpacing,
+              runSpacing: _controlSpacing,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  'Groups',
+                  key: const Key('institutionGroupListHeading'),
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                FilledButton.icon(
+                  key: const Key('institutionGroupCreateButton'),
+                  onPressed: () => context.goNamed(
+                    AppRouteNames.institutionAdminGroupCreate,
+                  ),
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('Create Group'),
+                ),
+              ],
             ),
+            if (state.recoveryWarning case final warning?) ...[
+              const SizedBox(height: 12),
+              Semantics(
+                key: const Key('institutionGroupCreateRecoveryWarning'),
+                liveRegion: true,
+                container: true,
+                child: MaterialBanner(
+                  content: Text(warning),
+                  actions: const [SizedBox.shrink()],
+                ),
+              ),
+            ],
             const SizedBox(height: _sectionSpacing),
             _GroupListToolbar(
               state: state,
@@ -84,6 +115,14 @@ class _InstitutionAdminGroupsScreenState
               onNext: controller.nextPage,
               onFirstPage: controller.returnToFirstPage,
               onPerPageChanged: controller.setPerPage,
+              onCreate: () =>
+                  context.goNamed(AppRouteNames.institutionAdminGroupCreate),
+              onOpenGroup: (group) => context.goNamed(
+                AppRouteNames.institutionAdminGroupDetail,
+                pathParameters: {
+                  AppRoutePaths.institutionAdminGroupIdParameter: group.id,
+                },
+              ),
             ),
           ],
         ),
@@ -208,6 +247,8 @@ class _GroupListBody extends StatelessWidget {
     required this.onNext,
     required this.onFirstPage,
     required this.onPerPageChanged,
+    required this.onCreate,
+    required this.onOpenGroup,
   });
 
   final InstitutionGroupListState state;
@@ -219,6 +260,8 @@ class _GroupListBody extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onFirstPage;
   final ValueChanged<int> onPerPageChanged;
+  final VoidCallback onCreate;
+  final ValueChanged<InstitutionGroup> onOpenGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +282,7 @@ class _GroupListBody extends StatelessWidget {
         onPrevious: onPrevious,
         onNext: onNext,
         onPerPageChanged: onPerPageChanged,
+        onOpenGroup: onOpenGroup,
       ),
       InstitutionGroupListStatus.error => _GroupListError(
         failure: state.failure!,
@@ -250,7 +294,14 @@ class _GroupListBody extends StatelessWidget {
         state: state,
         title: 'No groups available',
         message: 'No groups exist for this institution.',
-        actions: const [],
+        actions: [
+          FilledButton.icon(
+            key: const Key('institutionGroupGlobalEmptyCreateButton'),
+            onPressed: onCreate,
+            icon: const Icon(Icons.group_add_outlined),
+            label: const Text('Create Group'),
+          ),
+        ],
         onPrevious: onPrevious,
         onNext: onNext,
         onPerPageChanged: onPerPageChanged,
@@ -287,6 +338,7 @@ class _GroupListBody extends StatelessWidget {
         onPrevious: onPrevious,
         onNext: onNext,
         onPerPageChanged: onPerPageChanged,
+        onOpenGroup: onOpenGroup,
       ),
     };
   }
@@ -320,6 +372,7 @@ class _GroupListData extends StatelessWidget {
     required this.onPrevious,
     required this.onNext,
     required this.onPerPageChanged,
+    required this.onOpenGroup,
   });
 
   final InstitutionGroupListState state;
@@ -328,6 +381,7 @@ class _GroupListData extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final ValueChanged<int> onPerPageChanged;
+  final ValueChanged<InstitutionGroup> onOpenGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -355,6 +409,7 @@ class _GroupListData extends StatelessWidget {
           query: state.query,
           canSort: state.canChangeQuery,
           onSort: onSort,
+          onOpenGroup: onOpenGroup,
         ),
         const SizedBox(height: _sectionSpacing),
         _GroupPagination(
@@ -375,12 +430,14 @@ class _GroupTable extends StatelessWidget {
     required this.query,
     required this.canSort,
     required this.onSort,
+    required this.onOpenGroup,
   });
 
   final InstitutionGroupListPage result;
   final InstitutionGroupListQuery query;
   final bool canSort;
   final ValueChanged<InstitutionGroupListSort> onSort;
+  final ValueChanged<InstitutionGroup> onOpenGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -447,11 +504,14 @@ class _GroupTable extends StatelessWidget {
   DataRow _groupRow(InstitutionGroup group, int index) {
     return DataRow(
       key: ValueKey('institutionGroupRow${group.id}'),
+      onSelectChanged: (_) => onOpenGroup(group),
       cells: [
         DataCell(
           _BoundedGroupText(
             value: group.name,
             key: Key('institutionGroupName$index'),
+            semanticsLabel: 'Open group details for ${group.name}',
+            onSemanticsTap: () => onOpenGroup(group),
           ),
         ),
         DataCell(_BoundedGroupText(value: group.level ?? '—')),
@@ -476,17 +536,31 @@ class _GroupTable extends StatelessWidget {
 }
 
 class _BoundedGroupText extends StatelessWidget {
-  const _BoundedGroupText({required this.value, super.key});
+  const _BoundedGroupText({
+    required this.value,
+    super.key,
+    this.semanticsLabel,
+    this.onSemanticsTap,
+  });
 
   final String value;
+  final String? semanticsLabel;
+  final VoidCallback? onSemanticsTap;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: value,
-      child: SizedBox(
-        width: 190,
-        child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+      child: Semantics(
+        container: semanticsLabel != null,
+        excludeSemantics: semanticsLabel != null,
+        label: semanticsLabel ?? value,
+        button: semanticsLabel != null,
+        onTap: onSemanticsTap,
+        child: SizedBox(
+          width: 190,
+          child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ),
       ),
     );
   }
