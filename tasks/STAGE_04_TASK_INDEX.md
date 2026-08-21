@@ -8,6 +8,8 @@
 | Stage dependency | `Stage 3 — Institution Administration and User Management` is closed |
 | Planning state | `S04-BE-005 Approved; Backend Phase 2 rerun required after delivery` |
 | Backend implementation | `S04-BE-001…004 Accepted / Delivered; S04-BE-005 is the next authorized implementation task` |
+| Frontend decomposition | `Approved` |
+| Frontend task files | `Not yet created; will be prepared one task at a time after S04-BE-005 Accepted / Delivered and Backend Phase 2 rerun PASS` |
 | Frontend implementation | `Blocked until S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS` |
 | Integration | `Not decomposed; planning is not authorized` |
 | Stage closure | `Pending` |
@@ -251,8 +253,13 @@ Blocked pending S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS.
 This is an intentional temporary frontend implementation block while the
 approved backend follow-up and its checkpoint are pending.
 
-Do not invent `S04-FE-*` task IDs or create frontend task files during this
-gate.
+Frontend decomposition is `Approved`. Frontend task files have not yet been
+created and will be prepared one task at a time only after:
+
+```text
+S04-BE-005 = Accepted / Delivered
+→ Backend Phase 2 rerun = PASS
+```
 
 Frontend implementation starts only after:
 
@@ -265,8 +272,8 @@ That condition is not yet satisfied. The historical Backend Phase 2 `PASS` for
 `S04-BE-001…004` does not authorize frontend implementation after `S04-BE-005`
 was added to the backend block.
 
-After the required rerun passes and the frontend block is separately approved,
-this same Task Index can be updated with:
+After the required rerun passes, frontend task files will be prepared one task
+at a time. As each task is prepared, this same Task Index can be updated with:
 
 - exact `S04-FE-*` tasks;
 - task order;
@@ -281,7 +288,7 @@ this same Task Index can be updated with:
 Current state:
 
 ```text
-Not scheduled — frontend block is not decomposed yet.
+Not scheduled — frontend task files have not been created yet.
 ```
 
 When applicable, Frontend Phase 2 runs only after all approved Stage 4 frontend tasks are `Accepted` and `Delivered`.
@@ -387,7 +394,8 @@ Do not run per-task Phase 2 reviews.
 | Historical Backend Phase 2 for `S04-BE-001…004` | `PASS` |
 | `S04-BE-005` | `Approved` |
 | Required Backend Phase 2 rerun | `Pending S04-BE-005 Accepted / Delivered` |
-| Frontend decomposition | `No frontend task files registered during the reopened backend gate` |
+| Frontend decomposition | `Approved` |
+| Frontend task files | `Not yet created; will be prepared one task at a time after S04-BE-005 Accepted / Delivered and Backend Phase 2 rerun PASS` |
 | Frontend implementation | `Blocked until S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS` |
 | Frontend Phase 2 | `Not scheduled` |
 | Integration | `Not decomposed; planning is not authorized` |
@@ -406,5 +414,6 @@ S04-BE-005 implementation
 `S04-BE-001…004` remain `Accepted / Delivered`, and their historical Backend
 Phase 2 result remains `PASS`. The only currently permitted gate is
 `S04-BE-005 implementation`. Frontend implementation remains blocked until
-`S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS`. No frontend task
-files are created and integration remains unplanned.
+`S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS`. Frontend task
+files have not yet been created and will be prepared one task at a time only
+after that condition is satisfied. Integration remains unplanned.
