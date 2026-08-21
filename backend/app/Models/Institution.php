@@ -46,6 +46,11 @@ class Institution extends Model
         return $this->hasMany(User::class);
     }
 
+    public function groups(): HasMany
+    {
+        return $this->hasMany(Group::class);
+    }
+
     public function setting(): HasOne
     {
         return $this->hasOne(InstitutionSetting::class);
