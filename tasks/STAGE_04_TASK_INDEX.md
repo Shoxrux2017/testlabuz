@@ -6,10 +6,10 @@
 |---|---|
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Stage dependency | `Stage 3 — Institution Administration and User Management` is closed |
-| Planning state | `Backend decomposition approved; frontend decomposition pending` |
+| Planning state | `Backend block complete; Backend Phase 2 PASS; frontend planning/decomposition is the next gate` |
 | Backend implementation | `S04-BE-001…004 Accepted / Delivered; backend implementation block complete; no backend implementation task is authorized` |
-| Frontend implementation | `Blocked until Backend Phase 2 = PASS and frontend decomposition is approved` |
-| Integration | `Not decomposed yet` |
+| Frontend implementation | `Not authorized until frontend decomposition/tasks are prepared and approved` |
+| Integration | `Not decomposed` |
 | Stage closure | `Pending` |
 
 This file is the orchestration map for Stage 4.
@@ -43,11 +43,11 @@ Only the next dependency-satisfied task is promoted to `Approved`. Future task c
 
 | Order | Task ID | Title | Depends on | Current status | Delivery |
 |---:|---|---|---|---|---|
-| 1 | `S04-BE-001` | Group and Relationship Persistence Foundation | Stage 3 closed; Stage 4 backend decomposition approved | `Accepted` | `Implementation + GitHub delivery` |
-| 2 | `S04-BE-002` | Institution Group Management API | `S04-BE-001 Accepted + Delivered` | `Accepted` | `Implementation + GitHub delivery` |
-| 3 | `S04-BE-003` | Teacher and Student Group Membership API | `S04-BE-001 + S04-BE-002 Accepted + Delivered` | `Accepted` | `Implementation + GitHub delivery` |
-| 4 | `S04-BE-004` | Parent–Student Relationship API | `S04-BE-003 Accepted + Delivered` | `Accepted` | `Implementation + GitHub delivery` |
-| 5 | `S04-BE-PHASE-2` | Backend Phase 2 Read-Only Block Review | `S04-BE-001…004 Accepted + Delivered` | `Approved` | `Read-only checkpoint; no delivery` |
+| 1 | `S04-BE-001` | Group and Relationship Persistence Foundation | Stage 3 closed; Stage 4 backend decomposition approved | `Accepted / Delivered` | `Implementation + GitHub delivery` |
+| 2 | `S04-BE-002` | Institution Group Management API | `S04-BE-001 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
+| 3 | `S04-BE-003` | Teacher and Student Group Membership API | `S04-BE-001 + S04-BE-002 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
+| 4 | `S04-BE-004` | Parent–Student Relationship API | `S04-BE-003 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
+| 5 | `S04-BE-PHASE-2` | Backend Phase 2 Read-Only Block Review | `S04-BE-001…004 Accepted + Delivered` | `PASS` | `Read-only checkpoint; no delivery` |
 
 ### Backend dependency chain
 
@@ -64,7 +64,7 @@ S04-BE-004
     ↓ Accepted + Delivered
 Backend Phase 2
     ↓ PASS
-Frontend planning / implementation
+Stage 4 Frontend Planning / Decomposition
 ```
 
 ---
@@ -202,7 +202,7 @@ no unresolved architecture/API/database/security/tenant/lifecycle/cross-task con
 
 If `NOT ACCEPTED`, ChatGPT prepares focused fix contract(s), the fixes are implemented/verified/delivered, and the affected checkpoint is rerun.
 
-Frontend implementation cannot start until Backend Phase 2 is `PASS`.
+Frontend implementation cannot start until Backend Phase 2 is `PASS` and the frontend decomposition/tasks are prepared and approved.
 
 ---
 
@@ -211,7 +211,7 @@ Frontend implementation cannot start until Backend Phase 2 is `PASS`.
 ### Current state
 
 ```text
-Not decomposed yet.
+Ready for planning / next gate.
 ```
 
 This is intentional and **not a backend blocker**.
@@ -223,6 +223,8 @@ Frontend planning starts only after:
 ```text
 Backend Phase 2 = PASS
 ```
+
+That condition is now satisfied, so frontend planning is permitted. Frontend implementation remains unauthorized until the frontend decomposition and tasks are prepared and approved.
 
 At that point ChatGPT must re-check current `origin/main`, current frontend architecture/tests, locked Stage 4 product/API requirements, and delivered backend behavior before proposing the frontend task decomposition.
 
@@ -262,7 +264,7 @@ Stage integration cannot begin until the required Backend and Frontend Phase 2 c
 Current state:
 
 ```text
-Not decomposed yet.
+Not decomposed.
 ```
 
 Do not create the Stage 4 integration implementation contract before:
@@ -344,8 +346,9 @@ Do not run per-task Phase 2 reviews.
 | `S04-BE-002` | `Accepted / Delivered` |
 | `S04-BE-003` | `Accepted / Delivered` |
 | `S04-BE-004` | `Accepted / Delivered` |
-| Backend Phase 2 | `Approved — next checkpoint` |
-| Frontend decomposition | `Not started` |
+| Backend Phase 2 | `PASS` |
+| Frontend decomposition | `Ready for planning / next gate` |
+| Frontend implementation | `Not authorized until frontend decomposition/tasks are approved` |
 | Frontend Phase 2 | `Not scheduled` |
 | Integration | `Not decomposed` |
 | Stage Closure | `Pending` |
@@ -357,7 +360,7 @@ Do not run per-task Phase 2 reviews.
 The next permitted gate is:
 
 ```text
-Stage 4 Backend Phase 2 — Read-Only Block Review
+Stage 4 Frontend Planning / Decomposition
 ```
 
-No backend implementation task is currently authorized. Frontend planning/implementation cannot start until Backend Phase 2 = `PASS`.
+The backend block is complete and Backend Phase 2 is `PASS`. Frontend planning is now permitted. Frontend implementation starts only after the frontend decomposition and tasks are prepared and approved. Integration remains prohibited and `Not decomposed`.

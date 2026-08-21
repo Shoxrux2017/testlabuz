@@ -6,13 +6,13 @@
 |---|---|
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Block | Backend (`S04-BE-001` through `S04-BE-004`) |
-| Status | `Approved` |
+| Status | `PASS` |
 | Review mode | `Read-only` |
 | Entry gate | `S04-BE-001`…`S04-BE-004` are all `Accepted` and `Delivered` on `origin/main` |
 | Audited branch | `main` |
 | Required repository state | local `main == origin/main`, ahead/behind `0/0`, clean worktree |
 | Verdicts | `PASS` or `NOT ACCEPTED` |
-| Next gate after PASS | Stage 4 frontend implementation |
+| Next gate after PASS | Stage 4 Frontend Planning / Decomposition |
 
 This checkpoint reviews the complete delivered Stage 4 backend block as one integrated implementation surface.
 
@@ -1048,9 +1048,42 @@ ChatGPT produces the checkpoint record in this order:
 If verdict is `PASS`, the next permitted gate is:
 
 ```text
-Stage 4 frontend implementation
+Stage 4 Frontend Planning / Decomposition
 ```
 
 Backend delivery is already complete before this checkpoint and must not be repeated.
 
 This Phase 2 review does not authorize Stage integration or Stage closure.
+
+---
+
+## 20. Official ChatGPT Verdict Record
+
+Official verdict:
+
+```text
+PASS
+P1 = 0
+P2 = 0
+P3 = 0
+```
+
+Audited repository state:
+
+```text
+origin/main: 13c1d9c4689ceefce2451dfda5b98ce8a4d53ae7
+Stage 4 backend baseline: d9095e3fa7e6df6dc83ecb2ac97de98531068e42
+```
+
+Final verification evidence:
+
+- Pint: `245 files PASS`;
+- Stage 4 routes: `15/15 exact`;
+- obsolete routes: `0`;
+- full backend suite: `293 passed / 17,274 assertions`;
+- skipped/incomplete: `0`;
+- `composer validate --strict`: `PASS`;
+- `git diff --check`: `PASS`;
+- final audited `main`: clean, ahead/behind `0/0`.
+
+The backend block is complete and Backend Phase 2 is `PASS`. The next permitted gate is Stage 4 Frontend Planning / Decomposition. Frontend implementation remains unauthorized until the frontend decomposition and tasks are prepared and approved. Stage 4 integration remains unauthorized.
