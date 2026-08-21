@@ -12,6 +12,8 @@ final class ApiErrorResponse
 {
     private const CODE_AUTHENTICATION_REQUIRED = 'authentication_required';
 
+    private const CODE_BUSINESS_CONFLICT = 'business_conflict';
+
     private const CODE_CURRENT_PASSWORD_INVALID = 'current_password_invalid';
 
     private const CODE_INSTITUTION_INACTIVE = 'institution_inactive';
@@ -139,6 +141,19 @@ final class ApiErrorResponse
             'You do not have permission to perform this action.',
             self::CODE_FORBIDDEN,
             Response::HTTP_FORBIDDEN,
+        );
+    }
+
+    public static function groupArchived(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The group is archived.',
+            self::CODE_BUSINESS_CONFLICT,
+            Response::HTTP_CONFLICT,
         );
     }
 
