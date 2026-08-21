@@ -144,29 +144,46 @@ class InstitutionParentStudentsApiTest extends TestCase
                 'meta' => ['pagination' => ['page' => 1, 'per_page' => 20, 'total' => 0, 'last_page' => 1]],
             ]);
 
-        DB::flushQueryLog();
-        DB::enableQueryLog();
-        try {
-            $paginator = app(ListInstitutionParentStudents::class)(
-                actor: $actor,
-                parent: $parent->id,
-                search: 'beta',
-                isActive: null,
-                sort: 'full_name',
-                direction: 'asc',
-                page: 1,
-                perPage: 20,
-            );
-            foreach ($paginator->items() as $relationship) {
-                (new InstitutionParentStudentRelationshipResource($relationship))->toArray(Request::create('/'));
+        $measureQueries = function () use ($actor, $parent): array {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            try {
+                $paginator = app(ListInstitutionParentStudents::class)(
+                    actor: $actor,
+                    parent: $parent->id,
+                    search: 'beta',
+                    isActive: null,
+                    sort: 'full_name',
+                    direction: 'asc',
+                    page: 1,
+                    perPage: 100,
+                );
+                foreach ($paginator->items() as $relationship) {
+                    (new InstitutionParentStudentRelationshipResource($relationship))->toArray(Request::create('/'));
+                }
+
+                return ['queries' => DB::getQueryLog(), 'item_count' => count($paginator->items())];
+            } finally {
+                DB::disableQueryLog();
             }
-            $queries = DB::getQueryLog();
-        } finally {
-            DB::disableQueryLog();
+        };
+
+        $smallMeasurement = $measureQueries();
+        $this->assertSame(2, $smallMeasurement['item_count']);
+
+        for ($index = 0; $index < 20; $index++) {
+            $additionalStudent = User::factory()->student($institution)->create([
+                'full_name' => 'beta Growth '.$index,
+            ]);
+            $this->relationship($institution, $parent, $additionalStudent, $actor);
         }
 
-        $this->assertCount(3, $queries);
-        $listSql = strtolower($queries[2]['query']);
+        $largeMeasurement = $measureQueries();
+        $this->assertSame(22, $largeMeasurement['item_count']);
+        $this->assertCount(3, $smallMeasurement['queries']);
+        $this->assertSame(count($smallMeasurement['queries']), count($largeMeasurement['queries']));
+        $this->assertCount(3, $largeMeasurement['queries']);
+        $listSql = strtolower($largeMeasurement['queries'][2]['query']);
         $this->assertStringContainsString('parent_student_relationships', $listSql);
         $this->assertStringContainsString('inner join "users" as "students"', $listSql);
         $this->assertStringContainsString("ilike ? escape '!'", $listSql);

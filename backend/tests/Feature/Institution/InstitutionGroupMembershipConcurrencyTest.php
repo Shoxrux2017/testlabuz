@@ -194,6 +194,175 @@ class InstitutionGroupMembershipConcurrencyTest extends TestCase
                 ->where('group_id', $ids['groups']['student_identical'])
                 ->whereNull('ended_at')
                 ->count());
+            $this->assertSame(2, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_identical'])
+                ->count());
+
+            $studentOverlap = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_overlap'],
+                'assign_student',
+                array_slice($ids['users']['student_overlap'], 0, 2),
+                'assign_student',
+                array_slice($ids['users']['student_overlap'], 1, 2),
+            );
+            $this->assertSame(2, $studentOverlap['first']['created_count']);
+            $this->assertSame(1, $studentOverlap['second']['created_count']);
+            $this->assertSame(3, $this->currentStudentCount($ids['groups']['student_overlap']));
+            $this->assertSame(3, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_overlap'])
+                ->count());
+
+            $studentRemove = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_remove'],
+                'remove_student',
+                $ids['users']['student_remove'],
+                'remove_student',
+                $ids['users']['student_remove'],
+            );
+            $this->assertSame(1, $studentRemove['first']['membership_updates']);
+            $this->assertSame(0, $studentRemove['second']['membership_updates']);
+            $this->assertSame(0, $this->currentStudentCount($ids['groups']['student_remove']));
+            $this->assertSame(1, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_remove'])
+                ->whereNotNull('ended_at')
+                ->count());
+
+            $studentAssignThenRemove = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_assign_remove'],
+                'assign_student',
+                $ids['users']['student_assign_remove'],
+                'remove_student',
+                [$ids['users']['student_assign_remove'][0]],
+            );
+            $this->assertSame(2, $studentAssignThenRemove['first']['created_count']);
+            $this->assertSame(1, $studentAssignThenRemove['second']['membership_updates']);
+            $this->assertSame(1, $this->currentStudentCount($ids['groups']['student_assign_remove']));
+            $this->assertSame(2, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_assign_remove'])
+                ->count());
+            $this->assertSame(1, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_assign_remove'])
+                ->where('student_id', $ids['users']['student_assign_remove'][0])
+                ->whereNotNull('ended_at')
+                ->count());
+
+            $studentRemoveThenAssign = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_remove_assign'],
+                'remove_student',
+                $ids['users']['student_remove_assign'],
+                'assign_student',
+                $ids['users']['student_remove_assign'],
+            );
+            $this->assertSame(1, $studentRemoveThenAssign['first']['membership_updates']);
+            $this->assertSame(1, $studentRemoveThenAssign['second']['created_count']);
+            $this->assertSame(1, $this->currentStudentCount($ids['groups']['student_remove_assign']));
+            $this->assertSame(2, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_remove_assign'])
+                ->count());
+            $this->assertSame(1, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_remove_assign'])
+                ->whereNotNull('ended_at')
+                ->count());
+
+            $studentMembershipThenArchive = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_membership_archive'],
+                'assign_student',
+                $ids['users']['student_membership_archive'],
+                'archive',
+                [],
+            );
+            $this->assertSame('ok', $studentMembershipThenArchive['first']['outcome']);
+            $this->assertSame('ok', $studentMembershipThenArchive['second']['outcome']);
+            $this->assertSame(
+                GroupStatus::Archived,
+                Group::query()->findOrFail($ids['groups']['student_membership_archive'])->status,
+            );
+            $this->assertSame(1, $this->currentStudentCount($ids['groups']['student_membership_archive']));
+            $this->assertSame(1, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_membership_archive'])
+                ->count());
+
+            $studentArchiveThenAssign = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_archive_assign'],
+                'archive',
+                [],
+                'assign_student',
+                $ids['users']['student_archive_assign'],
+            );
+            $this->assertSame('ok', $studentArchiveThenAssign['first']['outcome']);
+            $this->assertSame('group_archived', $studentArchiveThenAssign['second']['outcome']);
+            $this->assertSame(
+                GroupStatus::Archived,
+                Group::query()->findOrFail($ids['groups']['student_archive_assign'])->status,
+            );
+            $this->assertSame(0, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_archive_assign'])
+                ->count());
+
+            $studentDeactivateThenAssign = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_deactivate_assign'],
+                'deactivate',
+                $ids['users']['student_deactivate_assign'],
+                'assign_student',
+                $ids['users']['student_deactivate_assign'],
+            );
+            $this->assertSame('ok', $studentDeactivateThenAssign['first']['outcome']);
+            $this->assertSame('inactive_member', $studentDeactivateThenAssign['second']['outcome']);
+            $this->assertFalse(User::query()->findOrFail($ids['users']['student_deactivate_assign'][0])->is_active);
+            $this->assertSame(0, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_deactivate_assign'])
+                ->count());
+
+            $studentAssignThenDeactivate = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_assign_deactivate'],
+                'assign_student',
+                $ids['users']['student_assign_deactivate'],
+                'deactivate',
+                $ids['users']['student_assign_deactivate'],
+            );
+            $this->assertSame(1, $studentAssignThenDeactivate['first']['created_count']);
+            $this->assertSame('ok', $studentAssignThenDeactivate['second']['outcome']);
+            $this->assertFalse(User::query()->findOrFail($ids['users']['student_assign_deactivate'][0])->is_active);
+            $this->assertSame(1, $this->currentStudentCount($ids['groups']['student_assign_deactivate']));
+            $this->assertSame(1, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_assign_deactivate'])
+                ->count());
+
+            $studentCrossGroup = $this->runRace(
+                $workerPath,
+                $ids['actor'],
+                $ids['groups']['student_cross_a'],
+                'assign_student',
+                array_reverse($ids['users']['student_cross']),
+                'assign_student_other_group',
+                array_merge([$ids['groups']['student_cross_b']], $ids['users']['student_cross']),
+            );
+            $this->assertSame(2, $studentCrossGroup['first']['created_count']);
+            $this->assertSame(2, $studentCrossGroup['second']['created_count']);
+            $this->assertSame(2, $this->currentStudentCount($ids['groups']['student_cross_a']));
+            $this->assertSame(2, $this->currentStudentCount($ids['groups']['student_cross_b']));
+            $this->assertSame(2, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_cross_a'])
+                ->count());
+            $this->assertSame(2, GroupStudentMembership::query()
+                ->where('group_id', $ids['groups']['student_cross_b'])
+                ->count());
         } finally {
             $this->runWorker([$workerPath, base_path(), 'cleanup', $ids['institution']]);
             unlink($workerPath);
@@ -203,6 +372,14 @@ class InstitutionGroupMembershipConcurrencyTest extends TestCase
     private function currentTeacherCount(string $groupId): int
     {
         return GroupTeacherMembership::query()
+            ->where('group_id', $groupId)
+            ->whereNull('ended_at')
+            ->count();
+    }
+
+    private function currentStudentCount(string $groupId): int
+    {
+        return GroupStudentMembership::query()
             ->where('group_id', $groupId)
             ->whereNull('ended_at')
             ->count();
@@ -385,6 +562,7 @@ use App\Actions\Institution\ArchiveInstitutionGroup;
 use App\Actions\Institution\AssignStudentToInstitutionGroup;
 use App\Actions\Institution\AssignTeacherToInstitutionGroup;
 use App\Actions\Institution\ChangeInstitutionUserLifecycle;
+use App\Actions\Institution\RemoveStudentFromInstitutionGroup;
 use App\Actions\Institution\RemoveTeacherFromInstitutionGroup;
 use App\Exceptions\Institution\GroupArchivedException;
 use App\Exceptions\Institution\InactiveGroupMemberException;
@@ -453,12 +631,47 @@ if ($mode === 'setup') {
     ])->id;
     $users['cross'] = User::factory()->count(2)->teacher($institution)->create()->pluck('id')->all();
 
-    $groups['student_identical'] = Group::factory()->create([
+    $studentScenarios = [
+        'student_identical' => 2,
+        'student_overlap' => 3,
+        'student_remove' => 1,
+        'student_assign_remove' => 2,
+        'student_remove_assign' => 1,
+        'student_membership_archive' => 1,
+        'student_archive_assign' => 1,
+        'student_deactivate_assign' => 1,
+        'student_assign_deactivate' => 1,
+    ];
+
+    foreach ($studentScenarios as $scenario => $count) {
+        $groups[$scenario] = Group::factory()->create([
+            'institution_id' => $institution->id,
+            'created_by_user_id' => $actor->id,
+            'name' => 'Concurrency '.str_replace('_', ' ', $scenario),
+        ])->id;
+        $users[$scenario] = User::factory()->count($count)->student($institution)->create()->pluck('id')->all();
+    }
+
+    foreach (['student_remove', 'student_remove_assign'] as $scenario) {
+        GroupStudentMembership::factory()->create([
+            'institution_id' => $institution->id,
+            'group_id' => $groups[$scenario],
+            'student_id' => $users[$scenario][0],
+            'assigned_by_user_id' => $actor->id,
+        ]);
+    }
+
+    $groups['student_cross_a'] = Group::factory()->create([
         'institution_id' => $institution->id,
         'created_by_user_id' => $actor->id,
-        'name' => 'Concurrency student identical',
+        'name' => 'Concurrency student cross A',
     ])->id;
-    $users['student_identical'] = User::factory()->count(2)->student($institution)->create()->pluck('id')->all();
+    $groups['student_cross_b'] = Group::factory()->create([
+        'institution_id' => $institution->id,
+        'created_by_user_id' => $actor->id,
+        'name' => 'Concurrency student cross B',
+    ])->id;
+    $users['student_cross'] = User::factory()->count(2)->student($institution)->create()->pluck('id')->all();
 
     echo json_encode([
         'institution' => $institution->id,
@@ -508,11 +721,16 @@ try {
         $otherGroupId = array_shift($ids);
         $result = (new AssignTeacherToInstitutionGroup)($actor, $otherGroupId, $ids);
         $createdCount = $result->createdCount;
+    } elseif ($operation === 'assign_student_other_group') {
+        $otherGroupId = array_shift($ids);
+        $result = (new AssignStudentToInstitutionGroup)($actor, $otherGroupId, $ids);
+        $createdCount = $result->createdCount;
     } else {
         $result = match ($operation) {
             'assign_teacher' => (new AssignTeacherToInstitutionGroup)($actor, $groupId, $ids),
             'assign_student' => (new AssignStudentToInstitutionGroup)($actor, $groupId, $ids),
             'remove_teacher' => (new RemoveTeacherFromInstitutionGroup)($actor, $groupId, $ids[0]),
+            'remove_student' => (new RemoveStudentFromInstitutionGroup)($actor, $groupId, $ids[0]),
             'archive' => (new ArchiveInstitutionGroup)($actor, $groupId),
             'deactivate' => (new ChangeInstitutionUserLifecycle)->deactivate($actor, $ids[0]),
         };

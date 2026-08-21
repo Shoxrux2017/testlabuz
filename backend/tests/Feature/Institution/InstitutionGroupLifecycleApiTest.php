@@ -440,19 +440,29 @@ class InstitutionGroupLifecycleApiTest extends TestCase
             $attemptPath,
         ]);
         $this->waitForFile($attemptPath, 'Second worker did not start its locking operation.');
-        $secondStartedAt = microtime(true);
-        usleep(500_000);
+        $secondBackendPid = (int) file_get_contents($attemptPath);
+        try {
+            $this->waitForPostgresLock(
+                $secondBackendPid,
+                $firstOperation.' -> '.$secondOperation.' for group '.$groupId,
+            );
+        } catch (\Throwable $exception) {
+            file_put_contents($releasePath, 'release');
+            $secondOutput = $this->finishWorker($second);
+            $firstOutput = $this->finishWorker($first);
+
+            foreach ([$lockedPath, $releasePath, $attemptPath, $attemptPath.'.first'] as $path) {
+                if (file_exists($path)) {
+                    unlink($path);
+                }
+            }
+
+            $this->fail($exception->getMessage()."\nFirst: ".$firstOutput."\nSecond: ".$secondOutput);
+        }
         file_put_contents($releasePath, 'release');
 
         $secondResult = json_decode($this->finishWorker($second), true, flags: JSON_THROW_ON_ERROR);
-        $secondElapsed = microtime(true) - $secondStartedAt;
         $firstResult = json_decode($this->finishWorker($first), true, flags: JSON_THROW_ON_ERROR);
-
-        $this->assertGreaterThanOrEqual(
-            0.4,
-            $secondElapsed,
-            'The second worker did not remain blocked behind the first PostgreSQL group row lock.',
-        );
 
         foreach ([$lockedPath, $releasePath, $attemptPath, $attemptPath.'.first'] as $path) {
             if (file_exists($path)) {
@@ -480,6 +490,34 @@ class InstitutionGroupLifecycleApiTest extends TestCase
         }
 
         $this->assertTrue($fileIsReady, $failureMessage);
+    }
+
+    private function waitForPostgresLock(int $backendPid, string $scenario): void
+    {
+        $deadline = microtime(true) + 10;
+        $lastActivity = null;
+
+        do {
+            DB::select('select pg_stat_clear_snapshot()');
+            $lastActivity = DB::selectOne(
+                'select wait_event_type, wait_event from pg_stat_activity where pid = ?',
+                [$backendPid],
+            );
+
+            if ($lastActivity !== null && $lastActivity->wait_event_type === 'Lock') {
+                $this->assertNotNull($lastActivity->wait_event);
+
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail(sprintf(
+            'Second worker never entered a PostgreSQL row-lock wait during %s. Last activity: %s',
+            $scenario,
+            json_encode($lastActivity, JSON_THROW_ON_ERROR),
+        ));
     }
 
     /** @return array{process: resource, pipes: array<int, resource>} */
