@@ -7,7 +7,7 @@
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Stage dependency | `Stage 3 — Institution Administration and User Management` is closed |
 | Planning state | `Backend decomposition approved; frontend decomposition pending` |
-| Backend implementation | `Only S04-BE-004 may start after Git preflight passes` |
+| Backend implementation | `S04-BE-001…004 Accepted / Delivered; backend implementation block complete; no backend implementation task is authorized` |
 | Frontend implementation | `Blocked until Backend Phase 2 = PASS and frontend decomposition is approved` |
 | Integration | `Not decomposed yet` |
 | Stage closure | `Pending` |
@@ -46,8 +46,8 @@ Only the next dependency-satisfied task is promoted to `Approved`. Future task c
 | 1 | `S04-BE-001` | Group and Relationship Persistence Foundation | Stage 3 closed; Stage 4 backend decomposition approved | `Accepted` | `Implementation + GitHub delivery` |
 | 2 | `S04-BE-002` | Institution Group Management API | `S04-BE-001 Accepted + Delivered` | `Accepted` | `Implementation + GitHub delivery` |
 | 3 | `S04-BE-003` | Teacher and Student Group Membership API | `S04-BE-001 + S04-BE-002 Accepted + Delivered` | `Accepted` | `Implementation + GitHub delivery` |
-| 4 | `S04-BE-004` | Parent–Student Relationship API | `S04-BE-003 Accepted + Delivered` | `Approved` | `Implementation + GitHub delivery` |
-| 5 | `S04-BE-PHASE-2` | Backend Phase 2 Read-Only Block Review | `S04-BE-001…004 Accepted + Delivered` | `Pending` | `Read-only checkpoint; no delivery` |
+| 4 | `S04-BE-004` | Parent–Student Relationship API | `S04-BE-003 Accepted + Delivered` | `Accepted` | `Implementation + GitHub delivery` |
+| 5 | `S04-BE-PHASE-2` | Backend Phase 2 Read-Only Block Review | `S04-BE-001…004 Accepted + Delivered` | `Approved` | `Read-only checkpoint; no delivery` |
 
 ### Backend dependency chain
 
@@ -343,8 +343,8 @@ Do not run per-task Phase 2 reviews.
 | `S04-BE-001` | `Accepted / Delivered` |
 | `S04-BE-002` | `Accepted / Delivered` |
 | `S04-BE-003` | `Accepted / Delivered` |
-| `S04-BE-004` | `Approved — next implementation task` |
-| Backend Phase 2 | `Pending — waiting for S04-BE-004 Accepted/Delivered` |
+| `S04-BE-004` | `Accepted / Delivered` |
+| Backend Phase 2 | `Approved — next checkpoint` |
 | Frontend decomposition | `Not started` |
 | Frontend Phase 2 | `Not scheduled` |
 | Integration | `Not decomposed` |
@@ -354,21 +354,10 @@ Do not run per-task Phase 2 reviews.
 
 ## 12. Next Permitted Gate
 
-The next permitted implementation gate is:
+The next permitted gate is:
 
 ```text
-S04-BE-004 — Parent–Student Relationship API
+Stage 4 Backend Phase 2 — Read-Only Block Review
 ```
 
-Before starting Codex:
-
-1. ensure the approved `S04-BE-004` contract is the version aligned with this index;
-2. re-check current `origin/main`;
-3. record the exact implementation baseline SHA;
-4. verify local `main == origin/main`;
-5. verify ahead/behind `0/0`;
-6. verify clean worktree;
-7. start one focused task branch;
-8. execute only `S04-BE-004`.
-
-Do not start Backend Phase 2 until `S04-BE-004` is `Accepted` and `Delivered`. Do not start frontend planning or implementation.
+No backend implementation task is currently authorized. Frontend planning/implementation cannot start until Backend Phase 2 = `PASS`.
