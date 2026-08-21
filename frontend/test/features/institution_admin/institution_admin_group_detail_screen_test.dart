@@ -9,11 +9,22 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_group_detail_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_group_membership_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_group_mutation_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_user_list_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_detail_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_membership.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_membership_list.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_membership_mutation.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_membership_query.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_membership_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_mutation.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_mutation_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_query.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_user_list_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/presentation/institution_admin_group_detail_screen.dart';
 
 import 'institution_group_test_support.dart';
@@ -33,14 +44,14 @@ void main() {
         'Level',
         'Subject direction',
         'Description',
-        'Teachers',
-        'Students',
         'Archived at',
         'Created',
         'Updated',
       ]) {
         expect(find.text(label), findsOneWidget);
       }
+      expect(find.text('Teachers'), findsWidgets);
+      expect(find.text('Students'), findsWidgets);
       expect(find.text('Active'), findsOneWidget);
       expect(find.text('2026-08-15 08:00 UTC'), findsOneWidget);
       expect(find.text('2026-08-15 09:30 UTC'), findsOneWidget);
@@ -61,6 +72,7 @@ void main() {
             archivedAt: DateTime.utc(2026, 8, 21, 10),
           ),
         ),
+        membership: _FakeMembershipRepository(withAll: true),
       );
       await tester.pumpAndSettle();
 
@@ -69,8 +81,105 @@ void main() {
       expect(find.text('Archive Group'), findsNothing);
       expect(find.textContaining('Reactivate'), findsNothing);
       expect(find.textContaining('Delete'), findsNothing);
+      expect(
+        find.text(
+          'Membership changes are unavailable because this group is archived.',
+        ),
+        findsNWidgets(2),
+      );
+      expect(find.text('Assign Teachers'), findsNothing);
+      expect(find.text('Assign Students'), findsNothing);
+      expect(find.text('Remove'), findsNothing);
     },
   );
+
+  testWidgets(
+    'membership sections expose independent columns and assignment picker tray',
+    (tester) async {
+      await _pump(
+        tester,
+        _FakeDetailRepository(),
+        membership: _FakeMembershipRepository(withAll: true),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('institutionGroupTeachersSection')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('institutionGroupStudentsSection')),
+        findsOneWidget,
+      );
+      for (final column in const [
+        'Full name',
+        'Login name',
+        'Contact',
+        'Assigned',
+        'Action',
+      ]) {
+        expect(find.text(column), findsNWidgets(2));
+      }
+      expect(find.text('Status'), findsNWidgets(3));
+
+      await tester.ensureVisible(find.text('Assign Teachers'));
+      await tester.tap(find.text('Assign Teachers'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('assignTeachersDialog')), findsOneWidget);
+      expect(
+        find.text(
+          'Only active users are shown. Users already assigned to this group can be selected safely; duplicate active memberships are not created.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const Key('candidate-teacher-$testTeacherId')),
+      );
+      await tester.pump();
+      expect(find.text('Selected: 1 / 100'), findsOneWidget);
+      expect(find.byTooltip('Remove from selection'), findsOneWidget);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const Key('institutionGroupDetailRefreshButton')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const Key('institutionGroupEditAction')),
+            )
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+
+  testWidgets('remove dialog shows exact history-preserving copy', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _FakeDetailRepository(),
+      membership: _FakeMembershipRepository(withTeacher: true),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Remove').first);
+    await tester.tap(find.text('Remove').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove teacher from group?'), findsOneWidget);
+    expect(find.text('Teacher One'), findsWidgets);
+    expect(find.text('teacher.one'), findsWidgets);
+    expect(
+      find.text(
+        'This ends the current group membership and revokes future group-based access. Historical relationship records and existing learning history are preserved. The user account itself is not deactivated.',
+      ),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('Edit dialog initializes fields and local no-op remains open', (
     tester,
@@ -252,6 +361,7 @@ Future<void> _pump(
   String target = testGroupId,
   TextScaler textScaler = TextScaler.noScaling,
   _FakeMutationRepository? mutation,
+  _FakeMembershipRepository? membership,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -261,6 +371,12 @@ Future<void> _pump(
         ),
         appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
         institutionGroupDetailRepositoryProvider.overrideWithValue(repository),
+        institutionGroupMembershipRepositoryProvider.overrideWithValue(
+          membership ?? _FakeMembershipRepository(),
+        ),
+        institutionUserListRepositoryProvider.overrideWithValue(
+          _FakeUserListRepository(),
+        ),
         if (mutation != null)
           institutionGroupMutationRepositoryProvider.overrideWithValue(
             mutation,
@@ -310,5 +426,76 @@ class _FakeDetailRepository implements InstitutionGroupDetailRepository {
   Future<InstitutionGroup> fetchGroup(String groupId) {
     targets.add(groupId);
     return onFetch?.call(groupId) ?? Future.value(group);
+  }
+}
+
+class _FakeMembershipRepository
+    implements InstitutionGroupMembershipRepository {
+  _FakeMembershipRepository({this.withTeacher = false, this.withAll = false});
+
+  final bool withTeacher;
+  final bool withAll;
+
+  @override
+  Future<InstitutionGroupMembershipListPage> fetchMemberships({
+    required String groupId,
+    required InstitutionGroupMemberKind kind,
+    required InstitutionGroupMembershipQuery query,
+  }) async {
+    final memberships =
+        withAll || (withTeacher && kind == InstitutionGroupMemberKind.teacher)
+        ? [testMembership()]
+        : <InstitutionGroupMembership>[];
+    return InstitutionGroupMembershipListPage(
+      memberships: memberships,
+      pagination: InstitutionGroupMembershipListPagination(
+        page: query.page,
+        perPage: query.perPage,
+        total: memberships.length,
+        lastPage: 1,
+      ),
+    );
+  }
+
+  @override
+  Future<List<InstitutionGroupMembership>> assignMemberships({
+    required String groupId,
+    required InstitutionGroupMemberKind kind,
+    required InstitutionGroupMembershipAssignmentRequest request,
+  }) async => [testMembership(id: request.memberIds.single)];
+
+  @override
+  Future<void> removeMembership({
+    required String groupId,
+    required InstitutionGroupMemberKind kind,
+    required String memberId,
+  }) async {}
+}
+
+class _FakeUserListRepository implements InstitutionUserListRepository {
+  @override
+  Future<InstitutionUserListPage> fetchUsers(
+    InstitutionUserListQuery query,
+  ) async {
+    final role = query.role ?? InstitutionUserRole.teacher;
+    final user = testCandidate(
+      id: role == InstitutionUserRole.teacher ? testTeacherId : testStudentId,
+      role: role,
+      fullName: role == InstitutionUserRole.teacher
+          ? 'Teacher One'
+          : 'Student One',
+      loginName: role == InstitutionUserRole.teacher
+          ? 'teacher.one'
+          : 'student.one',
+    );
+    return InstitutionUserListPage(
+      users: [user],
+      pagination: InstitutionUserListPagination(
+        page: query.page,
+        perPage: query.perPage,
+        total: 1,
+        lastPage: 1,
+      ),
+    );
   }
 }
