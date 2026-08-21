@@ -9,209 +9,131 @@
 | Backend implementation | `S04-BE-001…005 Accepted / Delivered` |
 | Complete Backend Phase 2 | `PASS` |
 | Frontend decomposition | `Approved — 5 implementation tasks` |
-| Frontend contracts | `FE-001…004 Approved; FE-005 Draft / Review pending` |
-| Frontend implementation | `FE-001…002 Accepted / Delivered; FE-003 next implementation task` |
-| Frontend Build Runner | `Prepared — approval-gated orchestration only` |
-| Frontend Phase 2 | `Pending all FE-001…005 Accepted / Delivered` |
-| Integration | `Not decomposed; blocked until Frontend Phase 2 PASS` |
+| Frontend contracts | `FE-001…005 Approved / Review complete` |
+| Frontend implementation | `FE-001…003 Accepted / Delivered; FE-004 next implementation task` |
+| Frontend Build Runner | `Prepared — all remaining task approval gates open subject to dependencies` |
+| Frontend Phase 2 | `Pending FE-004 and FE-005 delivery` |
+| Integration | `Blocked until Frontend Phase 2 PASS` |
 | Stage closure | `Pending` |
 
-This file is the Stage 4 orchestration/status map.
+This is the shared Stage 4 orchestration/status map.
 
-It is for ChatGPT/project tracking. Codex must not read it to determine implementation behavior.
+Codex must not read this file to determine implementation behavior. The active Approved task contract is self-contained.
 
 ---
 
 ## 2. Backend Gate
 
-Stage 4 backend implementation is complete:
-
-| Task | State |
-|---|---|
-| `S04-BE-001` | `Accepted / Delivered` |
-| `S04-BE-002` | `Accepted / Delivered` |
-| `S04-BE-003` | `Accepted / Delivered` |
-| `S04-BE-004` | `Accepted / Delivered` |
-| `S04-BE-005` | `Accepted / Delivered` |
-
-Complete Stage 4 Backend Phase 2:
+Stage 4 backend is complete:
 
 ```text
+S04-BE-001…005 = Accepted / Delivered
+
+Backend Phase 2:
 PASS
 P1 = 0
 P2 = 0
 P3 = 0
-```
 
-Verified backend checkpoint baseline:
-
-```text
-main / origin/main:
+Recorded checkpoint baseline:
 2e9dab8cfeb8a1caed4cc71c361a1f4812a1ce61
 
 Full backend suite:
 293 passed
 17,306 assertions
-350.85s
-exit code 0
 
 git diff --check:
 PASS
 ```
 
-Therefore backend does not block the frontend block.
+Backend does not block the frontend block.
 
 ---
 
-## 3. Frontend Task Files
+## 3. Frontend Queue
 
-All five frontend task files may be stored/tracked now:
-
-```text
-tasks/frontend/stage-04/
-  S04-FE-001-institution-group-navigation-and-list.md
-  S04-FE-002-institution-group-create-and-detail.md
-  S04-FE-003-institution-group-edit-and-archive-lifecycle.md
-  S04-FE-004-teacher-and-student-group-membership-management.md
-  S04-FE-005-parent-student-relationship-management.md
-  S04-FE-BUILD-RUNNER.md
-```
-
-Physical presence in the repository does **not** authorize implementation.
-
-Implementation authorization comes only from the current task's own:
-
-```text
-Status = Approved
-```
-
----
-
-## 4. Current Frontend Queue
-
-| Order | Task | Title | Dependency | Planning status | Implementation state |
+| Order | Task | Title | Dependency | Planning | Implementation |
 |---:|---|---|---|---|---|
-| 1 | `S04-FE-001` | Institution Group Navigation and List | Complete Backend Phase 2 `PASS` | `Approved` | `Accepted / Delivered` |
-| 2 | `S04-FE-002` | Institution Group Create and Detail | `FE-001 Accepted / Delivered` | `Approved` | `Accepted / Delivered` |
-| 3 | `S04-FE-003` | Institution Group Edit and Archive Lifecycle | `FE-002 Accepted / Delivered` | `Approved` | `Ready / next permitted` |
-| 4 | `S04-FE-004` | Teacher and Student Group Membership Management | `FE-003 Accepted / Delivered` | `Approved` | `Dependency pending` |
-| 5 | `S04-FE-005` | Parent–Student Relationship Management | `FE-004 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
+| 1 | `S04-FE-001` | Institution Group Navigation and List | Backend Phase 2 PASS | `Approved` | `Accepted / Delivered` |
+| 2 | `S04-FE-002` | Institution Group Create and Detail | FE-001 delivered | `Approved` | `Accepted / Delivered` |
+| 3 | `S04-FE-003` | Institution Group Edit and Archive Lifecycle | FE-002 delivered | `Approved` | `Accepted / Delivered` |
+| 4 | `S04-FE-004` | Teacher and Student Group Membership Management | FE-003 delivered | `Approved` | `Ready / next permitted` |
+| 5 | `S04-FE-005` | Parent–Student Relationship Management | FE-004 delivered | `Approved` | `Dependency pending` |
 
-Exact dependency chain:
+Exact chain:
 
 ```text
 Backend Phase 2 PASS
-    ↓
-FE-001 Approved
-    ↓ Accepted / Delivered
-FE-002 Approved
-    ↓ Accepted / Delivered
-FE-003 Approved
-    ↓ Accepted / Delivered
-FE-004 Approved
-    ↓ Accepted / Delivered
-FE-005 must be Approved
-    ↓ Accepted / Delivered
+  ↓
+FE-001 Accepted / Delivered
+  ↓
+FE-002 Accepted / Delivered
+  ↓
+FE-003 Accepted / Delivered
+  ↓
+FE-004 Approved / implement next
+  ↓ Accepted / Delivered
+FE-005 Approved / may continue automatically
+  ↓ Accepted / Delivered
 Frontend Phase 2
 ```
 
----
-
-## 5. Parallel Planning / Implementation Workflow
-
-The approved working model for the frontend block is:
-
-```text
-1. Store all five task files + Build Runner in the repository.
-2. Start Codex implementation of FE-001 only because FE-001 is Approved.
-3. FE-002 review is complete and FE-002 is Approved.
-4. Deliver the FE-002 approval update to main while FE-001 implementation continues.
-5. When FE-001 is Accepted / Delivered, Codex may start FE-002 automatically after synchronizing main.
-6. FE-003 review is complete and FE-003 is Approved; deliver its planning update to main while FE-002 implementation continues.
-7. FE-002 is Accepted / Delivered; FE-003 is the next permitted implementation task. FE-004 review is complete and FE-004 is Approved; deliver its planning update to main while FE-003 implementation proceeds. When FE-003 is Accepted / Delivered, Codex may start FE-004 automatically after synchronizing main. While FE-004 implements, ChatGPT reviews FE-005.
-```
-
-This parallelizes:
-
-```text
-ChatGPT task-contract review
-```
-
-with:
-
-```text
-Codex implementation of the already Approved preceding task
-```
-
-It does **not** parallelize implementation tasks.
-
-Codex still implements one task at a time.
+All five frontend task contracts have now passed ChatGPT implementation-readiness review.
 
 ---
 
-## 6. Current Frontend Gates
+## 4. Verified Frontend Delivery
 
-Current verified planning/delivery state:
+### S04-FE-001
 
 ```text
-S04-FE-001:
-Status = Approved
-Implementation = Accepted / Delivered
-Merge = 698b611677522071b6dae547c997c3f1a503d19e
-Gate = CLOSED / complete
+Accepted / Delivered
+PR #89
+Merge:
+698b611677522071b6dae547c997c3f1a503d19e
+```
 
-S04-FE-002:
-Status = Approved
-Review = Complete
-Implementation = Accepted / Delivered
-Merge = d330d693c02a9a8bed043e5628989bbe56979ccf
-Gate = CLOSED / complete
+### S04-FE-002
 
-S04-FE-003:
-Status = Approved
-Review = Complete
-Dependency = FE-002 Accepted / Delivered
-Gate = OPEN / next permitted implementation task
+```text
+Accepted / Delivered
+PR #90
+Merge:
+d330d693c02a9a8bed043e5628989bbe56979ccf
+```
 
-S04-FE-004:
+### S04-FE-003
+
+```text
+Accepted / Delivered
+PR #91
+Merge:
+b4e23fc8f230f64b1a7a1160ce93bee904f2d631
+```
+
+### S04-FE-004
+
+```text
 Status = Approved
 Review = Complete
 Dependency = FE-003 Accepted / Delivered
-Gate = DEPENDENCY PENDING
-
-S04-FE-005:
-Status = Draft
-Review = Pending
+Gate = OPEN / next implementation task
 ```
 
-Codex must still determine task delivery from synchronized `origin/main`; planning status alone never proves implementation acceptance.
-
----
-
-## 7. FE-002…005 Review Gate
-
-Current state:
-
-```text
-S04-FE-002 = Approved / Review complete
-S04-FE-003 = Approved / Review complete
-S04-FE-004 = Approved / Review complete
-S04-FE-005 = Draft / Review pending
-```
-
-FE-002 and FE-003 have passed review; FE-002 is already Accepted / Delivered and FE-003 is implementation-ready. FE-004 has now also passed review and is `Approved`, but remains blocked until FE-003 is Accepted / Delivered.
-
-FE-005 may remain committed to `main` for review continuity. It must not be implemented until it separately passes review and changes to:
+### S04-FE-005
 
 ```text
 Status = Approved
+Review = Complete
+Dependency = FE-004 Accepted / Delivered
+Gate = DEPENDENCY PENDING
 ```
 
-A later review may modify requirements inside that task file before approval.
+The Runner must recover actual delivery from synchronized `origin/main`; this index is orchestration context, not implementation proof.
 
 ---
 
-## 8. Build Runner Status
+## 5. Build Runner
 
 File:
 
@@ -219,79 +141,74 @@ File:
 tasks/frontend/stage-04/S04-FE-BUILD-RUNNER.md
 ```
 
-The Build Runner is orchestration only, not a sixth frontend implementation task.
+The Runner:
 
-It is approval-gated:
-
-```text
-Approved task -> may execute
-Draft task    -> stop WAITING FOR TASK APPROVAL
-```
-
-Therefore it is safe to store before FE-002…005 review completes.
-
-The runner:
-
-- works one implementation task at a time;
-- re-synchronizes `main` before each task;
-- reads only the active Approved task body;
-- does not implement a Draft future task;
+- recovers the first not-yet-delivered task from `origin/main`;
+- verifies the immediately preceding dependency is Accepted / Delivered;
+- verifies the active task's own `Status = Approved`;
+- reads only that active contract body;
+- implements one task at a time;
+- runs only contract-proportional verification;
+- performs focused GitHub delivery;
+- re-synchronizes main;
+- continues to the next Approved task automatically;
 - stops on `WAITING FOR TASK APPROVAL`, `BLOCKED`, or `DELIVERY BLOCKED`;
-- does not run Frontend Phase 2;
-- does not run Stage integration/closure.
+- does not run Frontend Phase 2, integration, or Stage closure.
+
+Because FE-005 is now Approved, there should be no planning approval stop after FE-004 if the FE-004 implementation is Accepted / Delivered and synchronized `main` contains this planning update.
 
 ---
 
-## 9. Per-Task Acceptance
+## 6. Per-Task Acceptance
 
-An implementation task becomes `Accepted / Delivered` only when:
+A frontend task is `Accepted / Delivered` only after:
 
 ```text
 approved contract satisfied
 focused tests PASS
-required directly affected regressions PASS
+directly affected regressions PASS
 static/format checks PASS
 git diff --check PASS
 focused scope/diff self-review PASS
-focused GitHub delivery complete
-result present on origin/main
+focused PR merged
+implementation present on origin/main
 local main == origin/main
 ahead/behind = 0/0
 working tree clean
 ```
 
-No task-level Phase 2 is performed.
+There is no per-task Phase 2 review.
 
 ---
 
-## 10. Verification Policy
+## 7. Verification Policy
 
-Each FE implementation task runs only verification proportional to its contract:
+Each implementation task runs only:
 
 ```text
 focused functionality tests
-necessary static/format checks
-directly affected regressions
+necessary directly affected regressions
+static/format checks
 git diff --check
-focused scope/diff self-check
+focused scope/diff self-review
 ```
 
-Do not run after every task:
+Do not run after each task:
 
 ```text
 full frontend suite
-full Windows build
+Windows build
 broad E2E
 Frontend Phase 2
 ```
 
-unless the active contract explicitly requires broader verification for a concrete risk.
+unless a specific contract requires broader verification for a concrete shared risk.
 
 ---
 
-## 11. Frontend Phase 2
+## 8. Frontend Phase 2 Gate
 
-Frontend Phase 2 remains blocked until:
+Blocked until:
 
 ```text
 FE-001 Accepted / Delivered
@@ -300,70 +217,57 @@ FE-003 Accepted / Delivered
 FE-004 Accepted / Delivered
 FE-005 Accepted / Delivered
 
-local main == origin/main
+main == origin/main
 ahead/behind = 0/0
 working tree clean
 ```
 
-Then ChatGPT performs the Stage 4 frontend block read-only review, including:
+Then perform one complete frontend-block Phase 2 read-only review with:
 
 ```text
-complete Stage 4 frontend diff
+complete Stage 4 frontend diff review
 full frontend test suite
 static analysis
 format checks
 required Windows build
-frontend architecture
-API/DTO integration
-session/routing/state ownership
-stale async safety
-mutation uncertainty handling
+routing/session/state architecture
+API/DTO/error integration
+stale async ownership
+mutation uncertainty/reconciliation
+cache/invalidation and cross-task interactions
 accessibility/focus/responsiveness
-cross-task interactions
 regression risk
 ```
 
-Checkpoint result:
+Verdict:
 
 ```text
 PASS
 NOT ACCEPTED
 ```
 
+Fix findings before Stage integration.
+
 ---
 
-## 12. Integration and Closure
+## 9. Integration and Closure
 
-Integration planning is not authorized until:
+Integration planning is authorized only after:
 
 ```text
 Backend Phase 2 PASS
 Frontend Phase 2 PASS
 ```
 
-Backend gate is already satisfied.
+Then perform Stage 4 real-stack/E2E/security/tenant integration verification.
 
-Remaining gate:
+Stage closure requires integration/fixes/delivery plus Stage Closure Review PASS.
 
-```text
-Frontend Phase 2 PASS
-```
-
-Only after that may ChatGPT decompose/create the Stage 4 integration task.
-
-Stage 4 closes only after:
-
-```text
-frontend block
-→ Frontend Phase 2 PASS
-→ integration
-→ required fixes
-→ Stage Closure Review PASS
-```
+Completion of FE-001…005 alone does not close Stage 4.
 
 ---
 
-## 13. Current Progress
+## 10. Current Progress
 
 | Item | State |
 |---|---|
@@ -371,9 +275,10 @@ frontend block
 | Backend Phase 2 | `PASS` |
 | `S04-FE-001` | `Accepted / Delivered` |
 | `S04-FE-002` | `Accepted / Delivered` |
-| `S04-FE-003` | `Approved / Ready` |
-| `S04-FE-004` | `Approved / Dependency pending` |
-| `S04-FE-005` | `Draft / Review pending` |
+| `S04-FE-003` | `Accepted / Delivered` |
+| `S04-FE-004` | `Approved / Ready` |
+| `S04-FE-005` | `Approved / Dependency pending` |
+| Frontend contract review | `Complete — all five Approved` |
 | Build Runner | `Prepared / approval-gated` |
 | Frontend Phase 2 | `Pending` |
 | Integration | `Blocked until Frontend Phase 2 PASS` |
@@ -381,27 +286,29 @@ frontend block
 
 ---
 
-## 14. Next Permitted Gate
+## 11. Next Gates
 
-Next implementation gate:
+Next implementation task:
 
 ```text
-S04-FE-003 — Institution Group Edit and Archive Lifecycle
+S04-FE-004 — Teacher and Student Group Membership Management
 ```
 
-Next planning/review work may proceed concurrently:
+After FE-004 `Accepted / Delivered`, Runner may continue directly to:
 
 ```text
-S04-FE-005 read-only contract review
+S04-FE-005 — Parent–Student Relationship Management
 ```
 
-Safe execution sequence:
+No further frontend implementation-contract review remains.
+
+Safe sequence:
 
 ```text
-FE-001 Accepted / Delivered
-→ FE-002 Approved and may implement now
-→ deliver FE-003 approval planning update to main while FE-002 implements
-→ when FE-002 is Accepted / Delivered, Runner may continue FE-003 automatically
-→ concurrently review/fix FE-004
-→ continue sequentially
+FE-004 implementation/delivery
+→ FE-005 implementation/delivery
+→ final main sync
+→ READY FOR CHATGPT FRONTEND PHASE 2
+→ Frontend Phase 2
+→ integration planning only after Phase 2 PASS
 ```

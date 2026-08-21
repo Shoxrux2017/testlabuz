@@ -7,33 +7,37 @@
 | Task ID | `S04-FE-005` |
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Area | `Frontend` |
-| Status | `Draft` |
-| Review | `Pending` |
+| Status | `Approved` |
+| Review | `Complete` |
 | Depends on | `S04-FE-004 Accepted / Delivered` |
 | Delivery | `Implementation + GitHub delivery` |
 
-This file is the complete task-specific implementation contract for Codex.
+Start implementation only when `S04-FE-004` is present on synchronized `origin/main` as `Accepted / Delivered`.
 
-> **Execution gate:** This file is intentionally stored before final review. Codex must not implement this task while `Status = Draft`. ChatGPT/reviewer must complete read-only review, resolve findings, change the task to `Approved`, and deliver that planning update to `main` first.
+This is the complete task-specific implementation contract for Codex.
 
-Codex must use only this contract, applicable `AGENTS.md` files, and directly relevant source/tests. Do not read product docs, roadmap, previous tasks, Stage history, or closure reviews to determine behavior.
+Codex may use only this contract, applicable `AGENTS.md` files, and directly relevant source/tests. Do not read product docs, roadmap, previous/future task contracts, Stage history, checkpoint reviews, or closure reviews to determine implementation behavior.
 
 ---
 
 ## 2. Goal
 
-Add a dedicated Institution Admin desktop surface for managing **current Parent–Student connections**.
+Add a dedicated Institution Admin desktop surface for managing **current Parent–Student relationships**.
 
-The feature must let an Institution Admin:
+The Institution Admin must be able to:
 
-- inspect a Parent's current Students;
-- inspect a Student's current Parents;
-- search/filter/sort/page those current relationships;
-- connect one active Parent with one active Student;
-- disconnect one current relationship;
-- continue seeing/disconnecting current relationships when either connected user later becomes inactive.
+```text
+inspect a Parent's current Students
+inspect a Student's current Parents
+search/filter/sort/page each current relationship projection
+connect one active Parent with one active Student
+disconnect one current relationship
+keep viewing/disconnecting current relationships when either connected user later becomes inactive
+```
 
-The feature must preserve backend-authoritative tenant scope, role validation, user-active eligibility for new connections, relationship history, and concurrency semantics.
+Backend remains authoritative for tenant scope, Parent/Student roles, active-user eligibility for a new connection, current relationship existence/privacy, many-to-many cardinality, idempotency, concurrency/locking, history, and timestamps.
+
+No optimistic authoritative relationship state and no automatic mutation replay are allowed.
 
 ---
 
@@ -41,13 +45,13 @@ The feature must preserve backend-authoritative tenant scope, role validation, u
 
 ### Included
 
-Add frontend route:
+Frontend route:
 
 ```text
 /institution-admin/users/parent-student-connections
 ```
 
-Consume exactly:
+Backend API:
 
 ```text
 GET    /api/v1/institution/parents/{parent}/students
@@ -56,66 +60,73 @@ POST   /api/v1/institution/parent-student-relationships
 DELETE /api/v1/institution/parent-student-relationships/{relationship}
 ```
 
-Reuse the existing Institution User list API for Parent/Student selection:
+Reuse the existing typed Institution User list repository for:
 
 ```text
-GET /api/v1/institution/users
+Parent anchor selection
+Student anchor selection
+active Parent connect selection
+active Student connect selection
 ```
 
 Implement:
 
-- Users-nested navigation entry;
-- `By Parent` and `By Student` current-connection views;
-- all-status anchor selection for inspecting existing relationships;
-- active-only Parent/Student selection for creating a connection;
+- Users-nested static route and Users-page entry action;
+- `By Parent` and `By Student` current-relationship views;
+- all-status anchor pickers;
+- active-only connect selectors;
 - strict relationship/list/pagination DTOs;
-- connect and disconnect mutation flows;
-- exact definite-error handling;
-- uncertain-outcome handling without automatic mutation replay;
-- route/session/tenant/stale-async ownership;
-- accessible desktop UI;
+- independent perspective query state;
+- connect and disconnect mutations;
+- exact definite-error parsing;
+- uncertain-outcome handling without replay;
+- cross-perspective stale markers;
+- mutation-induced `checkingCurrentState`;
+- route/session/anchor/perspective/relationship stale-async ownership;
+- accessibility, focus, and responsive desktop behavior;
 - focused deterministic tests.
 
 ### Non-goals
 
 Do **not** implement:
 
-- relationship history UI;
-- ended relationship list;
-- family/kinship types such as mother/father/guardian;
-- primary parent/guardian semantics;
+- relationship history UI or ended rows;
+- mother/father/guardian/relationship-type semantics;
+- primary guardian;
 - bulk connect/disconnect;
-- Parent or Student account creation/edit/lifecycle;
-- Parent or Student detail navigation from connection rows;
-- Group membership changes;
-- Group UI changes;
-- relationship hard deletion;
-- relationship start/end date editing;
-- global backend relationship-list endpoint;
-- optimistic relationship state;
-- automatic mutation replay;
-- backend/schema/API changes;
-- dependency/package changes.
+- Parent/Student account create/edit/lifecycle;
+- User Detail navigation from relationship rows;
+- Group changes;
+- relationship hard delete;
+- manual relationship dates;
+- global backend relationship list;
+- N+1 client aggregation;
+- optimistic row insertion/removal;
+- automatic POST/DELETE replay;
+- Institution User list/detail invalidation;
+- Dashboard invalidation;
+- backend/schema/API/dependency/platform changes.
 
 ---
 
-# 4. Current Implementation Context
-
-Existing Institution Admin Users architecture already provides:
-
-- `/institution-admin/users`;
-- `/institution-admin/users/new`;
-- `/institution-admin/users/:userId`;
-- strict UUID route helpers;
-- `InstitutionUser`;
-- `InstitutionUserListQuery`;
-- typed Institution User list repository;
-- server-driven role/status/search/sort/pagination;
-- Institution Admin shell/session guards.
-
-S04-FE-001…004 add Group functionality but this task remains owned by the existing `institution_admin` feature. It must not be placed under Group membership abstractions.
+## 4. Current Architecture Boundary
 
 Reuse:
+
+```text
+AppRouteNames / AppRoutePaths
+existing Institution Admin GoRouter/Shell
+Institution Admin Users screen
+InstitutionUser
+InstitutionUserListQuery
+InstitutionUserListRepository
+configured Dio / DioFailureMapper
+ApiFailure / ApiErrorCodes
+existing auth/session/device eligibility patterns
+existing Institution Admin UTC formatting convention
+```
+
+Responsibility flow:
 
 ```text
 Presentation
@@ -125,78 +136,125 @@ Presentation
   -> configured Dio
 ```
 
-Candidate/anchor selection may reuse the existing `InstitutionUserListRepository`, but must use route/dialog-local controllers so the main Users screen retained query state is not changed.
+Selection controllers may use the User list repository but must not read/mutate the main Users list controller or its retained query store.
+
+Do not force Parent–Student relationships into the S04-FE-004 Group membership abstraction; the identity/history/lifecycle API is different.
 
 ---
 
-# 5. Route and Institution Admin Shell
+# 5. Exact Frontend Route Contract
 
-## 5.1 Route declaration
+## 5.1 Constants
 
-Add:
+Add exact route name:
 
 ```text
-AppRouteNames.institutionAdminParentStudentConnections
+AppRouteNames.institutionAdminParentStudentConnections =
+    institution-admin-parent-student-connections
 ```
 
-Canonical path:
+Add exact static segment:
 
 ```text
+AppRoutePaths.institutionAdminParentStudentConnectionsSegment =
+    parent-student-connections
+```
+
+Add exact path:
+
+```text
+AppRoutePaths.institutionAdminParentStudentConnections =
+    /institution-admin/users/parent-student-connections
+```
+
+This is frontend-only. Do not invent a backend `/parent-student-connections` endpoint.
+
+## 5.2 Registries/classification
+
+Required:
+
+1. add `institutionAdminParentStudentConnections` exactly once to `AppRoutePaths.protected`;
+2. do not add it separately to `AppRoutePaths.all`;
+3. do **not** add it to `institutionAdminPrimaryDestinations`;
+4. add it to Institution Admin static-approved locations;
+5. add exact helper:
+
+```text
+isInstitutionAdminParentStudentConnectionsPath(path)
+```
+
+which returns true only for the exact canonical path;
+6. keep all route names/paths unique.
+
+The segment `parent-student-connections` must never be treated as a User UUID.
+
+## 5.3 GoRouter order
+
+Add exactly one `GoRoute` inside the existing Institution Admin `ShellRoute`.
+
+Relevant order:
+
+```text
+/institution-admin/users
+/institution-admin/users/new
 /institution-admin/users/parent-student-connections
-```
-
-Suggested static segment:
-
-```text
-parent-student-connections
-```
-
-This is a **frontend route only**. Do not invent a matching backend `/parent-student-connections` API.
-
-The static route must be declared/classified so it is never interpreted as:
-
-```text
 /institution-admin/users/:userId
 ```
 
-`parent-student-connections` is not a User UUID.
+The Parent–Student static route must be declared before dynamic User Detail.
 
-Update strict Institution Admin approved-location classification.
+No new ShellRoute/router family.
 
-The route is not a primary shell destination.
+## 5.4 Shell behavior
 
-Shell behavior:
+For the route:
 
 ```text
 selected destination = Users
 page title = Parent–Student Connections
 ```
 
-Existing Institution Admin desktop/session guards remain unchanged.
+It is not a primary rail destination.
+
+Do not URL-back or parse route query/fragment into:
+
+```text
+perspective
+anchor
+search
+status
+sort
+page
+dialog state
+```
+
+Keep the current project policy for static Institution Admin query/fragment behavior; this feature simply ignores them.
 
 ---
 
-## 5.2 Users screen entry point
+# 6. Users Screen Entry
 
-Add a visible action on the Institution Admin Users screen:
+Add a Users-page header action:
 
 ```text
 Parent–Student Connections
 ```
 
-Place it with the existing Users page header actions in a responsive `Wrap`/equivalent so Create User and relationship-management actions do not overflow.
-
-Activating it navigates to:
+Preserve:
 
 ```text
-/institution-admin/users/parent-student-connections
+Create User
 ```
 
-Do not add relationship controls to individual User Detail in this task.
+Use the existing responsive `Wrap`/equivalent so the heading and both actions remain usable at supported widths/text scales.
+
+Navigate by named route.
+
+Do not add relationship actions to User Detail.
 
 ---
 
-# 6. Page UX
+# 7. Page and Perspective State
 
 Heading:
 
@@ -204,13 +262,13 @@ Heading:
 Parent–Student Connections
 ```
 
-Top-level action:
+Top action:
 
 ```text
 Connect Parent and Student
 ```
 
-Provide two view modes:
+Modes:
 
 ```text
 By Parent
@@ -223,156 +281,188 @@ Default:
 By Parent
 ```
 
-These are two perspectives over the same current Parent–Student relationships.
-
-### By Parent
-
-1. select a Parent anchor;
-2. read:
-   `GET /institution/parents/{parent}/students`;
-3. list current related Students.
-
-### By Student
-
-1. select a Student anchor;
-2. read:
-   `GET /institution/students/{student}/parents`;
-3. list current related Parents.
-
-Each perspective owns an independent current anchor + relationship-list query while the route remains mounted.
-
-No cross-route persistence is required after leaving this screen.
-
----
-
-# 7. Anchor Selection for Current-Relationship Inspection
-
-## 7.1 Why anchor selection is required
-
-Backend provides no global current relationship list.
-
-Therefore the frontend must select an authorized Parent or Student before requesting relationships.
-
-Do not attempt to simulate a global relationship table by enumerating all Users and performing N+1 relationship requests.
-
----
-
-## 7.2 Anchor selectors
-
-By Parent selector:
-
-```text
-Select Parent
-```
-
-By Student selector:
-
-```text
-Select Student
-```
-
-Use the existing Institution User list repository.
-
-### Parent anchor query
-
-Fixed:
-
-```text
-role = parent
-status = omitted
-sort = full_name
-direction = asc
-per_page = 20
-```
-
-### Student anchor query
-
-Fixed:
-
-```text
-role = student
-status = omitted
-sort = full_name
-direction = asc
-per_page = 20
-```
-
-Omitting status is intentional: an inactive Parent or Student may still have current relationships that must remain visible and disconnectable.
-
-Anchor selector supports:
-
-```text
-search
-page
-```
-
-Search:
-
-- max 254 characters;
-- trim leading/trailing whitespace;
-- blank means no search;
-- 300 ms debounce;
-- submit commits immediately;
-- page resets to 1.
-
-Display each candidate:
-
-```text
-Full name
-Login name
-Active / Inactive
-Email/phone
-```
-
-Selection is single-select.
-
-Do not mutate the Institution Users page's retained query/controller.
-
----
-
-## 7.3 Anchor state
-
-When no anchor is selected:
-
 By Parent:
 
 ```text
-Select a Parent to view current Student connections.
+anchor = one Parent
+GET /institution/parents/{parentId}/students
+rows = current Students
 ```
 
 By Student:
 
 ```text
-Select a Student to view current Parent connections.
+anchor = one Student
+GET /institution/students/{studentId}/parents
+rows = current Parents
+```
+
+Each perspective independently preserves while this route remains mounted:
+
+```text
+selected anchor
+search draft
+committed query
+status
+page
+perPage
+sort
+direction
+projection stale marker
+read state
+```
+
+Switching views preserves the hidden perspective's state.
+
+No cross-route persistence after leaving this screen.
+
+---
+
+# 8. Anchor Picker
+
+## 8.1 UX
+
+No anchor means no relationship GET.
+
+`Select Parent` / `Select Student` opens a bounded modal picker with:
+
+```text
+search
+single-select result list
+Previous
+Next
+Cancel
+Select
+```
+
+No manual UUID entry.
+
+`Select` disabled until one valid item is selected.
+
+After selection show a page-level summary:
+
+```text
+Full name
+Login name
+Active / Inactive
+Change
+Clear selection
+```
+
+`Clear selection`:
+
+```text
+invalidate old-anchor reads
+clear relationship data
+reset relationship query to initial
+return perspective to noAnchor
 ```
 
 Changing anchor:
 
-- resets that perspective's relationship query to initial defaults;
-- invalidates in-flight read publication for the old anchor;
-- loads the new anchor's current relationships.
-
-Switching `By Parent` / `By Student` preserves each perspective's currently selected anchor/query while the page remains mounted.
-
-If an anchor-specific relationship endpoint returns exact:
-
 ```text
-404 resource_not_found
+invalidate old-anchor publication
+reset that perspective relationship query
+load new anchor current relationships
 ```
 
-clear that anchor after safe reconciliation/feedback:
+## 8.2 Fixed User queries
+
+Parent anchor:
 
 ```text
-The selected user is no longer available for relationship management.
+role = parent
+status omitted
+sort = full_name
+direction = asc
+per_page = 20
 ```
 
-Do not reveal whether the target was missing, wrong-role, or outside the Institution.
+Student anchor:
+
+```text
+role = student
+status omitted
+sort = full_name
+direction = asc
+per_page = 20
+```
+
+Inactive anchors are valid.
+
+`mustChangePassword` is not an anchor-eligibility rule.
+
+## 8.3 Anchor result invariants
+
+After `InstitutionUserListRepository` returns a page:
+
+Parent purpose:
+
+```text
+every user.role == parent
+```
+
+Student purpose:
+
+```text
+every user.role == student
+```
+
+Active or inactive is accepted.
+
+Require case-insensitive unique User IDs in the page.
+
+Wrong-role purpose mismatch:
+
+```text
+whole selector page -> invalidResponse
+```
+
+Do not silently filter it.
+
+## 8.4 Anchor search/page
+
+Search:
+
+```text
+trim outer whitespace
+blank -> null
+max = 254 Unicode code points
+measure = value.runes.length
+debounce = exactly 300 ms
+```
+
+Exact error:
+
+```text
+Search must be 254 characters or fewer.
+```
+
+Rules:
+
+- valid input restarts debounce;
+- Enter/Search commits immediately;
+- changed search resets page 1;
+- identical normalized query sends no duplicate;
+- invalid search sends no GET;
+- Previous/Next cannot paginate an invalid search;
+- pending different valid search + Previous/Next commits search and loads page 1;
+- non-session failure has manual Retry exact failed query;
+- no automatic retry.
+
+At most one page correction per logical picker request:
+
+```text
+total == 0
+  ? 1
+  : max(1, min(last_page, requested_page - 1))
+```
 
 ---
 
-# 8. Exact Current Relationship List Resource
+# 9. Relationship Resource / Identity
 
-Each list row must contain exactly:
+List row exact keys:
 
 ```text
 id
@@ -383,7 +473,7 @@ ended_at
 related_user
 ```
 
-`related_user` must contain exactly:
+`related_user` exact keys:
 
 ```text
 id
@@ -394,131 +484,97 @@ phone
 is_active
 ```
 
-## 8.1 Relationship fields
+No unknown/missing keys.
 
-`id`
-
-```text
-canonical hyphenated UUID
-```
-
-`parent_id`
+Rules:
 
 ```text
-canonical hyphenated UUID
+id, parent_id, student_id = canonical hyphen UUID
+parent_id != student_id
+started_at = valid ISO-8601 UTC ending Z
+ended_at = null for current lists
 ```
 
-`student_id`
+Related User:
 
 ```text
-canonical hyphenated UUID
+id = canonical UUID
+full_name = non-blank string
+login_name = non-blank string
+email = nullable string
+phone = nullable string
+is_active = JSON boolean
 ```
 
-Parent and Student IDs must differ.
+Do not coerce/trim/default server values.
 
-`started_at`
-
-```text
-required valid UTC timestamp ending in Z
-```
-
-`ended_at`
-
-For these **current** list endpoints:
-
-```text
-must be null
-```
-
-A non-null `ended_at` in a successful current-list response is invalid response data.
-
----
-
-## 8.2 Related User fields
-
-`related_user.id`
-
-```text
-canonical hyphenated UUID
-```
-
-`full_name`
-
-```text
-non-blank string
-```
-
-`login_name`
-
-```text
-non-blank string
-```
-
-`email`
-
-```text
-nullable string
-```
-
-`phone`
-
-```text
-nullable string
-```
-
-`is_active`
-
-```text
-JSON boolean
-```
-
-### Direction invariants
+## 9.1 Direction invariants
 
 By Parent:
 
 ```text
-relationship.parent_id == selected Parent ID
+relationship.parent_id == selected Parent anchor
 related_user.id == relationship.student_id
 ```
 
 By Student:
 
 ```text
-relationship.student_id == selected Student ID
+relationship.student_id == selected Student anchor
 related_user.id == relationship.parent_id
 ```
 
-Reject a page as malformed if direction/anchor invariants contradict the request.
+Compare UUIDs case-insensitively.
 
-Reject duplicate relationship IDs in one page.
+Reject whole page if any row contradicts anchor/direction/opposite-ID invariants.
 
-Malformed success responses map to existing local:
+Reject duplicate relationship IDs case-insensitively.
+
+## 9.2 Disconnect identity
+
+Exact current relationship action identity:
 
 ```text
-invalidResponse
+relationship.id
+parentId
+studentId
+startedAt
+perspective
+selected anchor ID
+exact relationship object identity
 ```
 
-handling.
+Do not identify a disconnect target only by pair/User/row position.
+
+Disconnect + later reconnect of same pair creates a new current identity and must not receive stale completion/focus from the old relationship.
 
 ---
 
-# 9. Current Relationship List API
+# 10. Relationship List HTTP Contract
 
-## 9.1 By Parent
+By Parent:
 
 ```text
 GET /institution/parents/{parentId}/students
 ```
 
-## 9.2 By Student
+By Student:
 
 ```text
 GET /institution/students/{studentId}/parents
 ```
 
-No request body.
+Requirements:
 
-Allowed query keys:
+```text
+canonical anchor UUID
+success = exactly HTTP 200
+Dio queryParameters
+no data argument
+zero request-body bytes
+```
+
+Allowed query only:
 
 ```text
 search
@@ -532,6 +588,8 @@ direction
 Defaults:
 
 ```text
+search = null
+status = null
 page = 1
 per_page = 20
 sort = full_name
@@ -545,29 +603,23 @@ active
 inactive
 ```
 
-The status filter applies to the **related user**, not the selected anchor.
+Status applies to related User, not anchor.
 
-Allowed sorts:
+Sort:
 
 ```text
 full_name
 started_at
 ```
 
-Directions:
+Direction:
 
 ```text
 asc
 desc
 ```
 
-Maximum:
-
-```text
-per_page <= 100
-```
-
-UI page sizes:
+UI page size:
 
 ```text
 20
@@ -575,88 +627,131 @@ UI page sizes:
 100
 ```
 
-No unknown query keys.
+Always send:
+
+```text
+page
+per_page
+sort
+direction
+```
+
+Only send non-null:
+
+```text
+search
+status
+```
+
+Never send blank search, `"all"`, JSON null, unknown keys, tenant selector, or GET body.
 
 ---
 
-# 10. Relationship List Query Behavior
+# 11. Relationship Query Orchestration
 
-Each perspective has independent query state.
-
-## 10.1 Search
-
-By Parent label:
+Search labels:
 
 ```text
-Search connected students
+By Parent: Search connected students
+By Student: Search connected parents
 ```
 
-By Student label:
+Search rules:
 
 ```text
-Search connected parents
+trim outer whitespace
+blank -> null
+max 254 runes
+exact 300 ms debounce
+literal %, _, ! preserved
+changed committed search -> page 1
+Enter -> immediate commit
+same normalized query -> no duplicate
 ```
 
-Rules:
-
-- max 254 characters;
-- trim leading/trailing whitespace;
-- blank means omit `search`;
-- preserve case/special characters otherwise;
-- `%`, `_`, `!` are literal user text;
-- 300 ms debounce;
-- keyboard submit commits immediately;
-- invalid over-length draft sends no request;
-- committed search change resets page to 1.
-
-## 10.2 Status filter
+Exact error:
 
 ```text
-All statuses
-Active
-Inactive
+Search must be 254 characters or fewer.
 ```
 
-This filters current related users by account active state.
-
-Changing filter resets page to 1.
-
-## 10.3 Sorting
-
-Columns:
+Pending different valid draft + Status/Sort/Page size/Refresh:
 
 ```text
-Full name
-Connected
+cancel debounce
+commit search into same resulting query
+page 1 if search changed
+one logical GET
 ```
 
-Mapping:
+Pending different valid draft + Previous/Next:
+
+```text
+commit search
+load page 1
+do not paginate old results
+```
+
+Invalid draft blocks:
+
+```text
+Search submit
+Status
+Sort
+Page size
+Previous
+Next
+Refresh
+```
+
+`Clear filters` remains available.
+
+Status:
+
+```text
+All statuses -> null
+Active -> active
+Inactive -> inactive
+```
+
+Status change -> page 1.
+
+Sorting:
 
 ```text
 Full name -> full_name
 Connected -> started_at
+different sort -> asc
+same sort -> toggle
+sort change -> page 1
 ```
 
-Rules:
+Page size change -> page 1.
 
-- default Full name ascending;
-- different sort => ascending;
-- current sort => toggle asc/desc;
-- sort change resets page to 1.
+Clear filters:
 
-## 10.4 Pagination
+```text
+clear searchDraft/search/status/search error
+page = 1
+preserve perPage/sort/direction
+```
 
-- Previous / Next;
-- page sizes 20/50/100;
-- page-size change resets page to 1;
-- suppress duplicate same-query requests;
-- replacement-query load does not present old rows as current confirmed results;
-- explicit Refresh retains current confirmed rows with visible progress;
-- after disconnect empties/out-ranges the current page, perform at most one automatic correction to page 1 or valid last_page.
+Refresh uses exact current committed query; same-query confirmed rows may remain only with explicit refreshing progress.
+
+Retry:
+
+```text
+manual
+exact failed anchor/query
+duplicate protected
+no automatic retry
+```
+
+Session-authority failures use session reconciliation, not ordinary retryable list error.
 
 ---
 
-# 11. Exact List Envelope
+# 12. Exact List Envelope / Page Correction
 
 Require exactly:
 
@@ -674,20 +769,176 @@ Require exactly:
 }
 ```
 
-Pagination must satisfy the established strict Institution Admin list invariants:
+Reject unknown/missing/renamed envelope/meta/pagination keys.
 
-- JSON integers;
-- requested page match;
-- requested per_page match;
-- total >= 0;
-- mathematically correct last_page, with 1 when total is 0;
-- row count <= per_page;
-- zero total has zero rows;
-- out-of-range page contains zero rows.
+Pagination integers:
+
+```text
+page >= 1 and equals requested page
+per_page 1..100 and equals requested perPage
+total >= 0
+last_page = max(1, ceil(total/per_page))
+```
+
+Rows:
+
+```text
+count <= per_page
+total 0 -> empty + last_page 1
+total > 0 -> row count <= total
+page > last_page -> only empty data
+```
+
+Apply resource/direction uniqueness invariants.
+
+Malformed success -> `invalidResponse`.
+
+At most one automatic correction per logical request:
+
+```text
+if empty and requested page > 1:
+    target = total == 0
+        ? 1
+        : max(1, min(last_page, requested_page - 1))
+```
+
+Preserve search/status/perPage/sort/direction.
+
+Each perspective owns an independent correction budget.
 
 ---
 
-# 12. Relationship List UI
+# 13. Relationship List State / Cross-Perspective Stale State
+
+Use one focused list abstraction parameterized by:
+
+```text
+byParent
+byStudent
+```
+
+Each perspective owns:
+
+```text
+selected anchor
+committed query
+search draft/error
+current result/failure
+projection stale flag
+operation generation/in-flight query
+eligible session key
+correction budget
+```
+
+Required states:
+
+```text
+noAnchor
+loading
+queryLoading
+refreshing
+checkingCurrentState
+data
+globalEmpty
+filteredEmpty
+emptyPage
+error
+```
+
+Never request before anchor.
+
+Reject stale query/old anchor/wrong perspective/dispose/session/institution/device completion.
+
+A hidden perspective may be marked stale.
+
+When switching to a stale hidden perspective:
+
+```text
+do not present cached rows as current
+auto-load its retained anchor/query
+show loading/checking until current read settles
+```
+
+For Parent P ↔ Student S:
+
+```text
+By Parent matching anchor = P
+By Student matching anchor = S
+```
+
+After a relevant mutation:
+
+```text
+current affected perspective -> stale/reload
+matching opposite anchor -> stale
+unrelated anchors -> unchanged
+```
+
+Hidden matching opposite reloads automatically on next switch.
+
+---
+
+# 14. Mutation-Induced `checkingCurrentState`
+
+After a mutation that succeeded or may have committed, affected old rows are no longer authoritative.
+
+While GET reconciliation runs:
+
+```text
+old rows may remain visible only with:
+Checking current connections
+```
+
+Disable relationship mutation/query controls while the active reconciliation owns the page.
+
+Success:
+
+```text
+replace with authoritative page
+clear stale
+```
+
+Read failure:
+
+```text
+discard stale rows
+perspective -> error
+manual Retry exact anchor/query
+```
+
+Never restore stale old rows as confirmed after failed reconciliation.
+
+Mutation outcome and projection read outcome are independent:
+
+```text
+confirmed mutation remains confirmed even if later GET fails
+unknown mutation remains unknown even if current GET succeeds
+```
+
+Do not erase already-settled mutation feedback because a projection object is replaced.
+
+---
+
+# 15. Relationship List UI
+
+Structure:
+
+```text
+heading + Connect action
+By Parent / By Student
+selected anchor summary or no-anchor prompt
+toolbar
+horizontally scrollable table
+pagination
+feedback/read state
+```
+
+No anchor:
+
+```text
+Select a Parent to view current Student connections.
+Select a Student to view current Parent connections.
+```
 
 Columns:
 
@@ -715,72 +966,30 @@ Action
 
 Display:
 
-- full name;
-- login name;
-- email/phone;
-- no contact => `Not provided`;
-- `Active` / `Inactive` explicit text, not color-only;
-- `started_at` using existing Institution Admin UTC formatting;
-- current row always has `ended_at == null`;
-- action = `Disconnect`.
-
-Inactive connected users remain visible.
-
-Disconnect remains available even when the selected anchor or related user is inactive.
-
-Do not link rows to User Detail in this task.
-
----
-
-## 12.1 Empty states
-
-No anchor:
-
 ```text
-Select a Parent to view current Student connections.
-Select a Student to view current Parent connections.
+email+phone absent -> Not provided
+true -> Active
+false -> Inactive
+started_at -> YYYY-MM-DD HH:mm UTC
 ```
 
-Selected anchor, no current connections:
+Inactive current relationships remain visible/disconnectable.
+
+No User Detail links.
+
+Empty:
 
 ```text
 No current Student connections
 No current Parent connections
 ```
 
-Filtered/search empty:
+Filtered:
 
 ```text
 No matching Student connections
 No matching Parent connections
 ```
-
-with:
-
-```text
-Clear filters
-```
-
----
-
-## 12.2 Loading/error
-
-Initial:
-
-```text
-Loading connections
-```
-
-Replacement query:
-
-```text
-Loading matching connections
-```
-
-Refresh:
-
-- keep current confirmed rows;
-- visible/semantic progress.
 
 Error:
 
@@ -788,32 +997,15 @@ Error:
 Unable to load connections
 ```
 
-Retry only when allowed by existing safe failure semantics.
-
 ---
 
-# 13. Connect Parent and Student Dialog
+# 16. Connect Dialog User Selection
 
-Open from:
-
-```text
-Connect Parent and Student
-```
-
-Title:
+Dialog:
 
 ```text
 Connect Parent and Student
 ```
-
-The dialog contains exactly two independent single-select active-user selectors:
-
-```text
-Parent
-Student
-```
-
-Both must be selected before submit.
 
 Actions:
 
@@ -822,17 +1014,36 @@ Cancel
 Connect
 ```
 
-No relationship type/label field.
+No family type field.
+
+Own two independent single selections:
+
+```text
+Parent
+Student
+```
+
+Use one bounded dialog, not nested dialogs.
+
+Exact interaction may use `Parent / Student` segmented mode/tabs inside the dialog.
+
+Always show selected summaries for Parent and Student with `Change`/`Clear` until submit.
+
+Each selector owns independent search/page state.
+
+Selected summary persists while that selector search/page changes.
+
+Closing dialog destroys candidate queries/results/selections.
+
+Connect disabled until both selected.
 
 ---
 
-# 14. Connect Candidate Selection
+# 17. Connect Candidate Fixed Purpose
 
-Use existing Institution User list repository with route/dialog-local state.
+Reuse `InstitutionUserListRepository`.
 
-## 14.1 Parent candidate query
-
-Fixed:
+Parent:
 
 ```text
 role = parent
@@ -842,9 +1053,7 @@ direction = asc
 per_page = 20
 ```
 
-## 14.2 Student candidate query
-
-Fixed:
+Student:
 
 ```text
 role = student
@@ -854,28 +1063,35 @@ direction = asc
 per_page = 20
 ```
 
-Each selector independently supports:
+Search/page follow the same 254-rune, 300 ms, Retry and one-correction rules as anchor picker.
+
+After repository read:
+
+Parent page:
 
 ```text
-search
-page
+every role == parent
+every isActive == true
 ```
 
-with standard 254-character / 300 ms search behavior.
+Student page:
 
-Only server-returned active Users are selectable.
+```text
+every role == student
+every isActive == true
+```
 
-Candidate may become inactive after loading; frontend does not treat stale `is_active` as authority at mutation time.
+Require unique User IDs case-insensitively.
 
-Selected user summaries remain visible when candidate search/page changes.
+Wrong-role/inactive fixed-purpose mismatch -> whole page `invalidResponse`, never silent filtering.
 
-Do not allow manual UUID entry.
+Do not require `mustChangePassword == false`.
 
-Do not persist dialog candidate query/selection after closing.
+Do not enforce absence of existing relationships; backend supports many-to-many/idempotency.
 
 ---
 
-# 15. Exact Connect Request
+# 18. Connect Request / Success
 
 Endpoint:
 
@@ -883,9 +1099,15 @@ Endpoint:
 POST /institution/parent-student-relationships
 ```
 
-No query parameters.
+Transport:
 
-Exact JSON keys:
+```text
+Content-Type = application/json
+no query
+followRedirects = false per existing mutation convention
+```
+
+Exact body:
 
 ```json
 {
@@ -894,35 +1116,20 @@ Exact JSON keys:
 }
 ```
 
-Do not send:
+Exactly two keys.
+
+Never send institution/connected_by/relationship/date/role/status/type/extra fields.
+
+Confirmed statuses:
 
 ```text
-institution_id
-connected_by_user_id
-relationship_id
-started_at
-ended_at
-role
-status
-relationship_type
+201 Created -> new current relationship
+200 OK -> already-current idempotent relationship
 ```
 
-or any other field.
+No other 2xx confirmed.
 
-Parent and Student are exactly the selected typed User IDs.
-
----
-
-# 16. Connect Success Contract
-
-Confirmed success statuses:
-
-```text
-201 Created -> new current relationship created
-200 OK      -> same relationship was already current; idempotent no-op
-```
-
-Exact envelope:
+Exact response:
 
 ```json
 {
@@ -937,68 +1144,59 @@ Exact envelope:
 }
 ```
 
-Require exact top-level keys:
+Exact top-level keys `data,message`; exact five data keys.
+
+Require:
 
 ```text
-data
+canonical relationship/parent/student UUIDs
+returned pair == submitted pair case-insensitively
+parent != student
+started_at UTC ending Z
+ended_at null
+exact success message
+```
+
+Do not require a new ID based on HTTP 201 vs 200.
+
+Malformed/wrong status/message/pair -> unknown outcome.
+
+---
+
+# 19. Exact Mutation Error Envelope
+
+Definite mutation failure requires exact envelope:
+
+```json
+{
+  "message": "non-blank string",
+  "code": "non-empty string",
+  "errors": {},
+  "request_id": "optional non-empty string"
+}
+```
+
+Required keys:
+
+```text
 message
+code
+errors
 ```
 
-Require exact message:
+Optional only:
 
 ```text
-Parent and student connected successfully.
+request_id
 ```
 
-Strict mutation resource:
+No unknown keys.
 
-- exact five data keys;
-- canonical relationship/parent/student UUIDs;
-- returned parent_id equals submitted Parent ID;
-- returned student_id equals submitted Student ID;
-- valid UTC started_at;
-- ended_at must be null.
+Each error field value is a non-empty array of non-empty strings.
 
-Do not require a new relationship ID for 201 vs 200 in the frontend; backend status is authoritative.
+Non-422 definite failure requires empty `errors`.
 
-Do not require user active state in this response because it contains no user resource and an already-current relationship is idempotently valid even if a user became inactive.
-
----
-
-# 17. Confirmed Connect UI
-
-On confirmed 200/201:
-
-1. close dialog;
-2. clear dialog candidate state;
-3. switch page to:
-
-```text
-By Parent
-```
-
-4. select the submitted Parent as the Parent anchor;
-5. if that Parent was already the selected Parent, preserve its current relationship query;
-6. if it is a new anchor, use initial relationship query;
-7. reload that Parent's current Students authoritatively;
-8. if the submitted Student is currently selected as the By Student anchor, also mark/reload that perspective;
-9. show live-region feedback:
-
-```text
-Parent and student connected successfully.
-```
-
-Do not insert a relationship row optimistically.
-
-Do not invalidate Institution User list/detail/dashboard: this relationship mutation does not change the current User resource contract or current Institution dashboard user counts.
-
----
-
-# 18. Connect Definite Failures
-
-Treat mutation failure as definite only for exact expected API error envelopes.
-
-Recognized:
+Allowed exact pairs:
 
 ```text
 401 authentication_required
@@ -1017,113 +1215,237 @@ Recognized:
 429 rate_limited
 ```
 
-## 18.1 422 validation_failed
+Never branch on backend human message.
 
-Normal client state should prevent invalid request shape.
+Malformed envelope/unsupported pair/transform failure -> uncertain outcome after dispatch.
 
-Safe form-level feedback:
+Connect known 422 fields:
+
+```text
+parent_id -> Review the selected Parent.
+student_id -> Review the selected Student.
+```
+
+If any `body`, query, protected, wrong/unknown key is present, also show:
 
 ```text
 The connection request did not match the server contract.
 ```
 
-Do not display raw backend validation strings.
+Empty/unusable 422 errors use the same form-level feedback.
 
-## 18.2 404 resource_not_found
+Never render raw validation strings.
 
-May represent:
+---
 
-- missing Parent;
-- wrong-role Parent;
-- foreign Parent;
-- missing Student;
-- wrong-role Student;
-- foreign Student.
+# 20. Relationship Mutation Arbitration / Dialog Transitions
 
-Do not identify which target failed.
-
-Close stale dialog, clear selection, and show:
+Only one relationship mutation/dialog at a time:
 
 ```text
-One or both selected users are no longer available for this connection.
+Connect
+Disconnect
 ```
 
-Candidate data must be reloaded on the next connect attempt.
-
-Do not disclose existence or role beyond current authorized User list reads.
-
-## 18.3 409 business_conflict
-
-For current backend connect behavior, a new relationship is rejected when one or both selected users are inactive. Do not parse backend message text.
-
-Close stale dialog, clear selection, and show:
+While an action is open/busy/reconciling disable:
 
 ```text
-The connection was not accepted because current user state changed. Review active Parents and Students before trying again.
+perspective switch
+anchor Change/Clear
+relationship query controls
+Connect
+all Disconnect actions
 ```
 
-Next connect attempt uses fresh active candidate data.
+### Connect before submit
 
-A repeated request for an already-current pair may still succeed with 200 even if a connected user became inactive; accept the backend result.
+Allow Cancel/Escape/back/barrier dismissal.
 
-## 18.4 Forbidden / rate limit
+Cancel clears dialog-local state and restores Connect focus only if route/session still current.
+
+### Connect busy
+
+Block dismissal and duplicate submit.
+
+Progress:
+
+```text
+Connecting Parent and Student
+Checking current connections
+```
+
+### Connect recoverable definite failure
+
+For:
+
+```text
+422
+403 forbidden
+429
+```
+
+keep dialog open and preserve:
+
+```text
+Parent selection/query
+Student selection/query
+```
+
+Re-enable controls. Later `Connect` is a new explicit POST.
+
+Safe permission/rate messages:
 
 ```text
 You do not have permission to manage Parent–Student connections.
 Too many requests. Wait before trying again.
 ```
 
-Session-authority failures follow the existing auth/session reconciliation boundary.
+### Connect terminal
 
----
-
-# 19. Connect Uncertain Outcome
-
-Do not automatically replay POST.
-
-Treat outcome as unknown when commit success cannot be proven:
-
-- timeout;
-- connection interruption after dispatch;
-- 5xx;
-- malformed/unexpected error envelope;
-- unexpected HTTP status;
-- malformed 200/201 success;
-- wrong message;
-- request/returned pair mismatch;
-- unexpected post-dispatch exception.
-
-On uncertain connect:
-
-1. close dialog;
-2. clear dialog selection/query state;
-3. switch to `By Parent`;
-4. select the submitted Parent as anchor;
-5. reload its current Student connections;
-6. reload the submitted Student's perspective too only if that Student is already the active By Student anchor;
-7. do not scan all pages or manufacture proof of the mutation;
-8. do not replay POST;
-9. show:
+For:
 
 ```text
-Connection result could not be confirmed. Current connections were refreshed; review them before trying again.
+404
+409
+unknown
+session loss
+route exit
+newer ownership
 ```
 
-The refreshed list is authoritative current state, but the originating mutation remains unconfirmed.
-
-A new connect requires reopening the dialog and explicitly selecting the pair again.
+close/clear stale dialog. Do not restore obsolete focus.
 
 ---
 
-# 20. Disconnect Relationship UX
+# 21. Confirmed Connect
 
-Every current relationship row has:
+On strict current 200/201:
+
+1. settle mutation as confirmed;
+2. close/clear dialog;
+3. publish:
+
+```text
+Parent and student connected successfully.
+```
+
+4. switch to `By Parent`;
+5. set submitted Parent as anchor;
+6. same existing Parent anchor -> preserve its relationship query;
+7. new Parent anchor -> initial relationship query;
+8. mark/reload submitted Parent projection;
+9. if retained By Student anchor equals submitted Student, mark that hidden perspective stale;
+10. reload hidden opposite only when next shown;
+11. no optimistic row insertion.
+
+Do not invalidate Users, Dashboard, Groups.
+
+Confirmed mutation stays confirmed even if the later relationship GET fails.
+
+---
+
+# 22. Connect Definite 404 / 409
+
+### 404
+
+Could be either selected User target.
+
+Do not infer which.
+
+POST is definitely rejected.
+
+Close/clear dialog and show:
+
+```text
+One or both selected users are no longer available for this connection.
+```
+
+Next Connect uses fresh candidate reads.
+
+No relationship projection reload is required solely to prove this definite failed POST.
+
+### 409 business_conflict
+
+Do not parse human message.
+
+For current backend, this means current user state prevents a new relationship; repeated already-current pair may still be strict 200.
+
+Close/clear dialog and show:
+
+```text
+The connection was not accepted because current user state changed. Review active Parents and Students before trying again.
+```
+
+Next Connect uses fresh active candidate reads.
+
+No replay.
+
+---
+
+# 23. Unknown Connect Recovery
+
+Never replay POST.
+
+Unknown includes:
+
+```text
+connection ambiguity
+timeout
+Dio cancellation while current operation owns publication
+5xx
+unexpected status/2xx
+malformed error envelope
+unsupported status/code pair
+malformed success/message/pair
+response transform/parsing failure
+unexpected post-dispatch exception
+```
+
+Exact recovery:
+
+```text
+perspective = By Parent
+anchor = submitted Parent
+
+searchDraft = ''
+search = null
+status = null
+page = 1
+perPage = preserve current By Parent page-size choice
+sort = started_at
+direction = desc
+```
+
+Then:
+
+1. close/clear dialog;
+2. mark submitted Parent projection stale;
+3. if retained By Student anchor equals submitted Student, mark it stale;
+4. authoritatively load By Parent recovery query;
+5. do not scan additional pages;
+6. do not infer original success from seeing the pair;
+7. do not auto-open a row;
+8. no POST replay.
+
+One-time warning:
+
+```text
+Connection result remains unconfirmed. Review recent current connections before connecting this pair again.
+```
+
+A new Connect is a new explicit operation.
+
+---
+
+# 24. Disconnect Contract
+
+Every confirmed current row has:
 
 ```text
 Disconnect
 ```
 
-Use the exact relationship row object from the current list.
+Allowed even when anchor/related User is inactive.
 
 Dialog title:
 
@@ -1131,12 +1453,9 @@ Dialog title:
 Disconnect Parent and Student?
 ```
 
-Show both known parties:
+Show both parties.
 
-- selected anchor summary;
-- related user's full name + login name.
-
-Explanation:
+Exact explanation:
 
 ```text
 Disconnecting ends the current Parent–Student relationship and revokes future relationship-based access. Historical relationship records are preserved. Neither user account is deactivated or deleted.
@@ -1149,13 +1468,7 @@ Cancel
 Disconnect
 ```
 
-No family type/meaning is implied.
-
-Disconnect is allowed even when either displayed user is inactive.
-
----
-
-# 21. Exact Disconnect Request
+Bind to exact relationship identity from Section 9.2.
 
 Endpoint:
 
@@ -1163,394 +1476,347 @@ Endpoint:
 DELETE /institution/parent-student-relationships/{relationshipId}
 ```
 
-Target:
+Target only `relationship.id`.
+
+Transport:
 
 ```text
-relationship.id
+canonical relationship UUID
+no query
+no data argument
+zero body bytes
+followRedirects = false per mutation convention
 ```
 
-Do **not** disconnect by Parent ID + Student ID.
-
-Send:
+Confirmed success:
 
 ```text
-no request body
-no query parameters
+exactly 204 No Content
 ```
 
-Expected confirmed success:
+Accepted Dio payload:
 
 ```text
-204 No Content
+null
+or exact empty string
 ```
 
-Require no meaningful response body.
+Any meaningful body (`{}`, `[]`, non-empty string, number, boolean) makes outcome unknown.
 
-Backend semantics:
-
-- current relationship -> sets authoritative `ended_at`;
-- already-ended relationship -> idempotent 204;
-- historical row remains persisted;
-- Parent/Student accounts are unchanged.
-
-Frontend current-list endpoints naturally stop returning ended relationships.
+No automatic DELETE replay.
 
 ---
 
-# 22. Confirmed Disconnect UI
+# 25. Disconnect Dialog / Definite Errors
 
-On confirmed `204`:
+Before submit:
 
-1. close dialog;
-2. reload the current perspective list using its existing anchor/query;
-3. if the opposite perspective is currently anchored to the related user in the same relationship, mark/reload it too;
-4. show:
+```text
+Cancel/Escape/back/barrier dismissal allowed
+```
+
+Busy/reconciling:
+
+```text
+Cancel disabled
+Disconnect disabled
+all relationship navigation/query/mutation controls disabled
+dismissal blocked
+```
+
+Progress:
+
+```text
+Disconnecting Parent and Student
+Checking current connections
+```
+
+Recoverable definite:
+
+```text
+403 forbidden
+422 validation_failed
+429 rate_limited
+```
+
+After response:
+
+- close confirmation;
+- do not mark relationship projection stale solely for these definite failed requests;
+- show safe page feedback;
+- restore same Disconnect focus only if exact relationship identity still exists.
+
+Safe feedback:
+
+```text
+You do not have permission to manage Parent–Student connections.
+The disconnect request did not match the server contract.
+Too many requests. Wait before trying again.
+```
+
+No automatic retry.
+
+---
+
+# 26. Confirmed / 404 / 409 / Unknown Disconnect
+
+### Confirmed 204
+
+1. settle mutation confirmed;
+2. close dialog;
+3. mark current perspective stale;
+4. mark matching opposite anchor stale;
+5. publish:
 
 ```text
 Parent and student disconnected.
 ```
 
-Do not optimistically delete the row.
+6. reload current perspective exact retained query;
+7. hidden matching opposite reloads next switch;
+8. no optimistic row removal.
 
-If reloaded pagination becomes empty/out-of-range, use the one-time page correction rule.
+Confirmed result remains confirmed even if later GET fails.
 
-No Institution User list/detail/dashboard invalidation is required.
+### Exact 404
 
----
+Do not distinguish missing/foreign/inaccessible relationship.
 
-# 23. Disconnect Definite Failures
-
-Recognized exact error envelopes:
-
-```text
-401 authentication_required
-403 forbidden
-403 password_change_required
-403 user_inactive
-403 institution_inactive
-404 resource_not_found
-422 validation_failed
-429 rate_limited
-```
-
-`409 business_conflict` is not part of the current disconnect business contract. If an exact centralized 409 is unexpectedly received in future/current runtime, treat it as a safe general rejected mutation and do not infer a relationship state from message text.
-
-## 23.1 404 resource_not_found
-
-Relationship ID may be missing/foreign/inaccessible.
-
-Close stale confirmation and reload the current list.
-
-Show:
+Close dialog, mark current and matching opposite projection stale, reload current perspective, show:
 
 ```text
 The selected connection is no longer available.
 ```
 
-Do not reveal whether a foreign relationship exists.
+No obsolete row focus.
 
-## 23.2 422
+### Exact 409 business_conflict
 
-```text
-The disconnect request did not match the server contract.
-```
-
-## 23.3 Forbidden / rate limit
+Not expected by current disconnect business path, but if received as exact centralized error:
 
 ```text
-You do not have permission to manage Parent–Student connections.
-Too many requests. Wait before trying again.
+definitely rejected
+no human-message interpretation
+close dialog
+mark affected projections stale
+reload current perspective
+no replay
 ```
 
-Session failures use existing auth/session reconciliation.
+Show:
+
+```text
+The disconnect request was not accepted because current server state changed.
+```
+
+### Unknown Disconnect
+
+Unknown includes connection/timeout/cancel/5xx/unexpected status/2xx/malformed envelope/unsupported pair/meaningful 204 body/transform error/post-dispatch exception.
+
+Flow:
+
+```text
+close dialog
+mark current + matching opposite stale
+reload current perspective
+hidden opposite reloads next switch
+no replay
+```
+
+Feedback:
+
+```text
+Disconnect result could not be confirmed. Review the current connections.
+```
+
+Do not say refresh succeeded before GET succeeds.
 
 ---
 
-# 24. Disconnect Uncertain Outcome
+# 27. Anchor Endpoint 404
 
-Do not automatically replay DELETE.
-
-Even though backend disconnect is idempotent, client confirmation requires an observed response.
-
-For timeout/connection/5xx/malformed/unexpected result:
-
-1. close/settle stale confirmation safely;
-2. reload current perspective list;
-3. reload opposite perspective only if already active for that related user;
-4. do not claim confirmed success/failure;
-5. do not replay DELETE;
-6. show:
+For relationship GET exact `404 resource_not_found`:
 
 ```text
-Disconnect result could not be confirmed. Current connections were refreshed.
+clear selected anchor
+invalidate old-anchor requests
+clear relationship rows/query back to initial
+return perspective to noAnchor
+show:
+The selected user is no longer available for relationship management.
 ```
 
-If the relationship is absent after refresh, that is authoritative current state, but the originating request remains unconfirmed.
+Do not distinguish missing/wrong-role/foreign.
+
+Malformed 404 -> normal read error/invalidResponse, not anchor-not-found.
 
 ---
 
-# 25. Reconnect / History Boundary
+# 28. Session / Async Ownership
 
-Backend relationship history is preserved:
-
-```text
-connect
--> current relationship row
-
-disconnect
--> same row gets ended_at
-
-later reconnect
--> new relationship row with a new relationship ID
-```
-
-Frontend in this task displays **current relationships only**.
-
-Do not:
-
-- query historical rows;
-- show prior started/ended periods;
-- reuse an old ended relationship ID;
-- imply that reconnect restores the old relationship row.
-
-A later successful connect simply appears as a current connection returned by list APIs.
-
----
-
-# 26. Current Inactive Users
-
-Current Parent–Student relationships survive account deactivation.
-
-Therefore:
-
-- inactive selected anchors are valid for relationship list reads;
-- inactive related users remain visible;
-- current connections involving inactive users remain disconnectable;
-- `Active`/`Inactive` must be displayed clearly.
-
-Creating a **new** relationship requires backend-authoritative active Parent + active Student, which is why connect candidate selectors are active-only.
-
-Do not automatically disconnect relationships when a User becomes inactive.
-
----
-
-# 27. Relationship List Application State
-
-Use one focused relationship-list abstraction parameterized by perspective:
-
-```text
-byParent
-byStudent
-```
-
-A list instance is keyed/owned by:
-
-```text
-perspective
-selected anchor UUID
-eligible Institution Admin session
-authenticated user instance
-institution ID
-query
-operation generation
-```
-
-State supports:
-
-```text
-noAnchor
-loading
-queryLoading
-refreshing
-globalEmpty
-filteredEmpty
-emptyPage
-data
-error
-```
-
-Requirements:
-
-- canonical anchor UUID;
-- no request before an anchor exists;
-- suppress duplicate same-query requests;
-- stale superseded query cannot publish;
-- old anchor completion cannot publish;
-- By Parent cannot overwrite By Student state;
-- dispose/session/institution/device change invalidates publication;
-- same-route perspective switch preserves each perspective's in-memory anchor/query;
-- no persistent cache after route exit is required.
-
-Actual Dio cancellation is not required.
-
----
-
-# 28. Anchor/Candidate Selector State
-
-Implement a focused reusable Institution User selection controller with explicit purpose:
-
-```text
-anchorParent
-anchorStudent
-connectParent
-connectStudent
-```
-
-Do not introduce a global User selection cache.
-
-Fixed role/status behavior belongs to the controller/query contract, not Widgets.
-
-Stale completion must not:
-
-- update a closed selector;
-- replace selection in another selector;
-- publish across session/institution/device change;
-- corrupt main Institution Users list retained state.
-
-Anchor selection persists while page route remains mounted.
-
-Connect selection is destroyed when dialog closes.
-
----
-
-# 29. Relationship Mutation Ownership
-
-A connect operation owns:
-
-```text
-eligible session key
-authenticated user instance
-institution ID
-selected Parent object/UUID
-selected Student object/UUID
-operation generation
-dialog/focus ownership
-```
-
-A disconnect operation owns:
-
-```text
-eligible session key
-authenticated user instance
-institution ID
-perspective
-selected anchor identity
-exact current relationship object
-related user identity
-relationship UUID
-operation generation
-dialog/focus ownership
-```
-
-Publication is allowed only while ownership remains current.
-
-Reject stale completion after:
-
-- logout/session replacement;
-- Institution change;
-- desktop eligibility loss;
-- route exit;
-- newer mutation;
-- selected anchor replacement;
-- relationship row replacement/removal;
-- dialog/controller disposal.
-
-Stale completion must not:
-
-- close a newer dialog;
-- change a later anchor;
-- show feedback in another session;
-- publish into another perspective;
-- navigate.
-
----
-
-# 30. Session / Authorization / Tenant Isolation
-
-Eligible frontend actor:
+Eligible frontend session:
 
 ```text
 authenticated
-role = institution_admin
+institution_admin
 active user
 must_change_password = false
-active own institution
-desktop surface
+matching active institution
+desktop
 ```
 
-The frontend sends no:
+List read ownership:
+
+```text
+perspective
+anchor UUID
+session key
+query
+generation
+```
+
+Selector read ownership:
+
+```text
+selector purpose
+session
+query
+route/dialog ownership
+generation
+```
+
+Connect operation owns:
+
+```text
+session key
+exact AuthUser object instance
+institution ID
+selected Parent object + ID
+selected Student object + ID
+generation
+dialog/route ownership
+```
+
+Disconnect owns:
+
+```text
+session key
+exact AuthUser object
+institution ID
+perspective
+selected anchor object + ID
+exact relationship object
+relationship ID + parentId + studentId + startedAt
+related User object + ID
+generation
+dialog/route ownership
+```
+
+Reject stale publication after:
+
+```text
+session/bootstrap/account/institution/device change
+route exit
+perspective/anchor replacement
+relationship replacement/removal/reconnect
+dialog/controller dispose
+newer operation
+```
+
+A stale completion must not close newer dialog, change later anchor, publish to another perspective/session, restore obsolete focus, or navigate.
+
+Actual Dio cancellation is not required.
+
+Session-authority codes:
+
+```text
+authentication_required
+password_change_required
+user_inactive
+institution_inactive
+```
+
+clear relationship publication authority and use existing auth/session reconciliation.
+
+`forbidden` is normal definite permission failure.
+
+---
+
+# 29. Tenant / Privacy / History
+
+Never send:
 
 ```text
 institution_id
 connected_by_user_id
 tenant selector
-role override
-status override
+role/status override
 relationship type
 started_at
 ended_at
 ```
 
-Backend remains authoritative for:
+Backend owns role, tenant, current existence, active eligibility for new connect, idempotency, locking/concurrency, and timestamps.
 
-- Parent role;
-- Student role;
-- same-Institution scope;
-- user-active eligibility for new connections;
-- relationship existence/privacy;
-- idempotency;
-- locking/concurrency;
-- history timestamps.
+Wrong-role/cross-tenant/missing User and relationship targets remain existence-private.
 
-A UUID obtained elsewhere does not expand scope.
+History boundary:
 
-Wrong-role, cross-tenant, missing, and foreign relationship targets must remain existence-private.
+```text
+connect -> current row
+disconnect -> row gets ended_at
+later reconnect -> new current row/new ID
+```
 
-Frontend hiding/route guards are UX only.
+Do not query/show history or imply reconnect restores old row.
 
 ---
 
-# 31. Accessibility / Keyboard / Focus / Responsiveness
+# 30. Accessibility / Responsiveness
 
 Page:
 
-- route heading semantic;
-- `By Parent` / `By Student` keyboard selectable;
-- anchor selector keyboard accessible;
-- search/filter/sort/pagination controls keyboard reachable;
-- sort direction announced;
-- Active/Inactive not color-only;
-- loading/refresh/error feedback live-region capable;
-- tables horizontally scroll instead of overflowing;
-- supported desktop resizing/text scaling must not produce RenderFlex overflow.
+- semantic heading;
+- keyboard perspective switch;
+- keyboard anchor Change/Clear;
+- keyboard search/filter/sort/pagination;
+- sort direction semantics;
+- Active/Inactive text, not color-only;
+- loading/refresh/checking/error live regions;
+- horizontal table scroll;
+- no supported desktop/text-scale overflow.
+
+Anchor picker:
+
+- bounded size;
+- one controlled result scroll;
+- predictable search/results/page/Cancel/Select traversal;
+- selected candidate announced;
+- inactive status visible.
 
 Connect dialog:
 
-- predictable Parent -> Student -> Cancel -> Connect traversal;
-- each selector has accessible selected summary;
-- search/page controls usable by keyboard;
-- submit disabled until both users selected;
-- duplicate submit impossible;
-- mutation/reconciliation prevents dismissal;
-- busy state announced.
+- bounded;
+- Parent/Student selector mode reachable;
+- selected summaries semantic;
+- keyboard searches/pages;
+- Connect disabled until both selected;
+- busy state live;
+- busy dismissal blocked.
 
-Disconnect dialog:
+Disconnect:
 
-- relationship parties clearly announced;
-- Cancel/Disconnect keyboard reachable;
-- busy state prevents dismissal;
-- after close, restore focus to the relationship row/action only if it still exists;
-- if row disappeared, focus relationship section heading/list surface.
+- both parties announced;
+- exact relationship focus restoration;
+- if row disappeared/reconnected, focus section/list surface instead of obsolete button.
 
-Users header action:
+Users header actions remain responsive.
 
-- remains usable with Create User at supported widths/text scales.
-
-Do not introduce a new design system.
+No new design system.
 
 ---
 
-# 32. Architecture and Placement
+# 31. Architecture / Expected Files
 
 Expected new files may include:
 
@@ -1591,322 +1857,229 @@ frontend/lib/features/institution_admin/presentation/institution_admin_shell.dar
 frontend/lib/features/institution_admin/presentation/institution_admin_users_screen.dart
 ```
 
-Focused presentation helpers/dialog files are allowed where they improve responsibility boundaries.
-
-Reuse:
-
-```text
-InstitutionUser
-InstitutionUserListQuery
-InstitutionUserListRepository
-configured Dio
-DioFailureMapper
-ApiFailure / ApiErrorCodes
-existing Institution Admin session snapshot/key patterns
-existing UTC formatter
-```
+Focused presentation helpers/dialogs are allowed.
 
 Do not:
 
-- add Dio calls in Widgets;
+- add Dio to Widgets/controllers;
 - parse JSON in presentation/controllers;
-- add a second HTTP client;
-- mutate main Users page retained controller/store;
-- create a backend-like global relationship aggregation in the client;
-- force this Parent–Student API into S04-FE-004 Group membership abstractions;
-- create Group changes;
-- modify backend/docs/packages/platform folders.
+- create second User repository/client;
+- mutate main Users retained state;
+- create global relationship aggregation;
+- force this into Group membership abstractions;
+- change Group code;
+- change backend/docs/packages/platform files.
 
-Any extra file requires a concrete in-scope reason and must be reported.
+Any additional file requires a concrete in-scope reason and must be reported.
 
 ---
 
-# 33. Acceptance Criteria
+# 32. Acceptance Criteria
 
-- [ ] `/institution-admin/users/parent-student-connections` is canonical, approved, selected under Users, and not interpreted as User detail.
-- [ ] Users screen exposes `Parent–Student Connections`.
-- [ ] Page provides `By Parent` and `By Student` views.
-- [ ] All-status Parent/Student anchor selection supports inactive users.
-- [ ] No N+1/global relationship enumeration is introduced.
-- [ ] By Parent uses only `GET /parents/{parent}/students`.
-- [ ] By Student uses only `GET /students/{student}/parents`.
-- [ ] Current relationship resource + related_user are parsed strictly.
-- [ ] Direction invariants and selected-anchor IDs are validated.
-- [ ] Lists support exact search/status/sort/pagination.
-- [ ] Current inactive connected users remain visible and disconnectable.
-- [ ] Relationship history is not displayed.
-- [ ] Connect dialog selects exactly one active Parent and one active Student.
-- [ ] Connect sends only `parent_id` + `student_id`.
-- [ ] Connect accepts `201` new and `200` already-current success.
-- [ ] Connect success resource/message/pair are validated strictly.
-- [ ] Connect does not optimistically create rows.
-- [ ] 404 connect does not disclose which target failed.
-- [ ] 409 connect handles stale inactive-user state without parsing human messages.
-- [ ] Unknown connect is not replayed and switches to/refetches authoritative current Parent connections.
-- [ ] Disconnect targets exact relationship UUID, not user-pair IDs.
-- [ ] Disconnect sends bodyless/queryless DELETE and accepts `204`.
-- [ ] Disconnect is UI-allowed even when Parent/Student is inactive.
-- [ ] Disconnect does not optimistically remove rows.
-- [ ] 404/unknown disconnect reloads current state without existence leakage or auto-replay.
-- [ ] Reconnect is treated as a new current relationship; no history restoration semantics are invented.
-- [ ] Main Institution Users list retained query state is unaffected by selectors.
-- [ ] Session/institution/route/perspective/anchor/mutation stale completions cannot publish.
-- [ ] No Group behavior is changed.
+- [ ] S04-FE-004 is Accepted / Delivered on synchronized `origin/main` before implementation.
+- [ ] Exact static route name/segment/path/registries/order are implemented.
+- [ ] Static route precedes User Detail and is never interpreted as UUID.
+- [ ] Shell selects Users and title is `Parent–Student Connections`.
+- [ ] No feature state is URL-backed.
+- [ ] Users page exposes responsive Parent–Student Connections action.
+- [ ] By Parent / By Student preserve independent in-memory anchor/query state.
+- [ ] No anchor produces zero relationship requests.
+- [ ] Anchor pickers are bounded all-status role-specific single-select pickers.
+- [ ] Wrong-role anchor results are invalidResponse; inactive anchors remain valid.
+- [ ] Anchor selector search/debounce/retry/correction is exact.
+- [ ] Relationship resource/list envelope/direction/anchor invariants are strict.
+- [ ] Relationship identity prevents stale disconnect/reconnect confusion.
+- [ ] Relationship GET uses exact query/no body and accepts only 200.
+- [ ] Relationship search pending/invalid/clear/retry/correction behavior is exact.
+- [ ] Inactive current related users remain visible/disconnectable.
+- [ ] Connect uses one bounded dialog with independent active Parent/Student selectors.
+- [ ] Connect selectors reject wrong-role/inactive fixed-purpose mismatches.
+- [ ] Connect sends exact two-key JSON/no query.
+- [ ] Connect accepts strict 201/200 success.
+- [ ] Exact mutation error envelope/status-code pairs are enforced.
+- [ ] Connect recoverable 422/403/429 preserves dialog selections/query.
+- [ ] Connect 404/409 closes stale dialog without target/message inference or replay.
+- [ ] Unknown connect uses exact recent-current recovery query and stays unconfirmed.
+- [ ] Disconnect targets exact relationship UUID, not User pair.
+- [ ] DELETE uses zero body/query and strict 204 null/empty payload.
+- [ ] Disconnect recoverable 403/422/429 is definite and does not stale projections.
+- [ ] Disconnect 404/409/unknown reloads current state without replay/existence leakage.
+- [ ] Only one relationship mutation/dialog may own the page.
+- [ ] Mutation busy state blocks perspective/anchor/query/other mutation changes.
+- [ ] Matching hidden opposite perspective is marked stale and reloads on next switch.
+- [ ] Mutation-induced old rows are explicitly checking/non-authoritative.
+- [ ] Failed reconciliation discards stale rows.
+- [ ] Confirmed mutation remains confirmed despite later read failure.
+- [ ] Unknown feedback never falsely claims refresh success.
+- [ ] Anchor list exact 404 clears anchor privately.
+- [ ] Main Institution Users retained/controller state is untouched.
+- [ ] No User/Dashboard/Group invalidation.
+- [ ] Session/tenant/privacy/stale-async/focus rules hold.
+- [ ] Keyboard/accessibility/responsive tests pass.
 - [ ] No backend/schema/dependency/public API change.
-- [ ] Keyboard/accessibility/responsive requirements are covered.
 - [ ] Focused verification passes.
 - [ ] `git diff --check` passes.
-- [ ] Diff contains no unrelated work.
+- [ ] Final diff is in scope.
 
 ---
 
-# 34. Focused Tests and Verification
+# 33. Focused Tests and Verification
 
-## Required focused coverage
+Use real existing filenames if an equivalent delivered test has a different name. Do not create duplicate tests only to satisfy an expected filename.
 
-### Route / shell / Users entry
-
-- exact route name/path/static segment;
-- static route cannot be User UUID detail;
-- approved-location classification;
-- Users shell selection;
-- page title;
-- role/device/session route guards;
-- Users header action navigation/responsiveness.
-
-### Relationship domain/query
-
-- perspective endpoint mapping;
-- initial query;
-- search trim/blank/max;
-- status active/inactive;
-- sort toggle;
-- page/per-page resets;
-- independent perspective query state.
-
-### Relationship DTO/list DTO
-
-- valid By Parent row;
-- valid By Student row;
-- inactive related user;
-- nullable contact;
-- exact relationship keys;
-- exact related_user keys;
-- canonical UUIDs;
-- valid started_at;
-- current ended_at must be null;
-- anchor/direction mismatch rejected;
-- related_user/opposite-ID mismatch rejected;
-- duplicate relationship IDs rejected;
-- exact pagination;
-- contradictory pagination rejected.
-
-### Relationship read remote/repository
-
-- exact Parent->Students GET path/query;
-- exact Student->Parents GET path/query;
-- no GET body;
-- strict DTO/domain mapping;
-- malformed success -> invalidResponse;
-- exact error mapping.
-
-### Relationship list controller
-
-- no anchor => no request;
-- all-status anchor may be inactive;
-- initial load;
-- search/status/sort/pagination;
-- refresh;
-- global/filter/empty-page/error;
-- page correction;
-- By Parent/By Student isolation;
-- anchor switch stale completion rejection;
-- session/institution/device/route dispose rejection;
-- 404 anchor clears/unavailable behavior.
-
-### User selection controller
-
-Anchor selectors:
-
-- fixed Parent/Student role;
-- status omitted;
-- search/page;
-- inactive candidates remain selectable;
-- no main Users retained-state mutation.
-
-Connect selectors:
-
-- fixed role;
-- fixed active status;
-- search/page;
-- single select;
-- selected summary survives candidate paging/search;
-- dialog close clears state;
-- stale session/dialog completion rejection.
-
-### Connect remote/repository
-
-- exact POST path;
-- exact two-key body;
-- no query;
-- `201` accepted;
-- `200` accepted;
-- exact message;
-- strict five-key relationship resource;
-- returned pair must equal submitted pair;
-- ended_at null;
-- exact definite 401/403/404/409/422/429 mapping;
-- timeout/connection/5xx/malformed status/body/message/pair -> unknown;
-- no automatic replay.
-
-### Connect action controller
-
-- submit requires active typed Parent + Student selection;
-- duplicate submit suppression;
-- direct 200/201 success closes dialog;
-- success switches to By Parent/submitted Parent and reloads;
-- active By Student opposite perspective invalidation when relevant;
-- 404 safe generic target feedback;
-- 409 current-user-state feedback;
-- uncertain outcome switches/reloads without claiming success;
-- no replay;
-- session/institution/route/newer-operation stale completion rejection.
-
-### Disconnect remote/repository
-
-- exact relationship-ID DELETE path;
-- no body/query;
-- exact 204/no content;
-- exact definite failure mapping;
-- unexpected/transport/5xx -> unknown;
-- no replay.
-
-### Disconnect action controller
-
-- opens from exact current relationship row;
-- inactive parties still allowed;
-- direct 204 reloads current list;
-- opposite active perspective invalidation when relevant;
-- 404 reload + safe unavailable feedback;
-- unknown reload + unconfirmed feedback;
-- stale row/anchor/perspective/session/route completion rejection;
-- page correction after removal.
-
-### Widget
-
-- heading;
-- By Parent / By Student controls;
-- anchor no-selection states;
-- anchor selector active/inactive presentation;
-- list toolbar/table/pagination;
-- inactive related user;
-- Connect dialog Parent/Student selectors;
-- Connect busy/error/success/unknown behavior;
-- Disconnect confirmation/history-preservation copy;
-- no family relationship-type fields;
-- no bulk controls;
-- no User-detail row navigation;
-- keyboard/focus/semantics/text-scale/narrow-desktop overflow.
-
----
-
-## Focused test command
-
-Run only S04-FE-005 tests and existing Users/router/shell tests directly modified.
-
-Expected command shape:
+From repository root:
 
 ```powershell
+Push-Location frontend
+
 fvm spawn 3.44.7 test `
   test/features/institution_admin/institution_parent_student_relationship_domain_test.dart `
   test/features/institution_admin/institution_parent_student_relationship_dto_test.dart `
+  test/features/institution_admin/institution_parent_student_relationship_list_dto_test.dart `
   test/features/institution_admin/institution_parent_student_relationship_remote_data_source_test.dart `
   test/features/institution_admin/institution_parent_student_relationship_repository_impl_test.dart `
   test/features/institution_admin/institution_parent_student_relationship_list_controller_test.dart `
   test/features/institution_admin/institution_user_selection_controller_test.dart `
   test/features/institution_admin/institution_parent_student_relationship_action_controller_test.dart `
-  test/features/institution_admin/institution_admin_parent_student_connections_screen_test.dart
+  test/features/institution_admin/institution_admin_parent_student_connections_screen_test.dart `
+  test/app/router/institution_admin_route_paths_test.dart `
+  test/features/institution_admin/institution_admin_shell_test.dart `
+  test/features/institution_admin/institution_admin_users_screen_test.dart
+
+Pop-Location
 ```
 
-If actual names differ because the current implementation establishes equivalent files, use those real paths and report the exact command.
+Required focused coverage:
 
-## Directly affected regression
-
-Required:
-
-```powershell
-fvm spawn 3.44.7 test test/app/router/institution_admin_route_paths_test.dart test/features/institution_admin/institution_admin_shell_test.dart test/features/institution_admin/institution_admin_users_screen_test.dart
+```text
+route static order/classification/shell title/Users entry
+anchor all-status role invariants/search/page/correction
+connect active role invariants and selector isolation
+no main Users retained-state mutation
+relationship query/search pending/invalid/clear/retry/correction
+strict list/resource/direction/pagination parsing
+cross-perspective stale reload
+checkingCurrentState + failed reconciliation drops stale rows
+connect exact 201/200/error/unknown recovery/no replay
+disconnect exact identity/204/body/error/unknown/no replay
+disconnect/reconnect new identity stale safety
+session/tenant/privacy/route/perspective/anchor ownership
+focus/keyboard/semantics/text scale/desktop overflow
 ```
 
-Also run exact existing Institution User list/query/repository tests only if their production files were changed. Reuse through an unchanged repository contract does not justify broad Users regression.
+Directly affected regression is already included for:
 
-No Group test suite is required unless Group production code was unexpectedly changed, which this contract does not authorize.
+```text
+institution_admin_route_paths_test
+institution_admin_shell_test
+institution_admin_users_screen_test
+```
 
-## Static analysis
+Run Institution User list/query/repository tests only if their production files are modified. Reusing an unchanged repository does not justify broad User regressions.
+
+No Group tests are required because Group production changes are not authorized.
+
+Static:
 
 ```powershell
+Push-Location frontend
 fvm spawn 3.44.7 analyze
+Pop-Location
 ```
 
-## Format check
+Format:
 
 ```powershell
-C:\Users\Administrator\fvm\versions\3.44.7\bin\cache\dart-sdk\bin\dart.exe format --output=none --set-exit-if-changed lib test
+Push-Location frontend
+
+C:\Users\Administrator\fvm\versions\3.44.7\bin\cache\dart-sdk\bin\dart.exe `
+  format --output=none --set-exit-if-changed lib test
+
+Pop-Location
 ```
 
-## Build
+Manual:
 
 ```text
-Not required for this task.
+Not required — deterministic route/domain/data/repository/controller/widget tests
+cover this task. Real-stack/Windows E2E belongs to Stage integration/checkpoint.
 ```
 
-## Always
+Always:
 
-```text
+```powershell
 git diff --check
 ```
 
-Then inspect the complete diff for:
+Focused diff review must confirm:
 
-- exact S04-FE-005 scope;
-- no Group changes;
-- no backend/schema/package changes;
-- no global N+1 relationship aggregation;
-- no family semantics;
-- no history/bulk UI;
-- no optimistic relationship state;
-- no mutation auto-replay;
-- exact 404 existence privacy;
-- exact active/inactive connect vs current-list boundary;
-- no corruption of main Users retained state;
-- safe perspective/anchor/session/mutation async ownership;
-- no raw errors/JSON/tokens/secrets/debug/temp artifacts.
+```text
+no Group/backend/package/platform changes
+static route before User Detail
+no global N+1 relationship aggregation
+no family/history/bulk semantics
+no optimistic state
+no mutation replay
+exact GET/POST/DELETE transport
+strict 404/privacy/business_conflict handling
+all-status anchors vs active-only connect
+main Users retained state untouched
+cross-perspective stale semantics
+unknown connect recovery never claims success
+disconnect/reconnect identity safety
+no stale rows after failed reconciliation
+no raw exception/JSON/token/private data
+no weakened tests/debug/temp artifacts
+```
 
-Do not run the full frontend suite, Windows build, broad E2E, or Frontend Phase 2 in this task. Those belong to the frontend block checkpoint unless a concrete unexpected shared-infrastructure regression risk invalidates this verification scope; report that mismatch instead of silently broadening verification.
+Do **not** run full frontend suite, Windows build, broad E2E, Frontend Phase 2, or Stage integration for this task.
+
+If implementation requires unapproved shared scope:
+
+```text
+BLOCKED
+```
+
+instead of silently broadening work.
 
 ---
 
-# 35. Delivery
+# 34. Delivery
 
-Future Build Runner/Codex execution:
+Branch:
 
 ```text
-branch: task/s04-fe-005-parent-student-connections
-commit: feat(frontend): manage parent student connections
-PR: focused PR to main
+task/s04-fe-005-parent-student-connections
 ```
 
-After merge verify:
+Commit:
 
 ```text
+feat(frontend): manage parent student connections
+```
+
+PR:
+
+```text
+focused PR to main
+```
+
+Task/Stage bookkeeping:
+
+```text
+None
+```
+
+After merge require:
+
+```text
+implementation on origin/main
 local main == origin/main
 ahead/behind = 0/0
-working tree = clean
+working tree clean
 ```
 
-Do not modify Stage/task bookkeeping during implementation unless the active orchestration step explicitly assigns it.
-
-If implementation/verification passes but safe GitHub delivery cannot complete:
+Verification pass but delivery failure:
 
 ```text
 DELIVERY BLOCKED
@@ -1914,24 +2087,52 @@ DELIVERY BLOCKED
 
 ---
 
-# 36. Codex Completion Report
+# 35. Planning Provenance
 
-Return concise evidence:
+For ChatGPT/reviewer traceability only. Codex must not open these sources to reinterpret requirements.
+
+| Source/reference | Decision already encoded |
+|---|---|
+| Parent→Students / Student→Parents controllers | exact anchor-based current relationship GET APIs |
+| Parent/Student list requests/actions | query bounds, current-only relationships, all-status anchors, related-user filters |
+| Relationship list resource/collection | exact row + related_user + pagination contract |
+| Connect request/controller/action | exact two-key POST, 201/200 idempotency, locked role/tenant/active rules |
+| Disconnect request/controller/action | relationship-ID DELETE, zero body/query, 204 history-preserving idempotency |
+| Mutation/list API tests | strict transport, privacy-equivalent 404s, inactive-current behavior, reconnect new ID |
+| Concurrency tests | duplicate connect/disconnect and connect/disconnect/user-deactivation ordering |
+| Institution User list repository/query | selector reads without new API or Users-state mutation |
+| Current route/shell/Users screen | static route ordering and Users destination/header integration |
+| Delivered FE-001…003 | Institution Admin route/session/failure patterns |
+| Approved/delivered FE-004 | fixed-purpose User selector patterns only; no abstraction reuse |
+| `frontend/AGENTS.md` | strict DTOs, stale async, no false authoritative state, focus/accessibility |
+
+---
+
+# 36. Codex Final Report
+
+Return:
 
 1. `ACCEPTED`, `BLOCKED`, or `DELIVERY BLOCKED`.
 2. Implementation summary.
-3. Changed files and purpose.
-4. Acceptance-criteria evidence.
-5. Exact focused verification commands/results.
-6. By Parent / By Student list-contract evidence.
-7. Inactive current-user visibility/disconnect evidence.
-8. Connect 201/200/idempotent/409/404/unknown-outcome evidence.
-9. Disconnect 204/history-preserving/404/unknown-outcome evidence.
-10. Tenant/existence-privacy/session evidence.
-11. Perspective/anchor/dialog/mutation stale-async evidence.
-12. Main Users retained-state isolation evidence.
-13. `git diff --check` + focused scope/diff self-review.
-14. Commit/PR/merge/main-sync evidence.
-15. Exact deviations/blockers.
+3. Changed files/purpose.
+4. Acceptance evidence.
+5. Exact verification commands/results.
+6. Route/static-order/shell/Users-entry evidence.
+7. Anchor fixed-role/all-status/no-Users-state-corruption evidence.
+8. By Parent/By Student query/DTO/pagination/cross-stale evidence.
+9. Connect active-selection + 201/200/error/unknown recovery/no-replay evidence.
+10. Disconnect identity + 204/error/reconnect/no-replay evidence.
+11. Projection checking/read-failure/confirmed-vs-read-state evidence.
+12. Tenant/404 privacy/session/stale-async evidence.
+13. Accessibility/focus/responsive evidence.
+14. `git diff --check` + focused scope review.
+15. Commit/PR/merge/main-sync evidence.
+16. Exact deviations/blockers.
 
-If any product, architecture, API, security, tenant, relationship lifecycle, concurrency, mutation-outcome, async-ownership, or UX decision required by this task is missing or conflicts with current implementation, return `BLOCKED` instead of inventing behavior.
+If any required product, architecture, API, security, tenant, lifecycle, concurrency, selector, routing, cross-perspective, mutation-outcome, async-ownership, reconciliation, focus, or UX decision is missing/conflicting:
+
+```text
+BLOCKED
+```
+
+Do not invent behavior.
