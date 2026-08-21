@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\GroupStatus;
 use Database\Factories\GroupFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -55,5 +56,13 @@ class Group extends Model
     public function studentMemberships(): HasMany
     {
         return $this->hasMany(GroupStudentMembership::class);
+    }
+
+    public function scopeWithCurrentMembershipCounts(Builder $query): Builder
+    {
+        return $query->withCount([
+            'teacherMemberships as teachers_count' => fn (Builder $query): Builder => $query->whereNull('ended_at'),
+            'studentMemberships as students_count' => fn (Builder $query): Builder => $query->whereNull('ended_at'),
+        ]);
     }
 }
