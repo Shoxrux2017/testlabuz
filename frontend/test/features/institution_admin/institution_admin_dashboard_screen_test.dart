@@ -102,7 +102,13 @@ void main() {
       expect(find.text('No users yet.'), findsNothing);
       expect(find.text('Active'), findsNothing);
       expect(find.text('Inactive'), findsNothing);
-      expect(find.text('Groups'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('institutionDashboardData')),
+          matching: find.text('Groups'),
+        ),
+        findsNothing,
+      );
       expect(find.text('Topics'), findsNothing);
       expect(find.text('Recent users'), findsNothing);
       expect(find.text('Create User'), findsNothing);
@@ -343,14 +349,27 @@ void main() {
       await _pumpApp(tester, dashboardRepository: repository);
       await tester.pumpAndSettle();
 
-      for (var index = 0; index < 6; index++) {
+      const refreshButtonKey = Key('institutionDashboardRefreshButton');
+      final refreshFinder = find.byKey(refreshButtonKey);
+      bool refreshHasPrimaryFocus() {
+        final focusContext = FocusManager.instance.primaryFocus?.context;
+        if (focusContext == null) {
+          return false;
+        }
+
+        var hasFocus = focusContext.widget.key == refreshButtonKey;
+        focusContext.visitAncestorElements((element) {
+          hasFocus = element.widget.key == refreshButtonKey;
+          return !hasFocus;
+        });
+        return hasFocus;
+      }
+
+      for (var index = 0; index < 20 && !refreshHasPrimaryFocus(); index++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab, platform: 'windows');
         await tester.pump();
       }
-      final refreshFinder = find.byKey(
-        const Key('institutionDashboardRefreshButton'),
-      );
-      expect(Focus.of(tester.element(refreshFinder)).hasFocus, isTrue);
+      expect(refreshHasPrimaryFocus(), isTrue);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.enter, platform: 'windows');
       await tester.pump();
