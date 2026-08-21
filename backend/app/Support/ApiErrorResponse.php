@@ -170,6 +170,19 @@ final class ApiErrorResponse
         );
     }
 
+    public static function inactiveParentStudentRelationshipUser(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The selected parent or student is inactive.',
+            self::CODE_BUSINESS_CONFLICT,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
     public static function resourceNotFound(Request $request): ?JsonResponse
     {
         if (! self::isApiRequest($request)) {
