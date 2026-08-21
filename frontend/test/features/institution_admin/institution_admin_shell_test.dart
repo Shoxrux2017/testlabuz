@@ -22,6 +22,8 @@ import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_group_list_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_group_create_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_group_detail_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_assessment_settings_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_profile_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_create_repository_impl.dart';
@@ -30,6 +32,10 @@ import 'package:testlabuz_client/features/institution_admin/domain/institution_d
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_list.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_list_query.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_list_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_create.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_create_repository.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_detail_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings_repository.dart';
@@ -55,7 +61,7 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_institu
 
 void main() {
   group('Institution Admin direct routing and destination mapping', () {
-    testWidgets('all seven routes use one shell and exact honest content', (
+    testWidgets('all nine routes use one shell and exact honest content', (
       tester,
     ) async {
       for (final route in _routeExpectations) {
@@ -63,6 +69,7 @@ void main() {
         final dashboardRepository = FakePlatformDashboardRepository();
         final listRepository = FakePlatformInstitutionListRepository();
         final detailRepository = FakeInstitutionUserDetailRepository();
+        final groupDetailRepository = FakeInstitutionGroupDetailRepository();
 
         await _pumpApp(
           tester,
@@ -71,6 +78,7 @@ void main() {
           dashboardRepository: dashboardRepository,
           listRepository: listRepository,
           institutionUserDetailRepository: detailRepository,
+          institutionGroupDetailRepository: groupDetailRepository,
         );
         await tester.pumpAndSettle();
 
@@ -86,6 +94,11 @@ void main() {
         expect(
           detailRepository.fetchCalls,
           AppRoutePaths.isInstitutionAdminUserDetailPath(route.path) ? 1 : 0,
+          reason: route.path,
+        );
+        expect(
+          groupDetailRepository.fetchCalls,
+          AppRoutePaths.isInstitutionAdminGroupDetailPath(route.path) ? 1 : 0,
           reason: route.path,
         );
       }
@@ -126,11 +139,13 @@ void main() {
     ) async {
       for (final path in _malformedLocations) {
         final detailRepository = FakeInstitutionUserDetailRepository();
+        final groupDetailRepository = FakeInstitutionGroupDetailRepository();
         await _pumpApp(
           tester,
           initialLocation: path,
           authRepository: _authenticatedRepository(_adminUser()),
           institutionUserDetailRepository: detailRepository,
+          institutionGroupDetailRepository: groupDetailRepository,
         );
         await tester.pumpAndSettle();
 
@@ -144,6 +159,7 @@ void main() {
           findsNothing,
         );
         expect(detailRepository.fetchCalls, 0, reason: path);
+        expect(groupDetailRepository.fetchCalls, 0, reason: path);
         expect(tester.takeException(), isNull, reason: path);
       }
     });
@@ -566,6 +582,89 @@ void main() {
       },
     );
 
+    testWidgets(
+      'Group Create blocks shell navigation while submitting and navigates once to authoritative detail',
+      (tester) async {
+        final completion = Completer<InstitutionGroup>();
+        final createRepository = FakeInstitutionGroupCreateRepository(
+          onCreate: (_) => completion.future,
+        );
+        final detailRepository = FakeInstitutionGroupDetailRepository();
+        final dashboardRepository = FakeInstitutionDashboardRepository();
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdminGroupCreate,
+          authRepository: _authenticatedRepository(_adminUser()),
+          institutionDashboardRepository: dashboardRepository,
+          institutionGroupCreateRepository: createRepository,
+          institutionGroupDetailRepository: detailRepository,
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('institutionGroupCreateNameField')),
+          'Detail Group',
+        );
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('institutionGroupCreateSubmitButton')),
+            )
+            .onPressed!();
+        await tester.pump();
+
+        expect(createRepository.requests, hasLength(1));
+        expect(_navigationRail(tester).onDestinationSelected, isNull);
+        await _tapDestination(tester, 'Dashboard');
+        await tester.pump();
+        expect(_currentPath(tester), AppRoutePaths.institutionAdminGroupCreate);
+        expect(dashboardRepository.fetchCalls, 0);
+
+        completion.complete(_createdInstitutionGroup(_userIdOne));
+        await tester.pumpAndSettle();
+        expect(
+          _currentPath(tester),
+          AppRoutePaths.institutionAdminGroupDetailLocation(_userIdOne),
+        );
+        expect(detailRepository.fetchCalls, 1);
+        expect(dashboardRepository.fetchCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'unknown Group Create terminal keeps shell navigation blocked',
+      (tester) async {
+        final createRepository = FakeInstitutionGroupCreateRepository(
+          onCreate: (_) => Future.error(
+            const InstitutionGroupCreateOutcomeUnknownException(),
+          ),
+        );
+        await _pumpApp(
+          tester,
+          initialLocation: AppRoutePaths.institutionAdminGroupCreate,
+          authRepository: _authenticatedRepository(_adminUser()),
+          institutionGroupCreateRepository: createRepository,
+        );
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('institutionGroupCreateNameField')),
+          'Unknown Group',
+        );
+        final submit = find.byKey(
+          const Key('institutionGroupCreateSubmitButton'),
+        );
+        await tester.ensureVisible(submit);
+        await tester.tap(submit);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('institutionGroupCreateUnknownOutcome')),
+          findsOneWidget,
+        );
+        expect(_navigationRail(tester).onDestinationSelected, isNull);
+        expect(_currentPath(tester), AppRoutePaths.institutionAdminGroupCreate);
+        expect(createRepository.requests, hasLength(1));
+      },
+    );
+
     testWidgets('invalid live Institution context fails closed', (
       tester,
     ) async {
@@ -846,7 +945,12 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.space, platform: 'windows');
       await tester.pumpAndSettle();
 
-      _expectDestination(tester, _routeExpectations[5]);
+      _expectDestination(
+        tester,
+        _routeExpectations.firstWhere(
+          (route) => route.path == AppRoutePaths.institutionAdminInstitution,
+        ),
+      );
 
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
@@ -1149,6 +1253,20 @@ final _routeExpectations = <_RouteExpectation>[
     body: 'No groups exist for this institution.',
   ),
   const _RouteExpectation(
+    path: AppRoutePaths.institutionAdminGroupCreate,
+    destination: InstitutionAdminShellDestination.groups,
+    title: 'Create Group',
+    placeholderKey: 'institutionGroupCreateHeading',
+    body: 'Cancel',
+  ),
+  _RouteExpectation(
+    path: AppRoutePaths.institutionAdminGroupDetailLocation(_userIdOne),
+    destination: InstitutionAdminShellDestination.groups,
+    title: 'Group Details',
+    placeholderKey: 'institutionGroupDetailHeading',
+    body: 'Back to Groups',
+  ),
+  const _RouteExpectation(
     path: AppRoutePaths.institutionAdminUserCreate,
     destination: InstitutionAdminShellDestination.users,
     title: 'Create User',
@@ -1188,6 +1306,12 @@ const _malformedLocations = <String>[
   '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000/extra',
   '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000?include=private',
   '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000#private',
+  '/institution-admin/groups/',
+  '/institution-admin/groups/new/extra',
+  '/institution-admin/groups/not-a-uuid',
+  '/institution-admin/groups/550e8400-e29b-41d4-a716-446655440000/extra',
+  '/institution-admin/groups/550e8400-e29b-41d4-a716-446655440000?include=private',
+  '/institution-admin/groups/550e8400-e29b-41d4-a716-446655440000#private',
   '/institution-admin/institution/edit',
   '/institution-admin/settings/categories',
 ];
@@ -1206,6 +1330,8 @@ Future<void> _pumpApp(
   institutionAssessmentSettingsRepository,
   FakeInstitutionUserListRepository? institutionUserListRepository,
   FakeInstitutionGroupListRepository? institutionGroupListRepository,
+  FakeInstitutionGroupCreateRepository? institutionGroupCreateRepository,
+  FakeInstitutionGroupDetailRepository? institutionGroupDetailRepository,
   FakeInstitutionUserCreateRepository? institutionUserCreateRepository,
   FakeInstitutionUserDetailRepository? institutionUserDetailRepository,
 }) async {
@@ -1239,6 +1365,14 @@ Future<void> _pumpApp(
         institutionGroupListRepositoryProvider.overrideWithValue(
           institutionGroupListRepository ??
               FakeInstitutionGroupListRepository(),
+        ),
+        institutionGroupCreateRepositoryProvider.overrideWithValue(
+          institutionGroupCreateRepository ??
+              FakeInstitutionGroupCreateRepository(),
+        ),
+        institutionGroupDetailRepositoryProvider.overrideWithValue(
+          institutionGroupDetailRepository ??
+              FakeInstitutionGroupDetailRepository(),
         ),
         institutionUserCreateRepositoryProvider.overrideWithValue(
           institutionUserCreateRepository ??
@@ -1757,6 +1891,52 @@ class FakeInstitutionGroupListRepository
       ),
     );
   }
+}
+
+class FakeInstitutionGroupCreateRepository
+    implements InstitutionGroupCreateRepository {
+  FakeInstitutionGroupCreateRepository({this.onCreate});
+
+  final Future<InstitutionGroup> Function(
+    InstitutionGroupCreateRequest request,
+  )?
+  onCreate;
+  final requests = <InstitutionGroupCreateRequest>[];
+
+  @override
+  Future<InstitutionGroup> createGroup(
+    InstitutionGroupCreateRequest request,
+  ) async {
+    requests.add(request);
+    return onCreate?.call(request) ?? _createdInstitutionGroup(_userIdOne);
+  }
+}
+
+class FakeInstitutionGroupDetailRepository
+    implements InstitutionGroupDetailRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<InstitutionGroup> fetchGroup(String groupId) async {
+    fetchCalls += 1;
+    return _createdInstitutionGroup(groupId);
+  }
+}
+
+InstitutionGroup _createdInstitutionGroup(String groupId) {
+  return InstitutionGroup(
+    id: groupId,
+    name: 'Detail Group',
+    level: null,
+    subjectDirection: null,
+    description: null,
+    status: InstitutionGroupStatus.active,
+    teachersCount: 0,
+    studentsCount: 0,
+    archivedAt: null,
+    createdAt: DateTime.utc(2026, 8, 15, 8),
+    updatedAt: DateTime.utc(2026, 8, 15, 9),
+  );
 }
 
 class FakeInstitutionUserCreateRepository

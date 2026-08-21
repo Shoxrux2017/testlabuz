@@ -8,6 +8,14 @@ void main() {
       expect(AppRouteNames.institutionAdminUsers, 'institution-admin-users');
       expect(AppRouteNames.institutionAdminGroups, 'institution-admin-groups');
       expect(
+        AppRouteNames.institutionAdminGroupCreate,
+        'institution-admin-group-create',
+      );
+      expect(
+        AppRouteNames.institutionAdminGroupDetail,
+        'institution-admin-group-detail',
+      );
+      expect(
         AppRouteNames.institutionAdminUserCreate,
         'institution-admin-user-create',
       );
@@ -27,12 +35,22 @@ void main() {
       expect(AppRoutePaths.institutionAdmin, '/institution-admin');
       expect(AppRoutePaths.institutionAdminUsersSegment, 'users');
       expect(AppRoutePaths.institutionAdminGroupsSegment, 'groups');
+      expect(AppRoutePaths.institutionAdminGroupCreateSegment, 'new');
+      expect(AppRoutePaths.institutionAdminGroupIdParameter, 'groupId');
       expect(AppRoutePaths.institutionAdminUserCreateSegment, 'new');
       expect(AppRoutePaths.institutionAdminUserIdParameter, 'userId');
       expect(AppRoutePaths.institutionAdminInstitutionSegment, 'institution');
       expect(AppRoutePaths.institutionAdminSettingsSegment, 'settings');
       expect(AppRoutePaths.institutionAdminUsers, '/institution-admin/users');
       expect(AppRoutePaths.institutionAdminGroups, '/institution-admin/groups');
+      expect(
+        AppRoutePaths.institutionAdminGroupCreate,
+        '/institution-admin/groups/new',
+      );
+      expect(
+        AppRoutePaths.institutionAdminGroupDetail,
+        '/institution-admin/groups/:groupId',
+      );
       expect(
         AppRoutePaths.institutionAdminUserCreate,
         '/institution-admin/users/new',
@@ -63,6 +81,8 @@ void main() {
         AppRouteNames.institutionAdmin,
         AppRouteNames.institutionAdminUsers,
         AppRouteNames.institutionAdminGroups,
+        AppRouteNames.institutionAdminGroupCreate,
+        AppRouteNames.institutionAdminGroupDetail,
         AppRouteNames.institutionAdminUserCreate,
         AppRouteNames.institutionAdminUserDetail,
         AppRouteNames.institutionAdminInstitution,
@@ -88,6 +108,8 @@ void main() {
         AppRoutePaths.institutionAdmin,
         AppRoutePaths.institutionAdminUsers,
         AppRoutePaths.institutionAdminGroups,
+        AppRoutePaths.institutionAdminGroupCreate,
+        AppRoutePaths.institutionAdminGroupDetail,
         AppRoutePaths.institutionAdminUserCreate,
         AppRoutePaths.institutionAdminUserDetail,
         AppRoutePaths.institutionAdminInstitution,
@@ -95,8 +117,8 @@ void main() {
       ];
 
       expect(allNames.toSet(), hasLength(allNames.length));
-      expect(institutionAdminNames.toSet(), hasLength(7));
-      expect(patterns.toSet(), hasLength(7));
+      expect(institutionAdminNames.toSet(), hasLength(9));
+      expect(patterns.toSet(), hasLength(9));
       for (final pattern in patterns) {
         expect(
           AppRoutePaths.protected.where((path) => path == pattern),
@@ -149,6 +171,28 @@ void main() {
             isFalse,
           );
         }
+        expect(
+          AppRoutePaths.isInstitutionAdminGroupCreatePath(
+            AppRoutePaths.institutionAdminGroupCreate,
+          ),
+          isTrue,
+        );
+        expect(
+          AppRoutePaths.isInstitutionAdminPrimaryDestination(
+            AppRoutePaths.institutionAdminGroupCreate,
+          ),
+          isFalse,
+        );
+        for (final groupId in const [_lowerUuid, _upperUuid]) {
+          final path = AppRoutePaths.institutionAdminGroupDetailLocation(
+            groupId,
+          );
+          expect(AppRoutePaths.isInstitutionAdminGroupDetailPath(path), isTrue);
+          expect(
+            AppRoutePaths.isInstitutionAdminApprovedLocation(path),
+            isTrue,
+          );
+        }
       },
     );
 
@@ -167,6 +211,12 @@ void main() {
         '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000?admin=true',
         '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000#details',
         '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000/',
+        '/institution-admin/groups/',
+        '/institution-admin/groups/new/extra',
+        '/institution-admin/groups/not-a-uuid',
+        '/institution-admin/groups/550e8400-e29b-41d4-a716-446655440000/extra',
+        '/institution-admin/groups/550e8400-e29b-41d4-a716-446655440000?query=1',
+        '/institution-admin/groups/550e8400-e29b-41d4-a716-446655440000#fragment',
       ];
 
       for (final path in malformedPaths) {
@@ -247,6 +297,58 @@ void main() {
           () => AppRoutePaths.institutionAdminUserDetailLocation(userId),
           throwsArgumentError,
           reason: userId,
+        );
+      }
+    });
+  });
+
+  group('Institution Admin Group detail UUID boundary', () {
+    test('builds lower and upper canonical UUID locations safely', () {
+      expect(
+        AppRoutePaths.institutionAdminGroupDetailLocation(_lowerUuid),
+        '/institution-admin/groups/$_lowerUuid',
+      );
+      expect(
+        AppRoutePaths.institutionAdminGroupDetailLocation(_upperUuid),
+        '/institution-admin/groups/$_upperUuid',
+      );
+    });
+
+    test('keeps static new out of the dynamic detail route', () {
+      expect(
+        AppRoutePaths.isInstitutionAdminGroupCreatePath(
+          AppRoutePaths.institutionAdminGroupCreate,
+        ),
+        isTrue,
+      );
+      expect(
+        AppRoutePaths.isInstitutionAdminGroupDetailPath(
+          AppRoutePaths.institutionAdminGroupCreate,
+        ),
+        isFalse,
+      );
+      expect(
+        () => AppRoutePaths.institutionAdminGroupDetailLocation('new'),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects malformed and path-manipulation Group IDs', () {
+      for (final groupId in const [
+        '',
+        ' $_lowerUuid',
+        '$_lowerUuid ',
+        'not-a-uuid',
+        '$_lowerUuid/extra',
+        '../$_lowerUuid',
+        '$_lowerUuid?query=1',
+        '$_lowerUuid#fragment',
+        '$_lowerUuid%2Fextra',
+      ]) {
+        expect(
+          () => AppRoutePaths.institutionAdminGroupDetailLocation(groupId),
+          throwsArgumentError,
+          reason: groupId,
         );
       }
     });

@@ -23,6 +23,7 @@ class InstitutionGroupListState {
     required this.failure,
     required this.searchErrorText,
     required this.isRetryInFlight,
+    required this.recoveryWarning,
   });
 
   const InstitutionGroupListState.initial()
@@ -34,11 +35,13 @@ class InstitutionGroupListState {
         failure: null,
         searchErrorText: null,
         isRetryInFlight: false,
+        recoveryWarning: null,
       );
 
   const InstitutionGroupListState.loading({
     required InstitutionGroupListQuery query,
     required String searchDraft,
+    String? recoveryWarning,
   }) : this._(
          status: InstitutionGroupListStatus.loading,
          query: query,
@@ -47,11 +50,13 @@ class InstitutionGroupListState {
          failure: null,
          searchErrorText: null,
          isRetryInFlight: false,
+         recoveryWarning: recoveryWarning,
        );
 
   const InstitutionGroupListState.queryLoading({
     required InstitutionGroupListQuery query,
     required String searchDraft,
+    String? recoveryWarning,
   }) : this._(
          status: InstitutionGroupListStatus.queryLoading,
          query: query,
@@ -60,12 +65,14 @@ class InstitutionGroupListState {
          failure: null,
          searchErrorText: null,
          isRetryInFlight: false,
+         recoveryWarning: recoveryWarning,
        );
 
   const InstitutionGroupListState.refreshing({
     required InstitutionGroupListQuery query,
     required String searchDraft,
     required InstitutionGroupListPage result,
+    String? recoveryWarning,
   }) : this._(
          status: InstitutionGroupListStatus.refreshing,
          query: query,
@@ -74,12 +81,14 @@ class InstitutionGroupListState {
          failure: null,
          searchErrorText: null,
          isRetryInFlight: false,
+         recoveryWarning: recoveryWarning,
        );
 
   factory InstitutionGroupListState.fromResult({
     required InstitutionGroupListQuery query,
     required String searchDraft,
     required InstitutionGroupListPage result,
+    String? recoveryWarning,
   }) {
     final status = switch ((
       result.groups.isNotEmpty,
@@ -100,6 +109,7 @@ class InstitutionGroupListState {
       failure: null,
       searchErrorText: null,
       isRetryInFlight: false,
+      recoveryWarning: recoveryWarning,
     );
   }
 
@@ -108,6 +118,7 @@ class InstitutionGroupListState {
     required String searchDraft,
     required ApiFailure failure,
     bool isRetryInFlight = false,
+    String? recoveryWarning,
   }) : this._(
          status: InstitutionGroupListStatus.error,
          query: query,
@@ -116,6 +127,7 @@ class InstitutionGroupListState {
          failure: failure,
          searchErrorText: null,
          isRetryInFlight: isRetryInFlight,
+         recoveryWarning: recoveryWarning,
        );
 
   final InstitutionGroupListStatus status;
@@ -125,6 +137,7 @@ class InstitutionGroupListState {
   final ApiFailure? failure;
   final String? searchErrorText;
   final bool isRetryInFlight;
+  final String? recoveryWarning;
 
   bool get hasRows => result?.groups.isNotEmpty ?? false;
 
@@ -171,6 +184,7 @@ class InstitutionGroupListState {
       failure: failure,
       searchErrorText: errorText,
       isRetryInFlight: isRetryInFlight,
+      recoveryWarning: recoveryWarning,
     );
   }
 
@@ -185,6 +199,7 @@ class InstitutionGroupListState {
       searchDraft: searchDraft,
       failure: currentFailure,
       isRetryInFlight: true,
+      recoveryWarning: recoveryWarning,
     );
   }
 }

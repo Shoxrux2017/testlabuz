@@ -42,12 +42,17 @@ final institutionGroupListRetainedQueryProvider =
       return store;
     });
 
+const institutionGroupCreateRecoveryWarning =
+    'Creation result remains unconfirmed. Review recent active groups before creating another group.';
+
 class InstitutionGroupListController
     extends Notifier<InstitutionGroupListState> {
   InstitutionGroupListSessionKey? _activeSessionKey;
   InstitutionGroupListQuery? _inFlightQuery;
   Timer? _searchDebounce;
   int _operationGeneration = 0;
+  String? _recoveryWarning;
+  var _authoritativeRowsStale = false;
   var _isDisposed = false;
   var _disposeRegistered = false;
 
@@ -92,6 +97,17 @@ class InstitutionGroupListController
     final searchDraft = retained?.matches(sessionKey) ?? false
         ? retained!.searchDraft
         : query.search ?? '';
+    _authoritativeRowsStale =
+        retained?.matches(sessionKey) == true &&
+        retained!.authoritativeRowsStale;
+    _recoveryWarning =
+        retained?.matches(sessionKey) == true &&
+            retained!.recoveryWarningPending
+        ? institutionGroupCreateRecoveryWarning
+        : null;
+    if (_recoveryWarning != null) {
+      retainedStore.consumeRecoveryWarning(sessionKey);
+    }
 
     scheduleMicrotask(() {
       if (_matchesSession(sessionKey)) {
@@ -106,6 +122,7 @@ class InstitutionGroupListController
     return InstitutionGroupListState.loading(
       query: query,
       searchDraft: searchDraft,
+      recoveryWarning: _recoveryWarning,
     );
   }
 
@@ -339,15 +356,18 @@ class InstitutionGroupListController
       _LoadPresentation.initial => InstitutionGroupListState.loading(
         query: query,
         searchDraft: searchDraft,
+        recoveryWarning: _recoveryWarning,
       ),
       _LoadPresentation.query => InstitutionGroupListState.queryLoading(
         query: query,
         searchDraft: searchDraft,
+        recoveryWarning: _recoveryWarning,
       ),
       _LoadPresentation.refresh => InstitutionGroupListState.refreshing(
         query: query,
         searchDraft: searchDraft,
         result: state.result!,
+        recoveryWarning: _recoveryWarning,
       ),
       _LoadPresentation.retry => state.retrying(),
     };
@@ -387,6 +407,7 @@ class InstitutionGroupListController
         state = InstitutionGroupListState.queryLoading(
           query: correctedQuery,
           searchDraft: state.searchDraft,
+          recoveryWarning: _recoveryWarning,
         );
         _rememberQuery();
         await _load(
@@ -402,7 +423,9 @@ class InstitutionGroupListController
         query: query,
         searchDraft: state.searchDraft,
         result: result,
+        recoveryWarning: _recoveryWarning,
       );
+      _authoritativeRowsStale = false;
       _rememberQuery();
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, sessionKey, query)) {
@@ -416,6 +439,7 @@ class InstitutionGroupListController
         query: query,
         searchDraft: state.searchDraft,
         failure: exception.failure,
+        recoveryWarning: _recoveryWarning,
       );
     } catch (_) {
       if (!_canPublish(generation, sessionKey, query)) {
@@ -429,6 +453,7 @@ class InstitutionGroupListController
           kind: ApiFailureKind.unknown,
           message: 'Unexpected Institution Group list failure.',
         ),
+        recoveryWarning: _recoveryWarning,
       );
     } finally {
       if (generation == _operationGeneration && _inFlightQuery == query) {
@@ -498,6 +523,8 @@ class InstitutionGroupListController
         .read(institutionGroupListRetainedQueryProvider)
         .clearIfMatches(_activeSessionKey);
     _activeSessionKey = null;
+    _recoveryWarning = null;
+    _authoritativeRowsStale = false;
     _searchDebounce?.cancel();
     _invalidateOperations();
   }
@@ -519,6 +546,8 @@ class InstitutionGroupListController
       sessionKey: sessionKey,
       query: state.query,
       searchDraft: state.searchDraft,
+      authoritativeRowsStale: _authoritativeRowsStale,
+      recoveryWarningPending: false,
     );
   }
 }
@@ -638,6 +667,45 @@ class InstitutionGroupListRetainedQueryStore {
       value = null;
     }
   }
+
+  void markAuthoritativeRowsStale(InstitutionGroupListSessionKey key) {
+    final retained = value;
+    value = retained?.matches(key) == true
+        ? retained!.copyWith(authoritativeRowsStale: true)
+        : InstitutionGroupListRetainedQuery(
+            sessionKey: key,
+            query: const InstitutionGroupListQuery.initial(),
+            searchDraft: '',
+            authoritativeRowsStale: true,
+          );
+  }
+
+  void prepareUnknownCreateRecovery(InstitutionGroupListSessionKey key) {
+    final retained = value;
+    final retainedQuery = retained?.matches(key) == true
+        ? retained!.query
+        : const InstitutionGroupListQuery.initial();
+    value = InstitutionGroupListRetainedQuery(
+      sessionKey: key,
+      query: retainedQuery.copyWith(
+        search: null,
+        status: InstitutionGroupStatusFilter.active,
+        page: InstitutionGroupListQuery.initialPage,
+        sort: InstitutionGroupListSort.createdAt,
+        direction: InstitutionGroupSortDirection.desc,
+      ),
+      searchDraft: '',
+      authoritativeRowsStale: true,
+      recoveryWarningPending: true,
+    );
+  }
+
+  void consumeRecoveryWarning(InstitutionGroupListSessionKey key) {
+    final retained = value;
+    if (retained?.matches(key) == true && retained!.recoveryWarningPending) {
+      value = retained.copyWith(recoveryWarningPending: false);
+    }
+  }
 }
 
 class InstitutionGroupListRetainedQuery {
@@ -645,13 +713,34 @@ class InstitutionGroupListRetainedQuery {
     required this.sessionKey,
     required this.query,
     required this.searchDraft,
+    this.authoritativeRowsStale = false,
+    this.recoveryWarningPending = false,
   });
 
   final InstitutionGroupListSessionKey sessionKey;
   final InstitutionGroupListQuery query;
   final String searchDraft;
+  final bool authoritativeRowsStale;
+  final bool recoveryWarningPending;
 
   bool matches(InstitutionGroupListSessionKey key) => sessionKey == key;
+
+  InstitutionGroupListRetainedQuery copyWith({
+    InstitutionGroupListQuery? query,
+    String? searchDraft,
+    bool? authoritativeRowsStale,
+    bool? recoveryWarningPending,
+  }) {
+    return InstitutionGroupListRetainedQuery(
+      sessionKey: sessionKey,
+      query: query ?? this.query,
+      searchDraft: searchDraft ?? this.searchDraft,
+      authoritativeRowsStale:
+          authoritativeRowsStale ?? this.authoritativeRowsStale,
+      recoveryWarningPending:
+          recoveryWarningPending ?? this.recoveryWarningPending,
+    );
+  }
 }
 
 enum _LoadPresentation { initial, query, refresh, retry }

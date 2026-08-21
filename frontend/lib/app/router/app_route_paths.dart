@@ -13,6 +13,8 @@ abstract final class AppRouteNames {
   static const institutionAdmin = 'institution-admin';
   static const institutionAdminUsers = 'institution-admin-users';
   static const institutionAdminGroups = 'institution-admin-groups';
+  static const institutionAdminGroupCreate = 'institution-admin-group-create';
+  static const institutionAdminGroupDetail = 'institution-admin-group-detail';
   static const institutionAdminUserCreate = 'institution-admin-user-create';
   static const institutionAdminUserDetail = 'institution-admin-user-detail';
   static const institutionAdminInstitution = 'institution-admin-institution';
@@ -43,6 +45,8 @@ abstract final class AppRoutePaths {
   static const institutionAdmin = '/institution-admin';
   static const institutionAdminUsersSegment = 'users';
   static const institutionAdminGroupsSegment = 'groups';
+  static const institutionAdminGroupCreateSegment = 'new';
+  static const institutionAdminGroupIdParameter = 'groupId';
   static const institutionAdminUserCreateSegment = 'new';
   static const institutionAdminUserIdParameter = 'userId';
   static const institutionAdminInstitutionSegment = 'institution';
@@ -51,6 +55,10 @@ abstract final class AppRoutePaths {
       '$institutionAdmin/$institutionAdminUsersSegment';
   static const institutionAdminGroups =
       '$institutionAdmin/$institutionAdminGroupsSegment';
+  static const institutionAdminGroupCreate =
+      '$institutionAdminGroups/$institutionAdminGroupCreateSegment';
+  static const institutionAdminGroupDetail =
+      '$institutionAdminGroups/:$institutionAdminGroupIdParameter';
   static const institutionAdminUserCreate =
       '$institutionAdminUsers/$institutionAdminUserCreateSegment';
   static const institutionAdminUserDetail =
@@ -74,6 +82,8 @@ abstract final class AppRoutePaths {
     institutionAdmin,
     institutionAdminUsers,
     institutionAdminGroups,
+    institutionAdminGroupCreate,
+    institutionAdminGroupDetail,
     institutionAdminUserCreate,
     institutionAdminUserDetail,
     institutionAdminInstitution,
@@ -102,9 +112,13 @@ abstract final class AppRoutePaths {
   static const _institutionAdminStaticLocations = <String>[
     ...institutionAdminPrimaryDestinations,
     institutionAdminUserCreate,
+    institutionAdminGroupCreate,
   ];
 
   static final RegExp _institutionAdminUserIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _institutionAdminGroupIdPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
@@ -172,9 +186,26 @@ abstract final class AppRoutePaths {
     return _institutionAdminUserIdPattern.hasMatch(userId);
   }
 
+  static bool isInstitutionAdminGroupCreatePath(String path) {
+    return path == institutionAdminGroupCreate;
+  }
+
+  static bool isInstitutionAdminGroupDetailPath(String path) {
+    const prefix = '$institutionAdminGroups/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final groupId = path.substring(prefix.length);
+
+    return groupId != institutionAdminGroupCreateSegment &&
+        _institutionAdminGroupIdPattern.hasMatch(groupId);
+  }
+
   static bool isInstitutionAdminApprovedLocation(String path) {
     return _institutionAdminStaticLocations.contains(path) ||
-        isInstitutionAdminUserDetailPath(path);
+        isInstitutionAdminUserDetailPath(path) ||
+        isInstitutionAdminGroupDetailPath(path);
   }
 
   static bool isInstitutionAdminSegment(String path) {
@@ -191,5 +222,18 @@ abstract final class AppRoutePaths {
     }
 
     return '$institutionAdminUsers/${Uri.encodeComponent(userId)}';
+  }
+
+  static String institutionAdminGroupDetailLocation(String groupId) {
+    if (!_institutionAdminGroupIdPattern.hasMatch(groupId) ||
+        groupId == institutionAdminGroupCreateSegment) {
+      throw ArgumentError.value(
+        groupId,
+        'groupId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+
+    return '$institutionAdminGroups/${Uri.encodeComponent(groupId)}';
   }
 }

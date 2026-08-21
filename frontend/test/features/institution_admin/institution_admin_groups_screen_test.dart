@@ -14,6 +14,7 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/institution_admin/application/institution_group_list_controller.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_group_list.dart';
@@ -93,7 +94,7 @@ void main() {
           tester
               .widget<DataTable>(table)
               .rows
-              .every((row) => row.onSelectChanged == null),
+              .every((row) => row.onSelectChanged != null),
           isTrue,
         );
         final semantics = tester.ensureSemantics();
@@ -104,9 +105,12 @@ void main() {
           ),
           findsOneWidget,
         );
+        expect(
+          find.bySemanticsLabel('Open group details for Advanced Mathematics'),
+          findsOneWidget,
+        );
         semantics.dispose();
         for (final excluded in const [
-          'Create Group',
           'Open Group',
           'View Group',
           'Edit',
@@ -115,6 +119,7 @@ void main() {
         ]) {
           expect(find.text(excluded), findsNothing);
         }
+        expect(find.text('Create Group'), findsOneWidget);
         expect(
           repository.queries.single,
           const InstitutionGroupListQuery.initial(),
@@ -305,7 +310,11 @@ void main() {
       await _pumpApp(tester, repository: repository);
       await tester.pumpAndSettle();
       expect(find.text('No groups available'), findsOneWidget);
-      expect(find.text('Create Group'), findsNothing);
+      expect(find.text('Create Group'), findsNWidgets(2));
+      expect(
+        find.byKey(const Key('institutionGroupGlobalEmptyCreateButton')),
+        findsOneWidget,
+      );
 
       await tester.enterText(
         find.byKey(const Key('institutionGroupSearchField')),
@@ -315,6 +324,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('No matching groups'), findsOneWidget);
       expect(find.text('Clear filters'), findsWidgets);
+      expect(
+        find.byKey(const Key('institutionGroupGlobalEmptyCreateButton')),
+        findsNothing,
+      );
 
       await tester.tap(
         find.byKey(const Key('institutionGroupClearFiltersButton')),
@@ -372,6 +385,39 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets('recovery query shows its warning once and then consumes it', (
+      tester,
+    ) async {
+      final store = InstitutionGroupListRetainedQueryStore();
+      final sessionKey = InstitutionGroupListSessionKey(
+        userId: _admin().id,
+        userInstance: _admin(),
+        institutionId: _admin().institutionId!,
+      );
+      store.prepareUnknownCreateRecovery(sessionKey);
+      final repository = _FakeGroupListRepository();
+      await _pumpApp(tester, repository: repository, retainedStore: store);
+      await tester.pumpAndSettle();
+
+      expect(repository.queries.single.toQueryParameters(), {
+        'page': 1,
+        'per_page': 20,
+        'sort': 'created_at',
+        'direction': 'desc',
+        'status': 'active',
+      });
+      expect(find.text(institutionGroupCreateRecoveryWarning), findsOneWidget);
+      expect(store.value!.recoveryWarningPending, isFalse);
+
+      await _pumpApp(
+        tester,
+        repository: _FakeGroupListRepository(),
+        retainedStore: store,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(institutionGroupCreateRecoveryWarning), findsNothing);
+    });
   });
 }
 
@@ -381,6 +427,7 @@ Future<void> _pumpApp(
   String initialLocation = AppRoutePaths.institutionAdminGroups,
   bool setDefaultSize = true,
   TextScaler textScaler = TextScaler.noScaling,
+  InstitutionGroupListRetainedQueryStore? retainedStore,
 }) async {
   if (setDefaultSize) {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
@@ -394,6 +441,10 @@ Future<void> _pumpApp(
         appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
         authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
         institutionGroupListRepositoryProvider.overrideWithValue(repository),
+        if (retainedStore != null)
+          institutionGroupListRetainedQueryProvider.overrideWithValue(
+            retainedStore,
+          ),
       ],
       child: MediaQuery(
         data: MediaQueryData(textScaler: textScaler),
