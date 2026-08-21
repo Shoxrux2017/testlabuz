@@ -5,415 +5,392 @@
 | Field | Value |
 |---|---|
 | Stage | `Stage 4 — Groups and User Relationships` |
-| Stage dependency | `Stage 3 — Institution Administration and User Management` is closed |
-| Planning state | `S04-BE-005 Approved; Backend Phase 2 rerun required after delivery` |
-| Backend implementation | `S04-BE-001…004 Accepted / Delivered; S04-BE-005 is the next authorized implementation task` |
-| Frontend decomposition | `Approved` |
-| Frontend task files | `Not yet created; will be prepared one task at a time after S04-BE-005 Accepted / Delivered and Backend Phase 2 rerun PASS` |
-| Frontend implementation | `Blocked until S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS` |
-| Integration | `Not decomposed; planning is not authorized` |
+| Stage dependency | `Stage 3 closed` |
+| Backend implementation | `S04-BE-001…005 Accepted / Delivered` |
+| Complete Backend Phase 2 | `PASS` |
+| Frontend decomposition | `Approved — 5 implementation tasks` |
+| Frontend contracts | `FE-001 Approved; FE-002…005 Draft / Review pending` |
+| Frontend implementation | `FE-001 ready to start` |
+| Frontend Build Runner | `Prepared — approval-gated orchestration only` |
+| Frontend Phase 2 | `Pending all FE-001…005 Accepted / Delivered` |
+| Integration | `Not decomposed; blocked until Frontend Phase 2 PASS` |
 | Stage closure | `Pending` |
 
-This file is the orchestration map for Stage 4.
+This file is the Stage 4 orchestration/status map.
 
-It records task order, dependencies, block checkpoints, and Stage progression. It is an input for ChatGPT/project orchestration and Stage tracking.
-
-Codex must **not** read this file to determine implementation behavior. Each Codex run receives only the current approved implementation contract, applicable `AGENTS.md` files, and directly relevant source/tests.
+It is for ChatGPT/project tracking. Codex must not read it to determine implementation behavior.
 
 ---
 
-## 2. Stage Goal
+## 2. Backend Gate
 
-Stage 4 establishes the structural relationships required for secure learning delivery inside one Institution:
+Stage 4 backend implementation is complete:
 
-- Institution Groups/classes;
-- Teacher ↔ Group membership;
-- Student ↔ Group membership;
-- Parent ↔ Student relationships;
-- historical relationship preservation;
-- tenant-safe authorization boundaries required by later learning-delivery Stages.
-
-Stage 4 does not implement Topics, Homework, Blitz, learning delivery, scoring, reporting, or progress workflows.
-
----
-
-## 3. Approved Stage 4 Backend Decomposition
-
-Backend tasks are implemented sequentially.
-
-Only the next dependency-satisfied task is promoted to `Approved`. Future task contracts may already exist as drafts, but Codex must not start them until their dependency and approval gates pass.
-
-| Order | Task ID | Title | Depends on | Current status | Delivery |
-|---:|---|---|---|---|---|
-| 1 | `S04-BE-001` | Group and Relationship Persistence Foundation | Stage 3 closed; Stage 4 backend decomposition approved | `Accepted / Delivered` | `Implementation + GitHub delivery` |
-| 2 | `S04-BE-002` | Institution Group Management API | `S04-BE-001 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
-| 3 | `S04-BE-003` | Teacher and Student Group Membership API | `S04-BE-001 + S04-BE-002 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
-| 4 | `S04-BE-004` | Parent–Student Relationship API | `S04-BE-003 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
-| 5 | `S04-BE-PHASE-2` | Backend Phase 2 Read-Only Block Review | `S04-BE-001…004 Accepted + Delivered` | `Historical PASS for S04-BE-001…004` | `Read-only checkpoint; no delivery` |
-| 6 | `S04-BE-005` | Parent–Student Relationship Related-User Summary | `S04-BE-001…004 Accepted / Delivered`; historical Backend Phase 2 `PASS`; Stage 4 frontend decomposition approval | `Approved` | `Implementation + GitHub delivery` |
-
-### Backend dependency chain
-
-```text
-Stage 3 Closed
-    ↓
-S04-BE-001
-    ↓ Accepted + Delivered
-S04-BE-002
-    ↓ Accepted + Delivered
-S04-BE-003
-    ↓ Accepted + Delivered
-S04-BE-004
-    ↓ Accepted + Delivered
-Backend Phase 2
-    ↓ Historical PASS for S04-BE-001…004
-S04-BE-005
-    ↓ Accepted + Delivered
-Backend Phase 2 Rerun
-    ↓ PASS
-Frontend Implementation Gate
-```
-
----
-
-## 4. Backend Task Contracts
-
-### S04-BE-001 — Group and Relationship Persistence Foundation
-
-Owns:
-
-- `groups`;
-- `group_teacher_memberships`;
-- `group_student_memberships`;
-- `parent_student_relationships`;
-- required tenant-supporting constraints/indexes;
-- `GroupStatus`;
-- Stage 4 persistence models/relationships/factories;
-- focused PostgreSQL persistence verification.
-
-Does **not** own public HTTP APIs.
-
-### S04-BE-002 — Institution Group Management API
-
-Owns:
-
-```text
-GET    /api/v1/institution/groups
-POST   /api/v1/institution/groups
-GET    /api/v1/institution/groups/{group}
-PATCH  /api/v1/institution/groups/{group}
-POST   /api/v1/institution/groups/{group}/archive
-```
-
-Owns Group resource/list/create/update/archive behavior, tenant safety, no-op semantics, counts, and Group lifecycle concurrency.
-
-### S04-BE-003 — Teacher and Student Group Membership API
-
-Owns:
-
-```text
-GET    /api/v1/institution/groups/{group}/teachers
-POST   /api/v1/institution/groups/{group}/teachers
-DELETE /api/v1/institution/groups/{group}/teachers/{teacher}
-
-GET    /api/v1/institution/groups/{group}/students
-POST   /api/v1/institution/groups/{group}/students
-DELETE /api/v1/institution/groups/{group}/students/{student}
-```
-
-Locked POST request shapes:
-
-```json
-{
-  "teacher_ids": ["uuid-1", "uuid-2"]
-}
-```
-
-```json
-{
-  "student_ids": ["uuid-1", "uuid-2"]
-}
-```
-
-Owns bulk-additive assignment, atomicity, idempotency, removal/history semantics, tenant/role safety, Group archive interaction, User lifecycle interaction, and concurrency.
-
-### S04-BE-004 — Parent–Student Relationship API
-
-Owns the locked public endpoints:
-
-```text
-GET    /api/v1/institution/parents/{parent}/students
-GET    /api/v1/institution/students/{student}/parents
-POST   /api/v1/institution/parent-student-relationships
-DELETE /api/v1/institution/parent-student-relationships/{relationship}
-```
-
-Owns explicit Parent ↔ Student current relationships, public relationship UUID, historical `ended_at` behavior, same-Institution/role enforcement, idempotency, User lifecycle interaction, and deterministic concurrency.
-
-The obsolete route family below is **not** approved:
-
-```text
-/api/v1/institution/parent-student-connections
-```
-
-### S04-BE-005 — Parent–Student Relationship Related-User Summary
-
-Owns read-response enrichment for the two existing Parent–Student relationship
-list endpoints by adding the related User's safe identity summary. It preserves
-the existing mutation responses, routes, authorization, validation, lifecycle,
-persistence, and bounded-query behavior.
-
-This is the current `Approved` backend implementation task.
-
----
-
-## 5. Backend Phase 2 Checkpoint
-
-### Historical result for S04-BE-001…004
-
-The Backend Phase 2 review run after the original backend block remains recorded
-as:
-
-```text
-PASS
-```
-
-That historical result covers:
-
-```text
-S04-BE-001 = Accepted + Delivered
-S04-BE-002 = Accepted + Delivered
-S04-BE-003 = Accepted + Delivered
-S04-BE-004 = Accepted + Delivered
-```
-
-It does not cover the newly approved `S04-BE-005` change.
-
-### Required rerun after S04-BE-005
-
-Backend Phase 2 must be rerun only after:
-
-```text
-S04-BE-005 = Accepted + Delivered
-local main == origin/main
-ahead/behind = 0/0
-working tree = clean
-```
-
-Backend Phase 2 is strictly read-only.
-
-Required review scope includes:
-
-- complete Stage 4 backend delta;
-- full backend regression suite;
-- backend format/static checks;
-- route/API contract consistency;
-- migrations/schema/constraints/indexes;
-- tenant isolation and existence privacy;
-- authorization/role boundaries;
-- query count/N+1 behavior;
-- transactions;
-- concurrency;
-- idempotency;
-- lifecycle;
-- cross-task interactions;
-- previous-Stage regression risk.
-
-Checkpoint verdicts:
-
-```text
-PASS
-NOT ACCEPTED
-```
-
-`PASS` requires:
-
-```text
-P1 = 0
-P2 = 0
-required verification passes
-no unresolved architecture/API/database/security/tenant/lifecycle/cross-task conflict
-```
-
-If `NOT ACCEPTED`, ChatGPT prepares focused fix contract(s), the fixes are implemented/verified/delivered, and the affected checkpoint is rerun.
-
-Frontend implementation cannot start until `S04-BE-005` is `Accepted / Delivered`
-and the required Backend Phase 2 rerun is `PASS`.
-
----
-
-## 6. Frontend Block
-
-### Current state
-
-```text
-Blocked pending S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS.
-```
-
-This is an intentional temporary frontend implementation block while the
-approved backend follow-up and its checkpoint are pending.
-
-Frontend decomposition is `Approved`. Frontend task files have not yet been
-created and will be prepared one task at a time only after:
-
-```text
-S04-BE-005 = Accepted / Delivered
-→ Backend Phase 2 rerun = PASS
-```
-
-Frontend implementation starts only after:
-
-```text
-S04-BE-005 = Accepted / Delivered
-→ Backend Phase 2 rerun = PASS
-```
-
-That condition is not yet satisfied. The historical Backend Phase 2 `PASS` for
-`S04-BE-001…004` does not authorize frontend implementation after `S04-BE-005`
-was added to the backend block.
-
-After the required rerun passes, frontend task files will be prepared one task
-at a time. As each task is prepared, this same Task Index can be updated with:
-
-- exact `S04-FE-*` tasks;
-- task order;
-- dependencies;
-- acceptance/delivery states;
-- Frontend Phase 2 checkpoint.
-
----
-
-## 7. Frontend Phase 2
-
-Current state:
-
-```text
-Not scheduled — frontend task files have not been created yet.
-```
-
-When applicable, Frontend Phase 2 runs only after all approved Stage 4 frontend tasks are `Accepted` and `Delivered`.
-
-It is read-only and must end with:
-
-```text
-PASS
-NOT ACCEPTED
-```
-
-Stage integration cannot begin until the required Backend and Frontend Phase 2 checkpoints are both `PASS`.
-
----
-
-## 8. Integration
-
-Current state:
-
-```text
-Not decomposed; planning is not authorized.
-```
-
-Do not create the Stage 4 integration implementation contract before:
-
-```text
-Required Backend Phase 2 rerun = PASS
-Frontend Phase 2 = PASS
-```
-
-The future integration task must verify the real Laravel–Flutter workflow, including relevant authentication/session, tenant isolation, relationship access, API/DTO/error boundaries, and required real-stack/E2E behavior.
-
-This Task Index will be updated with the exact `S04-INT-*` task ID only when integration planning becomes current work.
-
----
-
-## 9. Stage Closure
-
-Stage 4 may be closed only after:
-
-```text
-Backend implementation complete
-→ Required Backend Phase 2 rerun PASS
-→ Frontend implementation complete
-→ Frontend Phase 2 PASS
-→ Integration complete
-→ Required fixes delivered
-→ Stage Closure Review PASS
-```
-
-Stage closure must verify:
-
-- every approved Stage 4 task is accepted/delivered;
-- required checkpoints are PASS;
-- integration is complete;
-- required security/tenant verification is complete;
-- `origin/main` contains the accepted result;
-- local `main == origin/main`;
-- ahead/behind is `0/0`;
-- working tree is clean;
-- no unresolved `P1` or `P2` remains.
-
----
-
-## 10. Task Lifecycle Rules
-
-Stage 4 task statuses:
-
-| Status | Meaning |
+| Task | State |
 |---|---|
-| `Draft` | Contract exists but implementation-readiness/dependency gate is not yet open |
-| `Approved` | Current task contract is implementation-ready and approved for Codex |
-| `In Progress` | Codex is implementing/verifying |
-| `Accepted` | Contract satisfied, focused verification passed, delivery completed, result is on `origin/main`, local main synchronized/clean |
-| `Blocked` | Planning/dependency/environment/contract issue prevents safe implementation |
-| `Delivery Blocked` | Implementation and required verification passed, but safe GitHub delivery could not complete |
-
-Normal task flow:
-
-```text
-Git Preflight
-→ Implementation
-→ Focused Verification
-→ Scope/Diff Self-Check
-→ GitHub Delivery
-→ Task Acceptance
-```
-
-Do not run per-task Phase 2 reviews.
-
----
-
-## 11. Current Stage 4 Progress
-
-| Item | State |
-|---|---|
-| Stage 3 dependency | `Satisfied` |
-| Stage 4 backend decomposition | `Approved` |
 | `S04-BE-001` | `Accepted / Delivered` |
 | `S04-BE-002` | `Accepted / Delivered` |
 | `S04-BE-003` | `Accepted / Delivered` |
 | `S04-BE-004` | `Accepted / Delivered` |
-| Historical Backend Phase 2 for `S04-BE-001…004` | `PASS` |
-| `S04-BE-005` | `Approved` |
-| Required Backend Phase 2 rerun | `Pending S04-BE-005 Accepted / Delivered` |
-| Frontend decomposition | `Approved` |
-| Frontend task files | `Not yet created; will be prepared one task at a time after S04-BE-005 Accepted / Delivered and Backend Phase 2 rerun PASS` |
-| Frontend implementation | `Blocked until S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS` |
-| Frontend Phase 2 | `Not scheduled` |
-| Integration | `Not decomposed; planning is not authorized` |
+| `S04-BE-005` | `Accepted / Delivered` |
+
+Complete Stage 4 Backend Phase 2:
+
+```text
+PASS
+P1 = 0
+P2 = 0
+P3 = 0
+```
+
+Verified backend checkpoint baseline:
+
+```text
+main / origin/main:
+2e9dab8cfeb8a1caed4cc71c361a1f4812a1ce61
+
+Full backend suite:
+293 passed
+17,306 assertions
+350.85s
+exit code 0
+
+git diff --check:
+PASS
+```
+
+Therefore backend does not block the frontend block.
+
+---
+
+## 3. Frontend Task Files
+
+All five frontend task files may be stored/tracked now:
+
+```text
+tasks/frontend/stage-04/
+  S04-FE-001-institution-group-navigation-and-list.md
+  S04-FE-002-institution-group-create-and-detail.md
+  S04-FE-003-institution-group-edit-and-archive-lifecycle.md
+  S04-FE-004-teacher-and-student-group-membership-management.md
+  S04-FE-005-parent-student-relationship-management.md
+  S04-FE-BUILD-RUNNER.md
+```
+
+Physical presence in the repository does **not** authorize implementation.
+
+Implementation authorization comes only from the current task's own:
+
+```text
+Status = Approved
+```
+
+---
+
+## 4. Current Frontend Queue
+
+| Order | Task | Title | Dependency | Planning status | Implementation state |
+|---:|---|---|---|---|---|
+| 1 | `S04-FE-001` | Institution Group Navigation and List | Complete Backend Phase 2 `PASS` | `Approved` | `Ready to start` |
+| 2 | `S04-FE-002` | Institution Group Create and Detail | `FE-001 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
+| 3 | `S04-FE-003` | Institution Group Edit and Archive Lifecycle | `FE-002 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
+| 4 | `S04-FE-004` | Teacher and Student Group Membership Management | `FE-003 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
+| 5 | `S04-FE-005` | Parent–Student Relationship Management | `FE-004 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
+
+Exact dependency chain:
+
+```text
+Backend Phase 2 PASS
+    ↓
+FE-001 Approved
+    ↓ Accepted / Delivered
+FE-002 must be Approved
+    ↓ Accepted / Delivered
+FE-003 must be Approved
+    ↓ Accepted / Delivered
+FE-004 must be Approved
+    ↓ Accepted / Delivered
+FE-005 must be Approved
+    ↓ Accepted / Delivered
+Frontend Phase 2
+```
+
+---
+
+## 5. Parallel Planning / Implementation Workflow
+
+The approved working model for the frontend block is:
+
+```text
+1. Store all five task files + Build Runner in the repository.
+2. Start Codex implementation of FE-001 only because FE-001 is Approved.
+3. While Codex implements FE-001, ChatGPT performs read-only review of FE-002.
+4. If FE-002 review finds issues:
+      fix the task contract;
+      keep it Draft until findings are resolved.
+5. When FE-002 passes review:
+      change FE-002 to Approved;
+      deliver the planning update to main.
+6. When FE-001 is Accepted / Delivered:
+      Codex may start FE-002 only if synchronized main shows FE-002 Approved.
+7. Repeat the same pattern for FE-003, FE-004, FE-005.
+```
+
+This parallelizes:
+
+```text
+ChatGPT task-contract review
+```
+
+with:
+
+```text
+Codex implementation of the already Approved preceding task
+```
+
+It does **not** parallelize implementation tasks.
+
+Codex still implements one task at a time.
+
+---
+
+## 6. FE-001 Current Gate
+
+`S04-FE-001` has completed the additional review/fix cycle and is the only current implementation-authorized frontend task.
+
+State:
+
+```text
+S04-FE-001:
+Status = Approved
+Implementation = Not started
+Gate = OPEN
+```
+
+Scope remains:
+
+```text
+Institution Group Navigation and List only
+```
+
+No create/detail/edit/archive/membership behavior is authorized in FE-001.
+
+---
+
+## 7. FE-002…005 Review Gate
+
+Current state:
+
+```text
+S04-FE-002 = Draft / Review pending
+S04-FE-003 = Draft / Review pending
+S04-FE-004 = Draft / Review pending
+S04-FE-005 = Draft / Review pending
+```
+
+These files may be committed to `main` now for review continuity.
+
+They must not be given to Codex for implementation until each has separately passed ChatGPT read-only review and has been changed to:
+
+```text
+Status = Approved
+```
+
+A later review may modify requirements inside that task file before approval.
+
+---
+
+## 8. Build Runner Status
+
+File:
+
+```text
+tasks/frontend/stage-04/S04-FE-BUILD-RUNNER.md
+```
+
+The Build Runner is orchestration only, not a sixth frontend implementation task.
+
+It is approval-gated:
+
+```text
+Approved task -> may execute
+Draft task    -> stop WAITING FOR TASK APPROVAL
+```
+
+Therefore it is safe to store before FE-002…005 review completes.
+
+The runner:
+
+- works one implementation task at a time;
+- re-synchronizes `main` before each task;
+- reads only the active Approved task body;
+- does not implement a Draft future task;
+- stops on `WAITING FOR TASK APPROVAL`, `BLOCKED`, or `DELIVERY BLOCKED`;
+- does not run Frontend Phase 2;
+- does not run Stage integration/closure.
+
+---
+
+## 9. Per-Task Acceptance
+
+An implementation task becomes `Accepted / Delivered` only when:
+
+```text
+approved contract satisfied
+focused tests PASS
+required directly affected regressions PASS
+static/format checks PASS
+git diff --check PASS
+focused scope/diff self-review PASS
+focused GitHub delivery complete
+result present on origin/main
+local main == origin/main
+ahead/behind = 0/0
+working tree clean
+```
+
+No task-level Phase 2 is performed.
+
+---
+
+## 10. Verification Policy
+
+Each FE implementation task runs only verification proportional to its contract:
+
+```text
+focused functionality tests
+necessary static/format checks
+directly affected regressions
+git diff --check
+focused scope/diff self-check
+```
+
+Do not run after every task:
+
+```text
+full frontend suite
+full Windows build
+broad E2E
+Frontend Phase 2
+```
+
+unless the active contract explicitly requires broader verification for a concrete risk.
+
+---
+
+## 11. Frontend Phase 2
+
+Frontend Phase 2 remains blocked until:
+
+```text
+FE-001 Accepted / Delivered
+FE-002 Accepted / Delivered
+FE-003 Accepted / Delivered
+FE-004 Accepted / Delivered
+FE-005 Accepted / Delivered
+
+local main == origin/main
+ahead/behind = 0/0
+working tree clean
+```
+
+Then ChatGPT performs the Stage 4 frontend block read-only review, including:
+
+```text
+complete Stage 4 frontend diff
+full frontend test suite
+static analysis
+format checks
+required Windows build
+frontend architecture
+API/DTO integration
+session/routing/state ownership
+stale async safety
+mutation uncertainty handling
+accessibility/focus/responsiveness
+cross-task interactions
+regression risk
+```
+
+Checkpoint result:
+
+```text
+PASS
+NOT ACCEPTED
+```
+
+---
+
+## 12. Integration and Closure
+
+Integration planning is not authorized until:
+
+```text
+Backend Phase 2 PASS
+Frontend Phase 2 PASS
+```
+
+Backend gate is already satisfied.
+
+Remaining gate:
+
+```text
+Frontend Phase 2 PASS
+```
+
+Only after that may ChatGPT decompose/create the Stage 4 integration task.
+
+Stage 4 closes only after:
+
+```text
+frontend block
+→ Frontend Phase 2 PASS
+→ integration
+→ required fixes
+→ Stage Closure Review PASS
+```
+
+---
+
+## 13. Current Progress
+
+| Item | State |
+|---|---|
+| Backend implementation | `Complete` |
+| Backend Phase 2 | `PASS` |
+| `S04-FE-001` | `Approved / Ready to start` |
+| `S04-FE-002` | `Draft / Review pending` |
+| `S04-FE-003` | `Draft / Review pending` |
+| `S04-FE-004` | `Draft / Review pending` |
+| `S04-FE-005` | `Draft / Review pending` |
+| Build Runner | `Prepared / approval-gated` |
+| Frontend Phase 2 | `Pending` |
+| Integration | `Blocked until Frontend Phase 2 PASS` |
 | Stage Closure | `Pending` |
 
 ---
 
-## 12. Next Permitted Gate
+## 14. Next Permitted Gate
 
-The next permitted gate is:
+Next implementation gate:
 
 ```text
-S04-BE-005 implementation
+S04-FE-001 — Institution Group Navigation and List
 ```
 
-`S04-BE-001…004` remain `Accepted / Delivered`, and their historical Backend
-Phase 2 result remains `PASS`. The only currently permitted gate is
-`S04-BE-005 implementation`. Frontend implementation remains blocked until
-`S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS`. Frontend task
-files have not yet been created and will be prepared one task at a time only
-after that condition is satisfied. Integration remains unplanned.
+Next planning/review work may proceed concurrently:
+
+```text
+S04-FE-002 read-only contract review
+```
+
+Safe execution sequence:
+
+```text
+Commit/store the complete frontend planning package on main
+→ verify main sync/clean
+→ start FE-001 implementation
+→ concurrently review/fix FE-002
+→ approve FE-002 only after review PASS
+→ continue sequentially
+```
