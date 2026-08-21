@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -56,5 +57,25 @@ class User extends Authenticatable
     public function creator(): BelongsTo
     {
         return $this->belongsTo(self::class, 'created_by_user_id');
+    }
+
+    public function teacherGroupMemberships(): HasMany
+    {
+        return $this->hasMany(GroupTeacherMembership::class, 'teacher_id');
+    }
+
+    public function studentGroupMemberships(): HasMany
+    {
+        return $this->hasMany(GroupStudentMembership::class, 'student_id');
+    }
+
+    public function parentStudentRelationships(): HasMany
+    {
+        return $this->hasMany(ParentStudentRelationship::class, 'parent_id');
+    }
+
+    public function studentParentRelationships(): HasMany
+    {
+        return $this->hasMany(ParentStudentRelationship::class, 'student_id');
     }
 }
