@@ -18,11 +18,11 @@ Current approval map:
 S04-FE-001 = Approved
 S04-FE-002 = Approved
 S04-FE-003 = Approved
-S04-FE-004 = Draft / Review pending
+S04-FE-004 = Approved
 S04-FE-005 = Draft / Review pending
 ```
 
-The runner always resumes from the first not-yet-delivered task. FE-001 is already delivered on current project history; FE-002 may run when not yet delivered, and FE-003 may run only after FE-002 is Accepted / Delivered. FE-004 and FE-005 remain approval-gated.
+The runner always resumes from the first not-yet-delivered task. FE-001 and FE-002 are already delivered on current project history. FE-003 may run now when it is the first not-delivered task; FE-004 may run only after FE-003 is Accepted / Delivered. FE-005 remains approval-gated.
 
 Queue:
 
