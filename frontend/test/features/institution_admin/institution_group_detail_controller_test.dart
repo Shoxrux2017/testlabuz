@@ -155,6 +155,84 @@ void main() {
     );
     expect(setup.subscription.read().group, isNull);
   });
+
+  test(
+    'mutation replacement requires exact selected object and target',
+    () async {
+      final setup = _setup(_FakeDetailRepository(), testGroupId);
+      await _flush();
+      final selected = setup.subscription.read().group!;
+      final controller = setup.container.read(
+        institutionGroupDetailControllerProvider(testGroupId).notifier,
+      );
+
+      expect(
+        controller.replaceFromMutation(testGroup(), testGroup(name: 'Ignored')),
+        isFalse,
+      );
+      final returned = testGroup(name: 'Authoritative replacement');
+      expect(controller.replaceFromMutation(selected, returned), isTrue);
+      expect(setup.subscription.read().group, same(returned));
+    },
+  );
+
+  test(
+    'mutation not-found and error discard Group and invalidate stale reads',
+    () async {
+      final refresh = Completer<InstitutionGroup>();
+      var calls = 0;
+      final setup = _setup(
+        _FakeDetailRepository(
+          onFetch: (_) {
+            calls += 1;
+            return calls == 1 ? Future.value(testGroup()) : refresh.future;
+          },
+        ),
+        testGroupId,
+      );
+      await _flush();
+      final selected = setup.subscription.read().group!;
+      final controller = setup.container.read(
+        institutionGroupDetailControllerProvider(testGroupId).notifier,
+      );
+      controller.refresh();
+
+      expect(
+        controller.markErrorFromMutation(
+          selected,
+          ApiFailure.local(
+            kind: ApiFailureKind.connection,
+            message: 'Private.',
+          ),
+        ),
+        isTrue,
+      );
+      refresh.complete(testGroup(name: 'Stale refresh'));
+      await _flush();
+      expect(
+        setup.subscription.read().status,
+        InstitutionGroupDetailStatus.error,
+      );
+      expect(setup.subscription.read().group, isNull);
+
+      final freshSetup = _setup(_FakeDetailRepository(), testGroupId);
+      await _flush();
+      final freshSelected = freshSetup.subscription.read().group!;
+      expect(
+        freshSetup.container
+            .read(
+              institutionGroupDetailControllerProvider(testGroupId).notifier,
+            )
+            .markNotFoundFromMutation(freshSelected),
+        isTrue,
+      );
+      expect(
+        freshSetup.subscription.read().status,
+        InstitutionGroupDetailStatus.notFound,
+      );
+      expect(freshSetup.subscription.read().group, isNull);
+    },
+  );
 }
 
 ({

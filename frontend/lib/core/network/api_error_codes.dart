@@ -6,6 +6,7 @@ abstract final class ApiErrorCodes {
   static const passwordChangeRequired = 'password_change_required';
   static const forbidden = 'forbidden';
   static const resourceNotFound = 'resource_not_found';
+  static const businessConflict = 'business_conflict';
   static const validationFailed = 'validation_failed';
   static const serverError = 'server_error';
   static const currentPasswordInvalid = 'current_password_invalid';
