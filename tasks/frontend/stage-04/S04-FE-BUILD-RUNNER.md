@@ -12,17 +12,17 @@ The runner may implement a task only when the task's own metadata on the latest 
 Status = Approved
 ```
 
-Current planning expectation at initial launch:
+Current approval map:
 
 ```text
 S04-FE-001 = Approved
 S04-FE-002 = Approved
-S04-FE-003 = Draft / Review pending
+S04-FE-003 = Approved
 S04-FE-004 = Draft / Review pending
 S04-FE-005 = Draft / Review pending
 ```
 
-This lets Codex start S04-FE-001 immediately. After S04-FE-001 is Accepted / Delivered, S04-FE-002 may continue automatically because it has completed review and is Approved; later Draft tasks remain approval-gated.
+The runner always resumes from the first not-yet-delivered task. FE-001 is already delivered on current project history; FE-002 may run when not yet delivered, and FE-003 may run only after FE-002 is Accepted / Delivered. FE-004 and FE-005 remain approval-gated.
 
 Queue:
 

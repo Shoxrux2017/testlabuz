@@ -1,44 +1,44 @@
-# S04-FE-002 — Institution Group Create and Detail
+# S04-FE-003 — Institution Group Edit and Archive Lifecycle
 
 ## 1. Metadata
 
 | Field | Value |
 |---|---|
-| Task ID | `S04-FE-002` |
+| Task ID | `S04-FE-003` |
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Area | `Frontend` |
 | Status | `Approved` |
 | Review | `Complete` |
-| Depends on | `S04-FE-001 Accepted / Delivered` |
+| Depends on | `S04-FE-002 Accepted / Delivered` |
 | Delivery | `Implementation + GitHub delivery` |
 
-Start implementation only when S04-FE-001 is present on synchronized `origin/main` as Accepted / Delivered.
+Start implementation only when S04-FE-002 is present on synchronized `origin/main` as Accepted / Delivered.
 
 This file is the complete task-specific implementation contract for Codex.
 
-Codex must use only this contract, applicable `AGENTS.md` files, and directly relevant source/tests. Do not read product docs, roadmap, previous tasks, Stage history, checkpoint reviews, or closure reviews to determine behavior.
+Codex must use only this contract, applicable `AGENTS.md` files, and directly relevant source/tests. Do not read product docs, roadmap, previous/future task contracts, Stage history, checkpoint reviews, or closure reviews to determine behavior.
 
 ---
 
 ## 2. Goal
 
-Extend the Institution Admin Groups experience with:
-
-1. a production-quality **Create Group** flow backed by:
+Extend the delivered Group Detail experience with safe Institution Admin lifecycle actions:
 
 ```text
-POST /api/v1/institution/groups
+PATCH /api/v1/institution/groups/{group}
+POST  /api/v1/institution/groups/{group}/archive
 ```
 
-2. a production-quality **Group Detail** screen backed by:
+The task must:
 
-```text
-GET /api/v1/institution/groups/{group}
-```
-
-3. navigation from the delivered S04-FE-001 Group list to create/detail routes.
-
-This task does not implement Group edit/archive or membership management.
+- edit only active Groups;
+- archive active Groups with confirmation;
+- make archived Groups read-only;
+- preserve backend lifecycle/tenant authority;
+- avoid optimistic authoritative state;
+- avoid automatic mutation replay;
+- reconcile mutation uncertainty and lifecycle races through authoritative Group Detail GET;
+- prevent stale mutation completions from replacing newer session/target/detail state.
 
 ---
 
@@ -46,522 +46,151 @@ This task does not implement Group edit/archive or membership management.
 
 ### Included
 
-- Add canonical Institution Admin routes:
-  - `/institution-admin/groups/new`
-  - `/institution-admin/groups/:groupId`
-- Add strict route/path helpers and route classification for Group targets.
-- Add `Create Group` entry points to the delivered Group list.
-- Make existing Group list rows open Group Detail accessibly.
-- Implement controlled Create Group form/domain/state/controller/data/repository flow.
-- Implement exact create request serialization.
-- Implement strict Create Group success/error parsing and uncertain-outcome handling.
-- Implement safe `Review recent groups` recovery after uncertain create outcome.
-- Implement Group Detail DTO/data/repository/controller/state/screen.
-- Reuse the strict Group model/DTO delivered by S04-FE-001.
-- Preserve normal retained Group-list query state across create/detail navigation.
-- Add narrow Group-list stale/reload integration for confirmed create.
-- Add focused deterministic tests and directly affected router/shell/list regressions.
+- Add `Edit` and `Archive Group` actions to confirmed active Group Detail.
+- Add read-only archived Group Detail indication.
+- Implement modal edit dialog.
+- Implement modal archive confirmation.
+- Implement exact changed-fields-only partial PATCH.
+- Detect normalized client-side no-op and send no PATCH.
+- Implement archive POST with no query and zero request-body bytes.
+- Add strict mutation DTO, repository, remote data source, action controller/state.
+- Add stable frontend `business_conflict` machine code if absent.
+- Parse exact mutation success/error envelopes.
+- Reconcile edit `409 business_conflict`.
+- Reconcile uncertain update/archive outcomes through one authoritative Group Detail GET.
+- Reconcile mutation `404` to the existing privacy-safe Detail not-found state.
+- Discard stale confirmed Detail when reconciliation cannot establish current server state.
+- Mark Group-list data stale only when required, preserving retained query state.
+- Preserve focus/keyboard/dialog/accessibility/session/tenant/stale-async correctness.
+- Add focused deterministic tests.
 
 ### Non-goals
 
 Do **not** implement:
 
-- Group edit;
-- Group archive;
-- archive confirmation;
-- Group reactivation;
-- Teacher membership list/add/remove;
-- Student membership list/add/remove;
+- Group reactivation/restore;
+- hard delete;
+- separate Group edit route;
+- route changes;
+- Group create behavior changes except compatibility regression;
+- Teacher membership management;
+- Student membership management;
 - Parent–Student relationships;
-- optimistic insertion into Group list;
-- optimistic Group counts;
-- automatic replay/retry of Group creation;
-- inference of create success from Group name/search results;
-- client-side Group-name uniqueness;
-- Institution Dashboard invalidation for Group create;
-- Group metrics on Institution Dashboard;
+- membership-count editing;
+- client-generated `status`, `archived_at`, or `updated_at`;
+- optimistic Group Detail lifecycle mutation;
+- optimistic Group-list row/order/pagination/count mutation;
+- automatic PATCH replay;
+- automatic archive POST replay;
+- Idempotency-Key;
+- Institution Dashboard invalidation;
 - backend/schema/API changes;
-- dependency/package changes;
-- platform-file changes;
-- a second router, API client, state framework, or cache architecture;
-- unrelated refactors of User create/detail/list code.
+- package/dependency/platform changes;
+- generic mutation infrastructure spanning unrelated features;
+- refactor of Institution User action code.
 
 ---
 
 ## 4. Current Implementation Context
 
-S04-FE-001 establishes the Group list, strict Group resource DTO/domain model, list query/pagination flow, list controller/state, list screen, Groups route, and Groups shell destination.
+Implementation starts only after S04-FE-002 is delivered.
 
-Extend the established Institution Admin feature:
+Reuse the **delivered** Group ownership boundaries instead of creating parallel state:
 
 ```text
-frontend/lib/features/institution_admin/
-  application/
-  data/
-  domain/
-  presentation/
+InstitutionGroup
+strict Group DTO
+Group Detail repository/controller/state/screen
+Group-list retained query + stale/reload owner
+Group route/session key conventions
 ```
 
-Reuse existing patterns only where they own the same responsibility:
+Use the established local Institution User mutation pattern where responsibilities match:
 
-- Institution User create flow:
-  - controlled form;
-  - strict mutation success parsing;
-  - exact definite-error envelope recognition;
-  - uncertain mutation outcome;
-  - session/operation ownership;
-  - success effect from published controller state;
-- Institution User detail flow:
-  - autoDispose family;
-  - canonical local target guard;
-  - exact target/response identity;
-  - refreshing state;
-  - privacy-safe 404 handling;
-  - retry classification;
-  - session reconciliation;
-- Institution Admin router/shell conventions;
-- configured Dio client and shared failure/session infrastructure;
-- Institution Admin UTC presentation convention.
+```text
+Detail Screen
+  -> Action Controller / State
+  -> Mutation Repository
+  -> Mutation Remote Data Source
+  -> configured Dio
+```
 
-Do not refactor unrelated User code merely to share superficial implementation.
+Relevant existing behavior pattern:
+
+- controlled edit dialog;
+- action family keyed by route resource ID;
+- exact selected-object/session/target ownership;
+- immutable submitted request snapshot;
+- strict mutation success parsing;
+- exact definite-error recognition;
+- unknown mutation outcome -> authoritative detail read;
+- safe Detail replacement/not-found hooks;
+- list retained query + stale-session marker;
+- focus restoration only for current controls.
+
+Do not copy User-specific business behavior or create a cross-feature generic action framework.
 
 ---
 
-# 5. Exact Implementation Contract
+# 5. Exact Backend Contract Consumed by Frontend
 
-## 5.1 Route names, paths, registries, and order
+## 5.1 Group lifecycle
 
-Add exact route names:
-
-```text
-AppRouteNames.institutionAdminGroupCreate =
-    institution-admin-group-create
-
-AppRouteNames.institutionAdminGroupDetail =
-    institution-admin-group-detail
-```
-
-Add exact path constants:
+Machine states:
 
 ```text
-AppRoutePaths.institutionAdminGroupCreateSegment =
-    new
-
-AppRoutePaths.institutionAdminGroupIdParameter =
-    groupId
-
-AppRoutePaths.institutionAdminGroupCreate =
-    /institution-admin/groups/new
-
-AppRoutePaths.institutionAdminGroupDetail =
-    /institution-admin/groups/:groupId
+active
+archived
 ```
 
-The Group list route remains:
+Frontend presentation:
 
 ```text
-/institution-admin/groups
+active:
+  Edit
+  Archive Group
+
+archived:
+  no Edit
+  no Archive Group
+  no Reactivate
+  no Restore
+  no Delete
+
+  Archived groups are read-only.
 ```
 
-### Protected / approved location registries
+Backend remains authoritative when displayed active state becomes stale.
 
-Update the established router registries exactly:
-
-1. Add these route templates exactly once to `AppRoutePaths.protected`:
-
-```text
-institutionAdminGroupCreate
-institutionAdminGroupDetail
-```
-
-2. Do not duplicate them separately in `AppRoutePaths.all`; `all` remains composed from `auth + protected`.
-
-3. Do **not** add create/detail to `institutionAdminPrimaryDestinations`. Only the Groups list is a primary navigation destination.
-
-4. Add the create path to the Institution Admin static-approved location collection.
-
-5. Add Group Detail to `isInstitutionAdminApprovedLocation(...)` through the strict dynamic Group Detail helper.
-
-6. Keep route names and route paths globally unique.
-
-### Strict Group UUID
-
-Use the same canonical hyphenated UUID lexical policy as the delivered Institution User detail route:
-
-```text
-8-4-4-4-12 hexadecimal groups
-case-insensitive hexadecimal
-no leading/trailing whitespace
-no slash
-no encoded path manipulation
-no query/fragment text
-```
-
-Add helpers:
-
-```text
-isInstitutionAdminGroupCreatePath(path)
-isInstitutionAdminGroupDetailPath(path)
-institutionAdminGroupDetailLocation(groupId)
-```
-
-`isInstitutionAdminGroupDetailPath(...)`:
-
-- requires the exact `/institution-admin/groups/` prefix;
-- excludes the static `new` segment;
-- accepts one segment only;
-- requires a canonical hyphenated UUID;
-- does not trim input.
-
-`institutionAdminGroupDetailLocation(groupId)`:
-
-- validates before building;
-- throws `ArgumentError` for malformed/noncanonical IDs;
-- never accepts `new`;
-- URI-encodes the already validated path segment.
-
-### GoRouter declarations
-
-Add exactly one create route and one detail route inside the **existing Institution Admin `ShellRoute`**.
-
-Order:
-
-```text
-/institution-admin/groups
-/institution-admin/groups/new
-/institution-admin/groups/:groupId
-```
-
-The static create route must be declared before the dynamic detail route.
-
-Do not create another `ShellRoute`, nested router, or Groups router family.
-
-### Group Detail direct-entry safety
-
-The real router must reject unsafe Group Detail entry before Group Detail data/controller work begins.
-
-For Group Detail:
-
-- query parameters are not allowed;
-- fragments are not allowed;
-- noncanonical path targets are not allowed.
-
-Extend the established Institution Admin redirect/builder safety pattern so:
-
-```text
-valid canonical Group Detail without query/fragment
-    -> Group Detail screen
-
-Group Detail path with query/fragment
-malformed/noncanonical Group target
-path manipulation
-    -> existing safe Institution Admin routing boundary
-    -> no Group Detail provider/data request
-```
-
-Do not invent a new error route solely for this task.
-
-### Shell mapping and titles
-
-These locations all select:
-
-```text
-InstitutionAdminShellDestination.groups
-```
-
-Locations:
-
-```text
-/institution-admin/groups
-/institution-admin/groups/new
-/institution-admin/groups/<valid UUID>
-```
-
-Shell titles:
-
-```text
-/institution-admin/groups             -> Groups
-/institution-admin/groups/new         -> Create Group
-/institution-admin/groups/<UUID>      -> Group Details
-```
+There is no Group reactivation endpoint in this Stage.
 
 ---
 
-## 5.2 Shell navigation during Group create
+## 5.2 Update endpoint
 
-The existing shell already coordinates busy state for Institution User create. Extend it narrowly for Group create.
-
-Required behavior:
+Exact endpoint:
 
 ```text
-Institution User Create route
-    -> watch only InstitutionUserCreateController busy state
-
-Institution Group Create route
-    -> watch only InstitutionGroupCreateController route-blocking state
-
-all other Institution Admin routes
-    -> do not instantiate/watch either create controller solely for navigation state
+PATCH /institution/groups/{groupId}
 ```
 
-Group create route blocks conflicting shell navigation while:
+Requirements:
 
 ```text
-submitting
-reconciling unknown outcome
-terminal unknown outcome awaiting Review recent groups
+canonical validated Group UUID
+application/json object
+no query parameters
+at least one allowed changed field
 ```
 
-Group create route allows normal shell navigation while:
+Allowed JSON keys only:
 
 ```text
-editing
-local validation failure
-server validation failure
-other definite failure
+name
+level
+subject_direction
+description
 ```
-
-Sign-out/session reconciliation remains governed by existing auth/session behavior and must not be blocked by this feature.
-
-Normal back/pop on the Group Create route is also blocked while the route-blocking create state above is active.
-
----
-
-## 5.3 S04-FE-001 Group list integration
-
-After this task, the Group list adds:
-
-### Header action
-
-```text
-Create Group
-```
-
-Navigate by named route to:
-
-```text
-/institution-admin/groups/new
-```
-
-### Global-empty action
-
-When the authoritative unfiltered Group list is globally empty, show:
-
-```text
-Create Group
-```
-
-Filtered/search empty remains filter-oriented and keeps:
-
-```text
-Clear filters
-```
-
-Do not substitute a create-specific empty state for filtered results.
-
-### Row-to-detail navigation
-
-Each existing Group row exposes accessible detail navigation to:
-
-```text
-/institution-admin/groups/<group.id>
-```
-
-Use the established Institution Admin table convention:
-
-- the primary visible Group name exposes an accessible action/label;
-- row activation opens Group Detail;
-- keyboard users can activate it;
-- assistive technology can discover the detail action.
-
-Do not add:
-
-```text
-Edit
-Archive
-Manage teachers
-Manage students
-```
-
-to Group list rows.
-
-### Normal retained-query behavior
-
-Opening Create or Detail does not clear normal retained S04-FE-001 state.
-
-For the same eligible session, preserve:
-
-```text
-search draft
-committed search
-status
-page
-perPage
-sort
-direction
-```
-
-Normal Cancel / Back to Groups restores that retained query and performs the normal authoritative Group-list load.
-
-The uncertain-create recovery in Section 5.12 is the only deliberate exception.
-
----
-
-## 5.4 Create Group form domain and normalization
-
-Fields, exact order:
-
-```text
-Name
-Level
-Subject direction
-Description
-```
-
-All text drafts preserve exactly what the user typed until request construction.
-
-Do not silently rewrite case, punctuation, internal whitespace, or internal newlines.
-
-### Length measurement
-
-All defined string maximums are measured in:
-
-```text
-Unicode code points
-Dart: value.runes.length
-```
-
-Do not use UTF-8 byte length or implicit UTF-16 code-unit length as the validation contract.
-
-### Name
-
-Rules:
-
-```text
-required
-normalize for request = trim leading/trailing whitespace
-normalized value must be non-empty
-max = 160 Unicode code points after trim
-```
-
-Do not lowercase/title-case/collapse internal whitespace.
-
-Safe local messages:
-
-```text
-Group name is required.
-Group name must be 160 characters or fewer.
-```
-
-### Level
-
-Rules:
-
-```text
-optional
-exact UI draft "" -> JSON null
-non-empty draft -> trim for request
-spaces-only non-empty draft -> local error
-max = 100 Unicode code points after trim
-```
-
-Safe local messages:
-
-```text
-Level must not contain only spaces.
-Level must be 100 characters or fewer.
-```
-
-### Subject direction
-
-Rules:
-
-```text
-optional
-exact UI draft "" -> JSON null
-non-empty draft -> trim for request
-spaces-only non-empty draft -> local error
-max = 160 Unicode code points after trim
-```
-
-Safe local messages:
-
-```text
-Subject direction must not contain only spaces.
-Subject direction must be 160 characters or fewer.
-```
-
-### Description
-
-Rules:
-
-```text
-optional multiline
-no client-defined maximum
-exact UI draft "" -> JSON null
-non-empty draft -> trim only leading/trailing whitespace
-spaces-only non-empty draft -> local error
-preserve internal newlines
-preserve internal whitespace
-preserve punctuation/case
-```
-
-Safe local message:
-
-```text
-Description must not contain only spaces.
-```
-
-Description keyboard behavior:
-
-- Enter inserts a newline;
-- Enter in Description does not submit;
-- submit is performed by explicit Create Group action or an equivalent dedicated form-submit shortcut that cannot conflict with multiline editing.
-
-### Input-limit presentation
-
-Do not truncate draft input automatically to the backend maximum.
-
-When over a defined maximum:
-
-- retain the user's draft;
-- show the local validation error;
-- do not submit.
-
-### Duplicate names
-
-Do not perform client-side uniqueness checks.
-
-Multiple Groups with the same normalized name are valid.
-
----
-
-## 5.5 Exact Create Group request
-
-Use exactly:
-
-```text
-POST /institution/groups
-```
-
-The configured Dio client owns `/api/v1`, authenticated headers, JSON content type, and standard transport configuration.
-
-No query parameters.
-
-Send exactly one JSON object with exactly these four keys on every create request:
-
-```json
-{
-  "name": "normalized required string",
-  "level": null,
-  "subject_direction": null,
-  "description": null
-}
-```
-
-Filled optional fields replace `null` with their normalized string.
-
-Do not omit any of the four allowed keys.
 
 Do not send:
 
@@ -575,185 +204,413 @@ students_count
 archived_at
 created_at
 updated_at
-unknown key
+any unknown key
 ```
 
-Do not send:
+The backend:
 
-```text
-FormData
-raw JSON string
-array
-scalar
-empty object
-query parameter
-tenant header/selector
-```
+- scopes Group through authenticated institution;
+- locks the fresh Group row;
+- rejects archived Group before update/no-op comparison;
+- applies only supplied fields;
+- performs no SQL UPDATE when supplied normalized values are already current;
+- returns a fresh exact Group resource with membership counts.
 
-Transport must remain:
-
-```text
-Content-Type: application/json
-```
-
-No `Idempotency-Key` exists for this endpoint.
-
-One user submit produces at most one POST.
+Frontend must not reproduce backend row-locking or tenant resolution.
 
 ---
 
-## 5.6 Create screen UX and state
+## 5.3 Archive endpoint
 
-Route:
+Exact endpoint:
 
 ```text
-/institution-admin/groups/new
+POST /institution/groups/{groupId}/archive
 ```
 
-Heading:
+Frontend sends:
 
 ```text
-Create Group
+no query parameters
+zero request-body bytes
+```
+
+Call the configured Dio client without a `data` argument.
+
+Do not send even an empty JSON object from this frontend flow:
+
+```text
+data: {}
+data: null
+"{}"
+JSON null
+FormData
+status
+reason
+timestamp
+force
+tenant/institution ID
+```
+
+Backend may accept an empty JSON object as an API shape, but this frontend contract deliberately uses zero body bytes.
+
+Backend lifecycle:
+
+```text
+active
+  -> archived
+  -> archived_at = authoritative server time
+  -> updated_at advances
+
+archived
+  -> archived
+  -> idempotent HTTP 200
+  -> archived_at preserved
+  -> updated_at preserved
+```
+
+Archive preserves memberships/history.
+
+---
+
+# 6. Edit Domain and UX
+
+## 6.1 Opening Edit
+
+Edit is a modal dialog on the existing Group Detail route.
+
+No new route.
+
+Dialog title:
+
+```text
+Edit Group
+```
+
+Fields, exact order:
+
+```text
+Name
+Level
+Subject direction
+Description
 ```
 
 Actions:
 
 ```text
 Cancel
-Create Group
+Save changes
 ```
 
-### Editing / validation
-
-- controlled deterministic form state;
-- predictable focus order;
-- local validation before transport;
-- first invalid field receives focus;
-- field errors clear/revalidate according to existing controlled-form conventions;
-- duplicate submit is suppressed.
-
-### Cancel
-
-Cancel is available only when Group create route is not in a route-blocking state.
-
-Cancel:
-
-1. clears route-local create state;
-2. does not invalidate Group list;
-3. preserves normal retained Group-list query;
-4. navigates to `/institution-admin/groups`.
-
-No unsaved-changes confirmation is required.
-
-### Submitting
-
-While POST is in flight:
-
-- fields disabled;
-- Cancel disabled;
-- Create disabled;
-- conflicting shell navigation disabled;
-- normal back/pop blocked;
-- duplicate submit ignored;
-- visible + semantic progress:
+`beginEdit(selectedGroup)` succeeds only when all are true:
 
 ```text
-Creating group
+Group Detail status = confirmed data
+detail target == route groupId
+detail.group is identical to selectedGroup
+selectedGroup.id matches route target
+selectedGroup.status == active
+eligible Institution Admin desktop session
+no current Group action owns the target
 ```
 
-Do not use optimistic success.
-
-### Unknown-terminal state
-
-When create outcome becomes unknown:
-
-- hide/disable the editable create form;
-- no Retry creation;
-- no Submit again;
-- no Cancel;
-- conflicting shell navigation remains disabled;
-- normal back/pop remains blocked;
-- only the safe `Review recent groups` recovery action from Section 5.12 is presented, besides auth/session-driven navigation.
+The form initializes from that exact selected confirmed Group object.
 
 ---
 
-## 5.7 Exact Create Group success response
+## 6.2 Unicode length and normalization
 
-Valid create success requires:
+Defined string maximums use Unicode code points:
 
 ```text
-HTTP 201 Created
+Dart: value.runes.length
 ```
 
-No other 2xx is valid success.
+Do not use UTF-8 byte length or UTF-16 code-unit `String.length` semantics as the contract boundary.
 
-Require exact top-level keys:
+Do not silently truncate drafts.
+
+### Name
+
+```text
+UI initial = group.name
+required
+request normalization = trim outer whitespace
+normalized non-empty
+max = 160 Unicode code points after trim
+preserve internal whitespace/case/punctuation
+never null
+```
+
+Safe messages:
+
+```text
+Group name is required.
+Group name must be 160 characters or fewer.
+```
+
+### Level
+
+```text
+UI initial = group.level ?? ''
+exact draft "" -> normalized null
+non-empty draft -> trim outer whitespace
+spaces-only non-empty draft -> local validation error
+max = 100 Unicode code points after trim
+```
+
+Safe messages:
+
+```text
+Level must not contain only spaces.
+Level must be 100 characters or fewer.
+```
+
+### Subject direction
+
+```text
+UI initial = group.subjectDirection ?? ''
+exact draft "" -> normalized null
+non-empty draft -> trim outer whitespace
+spaces-only non-empty draft -> local validation error
+max = 160 Unicode code points after trim
+```
+
+Safe messages:
+
+```text
+Subject direction must not contain only spaces.
+Subject direction must be 160 characters or fewer.
+```
+
+### Description
+
+```text
+UI initial = group.description ?? ''
+multiline
+no client-defined maximum
+exact draft "" -> normalized null
+non-empty draft -> trim outer whitespace only
+spaces-only non-empty draft -> local validation error
+preserve internal whitespace/newlines/case/punctuation
+```
+
+Safe message:
+
+```text
+Description must not contain only spaces.
+```
+
+Description keyboard behavior:
+
+```text
+Enter inserts newline
+Enter does not submit
+```
+
+Duplicate Group names are valid; do not perform uniqueness checks.
+
+---
+
+## 6.3 Changed-fields-only request
+
+After local validation, compare normalized form values to the exact selected confirmed Group.
+
+Create an immutable request containing only fields whose normalized values differ.
+
+Example:
+
+```json
+{
+  "name": "10-B"
+}
+```
+
+Clear nullable field:
+
+```json
+{
+  "description": null
+}
+```
+
+A changed request may contain 1..4 allowed keys.
+
+Never intentionally send `{}`.
+
+The request object must:
+
+- freeze changed fields;
+- reject unsupported keys;
+- expose `isEmpty`;
+- serialize exactly the changed map;
+- support comparing only submitted changed fields against an authoritative Group during success/reconciliation.
+
+---
+
+## 6.4 Local no-op
+
+If all normalized form values equal the selected Group:
+
+```text
+zero PATCH
+zero reconciliation GET
+zero Group-list invalidation
+dialog remains open
+```
+
+Show exact live-region form message:
+
+```text
+No group changes to save.
+```
+
+When any edit field changes after that message:
+
+- clear the no-op form message;
+- clear only the changed field's stale field error;
+- keep other applicable errors.
+
+Client no-op is not an authoritative lifecycle refresh.
+
+If another actor archived the Group after Detail was loaded, a local no-op does not issue a server request merely to detect that race. The next authoritative Detail refresh or a later non-empty mutation reveals current backend state.
+
+---
+
+# 7. Mutation Transport / DTO Contract
+
+## 7.1 Common success envelope
+
+Update and Archive use the same exact structural envelope:
 
 ```json
 {
   "data": {
     "...": "exact S04-FE-001 Group resource"
   },
-  "message": "Group created successfully."
+  "message": "endpoint-specific exact message"
 }
 ```
 
-No unknown top-level key is allowed.
-
-Require exact message:
+Top-level keys must be exactly:
 
 ```text
-Group created successfully.
+data
+message
 ```
 
-Parse `data` through the strict S04-FE-001 Group DTO.
+No unknown/missing keys.
 
-The returned Group must satisfy the normalized request snapshot:
+`data` uses the delivered strict Group DTO.
+
+Valid HTTP success:
 
 ```text
-returned.name == request.name
-returned.level == request.level
-returned.subject_direction == request.subject_direction
-returned.description == request.description
+exactly 200 OK
 ```
 
-And exact create lifecycle invariants:
+Any other 2xx is not confirmed success.
+
+Configure mutation requests with the existing mutation-safe Dio convention:
 
 ```text
-status == active
-teachers_count == 0
-students_count == 0
-archived_at == null
+followRedirects = false
 ```
 
-The strict Group DTO already owns:
-
-- exact Group keys;
-- canonical UUID;
-- UTC `Z` timestamps;
-- count types/ranges;
-- active/archive invariant.
-
-Any of these makes create outcome **unknown**, not confirmed failure/success:
-
-```text
-2xx other than 201
-malformed success envelope
-unknown/missing success key
-wrong success message
-malformed Group resource
-request/response snapshot mismatch
-unexpected Group lifecycle/count values
-response transform/parsing failure
-```
+where the delivered project pattern uses it.
 
 ---
 
-## 5.8 Exact definite-error envelope for Create Group
+## 7.2 Update success validation
 
-A failed POST is definite only when the response has both an allowed HTTP status/code pair and an exact error envelope.
+Exact success message:
 
-Allowed exact error envelope:
+```text
+Group updated successfully.
+```
+
+Confirmed direct update success requires all:
+
+```text
+HTTP 200
+exact {data,message}
+exact message
+strict Group resource
+
+routeTarget.id == selected.id == returned.id
+UUID comparison case-insensitive
+
+selected.createdAt == returned.createdAt
+
+returned.status == active
+returned.archivedAt == null
+
+every field included in immutable PATCH request
+    == returned authoritative value
+```
+
+Do **not** require these to equal the pre-request selected object:
+
+```text
+fields not submitted
+teachersCount
+studentsCount
+updatedAt
+```
+
+Another serialized backend operation may have changed unrelated mutable/current values before this mutation acquired the row lock.
+
+Any malformed envelope/resource/message/status, immutable-identity mismatch, target mismatch, lifecycle mismatch, or submitted-field mismatch means:
+
+```text
+InstitutionGroupMutationOutcomeUnknownException
+```
+
+or equivalent typed unknown outcome.
+
+It is not direct confirmed success.
+
+---
+
+## 7.3 Archive success validation
+
+Exact success message:
+
+```text
+Group archived successfully.
+```
+
+Confirmed direct archive success requires all:
+
+```text
+HTTP 200
+exact {data,message}
+exact message
+strict Group resource
+
+routeTarget.id == selected.id == returned.id
+UUID comparison case-insensitive
+
+selected.createdAt == returned.createdAt
+
+returned.status == archived
+returned.archivedAt != null
+```
+
+Do not require returned `archivedAt` or `updatedAt` to differ from the selected Group because the backend archive endpoint is idempotent.
+
+A stale active frontend can receive the already-archived backend resource from a concurrent earlier archive. That exact 200 is a valid confirmed archive request result.
+
+Any malformed/mismatched result becomes unknown outcome.
+
+---
+
+# 8. Exact Mutation Error Envelope
+
+A mutation response may be treated as a **definite failure** only when both HTTP status/code pairing and exact envelope are valid.
+
+Exact structural envelope:
 
 ```json
 {
@@ -789,15 +646,19 @@ request_id, if present = non-empty string
 errors = JSON object
 ```
 
-Each `errors` entry, when present:
+Every `errors` entry when present:
 
 ```text
 key = string
 value = non-empty JSON array
-every item = non-empty string
+each item = non-empty string
 ```
 
-For definite non-422 responses, `errors` must be empty.
+For definite non-422 failures:
+
+```text
+errors must be empty
+```
 
 Allowed status/code pairs:
 
@@ -809,14 +670,28 @@ Allowed status/code pairs:
 403 -> user_inactive
 403 -> institution_inactive
 
+404 -> resource_not_found
+
+409 -> business_conflict
+
 422 -> validation_failed
 
 429 -> rate_limited
 ```
 
-Any other status/code pairing or malformed error envelope is unknown outcome after dispatch.
+Add/reuse exact frontend machine constant:
 
-### 422 safe mapping
+```text
+ApiErrorCodes.businessConflict = business_conflict
+```
+
+Do not branch on backend human-readable `message`.
+
+Any malformed envelope, unsupported status/code pair, or unexpected HTTP failure status is an uncertain mutation outcome after dispatch.
+
+---
+
+## 8.1 Edit 422 mapping
 
 Known field keys:
 
@@ -827,7 +702,7 @@ subject_direction
 description
 ```
 
-Map them only to safe local text:
+Safe messages:
 
 ```text
 name              -> Review the group name.
@@ -836,262 +711,389 @@ subject_direction -> Review the subject direction.
 description       -> Review the description.
 ```
 
-Never branch on or display raw backend validation strings.
-
-Protocol/unknown keys include, for example:
+Protocol/unknown keys include:
 
 ```text
 body
 query key
-unknown/protected key
+protected key
+unknown key
 ```
 
 Rules:
 
-- known field errors -> show corresponding safe field messages;
-- any protocol/unknown key -> also show form-level:
+- map all known fields to safe local field errors;
+- if **any** protocol/unknown key exists, also show:
 
 ```text
-The group could not be created.
+The update request did not match the server contract.
 ```
 
-- empty/unusable 422 field-error set -> show the same form-level message.
+- empty/unusable 422 field-error set shows the same form-level message;
+- never render raw backend field-error strings.
 
-### Other definite safe feedback
+---
+
+## 8.2 Safe definite messages
+
+### Edit
 
 ```text
 forbidden:
-You do not have permission to create groups.
+You do not have permission to change this group.
 
 rate_limited:
 Too many requests. Wait before trying again.
 
-other definite safe form failure:
-The group could not be created.
+other definite edit failure:
+The group update was not accepted.
 ```
 
-Session-authority errors use Section 5.11.
+### Archive
 
-A definite create failure does not invalidate Group list state.
+```text
+forbidden:
+You do not have permission to archive this group.
+
+validation_failed:
+The archive request did not match the server contract.
+
+rate_limited:
+Too many requests. Wait before trying again.
+
+other definite archive failure:
+The archive request was not accepted.
+```
+
+`404`, `409`, and session failures use dedicated flows below.
 
 ---
 
-## 5.9 Unknown create outcome
+# 9. Action State / Ownership
 
-Group create is non-idempotent and duplicate Group names are allowed.
+Implement a focused Group action controller/state family keyed by route `groupId`.
 
-Never automatically replay POST.
-
-Treat outcome as unknown when dispatch may have reached the server but commit success cannot be proven, including:
+One operation owns:
 
 ```text
-connection interruption after dispatch
-connection error with ambiguous dispatch state
-timeout
-Dio cancellation while the operation still owns publication
-HTTP 5xx
-unexpected HTTP status
-unexpected 2xx other than 201
-malformed/unexpected error envelope
-malformed 201 success envelope
-malformed/mismatched Group success resource
-response transform/parsing failure
-unexpected exception after dispatch
-```
-
-Do not search for a same-name Group to infer success.
-
-Do not infer success from:
-
-```text
-name
-created_at proximity
-list count
-one matching row
-```
-
-Unknown feedback:
-
-```text
-Group creation could not be confirmed. The request may have succeeded. Review recent groups before creating another group.
-```
-
-Expose exactly one recovery action:
-
-```text
-Review recent groups
-```
-
-No retry-submit action exists in this terminal state.
-
----
-
-## 5.10 Create confirmed-success publication and navigation
-
-On a current, owned, strictly confirmed 201 result:
-
-1. publish create-controller state containing the confirmed `groupId`;
-2. mark Group-list authoritative rows stale according to Section 5.13;
-3. preserve the normal retained Group-list query/search store;
-4. do **not** invalidate Institution Dashboard;
-5. UI handles the confirmed-success state in a guarded post-frame/effect step:
-   - clear visible create text controllers;
-   - show success feedback:
-
-```text
-Group created successfully.
-```
-
-   - navigate by named route to:
-
-```text
-/institution-admin/groups/<returned Group UUID>
-```
-
-6. the Group Detail route performs its normal authoritative GET;
-7. do not seed Group Detail from the POST resource;
-8. route exit/autoDispose clears the create provider after the success effect has consumed `groupId`.
-
-Do not clear/reset the confirmed-success state before the current route effect can consume its `groupId`.
-
-A stale success completion must not:
-
-```text
-show success
-clear a newer form
-navigate
-mark another session's state
-```
-
----
-
-## 5.11 Create session and async ownership
-
-Bind a create operation to:
-
-```text
-authenticated Institution Admin user ID
+eligible Group Detail session key
+authenticated user ID
 exact AuthUser object instance identity
 institution ID
 desktop eligibility
-immutable normalized request snapshot
+route Group UUID
+identity of exact selected confirmed InstitutionGroup object
+selected.createdAt
+operation kind = edit | archive
+immutable edit request snapshot when submitted
 operation generation
-current create-route ownership
+focus-restoration key
 ```
 
-Eligibility:
+The action controller watches the delivered Group Detail owner.
+
+If the Detail controller replaces the current Group object with another authoritative object while an action is still bound to the previous selected object:
 
 ```text
-session authenticated
-user exists
-role = institution_admin
-user active
-must_change_password = false
-user.institution_id non-empty
-user.institution exists
-user.institution.id == user.institution_id
-institution active
-desktop surface
+invalidate the stale operation
+close stale dialog
+do not publish its later completion
 ```
 
-Reject stale publication after:
+Publication requires exact current ownership.
+
+Reject stale completion after:
 
 ```text
-route ownership lost
-logout
 session/bootstrap replacement
-same-role account switch
-cross-role switch
+account/user-instance change
 institution change
-user inactive
+role eligibility loss
+user/institution inactive
 must-change-password transition
-institution inactive
-device/surface eligibility loss
-controller dispose
-superseding operation generation
+desktop eligibility loss
+route target change
+detail selected-object replacement
+provider/controller dispose
+newer operation generation
 ```
 
-Actual network cancellation is not required.
-
-Session-authority server responses:
+A stale completion must not:
 
 ```text
-authentication_required
-password_change_required
-user_inactive
-institution_inactive
+replace newer Detail
+change list stale state for another session
+close/reopen wrong dialog
+show feedback in later session
+restore obsolete focus
+navigate
 ```
 
-must:
-
-- clear create publication authority;
-- clear protected create state;
-- invalidate operation generation;
-- use the established auth/session invalidation/bootstrap behavior;
-- never show stale mutation success/failure in a later session.
-
-`authentication_required` follows the existing central invalidation path; other authority failures bootstrap/reconcile as established by current Institution Admin flows.
+Actual Dio cancellation is not required.
 
 ---
 
-## 5.12 Unknown-outcome recovery: Review recent groups
+# 10. Dialog / Action Transition Matrix
 
-Normal retained Group-list query is deliberately overridden only for this recovery action.
+## 10.1 Detail action availability
 
-When the current create state is unknown and the user selects:
+Actions are enabled only when:
 
 ```text
-Review recent groups
+Detail = confirmed data
+Group = active
+action controller has no open/busy operation
 ```
 
-perform exactly:
+When any edit/archive dialog is open or mutation/reconciliation is active:
 
 ```text
-searchDraft = ''
-search = null
-status = active
-page = 1
-perPage = preserve the user's retained page-size choice
-sort = created_at
-direction = desc
+Detail Refresh disabled
+Edit disabled
+Archive disabled
+no second Group action dialog
+```
+
+Archived Detail has no mutation actions.
+
+---
+
+## 10.2 Edit dialog before submit
+
+Allowed:
+
+```text
+Cancel
+Escape/back dismissal
+normal dialog dismissal
+```
+
+Cancel/dismiss:
+
+- discards edit draft/action;
+- sends no mutation;
+- restores focus to `Edit` only if the same current active Group/detail/session still owns that control.
+
+---
+
+## 10.3 Edit local/definite recoverable failures
+
+For:
+
+```text
+local validation
+local no-op
+422 validation_failed
+403 forbidden
+429 rate_limited
+other non-session definite edit failure
+```
+
+the Edit dialog remains open.
+
+After server response:
+
+- fields become editable again;
+- Save becomes available again;
+- draft is preserved;
+- no automatic PATCH retry;
+- a later Save is a new explicit user submit.
+
+Focus:
+
+```text
+field errors -> first invalid field
+form/protocol-only feedback -> feedback region
+```
+
+`403`/`429`/general form feedback is announced and dialog stays open.
+
+---
+
+## 10.4 Edit terminal/stale paths
+
+These close the Edit dialog after the state transition/reconciliation settles:
+
+```text
+confirmed direct success
+409 business_conflict
+404 resource_not_found
+session authority loss
+unknown outcome after reconciliation
+selected Detail object replacement
+route/session ownership loss
+```
+
+Do not restore Edit focus when:
+
+```text
+Detail no longer has confirmed active Group
+action/session/target ownership is lost
+```
+
+---
+
+## 10.5 Archive confirmation before submit
+
+Dialog:
+
+```text
+Archive group?
+```
+
+Show current Group name.
+
+Exact explanation:
+
+```text
+Archiving makes this group read-only for future management. Historical relationships and learning records are preserved. Groups cannot be reactivated in the current MVP.
+```
+
+Actions:
+
+```text
+Cancel
+Archive Group
+```
+
+Before submit:
+
+```text
+Cancel allowed
+Escape/back allowed
+barrier dismissal allowed
+no mutation until explicit Archive Group
+```
+
+Cancel restores Archive focus only if that same active Group/control is still current.
+
+---
+
+## 10.6 Archive busy / definite result
+
+While POST or reconciliation is active:
+
+```text
+Cancel disabled
+Archive disabled
+duplicate confirmation suppressed
+dialog dismissal blocked
+Detail Refresh/Edit/Archive disabled
+```
+
+Semantic progress:
+
+```text
+Archiving group
+Checking current server state
+```
+
+For definite non-session failures:
+
+```text
+403
+422
+429
+other recognized non-404/non-409 definite failure
+```
+
+after response:
+
+- close archive dialog;
+- keep Detail only if still confirmed current active Group;
+- show safe feedback on Detail;
+- restore Archive focus only if active/current action still exists;
+- do not auto-retry.
+
+For:
+
+```text
+404
+409
+session failure
+unknown result
+```
+
+close dialog as reconciliation/transition settles and never restore an obsolete Archive button.
+
+---
+
+# 11. Group Detail Mutation Hooks
+
+Extend the **delivered S04-FE-002 Group Detail controller** narrowly.
+
+Required behavior equivalent to:
+
+```text
+replaceFromMutation(selectedGroup, returnedGroup)
+markNotFoundFromMutation(selectedGroup)
+markErrorFromMutation(selectedGroup, failure)
+```
+
+Actual method names may follow the delivered local naming convention.
+
+All hooks require:
+
+```text
+current route target matches
+current Detail Group is identical to selectedGroup
+selected Group ID matches target
+current eligible session still matches
+```
+
+### `replaceFromMutation`
+
+Additionally require:
+
+```text
+returned Group ID matches target
 ```
 
 Then:
 
-1. mark Group-list authoritative rows stale;
-2. store the recovery query for the same current session;
-3. clear route-local create editing state only after recovery intent is committed;
-4. navigate to `/institution-admin/groups`;
-5. Group list performs an authoritative GET using the recovery query;
-6. show one-time accessible warning on the Group list:
-
 ```text
-Creation result remains unconfirmed. Review recent active groups before creating another group.
+Detail -> confirmed data(returned authoritative Group)
 ```
 
-This recovery does **not** prove create success.
+### `markNotFoundFromMutation`
 
-Do not automatically select/open any candidate Group.
+```text
+invalidate current Detail read generations
+discard Group
+Detail -> not_found
+```
 
-After arriving on Group list, normal Group-list interactions resume. If the user intentionally chooses Create Group again, that is a new explicit operation.
+### `markErrorFromMutation`
 
-Session change clears this recovery warning/query ownership in the same way as other retained Group-list state.
+```text
+invalidate current Detail read generations
+discard Group
+Detail -> error(current-state unavailable)
+```
+
+Do not create a second Group Detail cache.
 
 ---
 
-## 5.13 Group-list stale/invalidation integration
+# 12. Group-list Stale Integration
 
-S04-FE-002 may narrowly extend the delivered S04-FE-001 Group-list controller/state or retained-state owner.
+Reuse the **delivered S04-FE-002 Group-list retained-state stale API** or its actual equivalent.
 
-### Confirmed create
+Do not create another Group-list cache/stale store.
 
-Mark current-session Group-list authoritative rows stale.
+Convert the current Detail session key to the existing Group-list session-key convention:
 
-Preserve:
+```text
+same user ID
+same exact user object instance identity
+same institution ID
+```
+
+Preserve retained:
 
 ```text
 search draft
-committed query
+committed search
 status
 page
 perPage
@@ -1099,432 +1101,550 @@ sort
 direction
 ```
 
-Do not treat previously loaded rows as authoritative after the create.
-
-Next Groups presentation performs authoritative GET for the retained query.
-
-### Unknown create
-
-Use only the recovery behavior from Section 5.12.
-
-### Cancel / definite failure
-
-Do not invalidate Group list.
-
-Preserve normal retained query unchanged.
-
-### Forbidden shortcuts
-
-Do not:
+Never optimistically patch:
 
 ```text
-optimistically insert returned Group into the list
-increment pagination total locally
-change server ordering locally
-seed list from POST result
-seed detail from POST result
-invalidate/refresh Institution Dashboard
+row values
+status
+ordering
+pagination total
+membership counts
 ```
 
-If FE-001 names the retained/stale APIs differently, extend that delivered owner rather than creating a parallel Group-list cache.
+### Exact stale timing
+
+#### Direct confirmed update/archive success
+
+After strict success validation and current ownership:
+
+```text
+mark list stale
+```
+
+Then replace Detail.
+
+#### Update/archive unknown outcome
+
+Before authoritative reconciliation GET:
+
+```text
+mark list stale
+```
+
+because mutation may have committed.
+
+#### Exact `409 business_conflict`
+
+Before authoritative reconciliation GET:
+
+```text
+mark list stale
+```
+
+because displayed Detail may be stale.
+
+#### Mutation `404`
+
+```text
+mark list stale
+Detail -> not_found
+```
+
+#### Local no-op / local validation
+
+```text
+do not mark stale
+```
+
+#### Definite `422` / `403` / `429`
+
+```text
+do not mark stale
+```
+
+unless a later required reconciliation actually reveals current-state divergence.
+
+Invalidate the route-scoped Group-list provider only through the delivered stale/reload convention needed to ensure the next Groups presentation performs an authoritative load.
+
+Do not invalidate Institution Dashboard.
 
 ---
 
-# 6. Group Detail
+# 13. Edit Direct Success
 
-## 6.1 Exact API contract
+On strict current direct update success:
 
-Use exactly:
-
-```text
-GET /institution/groups/{groupId}
-```
-
-Path construction:
+1. validate success according to Section 7.2;
+2. mark Group list stale;
+3. replace Detail via safe selected-object mutation hook;
+4. close edit dialog;
+5. publish live-region Detail feedback:
 
 ```text
-canonical validated groupId
-Uri.encodeComponent(groupId)
+Group updated successfully.
 ```
 
-No query parameters.
+6. restore focus to `Edit` only if returned authoritative Group remains active and current.
 
-No request body/data argument.
+Do not patch Group-list row manually.
 
-Valid success requires exactly:
+If safe Detail replacement fails because ownership is stale:
 
 ```text
-HTTP 200 OK
+do not publish success feedback
+do not close/focus a newer dialog
 ```
 
-No other 2xx is valid success.
+The stale operation simply loses publication authority.
 
-Exact success envelope:
+---
 
-```json
-{
-  "data": {
-    "...": "exact S04-FE-001 Group resource"
-  }
-}
-```
+# 14. Edit `409 business_conflict`
 
-No success `message` or unknown top-level key is allowed.
-
-Parse Group through the strict S04-FE-001 Group DTO.
-
-After parsing:
+For exact:
 
 ```text
-returnedGroup.id equals requested groupId case-insensitively
+HTTP 409
+code = business_conflict
+exact error envelope
 ```
 
-Otherwise map to:
+the PATCH is a definite rejection.
+
+Do not replay PATCH.
+
+Flow:
+
+1. mark Group list stale;
+2. show busy reconciliation:
 
 ```text
-ApiFailureKind.invalidResponse
+Checking current server state
+```
+
+3. issue exactly one authoritative current Group Detail GET through the delivered Detail repository;
+4. keep the old Group visible only as explicitly non-authoritative checking context;
+5. disable all Detail mutation/refresh actions during reconciliation.
+
+### Reconciliation 200 -> archived
+
+Replace Detail with authoritative archived Group.
+
+Close edit dialog.
+
+Show:
+
+```text
+Group is archived and can no longer be edited.
+```
+
+Detail becomes read-only.
+
+Do not restore Edit focus.
+
+### Reconciliation 200 -> active
+
+Replace Detail with authoritative active Group.
+
+Close edit dialog.
+
+Show:
+
+```text
+The group update was not accepted in its current state.
+```
+
+A later edit must begin from this newly confirmed Group object.
+
+### Exact 404
+
+```text
+mark Detail not_found
+close dialog
+no stale Group remains
+```
+
+### Session failure
+
+```text
+discard old Group/action authority
+close dialog
+auth/session reconciliation
+```
+
+### Other reconciliation failure / malformed read
+
+```text
+discard old Group
+Detail -> error
+close dialog
+show:
+The group update was not accepted. Current server state is unavailable.
+```
+
+Recovery is Detail Retry / Back to Groups.
+
+Do not keep previous active Group in normal confirmed `data`.
+
+---
+
+# 15. Update Unknown Outcome
+
+Do not replay PATCH.
+
+Treat result as unknown when commit success cannot be proven, including:
+
+```text
+connection interruption/error after dispatch ambiguity
+timeout
+Dio cancellation while operation still owns publication
+HTTP 5xx
+unexpected HTTP status
+unexpected 2xx other than 200
+malformed/unexpected error envelope
+unsupported status/code pair
+malformed/mismatched 200 success
+response transform/parsing failure
+unexpected post-dispatch exception
+immutable identity mismatch
+submitted-field mismatch
+```
+
+Flow:
+
+1. retain immutable original operation snapshot;
+2. mark Group list stale;
+3. set reconciliation busy state;
+4. show:
+
+```text
+The request result could not be confirmed. Checking the current server state…
+```
+
+5. issue exactly one authoritative Group Detail GET;
+6. never replay PATCH.
+
+### Reconciliation 200
+
+Strictly validate current Group detail through delivered Detail repository.
+
+Replace Detail with current authoritative Group.
+
+Close edit dialog.
+
+Compare only the fields included in submitted PATCH.
+
+If all submitted fields match:
+
+```text
+Current server state includes your requested values, but the update result could not be confirmed.
+```
+
+If any differs:
+
+```text
+Current server state differs from your requested values. The update result remains unconfirmed.
+```
+
+If current Group is archived, Detail is read-only regardless of field comparison.
+
+Neither message is confirmed mutation success/failure.
+
+### Reconciliation exact 404
+
+```text
+Detail -> not_found
+close dialog
+```
+
+### Session failure
+
+```text
+discard old Detail/action authority
+close dialog
+auth/session reconciliation
+```
+
+### Other reconciliation failure
+
+```text
+discard old Group
+Detail -> error
+close dialog
+show:
+The update result could not be confirmed. Current server state is unavailable.
+```
+
+A later mutation may begin only after a newly confirmed Detail is loaded.
+
+---
+
+# 16. Archive Direct Success
+
+On strict current direct archive success:
+
+1. validate according to Section 7.3;
+2. mark Group list stale;
+3. replace Detail with returned authoritative archived Group;
+4. close archive dialog;
+5. remove Edit/Archive actions;
+6. show live-region feedback:
+
+```text
+Group archived successfully.
+```
+
+7. move focus to the Group Detail heading/read-only surface.
+
+Never calculate `archivedAt` locally.
+
+Do not invalidate Institution Dashboard.
+
+---
+
+# 17. Archive `409 business_conflict`
+
+Current backend archive is idempotent and does not normally return lifecycle 409.
+
+If an exact:
+
+```text
+409 business_conflict
+```
+
+is received in this endpoint:
+
+- treat POST as definitely rejected;
+- do not infer the conflict reason from human message;
+- do not replay POST;
+- mark Group list stale;
+- perform one authoritative Group Detail GET.
+
+During reconciliation old Detail is non-authoritative and mutation/refresh actions are disabled.
+
+### Current authoritative Group archived
+
+Replace Detail, close dialog, make read-only.
+
+Show:
+
+```text
+The group is currently archived.
+```
+
+Do not claim this POST caused archive.
+
+### Current authoritative Group active
+
+Replace Detail, close dialog.
+
+Show:
+
+```text
+The archive request was not accepted in its current state.
+```
+
+### 404 / session / other reconciliation failure
+
+Use the same Detail not-found/session/error transitions defined for edit reconciliation.
+
+For other reconciliation failure, show:
+
+```text
+The archive request was not accepted. Current server state is unavailable.
 ```
 
 ---
 
-## 6.2 Detail 404 privacy contract
+# 18. Archive Unknown Outcome
 
-Only this is `not_found`:
+Even though backend archive is idempotent, this client must not silently replay an uncertain POST.
+
+Unknown includes:
+
+```text
+connection interruption/error with dispatch ambiguity
+timeout
+Dio cancellation while operation owns publication
+HTTP 5xx
+unexpected HTTP status
+unexpected 2xx other than 200
+malformed/unexpected error envelope
+unsupported status/code pairing
+malformed/mismatched 200 success
+response transform/parsing failure
+unexpected post-dispatch exception
+immutable identity mismatch
+```
+
+Flow:
+
+1. mark Group list stale;
+2. do not replay POST;
+3. show reconciliation busy state;
+4. issue exactly one authoritative Group Detail GET.
+
+### Current Group archived
+
+Replace Detail with archived authoritative Group.
+
+Close dialog.
+
+Show:
+
+```text
+The group is currently archived, but this archive request result could not be confirmed.
+```
+
+No confirmed success.
+
+### Current Group active
+
+Replace Detail with active authoritative Group.
+
+Close dialog.
+
+Show:
+
+```text
+The group is still active. The archive request result could not be confirmed.
+```
+
+No confirmed failure of the original request is inferred beyond current state.
+
+### Exact 404
+
+```text
+Detail -> not_found
+close dialog
+```
+
+### Session failure
+
+```text
+discard Detail/action authority
+close dialog
+auth/session reconciliation
+```
+
+### Other reconciliation failure
+
+```text
+discard old Group
+Detail -> error
+close dialog
+show:
+The archive result could not be confirmed. Current server state is unavailable.
+```
+
+---
+
+# 19. Mutation `404`
+
+An exact mutation error:
 
 ```text
 HTTP 404
 code = resource_not_found
 exact error envelope
-errors = empty object
+errors = empty
 ```
 
-Use the exact error-envelope structural rules from Section 5.8.
+must:
 
-The backend intentionally makes these privacy-equivalent:
+1. mark Group list stale;
+2. close stale Edit/Archive dialog;
+3. call the safe Detail not-found mutation hook;
+4. remove old Group from authoritative Detail state;
+5. render the exact existing S04-FE-002 privacy-safe not-found UI.
 
-```text
-missing Group
-cross-tenant Group
-scope-hidden Group
-well-formed UUID that does not resolve
-```
+Missing and foreign/scope-hidden Groups remain indistinguishable.
 
-Frontend presentation for all valid-target exact 404 cases:
-
-```text
-Group not found
-The requested group is not available.
-```
-
-Do not distinguish why the resource was unavailable.
-
-A malformed 404 envelope is:
-
-```text
-invalidResponse -> error
-```
-
-not `not_found`.
+Malformed 404 envelope is unknown outcome and therefore reconciles; it is not direct not-found.
 
 ---
 
-## 6.3 Detail target/controller ownership
+# 20. Session Authority Failures
 
-Use an `autoDispose family`-style controller keyed by `groupId`.
-
-### Router-level guard
-
-Real navigation must already reject malformed/noncanonical detail locations before creating Group Detail screen/provider, as defined in Section 5.1.
-
-### Controller-level defensive guard
-
-Direct controller/widget use still validates `groupId`.
-
-If invalid:
+Exact session authority failures:
 
 ```text
-local unavailable/not-found presentation
-zero network requests
+401 authentication_required
+
+403 password_change_required
+403 user_inactive
+403 institution_inactive
 ```
 
-This exists for defensive correctness and deterministic tests; it does not replace router safety.
+must:
 
-### Read ownership
+- invalidate Group action publication authority;
+- close/dismiss stale action state through normal provider/session transition;
+- discard protected Detail state as required by delivered Detail owner;
+- use established central auth/session reconciliation;
+- never restore action focus into a later session;
+- never publish later mutation/reconciliation completion.
 
-Bind reads to:
-
-```text
-target Group UUID
-session user ID
-exact AuthUser instance identity
-institution ID
-desktop eligibility
-operation generation
-current target
-```
-
-Suppress duplicate same-target in-flight GET.
-
-Reject stale completion after:
-
-```text
-target change
-superseding refresh/retry
-dispose
-session/user/institution change
-desktop eligibility loss
-operation generation change
-```
+`403 forbidden` is not a session-authority failure; it uses safe definite action feedback.
 
 ---
 
-## 6.4 Detail states
+# 21. Detail / Action Feedback and Focus
 
-Required states:
+Group Detail gains an action feedback live region above/beside Detail body, following established Institution Admin action pattern.
+
+Feedback must never display:
 
 ```text
-initial
-loading
-data
-refreshing
-not_found
-error
+raw backend message
+raw validation strings
+Dio exception text
+request URL containing private ID
+raw JSON
+stack trace
+SQL
+token
+institution/user private identifier
 ```
 
-Initial/loading semantic text:
+### Edit success
 
 ```text
-Loading group
+focus -> Edit
+only if same current active Group
 ```
 
-### Refresh
-
-Refresh is available only from confirmed data and is duplicate-protected.
-
-While refresh is in flight:
-
-- retain the currently confirmed Group visibly;
-- expose visible + semantic refreshing progress;
-- disable duplicate Refresh.
-
-Refresh result:
+### Archive success / archived reconciliation
 
 ```text
-200 valid Group
-    -> replace with authoritative Group
-
-exact 404 resource_not_found
-    -> discard prior Group
-    -> not_found
-
-session-authority failure
-    -> discard prior Group
-    -> clear detail authority
-    -> auth/session reconciliation
-
-any other failure
-    -> discard prior Group
-    -> error
+focus -> Group Detail heading/read-only surface
 ```
 
-Do not leave stale Group data presented as confirmed after refresh failure.
-
-### Retry
-
-Retry exists only from `error` when the failure is retryable.
-
-Retry starts a fresh detail load and does not keep failed/stale Group data as authoritative.
-
-Retryable only:
+### Definite archive failure
 
 ```text
-connection
-timeout
-ApiFailureKind.unknown
-server failure with HTTP >= 500
+focus -> Archive Group
+only if same Group remains confirmed active
 ```
 
-Non-retryable:
+### Stale/404/session/error
 
 ```text
-invalidResponse
-validation
-forbidden
-rate-limit
-exact not-found
-other non-5xx server failure
+no focus restoration to obsolete action
 ```
 
-No automatic retry.
-
-### Session authority
-
-These clear detail authority and use existing auth/session reconciliation:
+### Validation/form-only feedback
 
 ```text
-authentication_required
-password_change_required
-user_inactive
-institution_inactive
+first field error -> field focus
+otherwise -> feedback focus/live region
 ```
 
 ---
 
-## 6.5 Detail UI
+# 22. Security / Tenant / Persistence / Concurrency
 
-Route:
-
-```text
-/institution-admin/groups/<groupId>
-```
-
-Shell title:
-
-```text
-Group Details
-```
-
-Toolbar actions in this task:
-
-```text
-Back to Groups
-Refresh
-```
-
-Do not show:
-
-```text
-Edit
-Archive
-Reactivate
-Manage teachers
-Manage students
-membership lists
-```
-
-Heading after data load may show Group name.
-
-Display authoritative fields:
-
-```text
-Name
-Status
-Level
-Subject direction
-Description
-Teachers
-Students
-Archived at
-Created
-Updated
-```
-
-Display rules:
-
-```text
-status active   -> Active
-status archived -> Archived
-```
-
-Status must not be color-only.
-
-Nulls:
-
-```text
-level             -> Not provided
-subject_direction -> Not provided
-description       -> Not provided
-active archived_at -> —
-```
-
-Archived Group displays its archived timestamp.
-
-Teacher/student counts are shown exactly as returned.
-
-All timestamps shown with exact Institution Admin presentation format:
-
-```text
-YYYY-MM-DD HH:mm UTC
-```
-
-Long name/description/subject values wrap/constrain safely without desktop overflow.
-
-No membership endpoint is called by Group Detail in this task.
-
----
-
-## 6.6 Back navigation and normal list retention
-
-Actions:
-
-```text
-Create Cancel
-Group Detail Back to Groups
-normal route return
-```
-
-navigate to:
-
-```text
-/institution-admin/groups
-```
-
-and preserve normal same-session Group-list retained query.
-
-Group Detail itself does not invalidate Group list merely by loading/refreshing.
-
-Unknown-create `Review recent groups` uses the deliberate recovery override from Section 5.12.
-
----
-
-# 7. Accessibility / Keyboard / Responsiveness
-
-## Create
-
-Required:
-
-- deterministic focus traversal;
-- labels attached to fields;
-- semantic field errors;
-- first invalid field focus;
-- multiline Description supports Enter/newline;
-- duplicate submit impossible;
-- visible + semantic submitting progress;
-- route-blocking state is semantically apparent;
-- Cancel/Create disabled correctly;
-- unknown warning is a live region;
-- `Review recent groups` is keyboard reachable;
-- text scaling and supported desktop widths do not overflow.
-
-## Group list integration
-
-Required:
-
-- Create Group is keyboard reachable;
-- global-empty Create Group is discoverable;
-- Group name/detail action has accessible semantics;
-- keyboard activation opens detail;
-- no action relies on color alone.
-
-## Detail
-
-Required:
-
-- Back/Refresh keyboard reachable;
-- heading semantic;
-- loading/refresh live progress;
-- not-found/error readable by assistive technology;
-- labels/values usable with text scaling;
-- long content wraps;
-- narrow supported desktop layout does not RenderFlex overflow.
-
-Do not introduce a new design system or breakpoint architecture.
-
----
-
-# 8. Security / Tenant Isolation / Persistence
-
-Eligible frontend context remains exactly:
+Eligible actor remains:
 
 ```text
 authenticated
@@ -1535,268 +1655,168 @@ active own institution
 desktop surface
 ```
 
-Create request must never send:
+Mutation target Group UUID does not select tenant scope.
+
+Never send:
 
 ```text
 institution_id
 created_by_user_id
 tenant selector
-status override
+status
+archived_at
 membership IDs
 ```
 
-Group Detail UUID is only a requested resource identifier and never expands tenant scope.
+Backend remains authoritative for:
 
-Backend remains authoritative for tenant isolation and existence privacy.
+- tenant resolution;
+- existence privacy;
+- row locking;
+- lifecycle state;
+- timestamps;
+- persistence;
+- current membership counts.
 
-UI route guards are UX, not authorization.
-
-Do not add create/detail access to:
-
-```text
-Platform Owner
-Teacher
-Student
-Parent
-mobile/unsupported Institution Admin surface
-```
-
-Persistence/schema:
+Frontend persistence/schema:
 
 ```text
-N/A — frontend task
+N/A
 ```
 
-Client-authoritative lifecycle:
+Backend concurrency behavior consumed by UI:
 
 ```text
-N/A — backend owns lifecycle
+archive wins first
+    -> later update 409 business_conflict
+
+update wins first
+    -> update may succeed
+    -> later archive may succeed
+
+two archives
+    -> both may return 200
+    -> only first changes timestamps
 ```
 
-Create idempotency:
-
-```text
-No Idempotency-Key contract
-No automatic replay
-Unknown result remains unconfirmed
-```
-
-Optimistic authoritative state:
-
-```text
-Not allowed
-```
+Frontend does not implement locks and does not infer serialization order beyond returned/reconciled server state.
 
 ---
 
-# 9. Architecture and Placement
+# 23. Architecture / Placement
 
-Responsibility flow:
+Expected new files:
 
 ```text
-Presentation
-  -> Application / Controller
-  -> Repository contract
-  -> Repository implementation
-  -> Remote data source / DTO
-  -> configured Dio
+frontend/lib/features/institution_admin/domain/institution_group_mutation.dart
+frontend/lib/features/institution_admin/domain/institution_group_mutation_repository.dart
+
+frontend/lib/features/institution_admin/data/dto/institution_group_mutation_dto.dart
+frontend/lib/features/institution_admin/data/institution_group_mutation_remote_data_source.dart
+frontend/lib/features/institution_admin/data/institution_group_mutation_repository_impl.dart
+
+frontend/lib/features/institution_admin/application/institution_group_action_controller.dart
+frontend/lib/features/institution_admin/application/institution_group_action_state.dart
 ```
 
-### Create domain owns
-
-- form value;
-- normalized immutable create snapshot;
-- field enum/request-key mapping;
-- local validation;
-- exact request JSON object;
-- unknown-outcome marker/type if needed.
-
-### Create data layer owns
-
-- POST method/path/body;
-- exact HTTP status;
-- exact success envelope;
-- exact definite-error envelope recognition;
-- conversion of ambiguous transport/protocol results to unknown outcome.
-
-### Create controller owns
-
-- eligible session;
-- mutation generation;
-- duplicate suppression;
-- field/form safe error publication;
-- confirmed success state;
-- unknown terminal state;
-- Group-list stale/recovery intent;
-- no UI navigation side-effect directly if established project pattern publishes state for UI effect.
-
-### Detail data/repository owns
-
-- exact GET transport;
-- exact detail envelope;
-- strict Group DTO reuse;
-- exact 404 recognition;
-- target/response identity verification.
-
-### Detail controller owns
-
-- target/session ownership;
-- loading/refresh/error/not-found states;
-- duplicate suppression;
-- stale completion rejection;
-- retry classification;
-- session reconciliation trigger.
-
-### Widgets own only
-
-- rendering;
-- input;
-- focus;
-- navigation effects from current owned controller state;
-- semantics;
-- presentation formatting.
-
-No raw Dio/API path/JSON parsing in Widgets.
-
-No dashboard integration is added.
-
----
-
-# 10. Expected Files / Areas
-
-Reuse delivered S04-FE-001 Group files wherever they already own the responsibility.
-
-Expected new production files may include:
+Expected modifications:
 
 ```text
-frontend/lib/features/institution_admin/domain/institution_group_create.dart
-frontend/lib/features/institution_admin/domain/institution_group_create_repository.dart
-frontend/lib/features/institution_admin/domain/institution_group_detail_repository.dart
+frontend/lib/core/network/api_error_codes.dart
 
-frontend/lib/features/institution_admin/data/dto/institution_group_create_dto.dart
-frontend/lib/features/institution_admin/data/dto/institution_group_detail_dto.dart
-frontend/lib/features/institution_admin/data/institution_group_create_remote_data_source.dart
-frontend/lib/features/institution_admin/data/institution_group_create_repository_impl.dart
-frontend/lib/features/institution_admin/data/institution_group_detail_remote_data_source.dart
-frontend/lib/features/institution_admin/data/institution_group_detail_repository_impl.dart
-
-frontend/lib/features/institution_admin/application/institution_group_create_controller.dart
-frontend/lib/features/institution_admin/application/institution_group_create_state.dart
 frontend/lib/features/institution_admin/application/institution_group_detail_controller.dart
-frontend/lib/features/institution_admin/application/institution_group_detail_state.dart
-
-frontend/lib/features/institution_admin/presentation/institution_admin_group_create_screen.dart
 frontend/lib/features/institution_admin/presentation/institution_admin_group_detail_screen.dart
-frontend/lib/features/institution_admin/presentation/institution_admin_group_formatters.dart
 ```
 
-Modify as required:
+May modify only as narrowly required:
 
 ```text
-frontend/lib/app/router/app_route_paths.dart
-frontend/lib/app/router/app_router.dart
-frontend/lib/features/institution_admin/presentation/institution_admin_shell.dart
-frontend/lib/features/institution_admin/presentation/institution_admin_groups_screen.dart
-
 frontend/lib/features/institution_admin/application/institution_group_list_controller.dart
 frontend/lib/features/institution_admin/application/institution_group_list_state.dart
 ```
 
-If S04-FE-001 delivered equivalent filenames/placement with different names, extend those actual files instead of duplicating them.
+Use the actual delivered S04-FE-002 filenames if they differ.
 
-Do not refactor `institution_admin_user_formatters.dart` into shared infrastructure merely to format Group timestamps. A small Group-local formatter is allowed when needed.
+If FE-002 already provides the required Group-list stale API, reuse it without changing list files unnecessarily.
 
-Expected focused tests:
-
-```text
-frontend/test/features/institution_admin/institution_group_create_domain_test.dart
-frontend/test/features/institution_admin/institution_group_create_dto_test.dart
-frontend/test/features/institution_admin/institution_group_create_remote_data_source_test.dart
-frontend/test/features/institution_admin/institution_group_create_repository_impl_test.dart
-frontend/test/features/institution_admin/institution_group_create_controller_test.dart
-
-frontend/test/features/institution_admin/institution_group_detail_dto_test.dart
-frontend/test/features/institution_admin/institution_group_detail_remote_data_source_test.dart
-frontend/test/features/institution_admin/institution_group_detail_repository_impl_test.dart
-frontend/test/features/institution_admin/institution_group_detail_controller_test.dart
-
-frontend/test/features/institution_admin/institution_admin_group_create_screen_test.dart
-frontend/test/features/institution_admin/institution_admin_group_detail_screen_test.dart
-frontend/test/features/institution_admin/institution_admin_groups_screen_test.dart
-```
-
-Directly affected router/shell tests:
+Do not modify:
 
 ```text
-frontend/test/app/router/institution_admin_route_paths_test.dart
-frontend/test/features/institution_admin/institution_admin_shell_test.dart
+frontend/lib/app/router/*
 ```
 
-Changes outside these areas require a concrete in-scope necessity and must be reported.
+No route changes belong to FE-003.
 
 Forbidden:
 
 ```text
 backend/
 docs/
-unrelated task files
+unrelated tasks
 unrelated features
 pubspec.yaml
 pubspec.lock
-frontend/android/
-frontend/ios/
-frontend/windows/
-frontend/linux/
-frontend/macos/
-frontend/web/
+platform folders
 ```
 
+Do not:
+
+- call Dio from Widgets/controllers;
+- parse JSON in Widgets/controllers;
+- create a second Group Detail cache;
+- create another Group-list retained store;
+- create a separate edit route;
+- create a generic action framework for User + Group;
+- modify Institution Dashboard.
+
+Any additional file requires concrete in-scope necessity and must be reported.
+
 ---
 
-# 11. Acceptance Criteria
+# 24. Acceptance Criteria
 
-- [ ] S04-FE-001 is Accepted / Delivered on synchronized `origin/main` before implementation starts.
-- [ ] Exact create/detail route names, constants, templates, helpers, registries, and GoRoutes are implemented.
-- [ ] Static `new` precedes dynamic detail and can never be treated as a UUID.
-- [ ] Group Detail query/fragment/malformed direct entry cannot instantiate Detail data work.
-- [ ] List/create/detail all select Groups shell destination with exact page titles.
-- [ ] Group Create route disables conflicting shell navigation/back while route-blocking create states are active without breaking User Create behavior.
-- [ ] Group list exposes Create Group in header/global-empty and accessible row detail navigation.
-- [ ] Normal list retained query survives create/detail navigation.
-- [ ] Name/Level/Subject limits use Unicode code points and exact normalization.
-- [ ] Optional empty/spaces-only behavior matches contract.
-- [ ] Description is multiline and preserves internal newlines/whitespace.
-- [ ] Create sends exact four-key JSON object, no query, no tenant/protected fields.
-- [ ] Duplicate Group names are never rejected locally.
-- [ ] Only exact 201 `{data,message}` + snapshot/lifecycle invariants is confirmed create success.
-- [ ] Exact definite-error envelope/status-code pairing is enforced.
-- [ ] Mixed 422 known/protocol fields map safely.
-- [ ] Ambiguous create outcomes never replay and expose only Review recent groups.
-- [ ] Unknown recovery loads page 1 active Groups sorted `created_at desc` and remains explicitly unconfirmed.
-- [ ] Confirmed create marks Group list stale without changing retained query and without dashboard invalidation.
-- [ ] Cancel/definite failure do not invalidate Group list.
-- [ ] Success state is consumed safely before create-provider reset and navigates to authoritative Detail GET.
-- [ ] Detail sends exact bodyless/queryless GET and accepts only HTTP 200.
-- [ ] Detail exact `{data}` parsing and requested-ID identity are enforced.
-- [ ] Only exact 404 `resource_not_found` becomes privacy-safe not-found.
-- [ ] Malformed 404 is invalidResponse/error.
-- [ ] Detail refresh failures discard stale prior Group according to exact failure rules.
-- [ ] Stale create/detail completions cannot publish across route/session/institution/device/target boundaries.
-- [ ] No edit/archive/reactivate/membership behavior is introduced.
-- [ ] Exact UTC presentation is `YYYY-MM-DD HH:mm UTC`.
-- [ ] Accessibility/keyboard/responsive requirements pass.
-- [ ] No backend/schema/dependency/dashboard/public API change.
-- [ ] Focused verification and directly affected regressions pass.
+- [ ] S04-FE-002 is Accepted / Delivered on synchronized `origin/main` before FE-003 implementation.
+- [ ] Active confirmed Group Detail exposes `Edit` and `Archive Group`.
+- [ ] Archived Group is read-only with exact indication and no edit/archive/reactivate/delete.
+- [ ] Edit is modal; no route changes.
+- [ ] Form uses exact normalization/null/multiline/rune-length rules.
+- [ ] PATCH contains only normalized changed allowed fields.
+- [ ] Local no-op sends zero PATCH/GET, does not mark list stale, keeps dialog open, and clears message after edit change.
+- [ ] Update accepts only exact 200 `{data,message}` with exact message and strict Group DTO.
+- [ ] Direct update validates route/selected/returned ID, immutable `createdAt`, active lifecycle, and submitted fields.
+- [ ] Archive sends zero body bytes and no query.
+- [ ] Archive accepts only exact 200 `{data,message}` + immutable identity + archived lifecycle.
+- [ ] `ApiErrorCodes.businessConflict` is added/reused exactly.
+- [ ] Mutation error envelope and status/code pairs are strict.
+- [ ] Mixed 422 known + protocol keys show safe field errors plus form-level protocol feedback.
+- [ ] Edit `409 business_conflict` never replays PATCH and reconciles one authoritative Detail GET.
+- [ ] Unknown update never replays PATCH and reconciles once.
+- [ ] Archive 409/unknown never auto-replays and reconciles once.
+- [ ] Reconciliation 200 replaces Detail only through selected-object/session/target ownership.
+- [ ] Reconciliation 404 removes stale Group and enters existing not-found.
+- [ ] Reconciliation session failure removes stale authority and reconciles auth session.
+- [ ] Reconciliation other failure removes old Group and enters Detail error; stale active actions are not shown.
+- [ ] Edit recoverable validation/403/429 failures preserve draft and keep dialog open.
+- [ ] Archive definite 403/422/429 failure closes confirmation and shows Detail feedback.
+- [ ] Detail Refresh/Edit/Archive cannot run concurrently with an open/busy Group action.
+- [ ] Group list stale timing matches Section 12 and retained query is preserved.
+- [ ] No optimistic list/detail authoritative patch.
+- [ ] No Institution Dashboard invalidation.
+- [ ] Stale completion cannot publish across selected-object/target/session/institution/device/generation/dispose changes.
+- [ ] Focus restoration never targets removed/obsolete controls.
+- [ ] No Teacher/Student membership or Parent relationship behavior is introduced.
+- [ ] No backend/schema/dependency/route/public API change.
+- [ ] Focused verification passes.
 - [ ] `git diff --check` passes.
-- [ ] Final diff contains no unrelated work.
+- [ ] Final diff has no unrelated changes.
 
 ---
 
-# 12. Tests and Verification
+# 25. Focused Tests and Verification
 
-Run Flutter/Dart commands from `frontend/`.
+Use exact real delivered Group test filenames. If S04-FE-002 used equivalent names, substitute only those real paths and report the exact command.
 
-## 12.1 Focused tests
+## 25.1 Focused command
 
 From repository root:
 
@@ -1804,138 +1824,154 @@ From repository root:
 Push-Location frontend
 
 fvm spawn 3.44.7 test `
-  test/features/institution_admin/institution_group_create_domain_test.dart `
-  test/features/institution_admin/institution_group_create_dto_test.dart `
-  test/features/institution_admin/institution_group_create_remote_data_source_test.dart `
-  test/features/institution_admin/institution_group_create_repository_impl_test.dart `
-  test/features/institution_admin/institution_group_create_controller_test.dart `
-  test/features/institution_admin/institution_group_detail_dto_test.dart `
-  test/features/institution_admin/institution_group_detail_remote_data_source_test.dart `
-  test/features/institution_admin/institution_group_detail_repository_impl_test.dart `
+  test/features/institution_admin/institution_group_mutation_domain_test.dart `
+  test/features/institution_admin/institution_group_mutation_dto_test.dart `
+  test/features/institution_admin/institution_group_mutation_remote_data_source_test.dart `
+  test/features/institution_admin/institution_group_mutation_repository_impl_test.dart `
+  test/features/institution_admin/institution_group_action_controller_test.dart `
   test/features/institution_admin/institution_group_detail_controller_test.dart `
-  test/features/institution_admin/institution_admin_group_create_screen_test.dart `
   test/features/institution_admin/institution_admin_group_detail_screen_test.dart `
-  test/features/institution_admin/institution_admin_groups_screen_test.dart
+  test/features/institution_admin/institution_group_list_controller_test.dart
 
 Pop-Location
 ```
 
-If S04-FE-001 delivered equivalent test responsibilities under slightly different filenames, use the real delivered paths rather than creating duplicates solely to satisfy names; report the exact focused command.
+Required focused coverage:
 
-Required focused coverage includes:
+### Mutation domain
 
-### Routes/shell
-
-- exact names/segments/templates/parameter;
-- protected/static/dynamic approved-location classification;
-- `new` before dynamic detail;
-- valid lower/upper canonical UUIDs;
-- malformed/whitespace/slash/query/fragment/path-manipulation rejection;
-- Groups selected destination/title for list/create/detail;
-- Group Create route-blocking state disables shell navigation;
-- editing/definite-failure re-enable navigation;
-- existing User Create busy behavior remains unchanged.
-
-### Create domain/request
-
-- default form;
-- name trim/required/160 rune boundary;
+- active Group form initialization;
+- name 160-rune boundary/trim/required;
 - level 100-rune boundary;
 - subject 160-rune boundary;
-- empty optional -> null;
-- spaces-only optional error;
-- multiline Description preserves internal newlines;
-- exact four-key request JSON;
-- duplicate names allowed.
+- nullable empty -> null;
+- spaces-only optional invalid;
+- Description multiline internal newline preservation;
+- changed-fields-only map;
+- null clear;
+- unsupported key rejection;
+- local normalized no-op;
+- no-op message clearing on field change;
+- submitted-field matching.
 
-### Create DTO/data/repository
+### Mutation DTO/data
 
-- exact POST path;
-- exact JSON object;
+Update:
+
+- canonical target guard;
+- exact PATCH path;
+- exact changed JSON;
 - no query;
-- exact 201 only;
-- exact `{data,message}`;
-- exact message;
-- strict Group DTO reuse;
-- snapshot/status/count/archive invariants;
-- exact definite error envelope;
-- exact status/code pair rules;
-- mixed 422 safe mapping inputs;
-- connection/timeout/cancel/5xx/unexpected status/malformed response -> unknown;
-- malformed/mismatched 201 -> unknown;
-- no automatic replay.
-
-### Create controller/UI
-
-- eligibility/session ownership;
-- first invalid field;
-- duplicate submit suppression;
-- route-blocking states;
-- confirmed-success publication before navigation effect;
-- no dashboard invalidation;
-- confirmed list stale retention;
-- unknown terminal warning;
-- Review recent groups exact recovery query;
-- recovery one-time warning;
-- no retry-submit in unknown state;
-- stale route/session/institution/device completion rejection.
-
-### Detail DTO/data/repository
-
-- canonical target validation;
-- exact GET path;
-- no query/body;
+- no extra body fields;
+- followRedirects safe convention;
 - HTTP 200 only;
-- exact `{data}`;
+- exact `{data,message}`;
+- exact update message;
 - strict Group DTO;
-- returned ID matches requested ID;
-- exact 404 resource_not_found recognition;
-- malformed 404 -> invalidResponse;
-- malformed success -> invalidResponse.
+- exact definite 401/403/404/409/422/429 envelope;
+- non-422 errors require empty errors;
+- malformed envelope/status-code pair -> unknown;
+- 5xx/connection/timeout/cancel/unexpected 2xx -> unknown.
 
-### Detail controller/UI
+Archive:
 
-- invalid direct controller ID -> zero network;
-- initial/load/data;
-- refresh retains data only while request active;
-- successful refresh replacement;
-- refresh 404 discards data -> not_found;
-- refresh session failure discards data -> reconcile;
-- refresh other error discards data -> error;
-- duplicate request suppression;
-- retry classification;
-- stale target/session/institution/device/dispose rejection;
-- exact fields/counts/timestamps/null display;
-- no edit/archive/membership actions;
-- accessibility/text scale/overflow.
+- canonical target guard;
+- exact POST path;
+- no query;
+- no `data` argument / zero request-body bytes;
+- HTTP 200 only;
+- exact `{data,message}`;
+- exact archive message;
+- exact definite error classification;
+- malformed/unexpected result -> unknown.
 
-## 12.2 Directly affected regression
+### Repository
 
-From repository root:
+Update direct success requires:
 
-```powershell
-Push-Location frontend
-
-fvm spawn 3.44.7 test `
-  test/app/router/institution_admin_route_paths_test.dart `
-  test/features/institution_admin/institution_admin_shell_test.dart
-
-Pop-Location
+```text
+route == selected ID == returned ID
+selected.createdAt == returned.createdAt
+active + archivedAt null
+submitted fields match
 ```
 
-Also include the actual delivered S04-FE-001 Group query/controller/list focused test files in the focused command if FE-002 modifies them for stale/recovery behavior.
+Archive direct success requires:
 
-Required regression evidence:
+```text
+route == selected ID == returned ID
+selected.createdAt == returned.createdAt
+archived + archivedAt non-null
+```
 
-- S04-FE-001 search/filter/sort/page behavior remains intact;
-- normal retained query still works;
-- confirmed create stale reload does not alter retained query;
-- unknown recovery uses only its deliberate recent-active query override;
-- route registries stay unique/consistent;
-- User create/detail routes remain unchanged;
-- User Create shell busy lock still works.
+Test immutable identity mismatch -> unknown.
 
-## 12.3 Static analysis
+Do not compare untouched mutable fields/counts/updatedAt to pre-mutation snapshot.
+
+### Action controller / Detail integration
+
+- action starts only from exact active confirmed selected Group;
+- archived Group cannot begin action;
+- one action only;
+- Detail Refresh disabled while action open/busy;
+- local validation/no-op;
+- recoverable edit failures keep draft/dialog state;
+- archive definite failure settles/feedback correctly;
+- direct update/archive success;
+- exact list stale timing;
+- 409 update archived/active/404/session/error reconciliation;
+- unknown update field-match/differ/archived/404/session/error;
+- archive 409 current archived/active/error;
+- unknown archive archived/active/404/session/error;
+- reconciliation failure discards old Detail Group;
+- no mutation replay;
+- selected-object replacement invalidates stale action;
+- session/target/institution/device/generation/dispose rejection;
+- focus-key current/obsolete behavior.
+
+### Widget
+
+- active Edit/Archive;
+- archived read-only message;
+- Edit dialog field initialization;
+- Description Enter/newline;
+- validation/no-op focus/live region;
+- busy dismissal protection;
+- Archive confirmation exact content/actions;
+- action feedback;
+- 409/unknown checking state visibly non-authoritative;
+- actions disabled while action pending;
+- dialogs close on terminal/stale transitions;
+- correct focus after edit/archive/failure;
+- no obsolete focus after archive/not-found/session/error;
+- text scale/narrow desktop/long content no overflow.
+
+## 25.2 Directly affected regression
+
+The focused command above must include the delivered FE-002/FE-001 files actually changed by FE-003.
+
+At minimum verify:
+
+```text
+S04-FE-002 Group Detail:
+initial/load/data/refresh/error/not-found unchanged
+target/session stale safety unchanged
+
+S04-FE-001/002 Group list:
+retained query preserved
+stale marker consumed
+authoritative reload on next presentation
+no optimistic row/status/order/count mutation
+
+S04-FE-002 Create:
+create -> authoritative Detail navigation remains compatible
+```
+
+If FE-003 does not modify Create code, do not add the entire create suite merely for breadth.
+
+No Institution User regression is required because User code must not be changed.
+
+## 25.3 Static analysis
 
 ```powershell
 Push-Location frontend
@@ -1943,7 +1979,7 @@ fvm spawn 3.44.7 analyze
 Pop-Location
 ```
 
-## 12.4 Format check
+## 25.4 Format check
 
 ```powershell
 Push-Location frontend
@@ -1954,14 +1990,14 @@ C:\Users\Administrator\fvm\versions\3.44.7\bin\cache\dart-sdk\bin\dart.exe `
 Pop-Location
 ```
 
-## 12.5 Manual check
+## 25.5 Manual check
 
 ```text
-Not required — deterministic router/domain/data/controller/widget tests cover this
-task. Real-stack/Windows E2E belongs to Stage 4 integration/checkpoint workflow.
+Not required — deterministic domain/data/repository/controller/widget tests cover
+this task. Real-stack/Windows E2E belongs to Stage 4 integration/checkpoint workflow.
 ```
 
-## 12.6 Always
+## 25.6 Always
 
 From repository root:
 
@@ -1971,37 +2007,38 @@ git diff --check
 
 Then inspect the complete diff for:
 
-- exact FE-002 scope;
-- no dashboard invalidation;
-- exact route ordering/classification;
-- no raw JSON/Dio in Widgets;
+- exact FE-003 scope;
+- no route change;
+- no dashboard change;
+- no backend/package/platform/task bookkeeping change;
+- strict error envelope;
+- `business_conflict` only as stable machine code;
+- zero-body archive request;
+- no automatic mutation replay;
 - no optimistic authoritative Group state;
-- no automatic create replay;
-- unknown-outcome recovery remains explicitly unconfirmed;
-- Group-list retained state is not corrupted;
-- detail target identity and privacy-safe 404 are strict;
-- stale async/session/route/target completion cannot publish;
+- reconciliation failure cannot leave stale active Detail/actions;
+- list retained query not corrupted;
+- no raw backend/error/private data in UI/logs;
 - no unrelated refactor/format churn;
-- no weakened tests;
-- no debug output/secrets/temp artifacts.
+- no weakened tests/debug/temp artifacts.
 
 Do **not** run:
 
 ```text
-full frontend test suite
+full frontend suite
 Windows build
 broad E2E
 Frontend Phase 2
 Stage integration
 ```
 
-for this implementation task.
+for this task.
 
 If implementation necessarily requires unapproved shared scope with material regression risk outside this contract, return `BLOCKED` instead of silently broadening work.
 
 ---
 
-# 13. Delivery
+# 26. Delivery
 
 Mode:
 
@@ -2012,13 +2049,13 @@ Implementation + GitHub delivery
 Branch:
 
 ```text
-task/s04-fe-002-group-create-detail
+task/s04-fe-003-group-edit-archive
 ```
 
 Commit:
 
 ```text
-feat(frontend): add group create and detail
+feat(frontend): add group edit and archive
 ```
 
 PR:
@@ -2027,7 +2064,7 @@ PR:
 focused PR to main
 ```
 
-Allowed task/Stage bookkeeping changes:
+Task/Stage bookkeeping changes:
 
 ```text
 None
@@ -2042,7 +2079,7 @@ ahead/behind = 0/0
 working tree clean
 ```
 
-If implementation and required verification pass but safe GitHub delivery cannot complete:
+If implementation and verification pass but safe delivery cannot complete:
 
 ```text
 DELIVERY BLOCKED
@@ -2050,27 +2087,26 @@ DELIVERY BLOCKED
 
 ---
 
-# 14. Planning Provenance
+# 27. Planning Provenance
 
-For ChatGPT/reviewer traceability only. Codex must not open these sources to rediscover or reinterpret requirements.
+For ChatGPT/reviewer traceability only. Codex must not open these sources to rediscover requirements.
 
 | Source/reference | Decision already encoded above |
 |---|---|
-| Current Stage 4 Group routes/controller | Exact POST/GET endpoints and auth middleware boundary |
-| Current `InstitutionGroupCreateRequest` | Four allowed fields, JSON object, no query, trimming, nullable/empty/max rules |
-| Current `CreateInstitutionGroup` | Tenant/creator/status/archive authority and zero initial membership counts |
-| Current `InstitutionGroupResource` | Exact public Group resource and UTC timestamp shape |
-| Current Group backend tests | Duplicate-name behavior, exact create response, strict transport, privacy-safe detail 404 |
-| Current Institution Dashboard action/domain | Dashboard contains only teacher/student/parent counts; Group create must not invalidate it |
-| Delivered S04-FE-001 contract/implementation | Group list/read model, retained query, strict Group DTO, Groups shell destination |
-| Current Institution User create flow | Exact error envelope, unknown mutation outcome, session ownership, UI success-effect pattern |
-| Current Institution User detail flow | Family target ownership, exact 404, retry classification, target-response identity |
-| Current router/shell | Existing Institution Admin route registries, dynamic-route safety, create busy-navigation pattern |
-| `frontend/AGENTS.md` | Feature-first placement, DTO strictness, mutation uncertainty, stale async, accessibility |
+| Current `InstitutionGroupUpdateRequest` | Exact PATCH keys, partial object, no query, normalization/null/max rules, no empty accepted request |
+| Current `UpdateInstitutionGroup` | Tenant-scoped row lock, archived precedence, dirty/no-op semantics, fresh resource |
+| Current `InstitutionGroupArchiveRequest` | Archive endpoint request shape; frontend deliberately chooses zero body bytes |
+| Current `ArchiveInstitutionGroup` | Idempotent archive, server timestamps, row locking |
+| Current `InstitutionGroupLifecycleApiTest` | Archive idempotency, timestamp preservation, race serialization, body/query constraints |
+| Current `ApiErrorResponse` | `business_conflict` centralized 409 contract |
+| Delivered S04-FE-001 | Strict Group/list/query/session ownership |
+| Approved/delivered S04-FE-002 | Detail owner, stale Group-list owner, route/create/detail boundaries |
+| Current Institution User mutation/action implementation | Strict mutation envelope, selected-object ownership, reconciliation, stale list/focus pattern |
+| `frontend/AGENTS.md` | DTO strictness, mutation uncertainty, no stale authoritative state, cache/invalidation, accessibility |
 
 ---
 
-# 15. Codex Final Report
+# 28. Codex Final Report
 
 Return concise evidence:
 
@@ -2079,21 +2115,24 @@ Return concise evidence:
 3. Changed files and purpose.
 4. Acceptance-criteria evidence.
 5. Exact focused verification commands/results.
-6. Route-registry/order/query-fragment/shell-busy evidence.
-7. Create request/DTO/error-envelope evidence.
-8. Unknown-outcome/no-replay/recent-group-recovery evidence.
-9. Group-list stale/retained-query/no-dashboard evidence.
-10. Detail exact-GET/target-identity/privacy-safe-404/refresh evidence.
-11. Session/tenant/stale-async evidence.
-12. Accessibility/responsive evidence.
-13. `git diff --check` + focused scope/diff self-review.
-14. Commit/PR/merge/main-sync evidence.
-15. Exact deviations/blockers.
+6. Edit normalization/no-op/partial PATCH evidence.
+7. Archive zero-body/idempotent-response evidence.
+8. Exact mutation error-envelope + `business_conflict` evidence.
+9. Immutable Group identity validation evidence.
+10. 409 and unknown update reconciliation evidence.
+11. Archive 409/unknown reconciliation evidence.
+12. Reconciliation failure -> no stale authoritative Detail evidence.
+13. Dialog/focus/action transition evidence.
+14. Group-list stale/retained-query/no-dashboard evidence.
+15. Session/tenant/selected-object/stale-async evidence.
+16. `git diff --check` + focused diff/scope self-review.
+17. Commit/PR/merge/main-sync evidence.
+18. Exact deviations/blockers.
 
-If any required product, architecture, API, security, tenant, lifecycle, routing, mutation-outcome, async-ownership, or UX decision is missing or conflicts with the delivered S04-FE-001 implementation/current source, return:
+If a required product, architecture, API, security, tenant, lifecycle, concurrency, mutation-outcome, async-ownership, dialog/focus, or UX decision is missing or conflicts with the delivered S04-FE-002 implementation/current source:
 
 ```text
 BLOCKED
 ```
 
-instead of inventing behavior.
+Do not invent behavior.

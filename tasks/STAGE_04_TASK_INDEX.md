@@ -9,8 +9,8 @@
 | Backend implementation | `S04-BE-001…005 Accepted / Delivered` |
 | Complete Backend Phase 2 | `PASS` |
 | Frontend decomposition | `Approved — 5 implementation tasks` |
-| Frontend contracts | `FE-001 Approved; FE-002 Approved; FE-003…005 Draft / Review pending` |
-| Frontend implementation | `FE-001 ready to start` |
+| Frontend contracts | `FE-001 Approved; FE-002 Approved; FE-003 Approved; FE-004…005 Draft / Review pending` |
+| Frontend implementation | `FE-001 Accepted / Delivered; FE-002 next implementation task` |
 | Frontend Build Runner | `Prepared — approval-gated orchestration only` |
 | Frontend Phase 2 | `Pending all FE-001…005 Accepted / Delivered` |
 | Integration | `Not decomposed; blocked until Frontend Phase 2 PASS` |
@@ -91,9 +91,9 @@ Status = Approved
 
 | Order | Task | Title | Dependency | Planning status | Implementation state |
 |---:|---|---|---|---|---|
-| 1 | `S04-FE-001` | Institution Group Navigation and List | Complete Backend Phase 2 `PASS` | `Approved` | `Ready to start` |
-| 2 | `S04-FE-002` | Institution Group Create and Detail | `FE-001 Accepted / Delivered` | `Approved` | `Dependency pending` |
-| 3 | `S04-FE-003` | Institution Group Edit and Archive Lifecycle | `FE-002 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
+| 1 | `S04-FE-001` | Institution Group Navigation and List | Complete Backend Phase 2 `PASS` | `Approved` | `Accepted / Delivered` |
+| 2 | `S04-FE-002` | Institution Group Create and Detail | `FE-001 Accepted / Delivered` | `Approved` | `Ready / next permitted` |
+| 3 | `S04-FE-003` | Institution Group Edit and Archive Lifecycle | `FE-002 Accepted / Delivered` | `Approved` | `Dependency pending` |
 | 4 | `S04-FE-004` | Teacher and Student Group Membership Management | `FE-003 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
 | 5 | `S04-FE-005` | Parent–Student Relationship Management | `FE-004 Accepted / Delivered` | `Draft / Review pending` | `Not authorized` |
 
@@ -106,7 +106,7 @@ FE-001 Approved
     ↓ Accepted / Delivered
 FE-002 Approved
     ↓ Accepted / Delivered
-FE-003 must be Approved
+FE-003 Approved
     ↓ Accepted / Delivered
 FE-004 must be Approved
     ↓ Accepted / Delivered
@@ -127,8 +127,8 @@ The approved working model for the frontend block is:
 3. FE-002 review is complete and FE-002 is Approved.
 4. Deliver the FE-002 approval update to main while FE-001 implementation continues.
 5. When FE-001 is Accepted / Delivered, Codex may start FE-002 automatically after synchronizing main.
-6. While Codex implements FE-002, ChatGPT reviews FE-003.
-7. Repeat the same pattern for FE-003, FE-004, FE-005.
+6. FE-003 review is complete and FE-003 is Approved; deliver its planning update to main while FE-002 implementation continues.
+7. When FE-002 is Accepted / Delivered, Codex may start FE-003 automatically after synchronizing main. While FE-003 implements, ChatGPT reviews FE-004.
 ```
 
 This parallelizes:
@@ -151,30 +151,37 @@ Codex still implements one task at a time.
 
 ## 6. Current Frontend Gates
 
-`S04-FE-001` and `S04-FE-002` have completed their review/fix cycles.
-
-Current repository planning state:
+Current verified planning/delivery state:
 
 ```text
 S04-FE-001:
 Status = Approved
-Implementation delivery = not yet present on current main
-Gate = OPEN
+Implementation = Accepted / Delivered
+Merge = 698b611677522071b6dae547c997c3f1a503d19e
+Gate = CLOSED / complete
 
 S04-FE-002:
 Status = Approved
 Review = Complete
-Implementation = blocked until S04-FE-001 Accepted / Delivered
+Dependency = FE-001 Accepted / Delivered
+Gate = OPEN / next permitted implementation task
+
+S04-FE-003:
+Status = Approved
+Review = Complete
+Dependency = FE-002 Accepted / Delivered
 Gate = DEPENDENCY PENDING
+
+S04-FE-004:
+Status = Draft
+Review = Pending
+
+S04-FE-005:
+Status = Draft
+Review = Pending
 ```
 
-Scope remains:
-
-```text
-Institution Group Navigation and List only
-```
-
-No create/detail/edit/archive/membership behavior is authorized in FE-001.
+Codex must still determine task delivery from synchronized `origin/main`; planning status alone never proves implementation acceptance.
 
 ---
 
@@ -184,14 +191,14 @@ Current state:
 
 ```text
 S04-FE-002 = Approved / Review complete
-S04-FE-003 = Draft / Review pending
+S04-FE-003 = Approved / Review complete
 S04-FE-004 = Draft / Review pending
 S04-FE-005 = Draft / Review pending
 ```
 
-FE-002 has separately passed ChatGPT read-only review and is now `Approved`. It is still blocked from implementation until FE-001 is Accepted / Delivered.
+FE-002 and FE-003 have separately passed ChatGPT read-only review and are `Approved`. FE-003 remains blocked from implementation until FE-002 is Accepted / Delivered.
 
-FE-003…005 may remain committed to `main` for review continuity. They must not be implemented until each separately passes review and changes to:
+FE-004…005 may remain committed to `main` for review continuity. They must not be implemented until each separately passes review and changes to:
 
 ```text
 Status = Approved
@@ -359,9 +366,9 @@ frontend block
 |---|---|
 | Backend implementation | `Complete` |
 | Backend Phase 2 | `PASS` |
-| `S04-FE-001` | `Approved / Ready to start` |
-| `S04-FE-002` | `Approved / Dependency pending` |
-| `S04-FE-003` | `Draft / Review pending` |
+| `S04-FE-001` | `Accepted / Delivered` |
+| `S04-FE-002` | `Approved / Ready` |
+| `S04-FE-003` | `Approved / Dependency pending` |
 | `S04-FE-004` | `Draft / Review pending` |
 | `S04-FE-005` | `Draft / Review pending` |
 | Build Runner | `Prepared / approval-gated` |
@@ -376,23 +383,22 @@ frontend block
 Next implementation gate:
 
 ```text
-S04-FE-001 — Institution Group Navigation and List
+S04-FE-002 — Institution Group Create and Detail
 ```
 
 Next planning/review work may proceed concurrently:
 
 ```text
-S04-FE-003 read-only contract review
+S04-FE-004 read-only contract review
 ```
 
 Safe execution sequence:
 
 ```text
-Commit/store the complete frontend planning package on main
-→ verify main sync/clean
-→ start FE-001 implementation
-→ FE-002 already Approved; deliver its planning update to main
-→ when FE-001 is delivered, continue FE-002 automatically
-→ concurrently review/fix FE-003
+FE-001 Accepted / Delivered
+→ FE-002 Approved and may implement now
+→ deliver FE-003 approval planning update to main while FE-002 implements
+→ when FE-002 is Accepted / Delivered, Runner may continue FE-003 automatically
+→ concurrently review/fix FE-004
 → continue sequentially
 ```
