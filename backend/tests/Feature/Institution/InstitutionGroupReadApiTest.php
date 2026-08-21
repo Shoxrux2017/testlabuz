@@ -60,6 +60,12 @@ class InstitutionGroupReadApiTest extends TestCase
             ['methods' => ['GET'], 'uri' => 'api/v1/institution/groups/{group}', 'middleware' => $middleware],
             ['methods' => ['PATCH'], 'uri' => 'api/v1/institution/groups/{group}', 'middleware' => $middleware],
             ['methods' => ['POST'], 'uri' => 'api/v1/institution/groups/{group}/archive', 'middleware' => $middleware],
+            ['methods' => ['GET'], 'uri' => 'api/v1/institution/groups/{group}/teachers', 'middleware' => $middleware],
+            ['methods' => ['POST'], 'uri' => 'api/v1/institution/groups/{group}/teachers', 'middleware' => $middleware],
+            ['methods' => ['DELETE'], 'uri' => 'api/v1/institution/groups/{group}/teachers/{teacher}', 'middleware' => $middleware],
+            ['methods' => ['GET'], 'uri' => 'api/v1/institution/groups/{group}/students', 'middleware' => $middleware],
+            ['methods' => ['POST'], 'uri' => 'api/v1/institution/groups/{group}/students', 'middleware' => $middleware],
+            ['methods' => ['DELETE'], 'uri' => 'api/v1/institution/groups/{group}/students/{student}', 'middleware' => $middleware],
         ], $routes);
     }
 

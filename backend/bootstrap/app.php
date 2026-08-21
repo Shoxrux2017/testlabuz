@@ -6,6 +6,7 @@ use App\Exceptions\Auth\InvalidCredentialsException;
 use App\Exceptions\Auth\PasswordChangeRequiredException;
 use App\Exceptions\Auth\UserInactiveException;
 use App\Exceptions\Institution\GroupArchivedException;
+use App\Exceptions\Institution\InactiveGroupMemberException;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureUserHasRole;
@@ -51,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (AuthorizationException $e, Request $request) => ApiErrorResponse::forbidden($request));
         $exceptions->render(fn (AccessDeniedHttpException $e, Request $request) => ApiErrorResponse::forbidden($request));
         $exceptions->render(fn (GroupArchivedException $e, Request $request) => ApiErrorResponse::groupArchived($request));
+        $exceptions->render(fn (InactiveGroupMemberException $e, Request $request) => ApiErrorResponse::inactiveGroupMember($request));
         $exceptions->render(fn (NotFoundHttpException $e, Request $request) => ApiErrorResponse::resourceNotFound($request));
         $exceptions->render(fn (ThrottleRequestsException $e, Request $request) => ApiErrorResponse::rateLimited($request));
         $exceptions->render(fn (Throwable $e, Request $request) => ApiErrorResponse::serverError($request));
