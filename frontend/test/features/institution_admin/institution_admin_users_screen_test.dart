@@ -65,6 +65,7 @@ void main() {
       );
       expect(find.text('Users'), findsWidgets);
       expect(find.text('Create User'), findsOneWidget);
+      expect(find.text('Parent–Student Connections'), findsOneWidget);
       expect(find.widgetWithText(TextField, 'Search users'), findsOneWidget);
       expect(find.text('All roles'), findsOneWidget);
       expect(find.text('All statuses'), findsOneWidget);
@@ -130,10 +131,16 @@ void main() {
         'Export',
         'institution_id',
         'permissions',
-        'Groups',
       ]) {
         expect(find.text(excluded), findsNothing);
       }
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('institutionUserListSurface')),
+          matching: find.text('Groups'),
+        ),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     });
 
@@ -397,6 +404,29 @@ void main() {
         find.byKey(const Key('institutionUserDetailHeading')),
         findsOneWidget,
       );
+    });
+
+    testWidgets('Parent–Student action navigates by the exact static route', (
+      tester,
+    ) async {
+      final repository = _FakeUserListRepository();
+      await _pumpApp(tester, repository: repository);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const Key('institutionParentStudentConnectionsButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        _currentPath(tester),
+        AppRoutePaths.institutionAdminParentStudentConnections,
+      );
+      expect(
+        find.byKey(const Key('institutionParentStudentConnectionsHeading')),
+        findsOneWidget,
+      );
+      expect(repository.fetchCalls, 1);
     });
 
     testWidgets('a focused row activates by keyboard with its server UUID', (

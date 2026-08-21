@@ -61,7 +61,7 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_institu
 
 void main() {
   group('Institution Admin direct routing and destination mapping', () {
-    testWidgets('all nine routes use one shell and exact honest content', (
+    testWidgets('all ten routes use one shell and exact honest content', (
       tester,
     ) async {
       for (final route in _routeExpectations) {
@@ -132,6 +132,32 @@ void main() {
         );
         expect(find.text(userId), findsOneWidget);
       }
+    });
+
+    testWidgets('static connections route ignores query and fragment state', (
+      tester,
+    ) async {
+      await _pumpApp(
+        tester,
+        initialLocation:
+            '${AppRoutePaths.institutionAdminParentStudentConnections}'
+            '?perspective=byStudent&anchor=$_userIdOne#connect',
+        authRepository: _authenticatedRepository(_adminUser()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        _currentPath(tester),
+        AppRoutePaths.institutionAdminParentStudentConnections,
+      );
+      expect(
+        find.text('Select a Parent to view current Student connections.'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('institutionParentStudentConnectDialog')),
+        findsNothing,
+      );
     });
 
     testWidgets('malformed descendants resolve safely to Dashboard', (
@@ -1273,6 +1299,13 @@ final _routeExpectations = <_RouteExpectation>[
     placeholderKey: 'institutionUserCreateHeading',
     body: 'The user must change this password at first login.',
   ),
+  const _RouteExpectation(
+    path: AppRoutePaths.institutionAdminParentStudentConnections,
+    destination: InstitutionAdminShellDestination.users,
+    title: 'Parent–Student Connections',
+    placeholderKey: 'institutionParentStudentConnectionsHeading',
+    body: 'Select a Parent to view current Student connections.',
+  ),
   _RouteExpectation(
     path: AppRoutePaths.institutionAdminUserDetailLocation(_userIdOne),
     destination: InstitutionAdminShellDestination.users,
@@ -1301,6 +1334,7 @@ const _malformedLocations = <String>[
   '/institution-admin/',
   '/institution-admin/users/',
   '/institution-admin/users/new/extra',
+  '/institution-admin/users/parent-student-connections/extra',
   '/institution-admin/users//',
   '/institution-admin/users/not-a-uuid',
   '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000/extra',

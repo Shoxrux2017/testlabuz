@@ -14,6 +14,7 @@ import '../../features/institution_admin/presentation/institution_admin_dashboar
 import '../../features/institution_admin/presentation/institution_admin_group_create_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_group_detail_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_groups_screen.dart';
+import '../../features/institution_admin/presentation/institution_admin_parent_student_connections_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_profile_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_placeholder_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_settings_screen.dart';
@@ -192,6 +193,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => _buildInstitutionAdminShell(
               state,
               const InstitutionAdminUserCreatePlaceholderScreen(),
+            ),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminParentStudentConnections,
+            path: AppRoutePaths.institutionAdminParentStudentConnections,
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminParentStudentConnectionsScreen(),
             ),
           ),
           GoRoute(
