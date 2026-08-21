@@ -6,7 +6,7 @@
 |---|---|
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Area | Backend |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | Stage 3 closed; Stage 4 decomposition/task index approved |
 | Implementation type | Laravel/PostgreSQL persistence foundation |
 | Delivery | Implementation + GitHub delivery |
