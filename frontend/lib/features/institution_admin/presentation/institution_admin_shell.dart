@@ -113,6 +113,12 @@ enum InstitutionAdminShellDestination {
     icon: Icons.people_outline,
     selectedIcon: Icons.people,
   ),
+  groups(
+    label: 'Groups',
+    path: AppRoutePaths.institutionAdminGroups,
+    icon: Icons.groups_outlined,
+    selectedIcon: Icons.groups,
+  ),
   institution(
     label: 'Institution',
     path: AppRoutePaths.institutionAdminInstitution,
@@ -185,6 +191,9 @@ String? _pageTitleForPath(String path) {
   if (path == AppRoutePaths.institutionAdminUsers) {
     return 'Users';
   }
+  if (path == AppRoutePaths.institutionAdminGroups) {
+    return 'Groups';
+  }
   if (AppRoutePaths.isInstitutionAdminUserCreatePath(path)) {
     return 'Create User';
   }
@@ -245,7 +254,11 @@ class _InstitutionAdminNavigation extends StatelessWidget {
                 destination: destination,
                 selected: true,
               ),
-              label: Text(destination.label),
+              label: Text(
+                destination.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
       ),

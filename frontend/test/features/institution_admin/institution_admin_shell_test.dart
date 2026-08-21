@@ -21,11 +21,15 @@ import 'package:testlabuz_client/features/auth/domain/auth_repository.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_dashboard_repository_impl.dart';
+import 'package:testlabuz_client/features/institution_admin/data/institution_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_assessment_settings_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_profile_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_create_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_list_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_list.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_list_query.dart';
+import 'package:testlabuz_client/features/institution_admin/domain/institution_group_list_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_dashboard_repository.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings.dart';
 import 'package:testlabuz_client/features/institution_admin/domain/institution_assessment_settings_repository.dart';
@@ -51,7 +55,7 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_institu
 
 void main() {
   group('Institution Admin direct routing and destination mapping', () {
-    testWidgets('all six routes use one shell and exact honest content', (
+    testWidgets('all seven routes use one shell and exact honest content', (
       tester,
     ) async {
       for (final route in _routeExpectations) {
@@ -398,7 +402,7 @@ void main() {
   });
 
   group('Institution Admin shell content and navigation', () {
-    testWidgets('shows only approved live identity and four destinations', (
+    testWidgets('shows only approved live identity and five destinations', (
       tester,
     ) async {
       await _pumpApp(
@@ -430,7 +434,11 @@ void main() {
         );
         expect(find.byTooltip(destination.label), findsOneWidget);
       }
-      expect(_navigationRail(tester).destinations, hasLength(4));
+      expect(_navigationRail(tester).destinations, hasLength(5));
+      expect(
+        InstitutionAdminShellDestination.values.map((value) => value.label),
+        const ['Dashboard', 'Users', 'Groups', 'Institution', 'Settings'],
+      );
       expect(find.text('private-login'), findsNothing);
       expect(find.text('private@example.uz'), findsNothing);
       expect(find.text('+998900000000'), findsNothing);
@@ -715,7 +723,7 @@ void main() {
               final destinationIndex = InstitutionAdminShellDestination.values
                   .indexOf(destination);
               final semanticsLabel =
-                  '${destination.label}\nTab ${destinationIndex + 1} of 4';
+                  '${destination.label}\nTab ${destinationIndex + 1} of 5';
               final semanticsNode = tester.getSemantics(
                 find.bySemanticsLabel(semanticsLabel),
               );
@@ -828,6 +836,7 @@ void main() {
       for (final destination in const [
         InstitutionAdminShellDestination.dashboard,
         InstitutionAdminShellDestination.users,
+        InstitutionAdminShellDestination.groups,
         InstitutionAdminShellDestination.institution,
       ]) {
         await _sendTab(tester);
@@ -837,7 +846,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.space, platform: 'windows');
       await tester.pumpAndSettle();
 
-      _expectDestination(tester, _routeExpectations[4]);
+      _expectDestination(tester, _routeExpectations[5]);
 
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
@@ -875,7 +884,11 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        for (var index = 0; index < 5; index += 1) {
+        for (
+          var index = 0;
+          index < InstitutionAdminShellDestination.values.length + 1;
+          index += 1
+        ) {
           await _sendTab(tester);
         }
         _expectSignOutFocused(tester);
@@ -1129,6 +1142,13 @@ final _routeExpectations = <_RouteExpectation>[
     body: 'No Teachers, Students, or Parents exist yet.',
   ),
   const _RouteExpectation(
+    path: AppRoutePaths.institutionAdminGroups,
+    destination: InstitutionAdminShellDestination.groups,
+    title: 'Groups',
+    placeholderKey: 'institutionGroupListGlobalEmpty',
+    body: 'No groups exist for this institution.',
+  ),
+  const _RouteExpectation(
     path: AppRoutePaths.institutionAdminUserCreate,
     destination: InstitutionAdminShellDestination.users,
     title: 'Create User',
@@ -1185,6 +1205,7 @@ Future<void> _pumpApp(
   FakeInstitutionAssessmentSettingsRepository?
   institutionAssessmentSettingsRepository,
   FakeInstitutionUserListRepository? institutionUserListRepository,
+  FakeInstitutionGroupListRepository? institutionGroupListRepository,
   FakeInstitutionUserCreateRepository? institutionUserCreateRepository,
   FakeInstitutionUserDetailRepository? institutionUserDetailRepository,
 }) async {
@@ -1214,6 +1235,10 @@ Future<void> _pumpApp(
         ),
         institutionUserListRepositoryProvider.overrideWithValue(
           institutionUserListRepository ?? FakeInstitutionUserListRepository(),
+        ),
+        institutionGroupListRepositoryProvider.overrideWithValue(
+          institutionGroupListRepository ??
+              FakeInstitutionGroupListRepository(),
         ),
         institutionUserCreateRepositoryProvider.overrideWithValue(
           institutionUserCreateRepository ??
@@ -1260,6 +1285,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       institutionUserListRepositoryProvider.overrideWithValue(
         FakeInstitutionUserListRepository(),
+      ),
+      institutionGroupListRepositoryProvider.overrideWithValue(
+        FakeInstitutionGroupListRepository(),
       ),
     ],
   );
@@ -1417,7 +1445,6 @@ Future<void> _submitLogin(WidgetTester tester, {required String login}) async {
 }
 
 void _expectNoFutureScope() {
-  expect(find.text('Groups'), findsNothing);
   expect(find.text('Reports'), findsNothing);
   expect(find.text('Topics'), findsNothing);
   expect(find.text('Homework'), findsNothing);
@@ -1701,6 +1728,28 @@ class FakeInstitutionUserListRepository
     return InstitutionUserListPage(
       users: const [],
       pagination: InstitutionUserListPagination(
+        page: query.page,
+        perPage: query.perPage,
+        total: 0,
+        lastPage: 1,
+      ),
+    );
+  }
+}
+
+class FakeInstitutionGroupListRepository
+    implements InstitutionGroupListRepository {
+  var fetchCalls = 0;
+
+  @override
+  Future<InstitutionGroupListPage> fetchGroups(
+    InstitutionGroupListQuery query,
+  ) async {
+    fetchCalls += 1;
+
+    return InstitutionGroupListPage(
+      groups: const [],
+      pagination: InstitutionGroupListPagination(
         page: query.page,
         perPage: query.perPage,
         total: 0,

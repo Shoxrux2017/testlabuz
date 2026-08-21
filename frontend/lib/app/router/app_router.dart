@@ -11,6 +11,7 @@ import '../../features/auth/presentation/login/login_screen.dart';
 import '../../features/entry/domain/entry_route_resolver.dart';
 import '../../features/entry/presentation/role_entry_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_dashboard_screen.dart';
+import '../../features/institution_admin/presentation/institution_admin_groups_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_profile_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_placeholder_screen.dart';
 import '../../features/institution_admin/presentation/institution_admin_settings_screen.dart';
@@ -142,6 +143,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => _buildInstitutionAdminShell(
               state,
               const InstitutionAdminUsersPlaceholderScreen(),
+            ),
+          ),
+          GoRoute(
+            name: AppRouteNames.institutionAdminGroups,
+            path: AppRoutePaths.institutionAdminGroups,
+            builder: (context, state) => _buildInstitutionAdminShell(
+              state,
+              const InstitutionAdminGroupsScreen(),
             ),
           ),
           GoRoute(

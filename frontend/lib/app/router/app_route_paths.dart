@@ -12,6 +12,7 @@ abstract final class AppRouteNames {
   static const platformOwnerInstitutionEdit = 'platform-owner-institution-edit';
   static const institutionAdmin = 'institution-admin';
   static const institutionAdminUsers = 'institution-admin-users';
+  static const institutionAdminGroups = 'institution-admin-groups';
   static const institutionAdminUserCreate = 'institution-admin-user-create';
   static const institutionAdminUserDetail = 'institution-admin-user-detail';
   static const institutionAdminInstitution = 'institution-admin-institution';
@@ -41,12 +42,15 @@ abstract final class AppRoutePaths {
       '/platform-owner/institutions/:institutionId/edit';
   static const institutionAdmin = '/institution-admin';
   static const institutionAdminUsersSegment = 'users';
+  static const institutionAdminGroupsSegment = 'groups';
   static const institutionAdminUserCreateSegment = 'new';
   static const institutionAdminUserIdParameter = 'userId';
   static const institutionAdminInstitutionSegment = 'institution';
   static const institutionAdminSettingsSegment = 'settings';
   static const institutionAdminUsers =
       '$institutionAdmin/$institutionAdminUsersSegment';
+  static const institutionAdminGroups =
+      '$institutionAdmin/$institutionAdminGroupsSegment';
   static const institutionAdminUserCreate =
       '$institutionAdminUsers/$institutionAdminUserCreateSegment';
   static const institutionAdminUserDetail =
@@ -69,6 +73,7 @@ abstract final class AppRoutePaths {
     platformOwnerInstitutionEdit,
     institutionAdmin,
     institutionAdminUsers,
+    institutionAdminGroups,
     institutionAdminUserCreate,
     institutionAdminUserDetail,
     institutionAdminInstitution,
@@ -89,6 +94,7 @@ abstract final class AppRoutePaths {
   static const institutionAdminPrimaryDestinations = <String>[
     institutionAdmin,
     institutionAdminUsers,
+    institutionAdminGroups,
     institutionAdminInstitution,
     institutionAdminSettings,
   ];
