@@ -672,10 +672,6 @@ class InstitutionUserUpdateLifecycleApiTest extends TestCase
             $this->assertNull($oppositeTarget->deactivated_at);
             $this->assertSame([1, 1], [$oppositeRace['first_updates'], $oppositeRace['second_updates']]);
 
-            foreach ([$patchRace, $mixedRace, $sameRace, $oppositeRace] as $race) {
-                $this->assertGreaterThanOrEqual(0.30, $race['second_elapsed_seconds']);
-            }
-
             $tokensAfter = PersonalAccessToken::query()
                 ->whereIn('tokenable_id', array_values($ids['targets']))
                 ->orderBy('id')
@@ -1159,33 +1155,116 @@ class InstitutionUserUpdateLifecycleApiTest extends TestCase
         return $decoded;
     }
 
-    /** @return array{first_updates: int, second_updates: int, second_elapsed_seconds: float} */
+    /** @return array{first_updates: int, second_updates: int} */
     private function runRace(string $workerPath, string $actorId, string $targetId, string $firstOperation, string $secondOperation): array
     {
-        $signalPath = tempnam(sys_get_temp_dir(), 's03_be_005_signal_');
-        $this->assertIsString($signalPath);
-        unlink($signalPath);
+        $lockedPath = $this->unusedTempPath('s03_be_005_locked_');
+        $releasePath = $this->unusedTempPath('s03_be_005_release_');
+        $firstAttemptPath = $this->unusedTempPath('s03_be_005_attempt_first_');
+        $secondAttemptPath = $this->unusedTempPath('s03_be_005_attempt_second_');
+        $first = $this->startWorker([
+            $workerPath,
+            base_path(),
+            'run',
+            $actorId,
+            $targetId,
+            $firstOperation,
+            'hold',
+            $lockedPath,
+            $releasePath,
+            $firstAttemptPath,
+        ]);
+        $this->waitForFile($lockedPath, 'First worker did not acquire and hold the PostgreSQL user row lock.');
+        $second = $this->startWorker([
+            $workerPath,
+            base_path(),
+            'run',
+            $actorId,
+            $targetId,
+            $secondOperation,
+            'normal',
+            $lockedPath,
+            $releasePath,
+            $secondAttemptPath,
+        ]);
+        $this->waitForFile($secondAttemptPath, 'Second worker did not begin its user locking operation.');
 
-        $first = $this->startWorker([$workerPath, base_path(), 'run', $actorId, $targetId, $firstOperation, 'hold', $signalPath]);
-        $deadline = microtime(true) + 3;
-
-        while (! file_exists($signalPath) && microtime(true) < $deadline) {
-            usleep(10_000);
+        try {
+            $this->waitForPostgresLock(
+                (int) file_get_contents($secondAttemptPath),
+                $firstOperation.' -> '.$secondOperation.' for user '.$targetId,
+            );
+        } catch (\Throwable $exception) {
+            file_put_contents($releasePath, 'release');
+            $secondOutput = $this->finishWorker($second);
+            $firstOutput = $this->finishWorker($first);
+            $this->removeTempPaths([$lockedPath, $releasePath, $firstAttemptPath, $secondAttemptPath]);
+            $this->fail($exception->getMessage()."\nFirst: ".$firstOutput."\nSecond: ".$secondOutput);
         }
 
-        $this->assertFileExists($signalPath, 'First worker did not acquire and hold the PostgreSQL row lock.');
-        $secondStartedAt = microtime(true);
-        $second = $this->startWorker([$workerPath, base_path(), 'run', $actorId, $targetId, $secondOperation, 'normal', $signalPath]);
+        file_put_contents($releasePath, 'release');
         $secondResult = json_decode($this->finishWorker($second), true, flags: JSON_THROW_ON_ERROR);
-        $secondElapsed = microtime(true) - $secondStartedAt;
         $firstResult = json_decode($this->finishWorker($first), true, flags: JSON_THROW_ON_ERROR);
-        unlink($signalPath);
+        $this->removeTempPaths([$lockedPath, $releasePath, $firstAttemptPath, $secondAttemptPath]);
 
         return [
             'first_updates' => $firstResult['updates'],
             'second_updates' => $secondResult['updates'],
-            'second_elapsed_seconds' => $secondElapsed,
         ];
+    }
+
+    private function unusedTempPath(string $prefix): string
+    {
+        $path = tempnam(sys_get_temp_dir(), $prefix);
+        $this->assertIsString($path);
+        unlink($path);
+
+        return $path;
+    }
+
+    private function waitForFile(string $path, string $failureMessage): void
+    {
+        $deadline = microtime(true) + 10;
+
+        do {
+            clearstatcache(true, $path);
+
+            if (file_exists($path) && filesize($path) > 0) {
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail($failureMessage);
+    }
+
+    private function waitForPostgresLock(int $backendPid, string $scenario): void
+    {
+        $deadline = microtime(true) + 10;
+        $lastActivity = null;
+
+        do {
+            DB::select('select pg_stat_clear_snapshot()');
+            $lastActivity = DB::selectOne(
+                'select wait_event_type, wait_event from pg_stat_activity where pid = ?',
+                [$backendPid],
+            );
+
+            if ($lastActivity !== null && $lastActivity->wait_event_type === 'Lock') {
+                $this->assertNotNull($lastActivity->wait_event);
+
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail(sprintf(
+            'Second worker never entered a PostgreSQL user row-lock wait during %s. Last activity: %s',
+            $scenario,
+            json_encode($lastActivity, JSON_THROW_ON_ERROR),
+        ));
     }
 
     /** @return array{process: resource, pipes: array<int, resource>} */
@@ -1220,6 +1299,16 @@ class InstitutionUserUpdateLifecycleApiTest extends TestCase
     private function runWorker(array $arguments): string
     {
         return $this->finishWorker($this->startWorker($arguments));
+    }
+
+    /** @param list<string> $paths */
+    private function removeTempPaths(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
     }
 
     private function postgresConcurrencyWorkerSource(): string
@@ -1277,7 +1366,11 @@ $actor = User::query()->findOrFail($argv[3]);
 $targetId = $argv[4];
 $operation = $argv[5];
 $hold = $argv[6] === 'hold';
-$signalPath = $argv[7];
+$lockedPath = $argv[7];
+$releasePath = $argv[8];
+$attemptPath = $argv[9];
+$pid = DB::selectOne('select pg_backend_pid() as pid')->pid;
+file_put_contents($attemptPath, (string) $pid);
 DB::flushQueryLog();
 DB::enableQueryLog();
 
@@ -1297,8 +1390,25 @@ try {
     $queries = DB::getQueryLog();
 
     if ($hold) {
-        file_put_contents($signalPath, 'locked');
-        usleep(500_000);
+        file_put_contents($lockedPath, 'locked');
+        $deadline = microtime(true) + 10;
+
+        do {
+            clearstatcache(true, $releasePath);
+
+            if (file_exists($releasePath)) {
+                break;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        if (! file_exists($releasePath)) {
+            DB::rollBack();
+            fwrite(STDERR, 'Timed out waiting for deterministic user race release.');
+            exit(1);
+        }
+
         DB::commit();
     }
 

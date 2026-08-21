@@ -531,7 +531,6 @@ class InstitutionUnderstandingCategoryApiTest extends TestCase
                 'first',
                 'first',
             );
-            $this->assertGreaterThan(0.5, $sameFirst['second']['action_elapsed_seconds']);
             $this->assertSame(1, $sameFirst['first']['dml']);
             $this->assertSame(0, $sameFirst['second']['dml']);
             $this->assertSame($sameFirst['first']['state'], $sameFirst['second']['state']);
@@ -544,7 +543,6 @@ class InstitutionUnderstandingCategoryApiTest extends TestCase
                 'first',
                 'second',
             );
-            $this->assertGreaterThan(0.5, $differentFirst['second']['action_elapsed_seconds']);
             $this->assertSame('first', $differentFirst['first']['payload']);
             $this->assertSame('second', $differentFirst['second']['payload']);
             $this->assertSame(5, $differentFirst['first']['count']);
@@ -593,7 +591,6 @@ class InstitutionUnderstandingCategoryApiTest extends TestCase
                 $two['first_actor'],
                 $two['second_actor'],
             );
-            $this->assertLessThan(0.5, $independent['second']['action_elapsed_seconds']);
             $this->assertSame(5, $independent['first']['count']);
             $this->assertSame(5, $independent['second']['count']);
             $this->assertNotSame($independent['first']['institution_id'], $independent['second']['institution_id']);
@@ -919,27 +916,52 @@ class InstitutionUnderstandingCategoryApiTest extends TestCase
         string $firstPayload,
         string $secondPayload,
     ): array {
-        $signalPath = tempnam(sys_get_temp_dir(), 's03_be_007_signal_');
-        $this->assertIsString($signalPath);
-        unlink($signalPath);
-        $readyPath = $signalPath.'_ready';
+        $lockedPath = $this->unusedTempPath('s03_be_007_locked_');
+        $releasePath = $this->unusedTempPath('s03_be_007_release_');
+        $firstAttemptPath = $this->unusedTempPath('s03_be_007_attempt_first_');
+        $secondAttemptPath = $this->unusedTempPath('s03_be_007_attempt_second_');
         $first = $this->startWorker([
-            $workerPath, base_path(), 'run', $firstActorId, $firstPayload, 'hold', $signalPath, $readyPath,
+            $workerPath,
+            base_path(),
+            'run',
+            $firstActorId,
+            $firstPayload,
+            'hold',
+            $lockedPath,
+            $releasePath,
+            $firstAttemptPath,
         ]);
-        $deadline = microtime(true) + 3;
+        $this->waitForFile($lockedPath, 'First worker did not acquire the stable settings-row lock.');
+        $second = $this->startWorker([
+            $workerPath,
+            base_path(),
+            'run',
+            $secondActorId,
+            $secondPayload,
+            'normal',
+            $lockedPath,
+            $releasePath,
+            $secondAttemptPath,
+        ]);
+        $this->waitForFile($secondAttemptPath, 'Second worker did not begin its settings-row locking operation.');
 
-        while (! file_exists($signalPath) && microtime(true) < $deadline) {
-            usleep(10_000);
+        try {
+            $this->waitForPostgresLock(
+                (int) file_get_contents($secondAttemptPath),
+                $firstPayload.' -> '.$secondPayload.' for institution categories',
+            );
+        } catch (\Throwable $exception) {
+            file_put_contents($releasePath, 'release');
+            $secondOutput = $this->finishWorker($second);
+            $firstOutput = $this->finishWorker($first);
+            $this->removeTempPaths([$lockedPath, $releasePath, $firstAttemptPath, $secondAttemptPath]);
+            $this->fail($exception->getMessage()."\nFirst: ".$firstOutput."\nSecond: ".$secondOutput);
         }
 
-        $this->assertFileExists($signalPath, 'First worker did not acquire the stable settings-row lock.');
-        $second = $this->startWorker([
-            $workerPath, base_path(), 'run', $secondActorId, $secondPayload, 'normal', $signalPath, $readyPath,
-        ]);
+        file_put_contents($releasePath, 'release');
         $secondResult = json_decode($this->finishWorker($second), true, flags: JSON_THROW_ON_ERROR);
         $firstResult = json_decode($this->finishWorker($first), true, flags: JSON_THROW_ON_ERROR);
-        unlink($signalPath);
-        unlink($readyPath);
+        $this->removeTempPaths([$lockedPath, $releasePath, $firstAttemptPath, $secondAttemptPath]);
 
         return [
             'first' => $firstResult,
@@ -950,7 +972,124 @@ class InstitutionUnderstandingCategoryApiTest extends TestCase
     /** @return array{first: array<string, mixed>, second: array<string, mixed>} */
     private function runIndependentRace(string $workerPath, string $firstActorId, string $secondActorId): array
     {
-        return $this->runRace($workerPath, $firstActorId, $secondActorId, 'first', 'second');
+        $lockedPath = $this->unusedTempPath('s03_be_007_locked_');
+        $releasePath = $this->unusedTempPath('s03_be_007_release_');
+        $firstAttemptPath = $this->unusedTempPath('s03_be_007_attempt_first_');
+        $secondAttemptPath = $this->unusedTempPath('s03_be_007_attempt_second_');
+        $first = $this->startWorker([
+            $workerPath,
+            base_path(),
+            'run',
+            $firstActorId,
+            'first',
+            'hold',
+            $lockedPath,
+            $releasePath,
+            $firstAttemptPath,
+        ]);
+        $this->waitForFile($lockedPath, 'First independent worker did not acquire the settings-row lock.');
+        $second = $this->startWorker([
+            $workerPath,
+            base_path(),
+            'run',
+            $secondActorId,
+            'second',
+            'normal',
+            $lockedPath,
+            $releasePath,
+            $secondAttemptPath,
+        ]);
+        $this->waitForFile($secondAttemptPath, 'Second independent worker did not begin its settings-row operation.');
+
+        try {
+            $this->waitForWorkerExit($second, 'Different-institution category replacement was unexpectedly blocked.');
+        } catch (\Throwable $exception) {
+            file_put_contents($releasePath, 'release');
+            $secondOutput = $this->finishWorker($second);
+            $firstOutput = $this->finishWorker($first);
+            $this->removeTempPaths([$lockedPath, $releasePath, $firstAttemptPath, $secondAttemptPath]);
+            $this->fail($exception->getMessage()."\nFirst: ".$firstOutput."\nSecond: ".$secondOutput);
+        }
+
+        $secondResult = json_decode($this->finishWorker($second), true, flags: JSON_THROW_ON_ERROR);
+        file_put_contents($releasePath, 'release');
+        $firstResult = json_decode($this->finishWorker($first), true, flags: JSON_THROW_ON_ERROR);
+        $this->removeTempPaths([$lockedPath, $releasePath, $firstAttemptPath, $secondAttemptPath]);
+
+        return [
+            'first' => $firstResult,
+            'second' => $secondResult,
+        ];
+    }
+
+    private function unusedTempPath(string $prefix): string
+    {
+        $path = tempnam(sys_get_temp_dir(), $prefix);
+        $this->assertIsString($path);
+        unlink($path);
+
+        return $path;
+    }
+
+    private function waitForFile(string $path, string $failureMessage): void
+    {
+        $deadline = microtime(true) + 10;
+
+        do {
+            clearstatcache(true, $path);
+
+            if (file_exists($path) && filesize($path) > 0) {
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail($failureMessage);
+    }
+
+    private function waitForPostgresLock(int $backendPid, string $scenario): void
+    {
+        $deadline = microtime(true) + 10;
+        $lastActivity = null;
+
+        do {
+            DB::select('select pg_stat_clear_snapshot()');
+            $lastActivity = DB::selectOne(
+                'select wait_event_type, wait_event from pg_stat_activity where pid = ?',
+                [$backendPid],
+            );
+
+            if ($lastActivity !== null && $lastActivity->wait_event_type === 'Lock') {
+                $this->assertNotNull($lastActivity->wait_event);
+
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail(sprintf(
+            'Second worker never entered a PostgreSQL settings-row lock wait during %s. Last activity: %s',
+            $scenario,
+            json_encode($lastActivity, JSON_THROW_ON_ERROR),
+        ));
+    }
+
+    /** @param array{process: resource, pipes: array<int, resource>} $worker */
+    private function waitForWorkerExit(array $worker, string $failureMessage): void
+    {
+        $deadline = microtime(true) + 10;
+
+        do {
+            if (! proc_get_status($worker['process'])['running']) {
+                return;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        $this->fail($failureMessage);
     }
 
     /** @return array{process: resource, pipes: array<int, resource>} */
@@ -984,6 +1123,16 @@ class InstitutionUnderstandingCategoryApiTest extends TestCase
     private function runWorker(array $arguments): string
     {
         return $this->finishWorker($this->startWorker($arguments));
+    }
+
+    /** @param list<string> $paths */
+    private function removeTempPaths(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
     }
 
     private function postgresConcurrencyWorkerSource(): string
@@ -1055,8 +1204,9 @@ if ($mode === 'reset') {
 $actor = User::query()->findOrFail($argv[3]);
 $payloadName = $argv[4];
 $hold = $argv[5] === 'hold';
-$signalPath = $argv[6];
-$readyPath = $argv[7];
+$lockedPath = $argv[6];
+$releasePath = $argv[7];
+$attemptPath = $argv[8];
 $payloads = [
     'first' => [
         ['code' => 'understood_well', 'min_score' => 86, 'max_score' => 100, 'sort_order' => 1],
@@ -1081,6 +1231,8 @@ $payloads = [
     ],
 ];
 
+$pid = DB::selectOne('select pg_backend_pid() as pid')->pid;
+file_put_contents($attemptPath, (string) $pid);
 DB::flushQueryLog();
 DB::enableQueryLog();
 
@@ -1089,32 +1241,32 @@ if ($hold) {
 }
 
 try {
-    if (! $hold) {
-        file_put_contents($readyPath, 'ready');
-    }
-
-    $actionStartedAt = microtime(true);
     $categories = (new ReplaceInstitutionUnderstandingCategories(app(\App\Domain\Institution\UnderstandingCategorySetValidator::class)))(
         $actor,
         $payloads[$payloadName],
     );
-    $actionElapsedSeconds = microtime(true) - $actionStartedAt;
     $queries = DB::getQueryLog();
 
     if ($hold) {
-        file_put_contents($signalPath, 'locked');
+        file_put_contents($lockedPath, 'locked');
+        $deadline = microtime(true) + 10;
 
-        $readyDeadline = microtime(true) + 4;
+        do {
+            clearstatcache(true, $releasePath);
 
-        while (! file_exists($readyPath) && microtime(true) < $readyDeadline) {
-            usleep(10_000);
+            if (file_exists($releasePath)) {
+                break;
+            }
+
+            usleep(5_000);
+        } while (microtime(true) < $deadline);
+
+        if (! file_exists($releasePath)) {
+            DB::rollBack();
+            fwrite(STDERR, 'Timed out waiting for deterministic category race release.');
+            exit(1);
         }
 
-        if (! file_exists($readyPath)) {
-            throw new RuntimeException('Second race worker did not become ready.');
-        }
-
-        usleep(700_000);
         DB::commit();
     }
 
@@ -1129,7 +1281,6 @@ try {
         'institution_id' => $actor->institution_id,
         'count' => $categories->count(),
         'dml' => $dml,
-        'action_elapsed_seconds' => $actionElapsedSeconds,
         'state' => $categories->map(fn ($category): array => [
             'code' => $category->code->value,
             'min_score' => $category->min_score,
