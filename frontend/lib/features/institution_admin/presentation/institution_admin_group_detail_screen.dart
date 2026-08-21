@@ -7,9 +7,11 @@ import '../application/institution_group_action_controller.dart';
 import '../application/institution_group_action_state.dart';
 import '../application/institution_group_detail_controller.dart';
 import '../application/institution_group_detail_state.dart';
+import '../application/institution_group_membership_action_controller.dart';
 import '../domain/institution_group.dart';
 import '../domain/institution_group_mutation.dart';
 import 'institution_admin_group_formatters.dart';
+import 'institution_group_membership_sections.dart';
 
 const _detailPadding = 24.0;
 const _detailMaxWidth = 960.0;
@@ -47,6 +49,9 @@ class _InstitutionAdminGroupDetailScreenState
     final actionState = ref.watch(
       institutionGroupActionControllerProvider(groupId),
     );
+    final membershipActionState = ref.watch(
+      institutionGroupMembershipActionControllerProvider(groupId),
+    );
     final detailController = ref.read(
       institutionGroupDetailControllerProvider(groupId).notifier,
     );
@@ -60,7 +65,8 @@ class _InstitutionAdminGroupDetailScreenState
         : null;
     final canAct =
         activeGroup?.status == InstitutionGroupStatus.active &&
-        !actionState.hasOpenAction;
+        !actionState.hasOpenAction &&
+        !membershipActionState.hasOpenAction;
 
     return FocusTraversalGroup(
       policy: WidgetOrderTraversalPolicy(),
@@ -84,7 +90,8 @@ class _InstitutionAdminGroupDetailScreenState
                     onRefresh:
                         detailState.status ==
                                 InstitutionGroupDetailStatus.data &&
-                            !actionState.hasOpenAction
+                            !actionState.hasOpenAction &&
+                            !membershipActionState.hasOpenAction
                         ? detailController.refresh
                         : null,
                     onEdit: canAct
@@ -128,10 +135,32 @@ class _InstitutionAdminGroupDetailScreenState
                       ),
                     ),
                   ],
+                  if (membershipActionState.feedback != null) ...[
+                    const SizedBox(height: 16),
+                    Semantics(
+                      key: const Key('institutionGroupMembershipFeedback'),
+                      liveRegion: true,
+                      container: true,
+                      child: MaterialBanner(
+                        content: Text(membershipActionState.feedback!),
+                        actions: const [SizedBox.shrink()],
+                      ),
+                    ),
+                  ],
                   if (actionState.isReconciling) ...[
                     const SizedBox(height: 16),
                     Semantics(
                       key: const Key('institutionGroupReconciliationStatus'),
+                      liveRegion: true,
+                      label: 'Checking current server state',
+                      child: const LinearProgressIndicator(),
+                    ),
+                  ] else if (membershipActionState.isReconciling) ...[
+                    const SizedBox(height: 16),
+                    Semantics(
+                      key: const Key(
+                        'institutionGroupMembershipReconciliationStatus',
+                      ),
                       liveRegion: true,
                       label: 'Checking current server state',
                       child: const LinearProgressIndicator(),
@@ -174,8 +203,19 @@ class _InstitutionAdminGroupDetailScreenState
                           : null,
                     ),
                     InstitutionGroupDetailStatus.data ||
-                    InstitutionGroupDetailStatus.refreshing => _GroupDetails(
-                      group: detailState.group!,
+                    InstitutionGroupDetailStatus.refreshing => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _GroupDetails(group: detailState.group!),
+                        const SizedBox(height: 24),
+                        InstitutionGroupMembershipSections(
+                          groupId: groupId,
+                          group: detailState.group!,
+                          detailAllowsMutation:
+                              detailState.status ==
+                              InstitutionGroupDetailStatus.data,
+                        ),
+                      ],
                     ),
                   },
                 ],
