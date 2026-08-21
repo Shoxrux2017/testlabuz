@@ -6,15 +6,15 @@
 |---|---|
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Block | Frontend (`S04-FE-001` through `S04-FE-005`) |
-| Status | `Prepared — entry gate pending S04-FE-005 delivery` |
+| Status | `PASS` |
 | Review mode | `Read-only` |
 | Backend checkpoint dependency | Complete Stage 4 Backend Phase 2 = `PASS` |
-| Frontend entry gate | `S04-FE-001…005 Accepted / Delivered` on synchronized `origin/main` |
+| Frontend entry gate | `S04-FE-001…005 Accepted / Delivered` on synchronized `origin/main` — `PASS` |
 | Audited branch | `main` |
 | Required repository state | local `main == origin/main`, ahead/behind `0/0`, clean worktree |
 | Stage 4 frontend baseline | `1bc138a29250f575bc000c4be3e22d72f5b68e55` |
-| Audited `origin/main` | `<supply exact SHA after S04-FE-005 delivery>` |
-| Verdict | `Pending` |
+| Audited `origin/main` | `c2adec99344b86f18684974295df19011651a9b6` |
+| Verdict | `PASS` |
 | Verdicts | `PASS` or `NOT ACCEPTED` |
 | Next gate after PASS | Stage 4 Integration Planning / Decomposition |
 
@@ -49,11 +49,11 @@ The Stage 4 frontend implementation baseline is the first parent of the S04-FE-0
 
 This baseline contains the approved planning package immediately before Stage 4 frontend production implementation began.
 
-At review preparation time:
+Frontend implementation block completed at:
 
 ```text
-origin/main:
-94cb460012f0c0a84ed586c809a05ee6aec28c73
+frontend implementation tip:
+314afd43da521ddbfd486309fb3a7199e6479e29
 
 S04-FE-001:
 Accepted / Delivered
@@ -76,12 +76,31 @@ PR #92
 merge 0c1ecd80ac3cbb9db1e60582c08ab51dbebb2147
 
 S04-FE-005:
-Approved / implementation in progress
+Accepted / Delivered
+PR #93
+merge 314afd43da521ddbfd486309fb3a7199e6479e29
 ```
 
-The final audited `origin/main` SHA must be supplied only after S04-FE-005 is Accepted / Delivered.
+Frontend implementation and Frontend Phase 2 correction delivery are complete.
 
-Do not begin Phase 2 against the preparation SHA.
+Final audited state:
+
+```text
+origin/main:
+c2adec99344b86f18684974295df19011651a9b6
+
+Phase 2 evidence baseline:
+56e8b392fe628d257600ca223aa8d348afeb2f14
+
+Initial Phase 2 finding fix:
+PR #94
+merge 360c16ab29e192431c2c81f4ab20d6cd67c30a31
+
+Final test-only cleanup:
+c2adec99344b86f18684974295df19011651a9b6
+```
+
+The final cleanup removed only one unused local test variable. Focused Dashboard tests and static analysis were rerun successfully after that cleanup; the already-green full frontend suite and Windows build evidence remained valid because production code was unchanged.
 
 ---
 
@@ -175,7 +194,7 @@ git cat-file -e "$Stage4FrontendBaseline^{commit}"
 git merge-base --is-ancestor $Stage4FrontendBaseline origin/main
 ```
 
-ChatGPT/orchestration must provide the exact expected final audited `origin/main` SHA after FE-005 delivery.
+ChatGPT/orchestration must provide the exact expected audited `origin/main` SHA after this review contract/index planning update is delivered.
 
 If any entry condition fails:
 
@@ -1020,103 +1039,221 @@ Confirm no later Stage 4 task invalidated earlier Stage assumptions.
 
 ---
 
-# 24. Findings Severity
+# 24. Findings
 
-Use only:
-
-## `P1`
-
-Security, tenant isolation, protected-data exposure, secret exposure, or core public-contract breach.
-
-Examples:
-
-- stale previous-session tenant data visible;
-- foreign/direct identifier widens access;
-- token/private payload exposure;
-- frontend sends trusted tenant authority;
-- core approved route/API contract is materially wrong.
-
-## `P2`
-
-Material functional, architecture, state, routing, lifecycle, mutation-outcome, accessibility, build, or regression defect blocking the checkpoint.
-
-Examples:
-
-- full test/analyze/build failure caused by Stage 4;
-- stale async result overwrites current state;
-- uncertain mutation shown as confirmed;
-- duplicate competing cache/router/client/state owner;
-- failed reconciliation leaves stale active actions/data;
-- broken route order/direct entry;
-- optimistic false authoritative row/count state;
-- critical keyboard/focus/overflow failure;
-- missing critical test evidence.
-
-## `P3`
-
-Non-blocking maintainability, clarity, or test-quality improvement without current security/contract/functional impact.
-
-Do not invent findings to populate severity.
-
-For every finding record:
+## Current blocking findings
 
 ```text
-ID
-severity
-concise title
-exact file/location
-evidence
-violated approved behavior
-impact
-minimal remediation direction
+P1 = 0
+P2 = 0
+```
+
+No blocking frontend architecture, API/DTO/transport, routing, session, tenant/privacy, async ownership, cache/invalidation, mutation-reconciliation, accessibility, responsive, or regression finding remains.
+
+## Resolved during checkpoint — P2-01
+
+Initial full frontend suite on audited checkpoint preparation state:
+
+```text
+991 executed
+989 passed
+2 failed
+```
+
+Both failures were obsolete Institution Admin Dashboard regression-test assumptions after the approved Stage 4 `Groups` shell destination was added:
+
+1. a global `find.text('Groups') == findsNothing` assertion incorrectly included shell navigation;
+2. keyboard Refresh coverage depended on an historical fixed count of six `Tab` presses.
+
+Focused fix:
+
+```text
+PR #94
+test(frontend): update dashboard shell regressions
+merge:
+360c16ab29e192431c2c81f4ab20d6cd67c30a31
+```
+
+The fix:
+
+- scoped the `Groups`-absence assertion to the Dashboard content subtree;
+- retained real keyboard `Tab` + `Enter` verification while using a bounded traversal instead of a hard-coded historical tab count;
+- changed only `institution_admin_dashboard_screen_test.dart`.
+
+Verification after PR #94:
+
+```text
+focused Dashboard:
+10 passed
+
+full frontend suite:
+991 passed
+
+git diff --check:
+PASS
+```
+
+One unused local test variable remained after the focused fix. It was removed in the test-only cleanup commit:
+
+```text
+c2adec99344b86f18684974295df19011651a9b6
+```
+
+After the cleanup:
+
+```text
+flutter analyze:
+PASS
+
+focused Dashboard test:
+PASS
+
+git diff --check:
+PASS
+
+main == origin/main:
+yes
+
+ahead/behind:
+0/0
+
+working tree:
+clean
+```
+
+No production file changed during P2-01 remediation.
+
+## P3-01 — debounce tests use real wall-clock delay
+
+Evidence collection found 15 controller-test occurrences using real `Future.delayed` timing around the 300 ms debounce in:
+
+```text
+institution_group_list_controller_test.dart
+institution_group_membership_candidate_controller_test.dart
+institution_group_membership_list_controller_test.dart
+institution_parent_student_relationship_list_controller_test.dart
+institution_user_selection_controller_test.dart
+```
+
+Impact:
+
+- no current functional/security/API/state defect;
+- full suite is green;
+- tests remain deterministic enough in the current environment, but fake/controlled time would improve speed and robustness.
+
+Disposition:
+
+```text
+Non-blocking.
+Do not expand Stage 4 scope solely to refactor these tests.
+```
+
+Current findings:
+
+```text
+P1 = 0
+P2 = 0
+P3 = 1
 ```
 
 ---
 
 # 25. Verdict
 
-Use exactly one:
+Official Frontend Phase 2 verdict:
 
 ```text
 PASS
-NOT ACCEPTED
+P1 = 0
+P2 = 0
+P3 = 1
 ```
 
-## PASS requires
+PASS basis:
 
-- every entry condition passes;
-- complete Stage 4 frontend delta reviewed;
-- `P1 = 0`;
-- `P2 = 0`;
-- full frontend suite passes;
-- static analysis passes;
-- format check passes;
-- Windows build passes;
-- no unresolved architecture/API/session/routing/state/cache/accessibility/cross-task conflict;
-- required Stage 4 frontend criteria have evidence;
-- final repository remains clean/read-only.
+- all five frontend implementation tasks are Accepted / Delivered;
+- complete Stage 4 frontend delta was reviewed;
+- no unexplained backend/package/lock/platform/product-document scope entered the frontend block;
+- routing/shell/static-vs-dynamic route composition is coherent;
+- DTO/repository/controller/presentation boundaries are coherent;
+- exact Stage 4 API/transport/error contracts are respected;
+- Institution Admin session/device/institution ownership is preserved;
+- existence privacy and backend authority are preserved;
+- stale async completion, mutation uncertainty, reconciliation, cache/stale ownership, and cross-task interactions have no blocking finding;
+- accessibility/keyboard/focus/responsive review has no blocking finding;
+- required Windows debug build passed;
+- static analysis passed;
+- format check passed;
+- full frontend suite passed after P2-01 correction;
+- final test-only cleanup passed focused Dashboard tests and static analysis;
+- final `main == origin/main`, ahead/behind `0/0`, worktree clean.
 
-P3 may accompany PASS when genuinely non-blocking.
+Checkpoint verification record:
 
-## NOT ACCEPTED
+```text
+Stage 4 frontend baseline:
+1bc138a29250f575bc000c4be3e22d72f5b68e55
 
-Use when:
+Initial evidence main:
+56e8b392fe628d257600ca223aa8d348afeb2f14
 
-- any P1 or P2 exists;
-- required verification fails because of candidate implementation;
-- a required criterion lacks sufficient evidence;
-- entry conditions do not permit a valid review;
-- the review cannot establish the required correctness/safety boundary.
+Final audited main:
+c2adec99344b86f18684974295df19011651a9b6
 
-Do not fix findings during this checkpoint.
+Flutter SDK:
+3.44.7
 
-If NOT ACCEPTED:
+Format:
+PASS
+381 files
+0 changed
 
-1. preserve evidence;
-2. ChatGPT prepares focused fix contract(s);
-3. Codex implements, verifies, and delivers fixes;
-4. rerun affected checkpoint checks;
-5. obtain PASS before Stage integration planning.
+Analyze:
+PASS
+No issues found
+
+Windows debug build:
+PASS
+
+Initial full suite:
+989 passed / 2 failed
+P2-01 identified
+
+P2-01 fix PR:
+#94
+merge 360c16ab29e192431c2c81f4ab20d6cd67c30a31
+
+Focused Dashboard after fix:
+10 passed
+
+Full frontend suite after fix:
+991 passed
+
+Final cleanup:
+c2adec99344b86f18684974295df19011651a9b6
+
+Analyze after final cleanup:
+PASS
+
+Focused Dashboard after final cleanup:
+PASS
+
+git diff --check:
+PASS
+
+Final Git:
+main == origin/main
+ahead/behind 0/0
+clean
+```
+
+Next permitted gate:
+
+```text
+Stage 4 Integration Planning / Decomposition
+```
+
+Frontend implementation must not be repeated. Real-stack/E2E integration remains a separate Stage 4 integration task and Stage closure remains unauthorized until integration passes.
 
 ---
 
@@ -1248,41 +1385,84 @@ This checkpoint does not itself authorize Stage closure.
 
 # 28. Official Verdict Record
 
-Not populated during preparation.
+Official verdict:
 
 ```text
-Verdict: Pending
-P1: Pending
-P2: Pending
-P3: Pending
+PASS
+P1 = 0
+P2 = 0
+P3 = 1
+```
 
-Audited origin/main:
-<pending S04-FE-005 delivery>
+Audited repository:
+
+```text
+main:
+c2adec99344b86f18684974295df19011651a9b6
+
+origin/main:
+c2adec99344b86f18684974295df19011651a9b6
+
+ahead/behind:
+0/0
+
+working tree:
+clean
+```
 
 Stage 4 frontend baseline:
-1bc138a29250f575bc000c4be3e22d72f5b68e55
-
-Full frontend suite:
-Pending
-
-Static analysis:
-Pending
-
-Format check:
-Pending
-
-Windows build:
-Pending
-
-Final Git state:
-Pending
-```
-
-Populate the official record only after:
 
 ```text
-S04-FE-005 Accepted / Delivered
-entry gate PASS
-read-only evidence collection complete
-ChatGPT final review complete
+1bc138a29250f575bc000c4be3e22d72f5b68e55
 ```
+
+Verification:
+
+```text
+Full frontend suite:
+991 passed
+
+Static analysis:
+PASS
+
+Format check:
+PASS
+
+Windows debug build:
+PASS
+
+git diff --check:
+PASS
+```
+
+Resolved checkpoint correction:
+
+```text
+P2-01:
+Dashboard regression-test compatibility
+
+Fix PR:
+#94
+
+Fix merge:
+360c16ab29e192431c2c81f4ab20d6cd67c30a31
+
+Final cleanup:
+c2adec99344b86f18684974295df19011651a9b6
+```
+
+Non-blocking finding:
+
+```text
+P3-01:
+Several debounce controller tests use real Future.delayed timing.
+No Stage 4 correction required.
+```
+
+Next gate:
+
+```text
+Stage 4 Integration Planning / Decomposition
+```
+
+This Frontend Phase 2 PASS does not close Stage 4.
