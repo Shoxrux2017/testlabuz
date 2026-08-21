@@ -6,7 +6,7 @@
 |---|---|
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Block | Backend (`S04-BE-001` through `S04-BE-004`) |
-| Status | `Draft` |
+| Status | `Approved` |
 | Review mode | `Read-only` |
 | Entry gate | `S04-BE-001`…`S04-BE-004` are all `Accepted` and `Delivered` on `origin/main` |
 | Audited branch | `main` |
