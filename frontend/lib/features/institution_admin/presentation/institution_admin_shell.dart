@@ -9,6 +9,7 @@ import '../../auth/application/auth_session_state.dart';
 import '../../auth/domain/auth_user.dart';
 import '../../auth/domain/user_role.dart';
 import '../application/institution_group_create_controller.dart';
+import '../application/institution_parent_student_relationship_action_controller.dart';
 import '../application/institution_user_create_controller.dart';
 
 const _compactRailWidth = 136.0;
@@ -62,6 +63,14 @@ class InstitutionAdminShell extends ConsumerWidget {
         ? !ref.watch(
             institutionGroupCreateControllerProvider.select(
               (state) => state.isRouteBlocking,
+            ),
+          )
+        : AppRoutePaths.isInstitutionAdminParentStudentConnectionsPath(
+            locationPath,
+          )
+        ? !ref.watch(
+            institutionParentStudentRelationshipActionControllerProvider.select(
+              (state) => state.hasOpenAction,
             ),
           )
         : true;
@@ -160,7 +169,8 @@ enum InstitutionAdminShellDestination {
     }
 
     if (AppRoutePaths.isInstitutionAdminUserCreatePath(path) ||
-        AppRoutePaths.isInstitutionAdminUserDetailPath(path)) {
+        AppRoutePaths.isInstitutionAdminUserDetailPath(path) ||
+        AppRoutePaths.isInstitutionAdminParentStudentConnectionsPath(path)) {
       return InstitutionAdminShellDestination.users;
     }
 
@@ -215,6 +225,9 @@ String? _pageTitleForPath(String path) {
   }
   if (AppRoutePaths.isInstitutionAdminUserCreatePath(path)) {
     return 'Create User';
+  }
+  if (AppRoutePaths.isInstitutionAdminParentStudentConnectionsPath(path)) {
+    return 'Parent–Student Connections';
   }
   if (AppRoutePaths.isInstitutionAdminUserDetailPath(path)) {
     return 'User Details';

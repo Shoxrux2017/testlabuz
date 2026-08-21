@@ -16,6 +16,8 @@ abstract final class AppRouteNames {
   static const institutionAdminGroupCreate = 'institution-admin-group-create';
   static const institutionAdminGroupDetail = 'institution-admin-group-detail';
   static const institutionAdminUserCreate = 'institution-admin-user-create';
+  static const institutionAdminParentStudentConnections =
+      'institution-admin-parent-student-connections';
   static const institutionAdminUserDetail = 'institution-admin-user-detail';
   static const institutionAdminInstitution = 'institution-admin-institution';
   static const institutionAdminSettings = 'institution-admin-settings';
@@ -48,6 +50,8 @@ abstract final class AppRoutePaths {
   static const institutionAdminGroupCreateSegment = 'new';
   static const institutionAdminGroupIdParameter = 'groupId';
   static const institutionAdminUserCreateSegment = 'new';
+  static const institutionAdminParentStudentConnectionsSegment =
+      'parent-student-connections';
   static const institutionAdminUserIdParameter = 'userId';
   static const institutionAdminInstitutionSegment = 'institution';
   static const institutionAdminSettingsSegment = 'settings';
@@ -61,6 +65,9 @@ abstract final class AppRoutePaths {
       '$institutionAdminGroups/:$institutionAdminGroupIdParameter';
   static const institutionAdminUserCreate =
       '$institutionAdminUsers/$institutionAdminUserCreateSegment';
+  static const institutionAdminParentStudentConnections =
+      '$institutionAdminUsers/'
+      '$institutionAdminParentStudentConnectionsSegment';
   static const institutionAdminUserDetail =
       '$institutionAdminUsers/:$institutionAdminUserIdParameter';
   static const institutionAdminInstitution =
@@ -85,6 +92,7 @@ abstract final class AppRoutePaths {
     institutionAdminGroupCreate,
     institutionAdminGroupDetail,
     institutionAdminUserCreate,
+    institutionAdminParentStudentConnections,
     institutionAdminUserDetail,
     institutionAdminInstitution,
     institutionAdminSettings,
@@ -112,6 +120,7 @@ abstract final class AppRoutePaths {
   static const _institutionAdminStaticLocations = <String>[
     ...institutionAdminPrimaryDestinations,
     institutionAdminUserCreate,
+    institutionAdminParentStudentConnections,
     institutionAdminGroupCreate,
   ];
 
@@ -173,6 +182,10 @@ abstract final class AppRoutePaths {
 
   static bool isInstitutionAdminUserCreatePath(String path) {
     return path == institutionAdminUserCreate;
+  }
+
+  static bool isInstitutionAdminParentStudentConnectionsPath(String path) {
+    return path == institutionAdminParentStudentConnections;
   }
 
   static bool isInstitutionAdminUserDetailPath(String path) {

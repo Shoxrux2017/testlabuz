@@ -20,6 +20,10 @@ void main() {
         'institution-admin-user-create',
       );
       expect(
+        AppRouteNames.institutionAdminParentStudentConnections,
+        'institution-admin-parent-student-connections',
+      );
+      expect(
         AppRouteNames.institutionAdminUserDetail,
         'institution-admin-user-detail',
       );
@@ -38,6 +42,10 @@ void main() {
       expect(AppRoutePaths.institutionAdminGroupCreateSegment, 'new');
       expect(AppRoutePaths.institutionAdminGroupIdParameter, 'groupId');
       expect(AppRoutePaths.institutionAdminUserCreateSegment, 'new');
+      expect(
+        AppRoutePaths.institutionAdminParentStudentConnectionsSegment,
+        'parent-student-connections',
+      );
       expect(AppRoutePaths.institutionAdminUserIdParameter, 'userId');
       expect(AppRoutePaths.institutionAdminInstitutionSegment, 'institution');
       expect(AppRoutePaths.institutionAdminSettingsSegment, 'settings');
@@ -54,6 +62,10 @@ void main() {
       expect(
         AppRoutePaths.institutionAdminUserCreate,
         '/institution-admin/users/new',
+      );
+      expect(
+        AppRoutePaths.institutionAdminParentStudentConnections,
+        '/institution-admin/users/parent-student-connections',
       );
       expect(
         AppRoutePaths.institutionAdminUserDetail,
@@ -84,6 +96,7 @@ void main() {
         AppRouteNames.institutionAdminGroupCreate,
         AppRouteNames.institutionAdminGroupDetail,
         AppRouteNames.institutionAdminUserCreate,
+        AppRouteNames.institutionAdminParentStudentConnections,
         AppRouteNames.institutionAdminUserDetail,
         AppRouteNames.institutionAdminInstitution,
         AppRouteNames.institutionAdminSettings,
@@ -111,14 +124,15 @@ void main() {
         AppRoutePaths.institutionAdminGroupCreate,
         AppRoutePaths.institutionAdminGroupDetail,
         AppRoutePaths.institutionAdminUserCreate,
+        AppRoutePaths.institutionAdminParentStudentConnections,
         AppRoutePaths.institutionAdminUserDetail,
         AppRoutePaths.institutionAdminInstitution,
         AppRoutePaths.institutionAdminSettings,
       ];
 
       expect(allNames.toSet(), hasLength(allNames.length));
-      expect(institutionAdminNames.toSet(), hasLength(9));
-      expect(patterns.toSet(), hasLength(9));
+      expect(institutionAdminNames.toSet(), hasLength(10));
+      expect(patterns.toSet(), hasLength(10));
       for (final pattern in patterns) {
         expect(
           AppRoutePaths.protected.where((path) => path == pattern),
@@ -158,6 +172,24 @@ void main() {
             AppRoutePaths.institutionAdminUserCreate,
           ),
           isTrue,
+        );
+        expect(
+          AppRoutePaths.isInstitutionAdminParentStudentConnectionsPath(
+            AppRoutePaths.institutionAdminParentStudentConnections,
+          ),
+          isTrue,
+        );
+        expect(
+          AppRoutePaths.isInstitutionAdminApprovedLocation(
+            AppRoutePaths.institutionAdminParentStudentConnections,
+          ),
+          isTrue,
+        );
+        expect(
+          AppRoutePaths.isInstitutionAdminPrimaryDestination(
+            AppRoutePaths.institutionAdminParentStudentConnections,
+          ),
+          isFalse,
         );
         for (final userId in const [_lowerUuid, _upperUuid]) {
           final path = AppRoutePaths.institutionAdminUserDetailLocation(userId);
@@ -202,6 +234,7 @@ void main() {
         '/institution-admin/',
         '/institution-admin/users/',
         '/institution-admin/users/new/extra',
+        '/institution-admin/users/parent-student-connections/extra',
         '/institution-admin/users//',
         '/institution-admin/users/not-a-uuid',
         '/institution-admin/users/550e8400-e29b-41d4-a716-446655440000/extra',
@@ -266,6 +299,18 @@ void main() {
       );
       expect(
         () => AppRoutePaths.institutionAdminUserDetailLocation('new'),
+        throwsArgumentError,
+      );
+      expect(
+        AppRoutePaths.isInstitutionAdminUserDetailPath(
+          AppRoutePaths.institutionAdminParentStudentConnections,
+        ),
+        isFalse,
+      );
+      expect(
+        () => AppRoutePaths.institutionAdminUserDetailLocation(
+          AppRoutePaths.institutionAdminParentStudentConnectionsSegment,
+        ),
         throwsArgumentError,
       );
     });

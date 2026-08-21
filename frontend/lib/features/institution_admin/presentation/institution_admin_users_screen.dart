@@ -69,12 +69,27 @@ class _InstitutionAdminUsersScreenState
                 key: const Key('institutionUserListHeading'),
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              FilledButton.icon(
-                key: const Key('institutionUserCreateButton'),
-                onPressed: () =>
-                    context.goNamed(AppRouteNames.institutionAdminUserCreate),
-                icon: const Icon(Icons.person_add_outlined),
-                label: const Text('Create User'),
+              Wrap(
+                spacing: _controlSpacing,
+                runSpacing: _controlSpacing,
+                children: [
+                  OutlinedButton.icon(
+                    key: const Key('institutionParentStudentConnectionsButton'),
+                    onPressed: () => context.goNamed(
+                      AppRouteNames.institutionAdminParentStudentConnections,
+                    ),
+                    icon: const Icon(Icons.family_restroom_outlined),
+                    label: const Text('Parent–Student Connections'),
+                  ),
+                  FilledButton.icon(
+                    key: const Key('institutionUserCreateButton'),
+                    onPressed: () => context.goNamed(
+                      AppRouteNames.institutionAdminUserCreate,
+                    ),
+                    icon: const Icon(Icons.person_add_outlined),
+                    label: const Text('Create User'),
+                  ),
+                ],
               ),
             ],
           ),
