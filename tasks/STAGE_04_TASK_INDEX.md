@@ -13,7 +13,7 @@
 | Frontend implementation | `S04-FE-001…005 Accepted / Delivered — complete` |
 | Frontend Phase 2 contract | `Complete` |
 | Frontend Phase 2 verdict | `PASS — P1=0, P2=0, P3=1` |
-| Integration | `Planning / decomposition authorized` |
+| Integration | `S04-INT-001 Approved / Not started` |
 | Stage closure | `Pending` |
 
 This is the shared Stage 4 orchestration/status map.
@@ -278,7 +278,49 @@ Integration implementation/verification must be completed and accepted before St
 
 ---
 
-## 11. Stage Closure Gate
+## 11. Stage 4 Integration Task
+
+Approved task:
+
+```text
+S04-INT-001 — Stage 4 Windows Real-Stack E2E Verification
+```
+
+Contract:
+
+```text
+tasks/integration/stage-04/S04-INT-001-stage-04-windows-real-stack-e2e-verification.md
+```
+
+Status:
+
+```text
+Approved
+Implementation = Not started
+Automated integration = Pending
+Project Owner manual smoke = Pending
+```
+
+Verification policy:
+
+```text
+Reuse fresh Backend/Frontend Phase 2 PASS evidence.
+Do not rerun full backend/frontend suites, full analyze/format, standalone build,
+or previous-Stage broad E2E merely for integration.
+Run only focused integration-asset checks + one Stage 4 real-stack runner.
+```
+
+After automated integration assets are delivered:
+
+```text
+Project Owner manual smoke
+→ ChatGPT final integration verdict
+→ Stage Closure Review
+```
+
+---
+
+## 12. Stage Closure Gate
 
 Stage 4 closes only after:
 
@@ -296,7 +338,7 @@ Completion of FE-005 alone does not close Stage 4.
 
 ---
 
-## 12. Current Progress
+## 13. Current Progress
 
 | Item | State |
 |---|---|
@@ -311,24 +353,26 @@ Completion of FE-005 alone does not close Stage 4.
 | Frontend implementation block | `Complete` |
 | Frontend Phase 2 contract | `Complete` |
 | Frontend Phase 2 | `PASS — P1=0, P2=0, P3=1` |
-| Integration | `Planning / decomposition authorized` |
+| Integration | `S04-INT-001 Approved / Not started` |
 | Stage Closure | `Pending` |
 
 ---
 
-## 13. Next Permitted Gate
+## 14. Next Permitted Gate
 
 ```text
-Stage 4 Integration Planning / Decomposition
+S04-INT-001 implementation / automated real-stack verification
 ```
 
 Safe sequence:
 
 ```text
-prepare/approve integration contract
-→ implement/verify real-stack integration
+S04-INT-001 Approved
+→ implement focused E2E assets + run Stage 4 real-stack verification
 → fix/reverify integration findings if any
-→ deliver accepted integration state
+→ deliver automated integration assets/evidence
+→ Project Owner manual smoke PASS
+→ ChatGPT integration PASS
 → Stage Closure Review
 ```
 
