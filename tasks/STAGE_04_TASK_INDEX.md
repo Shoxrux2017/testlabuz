@@ -9,33 +9,32 @@
 | Backend implementation | `S04-BE-001…005 Accepted / Delivered` |
 | Complete Backend Phase 2 | `PASS` |
 | Frontend decomposition | `Approved — 5 implementation tasks` |
-| Frontend contracts | `FE-001…005 Approved / Review complete` |
-| Frontend implementation | `FE-001…003 Accepted / Delivered; FE-004 next implementation task` |
-| Frontend Build Runner | `Prepared — all remaining task approval gates open subject to dependencies` |
-| Frontend Phase 2 | `Pending FE-004 and FE-005 delivery` |
+| Frontend contracts | `S04-FE-001…005 Approved / Review complete` |
+| Frontend implementation | `S04-FE-001…004 Accepted / Delivered; S04-FE-005 In Progress` |
+| Frontend Phase 2 contract | `Prepared — entry gate pending S04-FE-005 delivery` |
+| Frontend Phase 2 verdict | `Pending` |
 | Integration | `Blocked until Frontend Phase 2 PASS` |
 | Stage closure | `Pending` |
 
 This is the shared Stage 4 orchestration/status map.
 
-Codex must not read this file to determine implementation behavior. The active Approved task contract is self-contained.
+Codex must not read this file to determine implementation behavior. The active Approved implementation contract or read-only review contract is self-contained.
 
 ---
 
 ## 2. Backend Gate
 
-Stage 4 backend is complete:
-
 ```text
-S04-BE-001…005 = Accepted / Delivered
+S04-BE-001…005:
+Accepted / Delivered
 
-Backend Phase 2:
+Complete Stage 4 Backend Phase 2:
 PASS
 P1 = 0
 P2 = 0
 P3 = 0
 
-Recorded checkpoint baseline:
+Recorded complete-backend checkpoint main:
 2e9dab8cfeb8a1caed4cc71c361a1f4812a1ce61
 
 Full backend suite:
@@ -46,21 +45,21 @@ git diff --check:
 PASS
 ```
 
-Backend does not block the frontend block.
+Backend does not block frontend or Frontend Phase 2.
 
 ---
 
-## 3. Frontend Queue
+## 3. Frontend Implementation Queue
 
-| Order | Task | Title | Dependency | Planning | Implementation |
+| Order | Task | Title | Dependency | Contract | Implementation |
 |---:|---|---|---|---|---|
 | 1 | `S04-FE-001` | Institution Group Navigation and List | Backend Phase 2 PASS | `Approved` | `Accepted / Delivered` |
 | 2 | `S04-FE-002` | Institution Group Create and Detail | FE-001 delivered | `Approved` | `Accepted / Delivered` |
 | 3 | `S04-FE-003` | Institution Group Edit and Archive Lifecycle | FE-002 delivered | `Approved` | `Accepted / Delivered` |
-| 4 | `S04-FE-004` | Teacher and Student Group Membership Management | FE-003 delivered | `Approved` | `Ready / next permitted` |
-| 5 | `S04-FE-005` | Parent–Student Relationship Management | FE-004 delivered | `Approved` | `Dependency pending` |
+| 4 | `S04-FE-004` | Teacher and Student Group Membership Management | FE-003 delivered | `Approved` | `Accepted / Delivered` |
+| 5 | `S04-FE-005` | Parent–Student Relationship Management | FE-004 delivered | `Approved` | `In Progress` |
 
-Exact chain:
+Exact implementation chain:
 
 ```text
 Backend Phase 2 PASS
@@ -71,69 +70,94 @@ FE-002 Accepted / Delivered
   ↓
 FE-003 Accepted / Delivered
   ↓
-FE-004 Approved / implement next
-  ↓ Accepted / Delivered
-FE-005 Approved / may continue automatically
+FE-004 Accepted / Delivered
+  ↓
+FE-005 Approved / In Progress
   ↓ Accepted / Delivered
 Frontend Phase 2
 ```
 
-All five frontend task contracts have now passed ChatGPT implementation-readiness review.
+No additional frontend implementation task is currently planned.
 
 ---
 
-## 4. Verified Frontend Delivery
+## 4. Frontend Delivery Evidence
 
 ### S04-FE-001
 
 ```text
-Accepted / Delivered
 PR #89
-Merge:
+merge:
 698b611677522071b6dae547c997c3f1a503d19e
 ```
 
 ### S04-FE-002
 
 ```text
-Accepted / Delivered
 PR #90
-Merge:
+merge:
 d330d693c02a9a8bed043e5628989bbe56979ccf
 ```
 
 ### S04-FE-003
 
 ```text
-Accepted / Delivered
 PR #91
-Merge:
+merge:
 b4e23fc8f230f64b1a7a1160ce93bee904f2d631
 ```
 
 ### S04-FE-004
 
 ```text
-Status = Approved
-Review = Complete
-Dependency = FE-003 Accepted / Delivered
-Gate = OPEN / next implementation task
+PR #92
+merge:
+0c1ecd80ac3cbb9db1e60582c08ab51dbebb2147
 ```
 
 ### S04-FE-005
 
 ```text
-Status = Approved
-Review = Complete
-Dependency = FE-004 Accepted / Delivered
-Gate = DEPENDENCY PENDING
+Contract:
+Approved / Review Complete
+
+Dependency:
+S04-FE-004 Accepted / Delivered
+
+Implementation:
+In Progress
+
+Delivery:
+Pending
 ```
 
-The Runner must recover actual delivery from synchronized `origin/main`; this index is orchestration context, not implementation proof.
+The Runner and Phase 2 review must recover actual delivery evidence from synchronized `origin/main`; this index is orchestration context, not implementation proof.
 
 ---
 
-## 5. Build Runner
+## 5. Stage 4 Frontend Baseline
+
+The frontend implementation baseline is:
+
+```text
+1bc138a29250f575bc000c4be3e22d72f5b68e55
+```
+
+This is the first parent of the S04-FE-001 merge and contains the approved planning package immediately before Stage 4 frontend production implementation began.
+
+Frontend Phase 2 reviews:
+
+```text
+baseline
+  ->
+final origin/main after S04-FE-005 delivery
+```
+
+for the complete `frontend/` delta.
+
+---
+
+## 6. Frontend Build Runner
 
 File:
 
@@ -143,72 +167,39 @@ tasks/frontend/stage-04/S04-FE-BUILD-RUNNER.md
 
 The Runner:
 
-- recovers the first not-yet-delivered task from `origin/main`;
-- verifies the immediately preceding dependency is Accepted / Delivered;
-- verifies the active task's own `Status = Approved`;
-- reads only that active contract body;
-- implements one task at a time;
-- runs only contract-proportional verification;
-- performs focused GitHub delivery;
-- re-synchronizes main;
-- continues to the next Approved task automatically;
-- stops on `WAITING FOR TASK APPROVAL`, `BLOCKED`, or `DELIVERY BLOCKED`;
-- does not run Frontend Phase 2, integration, or Stage closure.
+- executes one Approved implementation task at a time;
+- recovers actual delivery from `origin/main`;
+- performs focused per-task verification and delivery;
+- does not run Frontend Phase 2;
+- stops after FE-005 delivery with:
 
-Because FE-005 is now Approved, there should be no planning approval stop after FE-004 if the FE-004 implementation is Accepted / Delivered and synchronized `main` contains this planning update.
+```text
+STAGE 4 FRONTEND IMPLEMENTATION BLOCK COMPLETE
+READY FOR CHATGPT FRONTEND PHASE 2
+```
+
+The Runner must not begin integration or closure.
 
 ---
 
-## 6. Per-Task Acceptance
+## 7. Frontend Phase 2 Contract
 
-A frontend task is `Accepted / Delivered` only after:
-
-```text
-approved contract satisfied
-focused tests PASS
-directly affected regressions PASS
-static/format checks PASS
-git diff --check PASS
-focused scope/diff self-review PASS
-focused PR merged
-implementation present on origin/main
-local main == origin/main
-ahead/behind = 0/0
-working tree clean
-```
-
-There is no per-task Phase 2 review.
-
----
-
-## 7. Verification Policy
-
-Each implementation task runs only:
+Prepared file:
 
 ```text
-focused functionality tests
-necessary directly affected regressions
-static/format checks
-git diff --check
-focused scope/diff self-review
+tasks/frontend/stage-04/S04-FE-PHASE-2-frontend-block-review.md
 ```
 
-Do not run after each task:
+Current status:
 
 ```text
-full frontend suite
-Windows build
-broad E2E
-Frontend Phase 2
+Prepared
+Review mode = Read-only
+Entry gate pending S04-FE-005 Accepted / Delivered
+Verdict = Pending
 ```
 
-unless a specific contract requires broader verification for a concrete shared risk.
-
----
-
-## 8. Frontend Phase 2 Gate
-
-Blocked until:
+Phase 2 begins only after:
 
 ```text
 FE-001 Accepted / Delivered
@@ -217,26 +208,30 @@ FE-003 Accepted / Delivered
 FE-004 Accepted / Delivered
 FE-005 Accepted / Delivered
 
-main == origin/main
+local main == origin/main
 ahead/behind = 0/0
 working tree clean
 ```
 
-Then perform one complete frontend-block Phase 2 read-only review with:
+---
+
+## 8. Frontend Phase 2 Required Verification
+
+The checkpoint includes:
 
 ```text
 complete Stage 4 frontend diff review
 full frontend test suite
-static analysis
-format checks
-required Windows build
-routing/session/state architecture
-API/DTO/error integration
-stale async ownership
-mutation uncertainty/reconciliation
-cache/invalidation and cross-task interactions
-accessibility/focus/responsiveness
-regression risk
+Flutter static analysis
+Dart format check
+required Windows debug build
+route/shell review
+API/DTO/error/transport review
+session/tenant/stale-async review
+cache/invalidation review
+mutation uncertainty/reconciliation review
+accessibility/keyboard/focus/responsiveness review
+cross-task and previous-Stage regression review
 ```
 
 Verdict:
@@ -246,11 +241,45 @@ PASS
 NOT ACCEPTED
 ```
 
-Fix findings before Stage integration.
+PASS requires:
+
+```text
+P1 = 0
+P2 = 0
+full frontend suite PASS
+static analysis PASS
+format check PASS
+Windows build PASS
+no unresolved cross-task/frontend architecture conflict
+```
+
+The checkpoint is read-only. Findings are not fixed inside the review.
 
 ---
 
-## 9. Integration and Closure
+## 9. Fix Flow After Frontend Phase 2
+
+If:
+
+```text
+NOT ACCEPTED
+```
+
+then:
+
+```text
+record findings
+→ ChatGPT prepares focused fix contract(s)
+→ Codex implements/verifies/delivers fixes
+→ rerun affected Frontend Phase 2 checks
+→ obtain PASS
+```
+
+Stage integration remains blocked until Frontend Phase 2 PASS.
+
+---
+
+## 10. Integration Gate
 
 Integration planning is authorized only after:
 
@@ -259,15 +288,50 @@ Backend Phase 2 PASS
 Frontend Phase 2 PASS
 ```
 
-Then perform Stage 4 real-stack/E2E/security/tenant integration verification.
+Backend gate is already satisfied.
 
-Stage closure requires integration/fixes/delivery plus Stage Closure Review PASS.
+Remaining gate:
 
-Completion of FE-001…005 alone does not close Stage 4.
+```text
+Frontend Phase 2 PASS
+```
+
+Only then may ChatGPT prepare Stage 4 integration task(s) for:
+
+```text
+real Laravel–Flutter stack
+authentication/session
+Institution Admin role
+tenant isolation/existence privacy
+Groups
+Group lifecycle
+Teacher/Student memberships
+Parent–Student relationships
+API/DTO/error agreement
+required Windows/E2E/security verification
+```
 
 ---
 
-## 10. Current Progress
+## 11. Stage Closure Gate
+
+Stage 4 closes only after:
+
+```text
+all implementation delivered
+Backend Phase 2 PASS
+Frontend Phase 2 PASS
+integration PASS
+required fixes delivered
+Stage Closure Review PASS
+final main synchronized and clean
+```
+
+Completion of FE-005 alone does not close Stage 4.
+
+---
+
+## 12. Current Progress
 
 | Item | State |
 |---|---|
@@ -276,39 +340,31 @@ Completion of FE-001…005 alone does not close Stage 4.
 | `S04-FE-001` | `Accepted / Delivered` |
 | `S04-FE-002` | `Accepted / Delivered` |
 | `S04-FE-003` | `Accepted / Delivered` |
-| `S04-FE-004` | `Approved / Ready` |
-| `S04-FE-005` | `Approved / Dependency pending` |
+| `S04-FE-004` | `Accepted / Delivered` |
+| `S04-FE-005` | `Approved / In Progress` |
 | Frontend contract review | `Complete — all five Approved` |
-| Build Runner | `Prepared / approval-gated` |
-| Frontend Phase 2 | `Pending` |
+| Frontend implementation block | `Pending FE-005 delivery` |
+| Frontend Phase 2 contract | `Prepared` |
+| Frontend Phase 2 | `Entry gate pending` |
 | Integration | `Blocked until Frontend Phase 2 PASS` |
 | Stage Closure | `Pending` |
 
 ---
 
-## 11. Next Gates
+## 13. Next Permitted Gates
 
-Next implementation task:
-
-```text
-S04-FE-004 — Teacher and Student Group Membership Management
-```
-
-After FE-004 `Accepted / Delivered`, Runner may continue directly to:
+Current implementation gate:
 
 ```text
-S04-FE-005 — Parent–Student Relationship Management
+Complete S04-FE-005 implementation, focused verification, and delivery
 ```
 
-No further frontend implementation-contract review remains.
-
-Safe sequence:
+Then:
 
 ```text
-FE-004 implementation/delivery
-→ FE-005 implementation/delivery
-→ final main sync
-→ READY FOR CHATGPT FRONTEND PHASE 2
-→ Frontend Phase 2
-→ integration planning only after Phase 2 PASS
+verify final main sync/clean
+→ execute S04-FE-PHASE-2-frontend-block-review.md
+→ ChatGPT verdict PASS or NOT ACCEPTED
 ```
+
+Do not begin Stage 4 integration planning before Frontend Phase 2 PASS.
