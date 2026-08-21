@@ -6,10 +6,12 @@
 |---|---|
 | Stage | `Stage 4 — Groups and User Relationships` |
 | Stage dependency | `Stage 3 — Institution Administration and User Management` is closed |
-| Planning state | `Backend block complete; Backend Phase 2 PASS; frontend planning/decomposition is the next gate` |
-| Backend implementation | `S04-BE-001…004 Accepted / Delivered; backend implementation block complete; no backend implementation task is authorized` |
-| Frontend implementation | `Not authorized until frontend decomposition/tasks are prepared and approved` |
-| Integration | `Not decomposed` |
+| Planning state | `S04-BE-005 Approved; Backend Phase 2 rerun required after delivery` |
+| Backend implementation | `S04-BE-001…004 Accepted / Delivered; S04-BE-005 is the next authorized implementation task` |
+| Frontend decomposition | `Approved` |
+| Frontend task files | `Not yet created; will be prepared one task at a time after S04-BE-005 Accepted / Delivered and Backend Phase 2 rerun PASS` |
+| Frontend implementation | `Blocked until S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS` |
+| Integration | `Not decomposed; planning is not authorized` |
 | Stage closure | `Pending` |
 
 This file is the orchestration map for Stage 4.
@@ -47,7 +49,8 @@ Only the next dependency-satisfied task is promoted to `Approved`. Future task c
 | 2 | `S04-BE-002` | Institution Group Management API | `S04-BE-001 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
 | 3 | `S04-BE-003` | Teacher and Student Group Membership API | `S04-BE-001 + S04-BE-002 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
 | 4 | `S04-BE-004` | Parent–Student Relationship API | `S04-BE-003 Accepted + Delivered` | `Accepted / Delivered` | `Implementation + GitHub delivery` |
-| 5 | `S04-BE-PHASE-2` | Backend Phase 2 Read-Only Block Review | `S04-BE-001…004 Accepted + Delivered` | `PASS` | `Read-only checkpoint; no delivery` |
+| 5 | `S04-BE-PHASE-2` | Backend Phase 2 Read-Only Block Review | `S04-BE-001…004 Accepted + Delivered` | `Historical PASS for S04-BE-001…004` | `Read-only checkpoint; no delivery` |
+| 6 | `S04-BE-005` | Parent–Student Relationship Related-User Summary | `S04-BE-001…004 Accepted / Delivered`; historical Backend Phase 2 `PASS`; Stage 4 frontend decomposition approval | `Approved` | `Implementation + GitHub delivery` |
 
 ### Backend dependency chain
 
@@ -63,8 +66,12 @@ S04-BE-003
 S04-BE-004
     ↓ Accepted + Delivered
 Backend Phase 2
+    ↓ Historical PASS for S04-BE-001…004
+S04-BE-005
+    ↓ Accepted + Delivered
+Backend Phase 2 Rerun
     ↓ PASS
-Stage 4 Frontend Planning / Decomposition
+Frontend Implementation Gate
 ```
 
 ---
@@ -149,17 +156,45 @@ The obsolete route family below is **not** approved:
 /api/v1/institution/parent-student-connections
 ```
 
+### S04-BE-005 — Parent–Student Relationship Related-User Summary
+
+Owns read-response enrichment for the two existing Parent–Student relationship
+list endpoints by adding the related User's safe identity summary. It preserves
+the existing mutation responses, routes, authorization, validation, lifecycle,
+persistence, and bounded-query behavior.
+
+This is the current `Approved` backend implementation task.
+
 ---
 
 ## 5. Backend Phase 2 Checkpoint
 
-Run only after:
+### Historical result for S04-BE-001…004
+
+The Backend Phase 2 review run after the original backend block remains recorded
+as:
+
+```text
+PASS
+```
+
+That historical result covers:
 
 ```text
 S04-BE-001 = Accepted + Delivered
 S04-BE-002 = Accepted + Delivered
 S04-BE-003 = Accepted + Delivered
 S04-BE-004 = Accepted + Delivered
+```
+
+It does not cover the newly approved `S04-BE-005` change.
+
+### Required rerun after S04-BE-005
+
+Backend Phase 2 must be rerun only after:
+
+```text
+S04-BE-005 = Accepted + Delivered
 local main == origin/main
 ahead/behind = 0/0
 working tree = clean
@@ -202,7 +237,8 @@ no unresolved architecture/API/database/security/tenant/lifecycle/cross-task con
 
 If `NOT ACCEPTED`, ChatGPT prepares focused fix contract(s), the fixes are implemented/verified/delivered, and the affected checkpoint is rerun.
 
-Frontend implementation cannot start until Backend Phase 2 is `PASS` and the frontend decomposition/tasks are prepared and approved.
+Frontend implementation cannot start until `S04-BE-005` is `Accepted / Delivered`
+and the required Backend Phase 2 rerun is `PASS`.
 
 ---
 
@@ -211,24 +247,33 @@ Frontend implementation cannot start until Backend Phase 2 is `PASS` and the fro
 ### Current state
 
 ```text
-Ready for planning / next gate.
+Blocked pending S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS.
 ```
 
-This is intentional and **not a backend blocker**.
+This is an intentional temporary frontend implementation block while the
+approved backend follow-up and its checkpoint are pending.
 
-Do not invent `S04-FE-*` task IDs or detailed frontend contracts before frontend planning is performed.
-
-Frontend planning starts only after:
+Frontend decomposition is `Approved`. Frontend task files have not yet been
+created and will be prepared one task at a time only after:
 
 ```text
-Backend Phase 2 = PASS
+S04-BE-005 = Accepted / Delivered
+→ Backend Phase 2 rerun = PASS
 ```
 
-That condition is now satisfied, so frontend planning is permitted. Frontend implementation remains unauthorized until the frontend decomposition and tasks are prepared and approved.
+Frontend implementation starts only after:
 
-At that point ChatGPT must re-check current `origin/main`, current frontend architecture/tests, locked Stage 4 product/API requirements, and delivered backend behavior before proposing the frontend task decomposition.
+```text
+S04-BE-005 = Accepted / Delivered
+→ Backend Phase 2 rerun = PASS
+```
 
-After user approval, this same Task Index is updated with:
+That condition is not yet satisfied. The historical Backend Phase 2 `PASS` for
+`S04-BE-001…004` does not authorize frontend implementation after `S04-BE-005`
+was added to the backend block.
+
+After the required rerun passes, frontend task files will be prepared one task
+at a time. As each task is prepared, this same Task Index can be updated with:
 
 - exact `S04-FE-*` tasks;
 - task order;
@@ -243,7 +288,7 @@ After user approval, this same Task Index is updated with:
 Current state:
 
 ```text
-Not scheduled — frontend block is not decomposed yet.
+Not scheduled — frontend task files have not been created yet.
 ```
 
 When applicable, Frontend Phase 2 runs only after all approved Stage 4 frontend tasks are `Accepted` and `Delivered`.
@@ -264,13 +309,13 @@ Stage integration cannot begin until the required Backend and Frontend Phase 2 c
 Current state:
 
 ```text
-Not decomposed.
+Not decomposed; planning is not authorized.
 ```
 
 Do not create the Stage 4 integration implementation contract before:
 
 ```text
-Backend Phase 2 = PASS
+Required Backend Phase 2 rerun = PASS
 Frontend Phase 2 = PASS
 ```
 
@@ -286,7 +331,7 @@ Stage 4 may be closed only after:
 
 ```text
 Backend implementation complete
-→ Backend Phase 2 PASS
+→ Required Backend Phase 2 rerun PASS
 → Frontend implementation complete
 → Frontend Phase 2 PASS
 → Integration complete
@@ -346,11 +391,14 @@ Do not run per-task Phase 2 reviews.
 | `S04-BE-002` | `Accepted / Delivered` |
 | `S04-BE-003` | `Accepted / Delivered` |
 | `S04-BE-004` | `Accepted / Delivered` |
-| Backend Phase 2 | `PASS` |
-| Frontend decomposition | `Ready for planning / next gate` |
-| Frontend implementation | `Not authorized until frontend decomposition/tasks are approved` |
+| Historical Backend Phase 2 for `S04-BE-001…004` | `PASS` |
+| `S04-BE-005` | `Approved` |
+| Required Backend Phase 2 rerun | `Pending S04-BE-005 Accepted / Delivered` |
+| Frontend decomposition | `Approved` |
+| Frontend task files | `Not yet created; will be prepared one task at a time after S04-BE-005 Accepted / Delivered and Backend Phase 2 rerun PASS` |
+| Frontend implementation | `Blocked until S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS` |
 | Frontend Phase 2 | `Not scheduled` |
-| Integration | `Not decomposed` |
+| Integration | `Not decomposed; planning is not authorized` |
 | Stage Closure | `Pending` |
 
 ---
@@ -360,7 +408,12 @@ Do not run per-task Phase 2 reviews.
 The next permitted gate is:
 
 ```text
-Stage 4 Frontend Planning / Decomposition
+S04-BE-005 implementation
 ```
 
-The backend block is complete and Backend Phase 2 is `PASS`. Frontend planning is now permitted. Frontend implementation starts only after the frontend decomposition and tasks are prepared and approved. Integration remains prohibited and `Not decomposed`.
+`S04-BE-001…004` remain `Accepted / Delivered`, and their historical Backend
+Phase 2 result remains `PASS`. The only currently permitted gate is
+`S04-BE-005 implementation`. Frontend implementation remains blocked until
+`S04-BE-005 Accepted / Delivered → Backend Phase 2 rerun PASS`. Frontend task
+files have not yet been created and will be prepared one task at a time only
+after that condition is satisfied. Integration remains unplanned.
