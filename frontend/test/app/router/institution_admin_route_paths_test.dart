@@ -6,6 +6,7 @@ void main() {
     test('declare exact names paths segments parameter and primary order', () {
       expect(AppRouteNames.institutionAdmin, 'institution-admin');
       expect(AppRouteNames.institutionAdminUsers, 'institution-admin-users');
+      expect(AppRouteNames.institutionAdminGroups, 'institution-admin-groups');
       expect(
         AppRouteNames.institutionAdminUserCreate,
         'institution-admin-user-create',
@@ -25,11 +26,13 @@ void main() {
 
       expect(AppRoutePaths.institutionAdmin, '/institution-admin');
       expect(AppRoutePaths.institutionAdminUsersSegment, 'users');
+      expect(AppRoutePaths.institutionAdminGroupsSegment, 'groups');
       expect(AppRoutePaths.institutionAdminUserCreateSegment, 'new');
       expect(AppRoutePaths.institutionAdminUserIdParameter, 'userId');
       expect(AppRoutePaths.institutionAdminInstitutionSegment, 'institution');
       expect(AppRoutePaths.institutionAdminSettingsSegment, 'settings');
       expect(AppRoutePaths.institutionAdminUsers, '/institution-admin/users');
+      expect(AppRoutePaths.institutionAdminGroups, '/institution-admin/groups');
       expect(
         AppRoutePaths.institutionAdminUserCreate,
         '/institution-admin/users/new',
@@ -49,6 +52,7 @@ void main() {
       expect(AppRoutePaths.institutionAdminPrimaryDestinations, const [
         AppRoutePaths.institutionAdmin,
         AppRoutePaths.institutionAdminUsers,
+        AppRoutePaths.institutionAdminGroups,
         AppRoutePaths.institutionAdminInstitution,
         AppRoutePaths.institutionAdminSettings,
       ]);
@@ -58,6 +62,7 @@ void main() {
       const institutionAdminNames = <String>[
         AppRouteNames.institutionAdmin,
         AppRouteNames.institutionAdminUsers,
+        AppRouteNames.institutionAdminGroups,
         AppRouteNames.institutionAdminUserCreate,
         AppRouteNames.institutionAdminUserDetail,
         AppRouteNames.institutionAdminInstitution,
@@ -82,6 +87,7 @@ void main() {
       const patterns = <String>[
         AppRoutePaths.institutionAdmin,
         AppRoutePaths.institutionAdminUsers,
+        AppRoutePaths.institutionAdminGroups,
         AppRoutePaths.institutionAdminUserCreate,
         AppRoutePaths.institutionAdminUserDetail,
         AppRoutePaths.institutionAdminInstitution,
@@ -89,8 +95,8 @@ void main() {
       ];
 
       expect(allNames.toSet(), hasLength(allNames.length));
-      expect(institutionAdminNames.toSet(), hasLength(6));
-      expect(patterns.toSet(), hasLength(6));
+      expect(institutionAdminNames.toSet(), hasLength(7));
+      expect(patterns.toSet(), hasLength(7));
       for (final pattern in patterns) {
         expect(
           AppRoutePaths.protected.where((path) => path == pattern),
