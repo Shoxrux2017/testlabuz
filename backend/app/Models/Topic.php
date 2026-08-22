@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\TopicStatus;
 use Database\Factories\TopicFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -62,5 +63,21 @@ class Topic extends Model
     public function learningMaterials(): HasMany
     {
         return $this->hasMany(LearningMaterial::class);
+    }
+
+    public function scopeVisibleToTeacher(Builder $query, User $teacher): Builder
+    {
+        return $query
+            ->where('topics.institution_id', $teacher->institution_id)
+            ->where('topics.teacher_id', $teacher->id)
+            ->whereExists(function ($query) use ($teacher): void {
+                $query
+                    ->selectRaw('1')
+                    ->from('group_teacher_memberships')
+                    ->whereColumn('group_teacher_memberships.group_id', 'topics.group_id')
+                    ->where('group_teacher_memberships.institution_id', $teacher->institution_id)
+                    ->where('group_teacher_memberships.teacher_id', $teacher->id)
+                    ->whereNull('group_teacher_memberships.ended_at');
+            });
     }
 }

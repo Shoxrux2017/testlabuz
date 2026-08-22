@@ -19,6 +19,8 @@ use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
 use App\Support\Auth\LoginRateLimitKey;
 use Illuminate\Support\Facades\Route;
 
@@ -84,4 +86,14 @@ Route::prefix('institution')
         Route::post('users/{user}/activate', [InstitutionUserController::class, 'activate']);
         Route::post('users/{user}/deactivate', [InstitutionUserController::class, 'deactivate']);
         Route::get('users/{user}', [InstitutionUserController::class, 'show']);
+    });
+
+Route::prefix('teacher')
+    ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::Teacher->value])
+    ->group(function (): void {
+        Route::get('groups', TeacherGroupController::class);
+        Route::get('topics', [TeacherTopicController::class, 'index']);
+        Route::post('topics', [TeacherTopicController::class, 'store']);
+        Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
+        Route::patch('topics/{topic}', [TeacherTopicController::class, 'update']);
     });

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\Teacher\TopicNotEditableException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -54,6 +55,18 @@ class ApiErrorContractTest extends TestCase
         $response = $this->getJson('/api/v1/test-authorization');
 
         $this->assertErrorContract($response, 403, 'forbidden');
+    }
+
+    public function test_topic_not_editable_exception_returns_specific_conflict_contract(): void
+    {
+        Route::patch('/api/v1/test-topic-not-editable', function () {
+            throw new TopicNotEditableException;
+        });
+
+        $response = $this->patchJson('/api/v1/test-topic-not-editable');
+
+        $decoded = $this->assertErrorContract($response, 409, 'topic_not_editable');
+        $this->assertSame('The topic is not editable.', $decoded->message);
     }
 
     public function test_rate_limit_exception_returns_rate_limited_contract(): void
