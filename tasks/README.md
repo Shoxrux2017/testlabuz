@@ -792,18 +792,16 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
-| Stage 5 — Topics and Learning Materials | `Not started` | Stage 5 planning/decomposition |
+| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-BE-002 — Teacher Topic Authoring API` planning/readiness |
 
-Before Stage 5 planning/decomposition:
+Current Stage 5 progress:
 
-- Workflow v3 files must be delivered to `origin/main`;
-- local `main` must match `origin/main`, ahead/behind `0/0`, with a clean
-  working tree;
-- ChatGPT must re-read the current Stage 5 roadmap/specification scope and
-  current implementation/tests;
-- Stage 5 decomposition must be discussed and approved;
-- Stage 5 implementation remains unauthorized until its first task passes the
-  Implementation Readiness Gate.
+- Stage 5 planning/decomposition: Approved / Delivered.
+- `S05-BE-001`: Accepted / Delivered — PR #102,
+  merge `17129ede0e266087c23355f135f9a340ccdaaf92`.
+- Backend Phase 2: Not started; runs only after `S05-BE-001…005`
+  are Accepted / Delivered.
+- Next permitted task: `S05-BE-002 — Teacher Topic Authoring API`.
 
 ---
 
