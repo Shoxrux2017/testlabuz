@@ -792,7 +792,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
-| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-BE-003 — Learning Material Management and Private Storage` planning/readiness |
+| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-BE-003 — Learning Material Management and Private Storage` implementation |
 
 Current Stage 5 progress:
 
@@ -801,9 +801,11 @@ Current Stage 5 progress:
   merge `17129ede0e266087c23355f135f9a340ccdaaf92`.
 - `S05-BE-002`: Accepted / Delivered — PR #105,
   merge `08fc5bca465562bf88f2824dd62f0d13aa29a478`.
+- `S05-BE-003`: Approved / implementation contract Delivered — PR #106,
+  merge `a4774992527a86dbb7ce2bc9442a1f43d30ca7be`.
 - Backend Phase 2: Not started; runs only after `S05-BE-001…005`
   are Accepted / Delivered.
-- Next permitted task: `S05-BE-003 — Learning Material Management and Private Storage`.
+- Next permitted action: `S05-BE-003` implementation.
 
 ---
 

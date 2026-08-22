@@ -9,7 +9,7 @@
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition approved on | `2026-08-22` |
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
-| Implementation started | `Yes — S05-BE-001 Accepted / Delivered` |  `Yes — S05-BE-001…002 Accepted / Delivered` |
+| Implementation started | `Yes — S05-BE-001…002 Accepted / Delivered` |
 | Backend checkpoint | `Not started` |
 | Frontend checkpoint | `Not started` |
 | Integration gate | `Not started` |
@@ -176,7 +176,7 @@ Implementation proceeds one task at a time in dependency order.
 |---:|---|---|---|---|---|---|---|
 | 1 | `S05-BE-001` | Backend | Topic and Learning Material Persistence Foundation | Stage 4 closed | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-001-topic-learning-material-persistence-foundation.md` |
 | 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-002-teacher-topic-authoring-api.md` |
-| 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Draft` | `Not started` | `Not created` |
+| 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Approved` | `Not started` | `tasks/backend/stage-05/S05-BE-003-learning-material-management-private-storage.md` |
 | 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Draft` | `Not started` | `Not created` |
 | 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Draft` | `Not started` | `Not created` |
 | 6 | `S05-FE-001` | Frontend | Teacher Learning Workspace, Assigned Groups and Topic List | Backend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
@@ -356,7 +356,7 @@ Implementation Readiness Gate.
 |---|---|---|---|---|---|---|---|
 | `S05-BE-001` | `Yes` | `N/A` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-002` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
-| `S05-BE-003` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-003` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-004` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
 | `S05-BE-005` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
 | `S05-FE-001` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
@@ -881,33 +881,22 @@ closure bookkeeping delivered to origin/main
 ---
 
 ## 19. Next Permitted Action
-
 `S05-BE-001` and `S05-BE-002` are Accepted / Delivered.
 
-Latest delivery evidence:
+`S05-BE-003` is Approved and its implementation contract is delivered.
 
-S05-BE-002
-PR #105
-merge:
-08fc5bca465562bf88f2824dd62f0d13aa29a478
+Current implementation baseline candidate:
 
-Next permitted task:
+a4774992527a86dbb7ce2bc9442a1f43d30ca7be
 
-S05-BE-003 — Learning Material Management and Private Storage
+Next permitted action:
 
-Before implementation:
+1. Synchronize local `main` with current `origin/main`.
+2. Verify ahead/behind = `0/0` and clean working tree.
+3. Freeze the exact current `origin/main` SHA.
+4. Start Codex implementation of `S05-BE-003`.
 
-1. ChatGPT re-checks current `origin/main`.
-2. ChatGPT inspects the delivered Topic API, File/LearningMaterial persistence,
-   filesystem configuration, Institution upload limits, and directly relevant tests.
-3. Resolve the exact S05-BE-003 storage/DB consistency and replacement semantics.
-4. Prepare only the S05-BE-003 implementation contract.
-5. Run the Implementation Readiness Gate.
-6. Deliver bookkeeping + Approved S05-BE-003 contract.
-7. Freeze the new implementation baseline.
-8. Start Codex only after those gates pass.
-
-Do not prepare S05-BE-004 before S05-BE-003 is Accepted / Delivered.
+Do not prepare `S05-BE-004` before `S05-BE-003` is Accepted / Delivered.
 ---
 
 # Final Stage 5 Planning Principle
