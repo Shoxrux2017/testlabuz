@@ -9,10 +9,11 @@
 | Area | `[Backend / Frontend / Integration]` |
 | Status | `Draft` |
 | Depends on | `[Task IDs or None]` |
-| Delivery | `[Implementation + GitHub delivery / Implementation only]` |
+| Verification | `Codex — focused task verification only` |
+| Delivery execution | `Project Owner` |
 
-Start only when status is `Approved`, dependencies are delivered, and Git
-preflight from `tasks/README.md` is safe.
+Start only when status is `Approved`, dependencies are satisfied, and Git
+preflight is safe.
 
 This is the complete task-specific contract. Do not create a duplicate
 `CODEX-PROMPT` file.
@@ -21,7 +22,7 @@ This is the complete task-specific contract. Do not create a duplicate
 
 ## 2. Goal
 
-[One observable outcome.]
+[One observable implementation outcome.]
 
 ---
 
@@ -44,24 +45,24 @@ This is the complete task-specific contract. Do not create a duplicate
 Only record facts Codex needs to find the correct code quickly.
 
 - [Existing route/controller/action/repository/provider/widget]
-- [Existing model/resource/DTO/state pattern to reuse]
+- [Existing model/resource/DTO/state pattern]
 - [Relevant test file]
-- [Current behavior and boundary that must remain unchanged]
+- [Current behavior/boundary that must remain unchanged]
 
-Inspect only the directly relevant implementation and tests. Do not read product
-specifications, roadmap, architecture/database/API documents, previous tasks,
-Stage history, or closure reviews to determine requirements.
+Inspect only directly relevant implementation/tests plus applicable
+`AGENTS.md`. Do not read product docs, roadmap, previous tasks, Stage history,
+checkpoint reviews, or closure reviews to determine requirements.
 
 ---
 
 ## 5. Exact Implementation Contract
 
-Use `N/A — [reason]` for an inapplicable subsection.
+Use `N/A — [reason]` when a subsection does not apply.
 
 ### 5.1 Behavior and Lifecycle
 
 - [Exact success behavior]
-- [State transition / no-op / timestamp / history behavior]
+- [State transition/no-op/timestamp/history behavior]
 - [Forbidden behavior]
 - [Relevant edge case]
 
@@ -72,32 +73,32 @@ Use `N/A — [reason]` for an inapplicable subsection.
 - Method/path: `[METHOD /api/v1/...]`
 - Input: `[Exact query/body/headers]`
 - Success: `[Status + exact response/envelope]`
-- List/filter/sort/pagination: `[Rules or N/A]`
+- Filters/sort/pagination: `[Rules or N/A]`
 
 **UI**
 
 - Route/screen/dialog: `[Location or N/A]`
-- States: `[loading/empty/data/error/mutation states]`
-- Actions and feedback: `[Exact behavior]`
+- States: `[loading/empty/data/error/mutation]`
+- Actions/feedback: `[Exact behavior]`
 - Navigation/focus/accessibility: `[Rules or N/A]`
 - Cache/invalidation/retained state: `[Rules or N/A]`
 
 ### 5.3 Persistence and Application State
 
 - Schema/migration: `[Exact change or N/A]`
-- Query/read: `[Scope, ordering, eager loading, query limits]`
+- Query/read: `[Scope/order/eager loading/query limits]`
 - Write/transaction: `[Rows/fields/atomic boundary]`
 - No-op/history: `[Rules or N/A]`
 - Frontend state/cache: `[Rules or N/A]`
 
 ### 5.4 Authorization and Tenant Isolation
 
-- Actor and active-state requirements: `[Exact roles/checks]`
+- Actor/active-state requirements: `[Exact rules]`
 - Trusted tenant scope: `[How derived]`
 - Ownership/relationship rule: `[Exact rule]`
 - Wrong role/unauthenticated: `[Exact result]`
 - Foreign/direct ID: `[Privacy-safe result]`
-- Client identifiers that must not expand scope: `[Fields/IDs]`
+- Client IDs that must not widen scope: `[Fields/IDs]`
 
 ### 5.5 Validation and Errors
 
@@ -110,9 +111,9 @@ Use `N/A — [reason]` for an inapplicable subsection.
 
 Normalization/strict-input rules:
 
-- [Exact trimming/case/UUID/timestamp/enum/content-type/body/query behavior]
+- [Exact trim/case/UUID/timestamp/enum/content-type/body/query behavior]
 
-### 5.6 Concurrency, Idempotency, and Async Ownership
+### 5.6 Concurrency, Idempotency, Async Ownership
 
 - Transaction/lock/constraint: `[Rule or N/A]`
 - Idempotency/replay/duplicate mutation: `[Rule or N/A]`
@@ -134,10 +135,9 @@ Normalization/strict-input rules:
 | Path or area | Action | Reason |
 |---|---|---|
 | `[path]` | `[Inspect/Modify/Create/Test]` | `[Reason]` |
-| `[path]` | `[Inspect/Modify/Create/Test]` | `[Reason]` |
 
-Changes outside these areas require a concrete necessity within scope and must
-be reported. Unrelated files must not change.
+Changes outside these areas require concrete necessity within scope and must be
+reported.
 
 ---
 
@@ -148,15 +148,19 @@ be reported. Unrelated files must not change.
 - [ ] [Persistence/lifecycle/no-op behavior]
 - [ ] [Validation/error behavior]
 - [ ] [Authorized case]
-- [ ] [Wrong-role/cross-tenant negative case, or justified N/A]
-- [ ] [Concurrency/idempotency/stale-async case, or justified N/A]
+- [ ] [Wrong-role/cross-tenant negative case or justified N/A]
+- [ ] [Concurrency/idempotency/stale-async case or justified N/A]
 - [ ] [Architecture/placement requirement]
-- [ ] Required tests/checks pass.
-- [ ] No unrelated behavior or public contract changed.
+- [ ] Focused tests are added/updated and pass.
+- [ ] Required focused static/format/regression checks pass.
+- [ ] `git diff --check` passes.
+- [ ] No unrelated public behavior changed.
 
 ---
 
-## 8. Tests and Verification
+## 8. Focused Verification
+
+Run only the commands explicitly listed below.
 
 ### Focused Tests
 
@@ -168,8 +172,8 @@ Required cases:
 
 - [positive];
 - [validation/error];
-- [authorization/tenant, if applicable];
-- [edge/lifecycle/concurrency/async, if applicable].
+- [authorization/tenant where applicable];
+- [edge/lifecycle/concurrency/async where applicable].
 
 ### Format / Static Checks
 
@@ -183,22 +187,10 @@ Required cases:
 [Exact command]
 ```
 
-Or:
+or:
 
 ```text
 None required — [specific isolation reason].
-```
-
-### Manual Check
-
-```text
-[Exact steps and expected result]
-```
-
-Or:
-
-```text
-Not required — [reason].
 ```
 
 ### Always
@@ -207,49 +199,57 @@ Not required — [reason].
 git diff --check
 ```
 
-Then verify the complete diff:
+### Boundary
 
-- only necessary files changed;
-- contract and non-goals are preserved;
-- no unrelated refactor/format churn;
-- no weakened tests, debug code, secrets, or temporary artifacts;
-- no unintended API/schema/route/serialization change;
-- security/tenant boundaries and pre-existing user work are intact.
+Do not run full backend/frontend suites, full builds, broad E2E, or Phase 2
+unless ChatGPT explicitly includes one for a concrete task-specific risk.
 
-Narrow diagnostic reruns are allowed. Do not run full suites, full builds, broad
-E2E, or Phase 2 unless this contract explicitly requires them for a concrete
-risk. Those checks normally belong to Stage checkpoints.
+Narrow diagnostics/reruns are allowed only to understand a failure.
 
 ---
 
-## 9. Delivery
+## 9. Delivery Plan
 
-Follow root `AGENTS.md` and `tasks/README.md`.
+Default execution owner:
 
-- Mode: `[Implementation + GitHub delivery / Implementation only]`
-- Branch: `[Name/rule]`
-- Commit: `[Subject/convention]`
-- PR: `[Requirement or N/A]`
-- Allowed bookkeeping files: `[Paths or None]`
+```text
+Project Owner
+```
 
-For GitHub delivery, acceptance requires the result on `origin/main`, local
-`main == origin/main`, ahead/behind `0/0`, and a clean worktree.
+Recommended branch:
 
-For `Implementation only`, do not commit, push, open/merge a PR, or update
-task/Stage status.
+```text
+[task/<id>-<short-name>]
+```
 
-If required safe delivery cannot complete, report `DELIVERY BLOCKED`.
+Recommended commit:
+
+```text
+[subject]
+```
+
+Allowed bookkeeping files:
+
+```text
+[None / exact paths]
+```
+
+If Project Owner owns delivery, Codex must not commit, push, open/merge PRs, or
+update task/Stage status.
+
+Task acceptance occurs only after focused verification + delivery + final Git
+synchronization.
 
 ---
 
 ## 10. Planning Provenance
 
 For ChatGPT/reviewer traceability only. Codex must not open these sources to
-rediscover or reinterpret requirements.
+rediscover requirements.
 
 | Source/reference | Decision already encoded above |
 |---|---|
-| `[Stage index / specification section]` | `[Resolved decision]` |
+| `[spec/Stage reference]` | `[Resolved decision]` |
 
 ---
 
@@ -257,16 +257,15 @@ rediscover or reinterpret requirements.
 
 Return:
 
-1. **Status:** `ACCEPTED`, `BLOCKED`, or `DELIVERY BLOCKED`.
-2. **Implementation:** concise result.
-3. **Changed files:** file → purpose.
-4. **Acceptance criteria:** PASS/FAIL evidence.
-5. **Verification:** exact commands and results.
-6. **Security/tenant:** evidence or justified N/A.
-7. **Scope/diff:** non-goals, `git diff --check`, no unrelated changes.
-8. **Delivery:** commit/PR/merge/sync evidence or `Implementation only`.
-9. **Deviations/blockers:** exact facts.
+1. **Implementation:** concise summary.
+2. **Changed files:** file → purpose.
+3. **Verification:** exact focused commands/results.
+4. **Security/tenant:** evidence or justified N/A.
+5. **Scope/diff:** non-goals + `git diff --check`.
+6. **Delivery:** `Project Owner` by default; no Git delivery performed.
+7. **Deviations/blockers:** exact facts.
 
-Do not repeat the contract. If a product, architecture, API, database, security,
-tenant, lifecycle, concurrency, idempotency, or unresolved UX decision is
-missing, return `BLOCKED` instead of making that decision.
+Do not output `ACCEPTED`; ChatGPT assigns task acceptance after required
+delivery.
+
+Do not repeat the contract.
