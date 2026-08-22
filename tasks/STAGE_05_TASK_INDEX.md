@@ -1,0 +1,916 @@
+# Stage 5 Task Index — Topics and Learning Materials
+
+## 1. Stage Metadata
+
+| Field | Value |
+|---|---|
+| Roadmap stage | `Stage 5 — Topics and Learning Materials` |
+| Stage status | `Approved` |
+| Verification model | `Workflow v3 — Lean Verification` |
+| Decomposition approved on | `2026-08-22` |
+| Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
+| Implementation started | `No` |
+| Backend checkpoint | `Not started` |
+| Frontend checkpoint | `Not started` |
+| Integration gate | `Not started` |
+| Stage closed | `No` |
+
+This index is the authoritative implementation map for Stage 5 after this
+planning package is delivered to `origin/main`.
+
+The `Approved` state records Project Owner approval of the Stage decomposition.
+Implementation must still not start until the planning-package delivery is
+verified on current `origin/main` and the first implementation task
+(`S05-BE-001`) independently passes the Implementation Readiness Gate.
+
+This index organizes approved work but does not create or change product
+behavior.
+
+---
+
+## 2. Stage Goal and Boundary
+
+### Goal
+
+Allow Teachers to create the central learning object and provide Students with
+approved, protected study resources.
+
+The Stage 5 vertical outcome is:
+
+```text
+authorized Teacher
+→ assigned Group
+→ Topic
+→ private Learning Material
+→ Topic activation
+→ assigned Student access
+→ protected file download
+```
+
+### Included Stage Boundary
+
+Stage 5 includes:
+
+- Topic persistence and lifecycle foundation;
+- Learning Material and private-file persistence foundation;
+- Teacher read access to currently assigned active Groups for Topic authoring;
+- Teacher Topic list, create, detail, and metadata update;
+- Topic lifecycle:
+  - `draft → active`;
+  - `draft → archived`;
+  - `active → closed`;
+  - `closed → archived`;
+- Learning Material list, upload, replace, title update, remove, open/download;
+- approved learning-material formats:
+  - PDF;
+  - DOCX;
+  - PPT;
+  - PPTX;
+- platform hard maximum of 25 MiB per learning-material file;
+- lower Institution-configured learning-material limit;
+- private storage with no public storage-key/path authority;
+- Student Topic list and detail for currently authorized Group scope;
+- Student access to eligible non-draft Topic learning materials;
+- protected Learning Material download for authorized Teacher/Student scope;
+- Teacher desktop authoring experience;
+- Teacher mobile read/basic Topic status experience;
+- Student desktop and mobile Topic/material experience;
+- server-side role, Institution, Group membership, Topic ownership, lifecycle,
+  and file authorization;
+- real-stack integration, cross-tenant/direct-ID denial, persistence/restart
+  verification, and required Project Owner manual smoke.
+
+### Excluded Stage Boundary
+
+Stage 5 does not implement:
+
+- Homework authoring or Homework lifecycle;
+- Homework attempts or Student submissions;
+- Blitz authoring, activation, timing, or attempts;
+- Question authoring;
+- automatic/manual assessment checking;
+- official assessment scores;
+- Homework–Blitz pairing;
+- Topic result calculation;
+- understanding-category calculation;
+- Student/Parent result release;
+- Parent learning-material access;
+- Institution Admin learning-content authoring;
+- public file URLs;
+- client-supplied storage keys/paths;
+- full Learning Material version-history UI/API;
+- destructive deletion of historical learning records;
+- advanced course builders, AI, notifications, chat, billing, or other
+  Post-MVP behavior.
+
+Any scope change requires explicit planning approval and an index update. Do not
+silently broaden an implementation task.
+
+---
+
+## 3. Authoritative Planning Inputs
+
+ChatGPT prepared and reviewed this Stage using the following planning inputs.
+
+| Source | Exact section/reference | Why it governs Stage 5 |
+|---|---|---|
+| `docs/05-business-rules.md` | Topic and Learning Material rules (`BR-TOP-*`, `BR-MAT-*`) | Topic ownership, lifecycle, Student visibility, material authorization, file constraints, historical preservation |
+| `docs/06-roadmap.md` | `Stage 5 — Topics and Learning Materials` | Stage goal, dependencies, device scope, tests, acceptance boundary |
+| `docs/07-architecture.md` | Topic/learning-content aggregate, authorization, file-storage sections | Modular-monolith boundaries, private storage, tenant authorization, backend authority |
+| `docs/08-database.md` | `topics`, `files`, `learning_materials`, Institution upload setting | Persistence shape, UUID/tenant integrity, lifecycle timestamps, indexes, file metadata |
+| `docs/09-api-contracts.md` | Teacher Groups, Topic APIs, Learning Material APIs, Student Topics, protected download | Public API, resource, lifecycle, validation, upload capability, download authorization |
+| `AGENTS.md` | Workflow v3 execution rules | Codex scope, proportional task verification, delivery boundaries |
+| `backend/AGENTS.md` | Backend architecture and security rules | HTTP→Action→Domain→Eloquent, strict requests, tenant-first resolution, PostgreSQL integrity |
+| `frontend/AGENTS.md` | Flutter feature/layer/state rules | Presentation→Application→Repository→Data, strict DTOs, async ownership, router/session boundaries |
+| `tasks/README.md` | Workflow v3 — Lean Verification | Stage/task readiness, block checkpoints, integration, evidence reuse, closure |
+| Current `origin/main` planning baseline | `de9a8fee099a2947f6687ee9e6b219e612c93bff` | Authoritative repository state used for decomposition |
+| `tasks/STAGE_04_CLOSURE_REVIEW.md` | Stage 4 final verdict | Confirms Stage 4 Group/relationship graph is a closed dependency |
+
+The Stage 5 `docs/09-api-contracts.md` refinement and this index are intended to
+be delivered together as one planning/documentation package before
+implementation begins.
+
+These sources are planning and review inputs for ChatGPT.
+
+Codex receives only the current approved implementation contract plus applicable
+`AGENTS.md` files and directly relevant source/tests. Codex must not open these
+planning documents to rediscover or reinterpret product requirements.
+
+---
+
+## 4. Entry Gate
+
+Before `S05-BE-001` implementation begins:
+
+- [x] Stage 4 is explicitly closed.
+- [x] Stage 4 current Teacher–Group and Student–Group relationship graph exists.
+- [x] Workflow v3 — Lean Verification is delivered on `main`.
+- [x] Stage 5 roadmap scope was reviewed by ChatGPT.
+- [x] Relevant business, architecture, database, and API contracts were reviewed.
+- [x] Relevant backend/frontend implementation and tests were inspected.
+- [x] Stage 5 decomposition and task order were discussed with and approved by
+      the Project Owner.
+- [x] Backend, frontend, integration, and closure boundaries are explicit.
+- [x] Stage-level authorization, tenant-isolation, lifecycle, and file-protection
+      boundaries are explicit.
+- [x] Stage 5 API-contract refinements were prepared.
+- [ ] Stage 5 planning package is delivered to current `origin/main`.
+- [ ] Project Owner verifies local repository safety/synchronization before the
+      first implementation task.
+- [ ] `S05-BE-001` detailed implementation contract is created and independently
+      passes the Implementation Readiness Gate.
+
+If any remaining entry condition fails, implementation must not begin.
+
+Immediately before preparing or executing each implementation task, ChatGPT must
+re-check current `origin/main`, relevant source/tests, and prior task delivery
+state.
+
+---
+
+## 5. Approved Task Order
+
+Implementation proceeds one task at a time in dependency order.
+
+| Order | Task ID | Area | Short outcome | Depends on | Task status | Delivery status | Contract file |
+|---:|---|---|---|---|---|---|---|
+| 1 | `S05-BE-001` | Backend | Topic and Learning Material Persistence Foundation | Stage 4 closed | `Draft` | `Not started` | `Not created` |
+| 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Draft` | `Not started` | `Not created` |
+| 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Draft` | `Not started` | `Not created` |
+| 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Draft` | `Not started` | `Not created` |
+| 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Draft` | `Not started` | `Not created` |
+| 6 | `S05-FE-001` | Frontend | Teacher Learning Workspace, Assigned Groups and Topic List | Backend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
+| 7 | `S05-FE-002` | Frontend | Teacher Topic Create, Detail, Edit and Lifecycle | `S05-FE-001` | `Draft` | `Not started` | `Not created` |
+| 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Draft` | `Not started` | `Not created` |
+| 9 | `S05-FE-004` | Frontend | Student Topics and Learning Materials | `S05-FE-003` | `Draft` | `Not started` | `Not created` |
+| 10 | `S05-INT-001` | Integration | Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
+
+No per-task Phase 2 review exists for Stage 5+.
+
+The Stage index lists future tasks before their detailed contracts exist.
+Detailed implementation contracts are created/hardened in execution order only.
+
+Do not create duplicated `CODEX-PROMPT` files for the Stage.
+
+---
+
+## 6. Task Outcome Contracts at Decomposition Level
+
+These are Stage-orchestration boundaries only. They do not replace the detailed
+implementation contract that must be approved before each task.
+
+### `S05-BE-001` — Topic and Learning Material Persistence Foundation
+
+Focused outcome:
+
+- introduce the Stage 5 persistence foundation for `topics`, `files`, and
+  `learning_materials`;
+- preserve direct Institution ownership on high-risk rows;
+- establish lifecycle/file integrity needed by later Stage 5 APIs;
+- add models/factories/enums/relations/constraints/indexes required by the
+  approved database contract.
+
+Must not implement Teacher/Student HTTP APIs or file-transfer behavior.
+
+### `S05-BE-002` — Teacher Topic Authoring API
+
+Focused outcome:
+
+- expose current assigned active Groups needed for Teacher Topic authoring;
+- Teacher Topic list;
+- create Topic;
+- Topic detail;
+- metadata update;
+- tenant-safe/current-membership ownership enforcement;
+- strict request/response/error contract.
+
+Must not implement material upload, Student delivery, or later assessment
+behavior.
+
+### `S05-BE-003` — Learning Material Management and Private Storage
+
+Focused outcome:
+
+- Teacher material list;
+- upload;
+- replace;
+- title update;
+- remove;
+- effective upload capability metadata;
+- approved extension/MIME/size validation;
+- private storage;
+- storage/DB failure consistency;
+- no public storage key/path leakage.
+
+Must preserve Learning Material identity according to the approved MVP material
+model.
+
+### `S05-BE-004` — Topic Lifecycle
+
+Focused outcome:
+
+```text
+draft → active
+draft → archived
+active → closed
+closed → archived
+```
+
+Also enforce:
+
+- `archived` terminal;
+- no arbitrary client status assignment;
+- activation requirements;
+- at least one current Learning Material before Stage 5 activation;
+- Group/membership/lifecycle authorization;
+- concurrency-safe lifecycle transitions;
+- closed/archived read-only behavior;
+- no destructive history loss.
+
+Homework is Stage 6 and is not an activation dependency in Stage 5.
+
+### `S05-BE-005` — Student Topic Access and Protected File Download
+
+Focused outcome:
+
+- Student Topic list;
+- Student Topic detail;
+- eligible material projection;
+- draft invisibility;
+- current Student–Group authorization;
+- protected binary file download;
+- Teacher/Student file authorization;
+- removed/out-of-scope/cross-Institution/direct-UUID denial;
+- no public storage metadata leakage.
+
+Stage 5 does not add Parent file access or Student submission files.
+
+### `S05-FE-001` — Teacher Learning Workspace, Assigned Groups and Topic List
+
+Focused outcome:
+
+- replace the Teacher placeholder entry with the real Stage 5 Teacher learning
+  workspace;
+- assigned Group projection;
+- Topic list/filter/navigation;
+- desktop authoring entry;
+- mobile read/basic Topic navigation;
+- backend-authoritative scope and error handling.
+
+### `S05-FE-002` — Teacher Topic Create, Detail, Edit and Lifecycle
+
+Focused outcome:
+
+- desktop Topic create;
+- Topic detail;
+- allowed metadata edit;
+- activation/close/archive controls and state reconciliation;
+- read-only behavior when lifecycle requires it;
+- basic mobile Topic/detail/status view without duplicating complex authoring.
+
+### `S05-FE-003` — Teacher Learning Material Management
+
+Focused outcome:
+
+- list materials;
+- select/upload supported files;
+- show effective upload rules;
+- replace;
+- rename title;
+- remove;
+- authenticated download/open;
+- loading/progress/error/success reconciliation;
+- platform-specific file handling explicitly resolved in this task contract.
+
+Any new Flutter dependency requires explicit ChatGPT approval in the detailed
+task contract; Codex must not choose packages independently.
+
+### `S05-FE-004` — Student Topics and Learning Materials
+
+Focused outcome:
+
+- replace the Student placeholder entry for Stage 5 scope;
+- Student Topic list;
+- Topic detail/instructions;
+- eligible Learning Material list;
+- authenticated download/open;
+- desktop and Android/mobile behavior;
+- draft/out-of-scope/removed content must not become visible through client
+  behavior.
+
+### `S05-INT-001` — Stage 5 Real-Stack E2E
+
+Focused outcome:
+
+prove the complete Stage 5 Laravel–Flutter–PostgreSQL/private-storage workflow
+against the real stack after both block checkpoints pass.
+
+---
+
+## 7. Implementation Readiness Tracking
+
+A task becomes `Approved` only when its own detailed contract passes the
+Implementation Readiness Gate.
+
+| Task ID | Scope/non-goals | Behavior/API/UI | Persistence/lifecycle | Auth/tenant/security | Errors/edge/concurrency | Tests/verification | Ready |
+|---|---|---|---|---|---|---|---|
+| `S05-BE-001` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-002` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-003` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-004` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-005` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-FE-001` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
+| `S05-FE-002` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
+| `S05-FE-003` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
+| `S05-FE-004` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
+| `S05-INT-001` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
+
+For the current task, ChatGPT must confirm before approval:
+
+- one observable goal;
+- complete included scope and explicit non-goals;
+- accurate current implementation context;
+- exact behavior and state transitions;
+- exact API/UI contract where applicable;
+- persistence/schema behavior where applicable;
+- authorization and tenant isolation;
+- validation and stable error semantics;
+- edge cases;
+- concurrency/idempotency/stale-async behavior where relevant;
+- objective acceptance criteria;
+- focused tests and exact task-level verification;
+- directly affected regression scope;
+- Codex verification limited to proportional task scope;
+- Project Owner delivery ownership unless explicitly changed;
+- explicit allowed bookkeeping;
+- no unresolved product/architecture/API/database/security/lifecycle/UX
+  decision left to Codex.
+
+---
+
+## 8. Dependency and Checkpoint Map
+
+| Dependency or checkpoint | Required before | Evidence when satisfied |
+|---|---|---|
+| Stage 4 closure | Stage 5 implementation | `tasks/STAGE_04_CLOSURE_REVIEW.md` = `STAGE CLOSED` |
+| Stage 4 Teacher–Group graph | `S05-BE-002`, Teacher Topic authorization | Current membership persistence/API from Stage 4 |
+| Stage 4 Student–Group graph | `S05-BE-005`, Student Topic delivery | Current membership persistence/API from Stage 4 |
+| Stage 5 persistence foundation | `S05-BE-002` | `S05-BE-001 Accepted / Delivered` |
+| Teacher Topic authoring | material management | `S05-BE-002 Accepted / Delivered` |
+| material management | Topic activation/lifecycle | `S05-BE-003 Accepted / Delivered` |
+| Topic lifecycle + materials | Student delivery/download | `S05-BE-004 Accepted / Delivered` |
+| backend task block complete | Backend Phase 2 | `S05-BE-001…005 Accepted / Delivered` |
+| Backend Phase 2 `PASS` | frontend implementation | backend block review + audited `origin/main` |
+| frontend task block complete | Frontend Phase 2 | `S05-FE-001…004 Accepted / Delivered` |
+| Frontend Phase 2 `PASS` | `S05-INT-001` | frontend block review + audited `origin/main` |
+| Integration `PASS` + manual smoke `PASS` | Stage Closure Review | accepted integration evidence |
+| Stage Closure `PASS` | Stage 6 planning | `tasks/STAGE_05_CLOSURE_REVIEW.md` |
+
+Exact implementation chain:
+
+```text
+Stage 4 CLOSED
+  ↓
+Stage 5 planning package delivered
+  ↓
+S05-BE-001
+  ↓
+S05-BE-002
+  ↓
+S05-BE-003
+  ↓
+S05-BE-004
+  ↓
+S05-BE-005
+  ↓
+Backend Phase 2 PASS
+  ↓
+S05-FE-001
+  ↓
+S05-FE-002
+  ↓
+S05-FE-003
+  ↓
+S05-FE-004
+  ↓
+Frontend Phase 2 PASS
+  ↓
+S05-INT-001 PASS
+  ↓
+Project Owner manual smoke PASS
+  ↓
+Stage 5 Closure Review
+  ↓
+STAGE CLOSED
+```
+
+---
+
+## 9. Per-Task Verification Map
+
+Each detailed task contract defines exact commands based on the current
+repository at task-preparation time.
+
+| Task ID | Focused verification target | Static/format | Direct regression | Task executor | Delivery owner | `git diff --check` |
+|---|---|---|---|---|---|---|
+| `S05-BE-001` | migrations/models/constraints/relations | backend required checks | Stage 4 persistence integrity where affected | `Codex` | `Project Owner` | `Required` |
+| `S05-BE-002` | Teacher Groups + Topic authoring API | backend required checks | auth/role/current membership/tenant API | `Codex` | `Project Owner` | `Required` |
+| `S05-BE-003` | material/storage/limits/replacement/removal | backend required checks | settings + private storage/file integrity | `Codex` | `Project Owner` | `Required` |
+| `S05-BE-004` | lifecycle/transition/concurrency | backend required checks | Topic edit/material mutability | `Codex` | `Project Owner` | `Required` |
+| `S05-BE-005` | Student Topic + protected download auth | backend required checks | auth/current Student membership/existence privacy | `Codex` | `Project Owner` | `Required` |
+| `S05-FE-001` | Teacher workspace/groups/topic list | Flutter required checks | auth/entry/router/session | `Codex` | `Project Owner` | `Required` |
+| `S05-FE-002` | create/detail/edit/lifecycle UI | Flutter required checks | FE-001 navigation/state | `Codex` | `Project Owner` | `Required` |
+| `S05-FE-003` | upload/manage/download/open material UI | Flutter required checks | API/error/session + file handling | `Codex` | `Project Owner` | `Required` |
+| `S05-FE-004` | Student Topic/material experience | Flutter required checks | Student entry/router/session | `Codex` | `Project Owner` | `Required` |
+| `S05-INT-001` | focused integration assets/fixes only | as contract requires | real Stage 5 vertical flow | `Codex` only for implementation assets/fixes | `Project Owner` | `Required` |
+
+Normal implementation-task verification includes only:
+
+- focused tests for changed behavior;
+- required formatter/linter/static checks;
+- directly affected regression tests when justified;
+- `git diff --check`;
+- focused scope/diff self-check.
+
+Do not run full backend/frontend suites, broad builds, broad E2E, or Phase 2
+reviews after each small implementation task unless a concrete regression risk
+requires it.
+
+---
+
+## 10. Backend Phase 2 Checkpoint
+
+Run only after:
+
+```text
+S05-BE-001…005 = Accepted / Delivered
+```
+
+Planned review file:
+
+```text
+tasks/backend/stage-05/S05-BE-PHASE-2-backend-block-review.md
+```
+
+| Field | Value |
+|---|---|
+| Audited `origin/main` | `To be recorded at checkpoint` |
+| Review date | `Not started` |
+| Verification executor | `Project Owner` |
+| Verdict | `Not started` |
+| Findings | `N/A` |
+
+Required checkpoint evidence:
+
+- [ ] complete Stage 5 backend block reviewed read-only;
+- [ ] full backend regression suite passes;
+- [ ] required backend format/static checks pass;
+- [ ] `git diff --check` passes;
+- [ ] modular-monolith responsibilities remain coherent;
+- [ ] Topic/File/LearningMaterial schema, constraints, indexes, and relations are
+      coherent;
+- [ ] current Teacher/Student Group membership is consumed correctly;
+- [ ] tenant-first resource resolution and existence privacy are correct;
+- [ ] Topic lifecycle transitions compose correctly;
+- [ ] lifecycle concurrency/locking is sufficient and not excessive;
+- [ ] upload extension + MIME + exact size enforcement is correct;
+- [ ] Institution lower upload limit is authoritative;
+- [ ] private storage is not publicly addressable;
+- [ ] upload/replace/remove DB-storage consistency is reviewed;
+- [ ] protected download never authorizes by File UUID alone;
+- [ ] removed/unavailable file behavior is correct;
+- [ ] closed/archived history remains non-destructive;
+- [ ] Stage 4 authorization/membership behavior has no blocking regression;
+- [ ] cross-task API/resource/error behavior is consistent;
+- [ ] `P1 = 0`;
+- [ ] `P2 = 0`.
+
+Backend Phase 2 `PASS` is required before frontend Stage 5 implementation begins.
+
+If the checkpoint is `NOT ACCEPTED`, ChatGPT creates only the focused fix
+contract(s) required by the findings. Previously valid evidence is reused unless
+a later change materially invalidates it.
+
+---
+
+## 11. Frontend Phase 2 Checkpoint
+
+Run only after:
+
+```text
+Backend Phase 2 = PASS
+S05-FE-001…004 = Accepted / Delivered
+```
+
+Planned review file:
+
+```text
+tasks/frontend/stage-05/S05-FE-PHASE-2-frontend-block-review.md
+```
+
+| Field | Value |
+|---|---|
+| Audited `origin/main` | `To be recorded at checkpoint` |
+| Review date | `Not started` |
+| Verification executor | `Project Owner` |
+| Verdict | `Not started` |
+| Findings | `N/A` |
+
+Required checkpoint evidence:
+
+- [ ] complete Stage 5 frontend block reviewed read-only;
+- [ ] full frontend test suite passes;
+- [ ] Flutter static analysis passes;
+- [ ] Flutter format check passes;
+- [ ] required Windows debug build passes;
+- [ ] required Android debug build passes;
+- [ ] `git diff --check` passes;
+- [ ] Teacher/Student feature-layer boundaries are coherent;
+- [ ] DTO parsing and API/error integration match backend contracts;
+- [ ] auth/session/role/router boundaries remain correct;
+- [ ] stale async completion safety is preserved;
+- [ ] list/detail/mutation cache invalidation and reconciliation are correct;
+- [ ] loading/error/empty/success/mutation states are complete;
+- [ ] backend remains authoritative for Group scope, Topic lifecycle, upload
+      limits, and file authorization;
+- [ ] Teacher desktop vs mobile feature boundary matches roadmap scope;
+- [ ] Student desktop/mobile Topic/material path is usable;
+- [ ] file selection/upload/download/open behavior is safe on required targets;
+- [ ] accessibility/focus/keyboard/responsiveness is reviewed where required;
+- [ ] Stage 1–4 entry/navigation behavior has no blocking regression;
+- [ ] `P1 = 0`;
+- [ ] `P2 = 0`.
+
+If the checkpoint is `NOT ACCEPTED`, use focused fix contracts and minimum
+sufficient reruns according to Workflow v3 evidence-validity rules.
+
+---
+
+## 12. Integration Gate
+
+Integration begins only after:
+
+```text
+Backend Phase 2 PASS
++
+Frontend Phase 2 PASS
+```
+
+Integration task:
+
+```text
+S05-INT-001 — Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification
+```
+
+Planned contract path:
+
+```text
+tasks/integration/stage-05/S05-INT-001-stage-05-topics-protected-learning-materials-e2e-verification.md
+```
+
+| Field | Value |
+|---|---|
+| Audited `origin/main` | `To be recorded at integration` |
+| Automated execution owner | `Project Owner` |
+| Manual smoke owner | `Project Owner` |
+| Verdict | `Not started` |
+
+Fresh Backend/Frontend Phase 2 PASS evidence is reused. Do not rerun broad
+backend/frontend suites or standalone builds merely because integration begins.
+
+Required real-stack scenarios include:
+
+1. Teacher authenticates and sees only currently assigned active Groups.
+2. Teacher cannot create a Topic for an unrelated/cross-Institution Group.
+3. Teacher creates a valid `draft` Topic.
+4. Student cannot see the draft Topic.
+5. Teacher uploads approved PDF/DOCX/PPT/PPTX learning materials.
+6. Unsupported format is rejected.
+7. platform 25 MiB maximum is enforced.
+8. lower Institution material limit is enforced.
+9. Teacher activates only an activation-eligible Topic.
+10. current assigned Student sees the active Topic and material metadata.
+11. unrelated/cross-Institution/ended-membership Student does not receive access.
+12. direct foreign File UUID does not bypass authorization.
+13. Student downloads only an authorized current material.
+14. Teacher replaces a material while preserving logical Learning Material
+    identity according to the backend contract.
+15. old/removed file access becomes unavailable according to the approved API
+    behavior.
+16. Teacher closes the Topic and content becomes read-only.
+17. Teacher archives the Topic and historical records remain preserved.
+18. archived Group/current-membership edge behavior matches the approved Stage 5
+    contract.
+19. backend restart preserves Topic/material metadata and authorized private-file
+    behavior.
+20. Windows Teacher/Student workflow smoke passes.
+21. Android Student material access/download/open smoke passes.
+22. Project Owner manual smoke passes.
+
+Integration findings must be fixed and re-verified before `S05-INT-001` is
+Accepted / Delivered.
+
+---
+
+## 13. Evidence Validity and Minimum Rerun Tracking
+
+Fresh PASS evidence remains valid until a later change materially affects the
+surface that evidence proved.
+
+ChatGPT determines validity and minimum sufficient rerun scope using Workflow v3.
+
+| Later change | Evidence considered | Still valid? | Required rerun / reason |
+|---|---|---|---|
+| `Not applicable yet` | `N/A` | `N/A` | `N/A` |
+
+Default Stage 5 expectations:
+
+- docs/bookkeeping-only changes do not invalidate product verification;
+- isolated test-only strengthening does not invalidate production evidence;
+- narrow production fixes preserve unrelated PASS evidence;
+- shared auth/session/router/client/middleware/error changes may invalidate
+  broader affected evidence;
+- public API/schema/migration/authorization/tenant/file-security changes
+  invalidate the corresponding checkpoint/integration surface;
+- dependency/platform/build-system changes invalidate relevant build/static
+  evidence;
+- any required command that previously failed must eventually pass.
+
+Do not rerun by habit, and do not preserve materially invalidated evidence.
+
+---
+
+## 14. Roadmap Acceptance Matrix
+
+| Stage 5 criterion | Implementing task(s) | Verification owner/gate | Status |
+|---|---|---|---|
+| Teacher can view the Groups currently available for Topic authoring | `S05-BE-002`, `S05-FE-001` | Backend Phase 2 + Frontend Phase 2 + Integration | `Not started` |
+| Teacher can create a Topic only for an authorized assigned Group with approved metadata | `S05-BE-002`, `S05-FE-002` | Focused tests + Backend/Frontend Phase 2 + Integration | `Not started` |
+| Teacher can view and edit own eligible Topic without changing protected ownership fields | `S05-BE-002`, `S05-FE-002` | Backend/Frontend Phase 2 | `Not started` |
+| Topic lifecycle supports draft/active/closed/archived behavior without destructive history loss | `S05-BE-004`, `S05-FE-002` | Backend/Frontend Phase 2 + Integration | `Not started` |
+| Teacher can upload, view, replace, update, remove, open, and download protected Learning Materials | `S05-BE-003`, `S05-FE-003` | Backend/Frontend Phase 2 + Integration | `Not started` |
+| Learning Material formats and platform/Institution size limits are enforced server-side | `S05-BE-003`, `S05-FE-003` | Backend Phase 2 + Integration | `Not started` |
+| Student cannot see draft or unrelated/cross-Institution Topics | `S05-BE-005`, `S05-FE-004` | Backend Phase 2 + Integration | `Not started` |
+| Assigned Student can view eligible active Topic instructions and materials on required devices | `S05-BE-005`, `S05-FE-004` | Frontend Phase 2 + Integration + manual smoke | `Not started` |
+| Direct File UUID/path knowledge never bypasses learning-resource authorization | `S05-BE-005`, `S05-INT-001` | Backend Phase 2 + Integration | `Not started` |
+| Closed/archived Topic/material history is preserved and inappropriate new mutations are blocked | `S05-BE-004`, `S05-BE-005`, `S05-FE-002`, `S05-FE-004` | Both checkpoints + Integration | `Not started` |
+| Final Stage outcome: Teacher can create an active Topic with protected study materials accessible only to eligible Students | `S05-BE-001…005`, `S05-FE-001…004`, `S05-INT-001` | Stage Closure Review | `Not started` |
+
+A roadmap criterion with no implementation owner or verification owner is a
+decomposition defect.
+
+---
+
+## 15. Stage 5 Resolved Design Decisions
+
+The following decisions are part of the approved Stage 5 planning boundary and
+must not be reopened by Codex.
+
+### Topic lifecycle
+
+Allowed:
+
+```text
+draft → active
+draft → archived
+active → closed
+closed → archived
+```
+
+Not allowed:
+
+```text
+active → draft
+active → archived
+closed → active
+archived → *
+```
+
+`archived` is terminal.
+
+Topic `status` is server-controlled and changes only through lifecycle endpoints.
+
+### Stage 5 activation gate
+
+Topic activation requires:
+
+- valid Topic ownership/scope;
+- current Teacher assignment to the Group;
+- active Group;
+- required Topic metadata;
+- at least one current Learning Material.
+
+Homework is not required for Stage 5 activation because Homework begins in
+Stage 6.
+
+### Group archive boundary
+
+Create/activate/content mutation requires an active Group.
+
+If a Group is archived after Topic/content creation:
+
+- Topic/material history is preserved;
+- no automatic destructive deletion occurs;
+- new learning-content authoring/delivery is not created from the archived
+  Group;
+- allowed close/archive cleanup remains lifecycle-controlled.
+
+### Membership revocation boundary
+
+Ended current Teacher/Student membership revokes future current learning access
+that depends on that membership.
+
+Historical database records are preserved. Broader historical reporting access
+belongs to the relevant later reporting rules and is not invented in Stage 5.
+
+### Protected file boundary
+
+File UUID, original filename, storage disk, storage key, physical path, or URL
+is never authorization.
+
+Learning Material file access must resolve the connected Topic/material and
+current authorized role/Institution/relationship context first.
+
+### Teacher Group projection
+
+Stage 5 exposes a read-only Teacher Group projection required for Topic
+authoring. Teacher Group membership mutation remains Institution Admin scope
+from Stage 4.
+
+---
+
+## 16. Stage Risks and Stop Conditions
+
+| Risk or stop condition | Affected task/checkpoint | Mitigation / required decision | Status |
+|---|---|---|---|
+| Stage 5 API refinement not yet present on `origin/main` | Stage entry | Deliver updated `docs/09-api-contracts.md` with this index in the planning package before implementation | `Open until planning delivery` |
+| Topic activation wording in general business rules mentions Homework preparation, while Homework starts Stage 6 | `S05-BE-004` | Stage 5 specialization: require at least one current Learning Material; Homework gate begins when Stage 6 contract is available | `Resolved` |
+| Exact storage replacement/cleanup transaction strategy is implementation-sensitive | `S05-BE-003` | ChatGPT must resolve it in the BE-003 implementation contract before approval | `Open — later readiness gate` |
+| Exact Flutter package/platform strategy for select/save/open is not yet approved | `S05-FE-003` | ChatGPT must inspect current dependencies and explicitly approve any dependency change in FE-003 contract | `Open — later readiness gate` |
+| Private file handling can create DB/storage inconsistency on partial failure | `S05-BE-003`, Backend Phase 2 | BE-003 contract must define write/replace/remove failure semantics and cleanup behavior | `Open — later readiness gate` |
+| Direct IDs/cross-tenant file access could leak existence/content | `S05-BE-005`, Backend Phase 2, Integration | tenant-first connected-resource resolution + privacy-safe denial + negative tests/E2E | `Resolved at architecture level; implementation pending` |
+| Mobile file behavior may differ from Windows | `S05-FE-003`, `S05-FE-004`, Frontend Phase 2 | verify required Windows + Android paths; do not assume desktop-only behavior | `Open — implementation pending` |
+
+Stop affected work when:
+
+- a detailed task contract is not implementation-ready;
+- a locked product/architecture/API/database rule conflicts;
+- safe authorization or tenant isolation is unresolved;
+- a required dependency is missing;
+- Codex would need to choose product, API, database, security, lifecycle,
+  concurrency, or UX behavior;
+- implementation requires material scope expansion;
+- Git/repository state is unsafe;
+- required focused verification fails;
+- a block checkpoint/integration verification fails;
+- any P1/P2 finding remains unresolved.
+
+---
+
+## 17. Stage Checkpoint and Closure Ownership
+
+### Task implementation
+
+- Requirements/design owner: `ChatGPT`
+- Implementation agent: `Codex`
+- Normal task verification: `Codex`, focused/proportional only
+- Routine Git/GitHub delivery: `Project Owner`
+
+### Backend Phase 2
+
+- Review/design authority: `ChatGPT`
+- Full checkpoint execution: `Project Owner` or approved CI
+- Required verdict before frontend: `PASS`
+
+### Frontend Phase 2
+
+- Review/design authority: `ChatGPT`
+- Full checkpoint execution: `Project Owner` or approved CI
+- Required verdict before integration: `PASS`
+
+### Integration
+
+- Integration implementation assets/focused fixes: `Codex` when required
+- Real-stack execution: `Project Owner` or approved CI
+- Manual user-facing smoke: `Project Owner`
+
+### Closure
+
+Planned review file:
+
+```text
+tasks/STAGE_05_CLOSURE_REVIEW.md
+```
+
+Closure must reuse valid prior evidence rather than automatically repeating
+broad suites/builds/E2E.
+
+Stage 5 closes only when:
+
+```text
+S05-BE-001…005 Accepted / Delivered
++
+Backend Phase 2 PASS
++
+S05-FE-001…004 Accepted / Delivered
++
+Frontend Phase 2 PASS
++
+S05-INT-001 Accepted / Delivered / PASS
++
+Project Owner manual smoke PASS
++
+no unresolved P1/P2
++
+Stage Closure Review PASS
++
+closure bookkeeping delivered to origin/main
+```
+
+---
+
+## 18. Change Log
+
+| Date | Change | Reason | Approved by |
+|---|---|---|---|
+| `2026-08-22` | Initial Stage 5 decomposition: 5 Backend + 4 Frontend + 1 Integration task, Workflow v3 checkpoints and closure map | Prepare Stage 5 Topics and Learning Materials implementation under Lean Verification | `Project Owner` |
+| `2026-08-22` | Teacher assigned-Groups projection folded into `S05-BE-002` instead of a separate backend task | Reduce unnecessary task/Codex overhead without weakening architecture or verification | `Project Owner` |
+
+---
+
+## 19. Next Permitted Action
+
+Before implementation:
+
+```text
+1. Deliver the Stage 5 planning package:
+   - updated docs/09-api-contracts.md
+   - tasks/STAGE_05_TASK_INDEX.md
+
+2. Verify current origin/main and local repository safety.
+
+3. Re-read current source/tests relevant to S05-BE-001.
+
+4. Discuss and prepare only:
+   S05-BE-001 — Topic and Learning Material Persistence Foundation
+
+5. Run the S05-BE-001 Implementation Readiness Gate.
+
+6. Only after Project Owner approval:
+   S05-BE-001 → Approved → Codex implementation.
+```
+
+Do not prepare all Stage 5 detailed task contracts in advance.
+
+Do not begin `S05-BE-002` planning as an implementation contract until the
+current task/delivery state makes it the next permitted task.
+
+---
+
+# Final Stage 5 Planning Principle
+
+> Stage 5 introduces the first protected learning-content vertical on top of the
+> closed Stage 4 relationship graph. Teacher and Student access must always be
+> derived from current authenticated Institution/Group relationships, Topic
+> ownership/lifecycle, and connected private-file authorization; the Flutter
+> client never becomes the authority for those rules.

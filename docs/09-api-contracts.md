@@ -1944,17 +1944,163 @@ Returns the complete updated settings resource.
 
 ---
 
-# 13. Topic APIs
+# 13. Teacher Learning Context and Topic APIs
 
-Teacher mutation requires:
+All endpoints in this section require the middleware order:
 
-- Same institution
-- Active Teacher
-- Teacher assigned to Group
+```text
+auth:sanctum
+→ active.account
+→ password.changed
+→ role:teacher
+```
+
+The backend derives Institution scope exclusively from the authenticated Teacher.
+Teacher authorization is based on the current Teacher–Group relationship; a
+client-supplied Group or Topic UUID never expands that scope.
+
+For new or editable learning content, the Group must be `active`. An existing
+Topic whose Group is archived remains preserved. While the owning Teacher still
+has a current Teacher–Group membership, the Teacher may read that existing Topic
+and may complete its lifecycle through `close` / `archive`, but must not create,
+activate, edit, upload, replace, rename, or remove learning content in the
+archived Group.
 
 ---
 
-## 13.1 Teacher Topic List
+## 13.1 Teacher Assigned Group List
+
+```text
+GET /api/v1/teacher/groups
+```
+
+This is a read-only Teacher learning-context endpoint. It does not grant Group
+administration capability.
+
+### Query
+
+The only accepted query keys are:
+
+```text
+search
+page
+per_page
+sort
+direction
+```
+
+Rules:
+
+- Return only Groups from the authenticated Teacher's Institution.
+- Require a current Teacher–Group membership (`ended_at is null`).
+- Return only Groups whose current status is `active`.
+- `search` is optional, trimmed, maximum 254 characters, and is a
+  case-insensitive literal substring match across `name`, `level`, and
+  `subject_direction`; `%` and `_` are literal input, not wildcard expansion.
+- `page` defaults to `1` and must be at least `1`.
+- `per_page` defaults to `20`, must be at least `1`, and must not exceed `100`.
+- `sort` is `name|level|subject_direction`, default `name`.
+- `direction` is `asc|desc`, default `asc`.
+- Text sorting is case-insensitive and uses Group UUID as a deterministic
+  tie-break in the same direction.
+- Unknown query keys or invalid values return `422 validation_failed`.
+- A request body is rejected with `422 validation_failed`.
+
+### Success — 200
+
+```json
+{
+  "data": [
+    {
+      "id": "group-uuid",
+      "name": "9-A",
+      "level": "Grade 9",
+      "subject_direction": "Informatics",
+      "status": "active"
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "page": 1,
+      "per_page": 20,
+      "total": 1,
+      "last_page": 1
+    }
+  }
+}
+```
+
+The exact Group resource keys are:
+
+```text
+id
+name
+level
+subject_direction
+status
+```
+
+The response does not expose Institution ownership fields, membership-history
+rows, unrelated Teachers/Students, or Institution Admin mutation controls.
+
+---
+
+## 13.2 Teacher Topic Resource and Scope
+
+Teacher Topic list/detail/mutation endpoints use the following public Topic
+resource:
+
+```json
+{
+  "id": "topic-uuid",
+  "group": {
+    "id": "group-uuid",
+    "name": "9-A",
+    "level": "Grade 9",
+    "subject_direction": "Informatics",
+    "status": "active"
+  },
+  "title": "Internet Basics",
+  "description": null,
+  "subject": "Informatics",
+  "student_instructions": "Study the materials.",
+  "lesson_at": null,
+  "status": "draft",
+  "activated_at": null,
+  "closed_at": null,
+  "archived_at": null,
+  "created_at": "2026-08-22T08:00:00Z",
+  "updated_at": "2026-08-22T08:00:00Z"
+}
+```
+
+The Teacher Topic resource never exposes `institution_id`, raw membership rows,
+storage paths, result data, or a client-writable ownership field.
+
+Teacher read access requires:
+
+```text
+authenticated Teacher
++ same Institution
++ Topic owned by that Teacher
++ current Teacher–Group membership
+```
+
+The Group may already be archived for historical/read-only access. Ending the
+Teacher–Group membership revokes future normal Teacher Topic/material access;
+historical database ownership remains unchanged.
+
+A missing Topic, foreign-Institution Topic, Topic owned by another Teacher, or
+Topic outside the Teacher's current Group relationship returns the same
+scope-safe:
+
+```text
+404 resource_not_found
+```
+
+---
+
+## 13.3 Teacher Topic List
 
 ```text
 GET /api/v1/teacher/topics
@@ -1972,17 +2118,34 @@ sort
 direction
 ```
 
-Returns only Teacher's authorized Groups.
+Rules:
+
+- Return only Topics that satisfy the Teacher read scope from Section 13.2.
+- `group_id`, when supplied, must resolve inside that same Teacher scope.
+- `status` is `draft|active|closed|archived`.
+- `search` is an optional case-insensitive literal substring search over
+  Topic title and subject.
+- Standard pagination rules from Section 6 apply.
+- `sort` is `title|lesson_at|created_at|updated_at`, default `created_at`.
+- `direction` is `asc|desc`, default `desc`.
+- Every sort uses Topic UUID as a deterministic tie-break in the same direction.
+- Unknown filters/query keys are rejected with `422 validation_failed`.
+- A request body is rejected with `422 validation_failed`.
+
+Success returns `200 OK`, Topic resources from Section 13.2, and the normal
+pagination envelope.
 
 ---
 
-## 13.2 Create Topic
+## 13.4 Create Topic
 
 ```text
 POST /api/v1/teacher/topics
 ```
 
 ### Request
+
+The endpoint accepts exactly:
 
 ```json
 {
@@ -1995,31 +2158,56 @@ POST /api/v1/teacher/topics
 }
 ```
 
+Validation:
+
+```text
+group_id: required UUID
+          must resolve to an active Group in the authenticated Institution
+          with a current membership for the authenticated Teacher
+title: required, trimmed, non-empty string, maximum 255
+description: optional, nullable string
+subject: required, trimmed, non-empty string, maximum 160
+student_instructions: required, trimmed, non-empty string
+lesson_at: optional, nullable RFC 3339 timestamp with explicit offset
+           valid for the authenticated Institution timezone
+```
+
+- Unknown/protected JSON keys are rejected with `422 validation_failed`.
+- Query parameters are rejected with `422 validation_failed`.
+- An empty, malformed, scalar, or array JSON root is rejected with
+  `422 validation_failed`.
+- A missing, foreign-Institution, unrelated, ended-membership, or archived Group
+  is scope-safe `404 resource_not_found` for Topic creation.
+
 ### Backend Sets
 
 ```text
-institution_id
-teacher_id
+id = server-generated UUID
+institution_id = authenticated Teacher Institution
+teacher_id = authenticated Teacher
 status = draft
+activated_at = null
+closed_at = null
+archived_at = null
 ```
 
 ### Success — 201
 
-Returns Topic.
+Returns the complete Topic resource from Section 13.2 and:
 
-### Errors
-
-- `404 resource_not_found` for inaccessible Group
-- `403 group_not_assigned`
-- `409 institution_inactive`
+```text
+message = Topic created successfully.
+```
 
 ### Time Rule
 
-If `lesson_at` is supplied, it follows the institution-timezone input contract from Section 2.11.
+If `lesson_at` is supplied, it follows the institution-timezone input contract
+from Section 2.11. The backend persists the authoritative instant and returns it
+in UTC.
 
 ---
 
-## 13.3 Topic Detail
+## 13.5 Topic Detail
 
 Teacher:
 
@@ -2027,19 +2215,33 @@ Teacher:
 GET /api/v1/teacher/topics/{topic}
 ```
 
+The path UUID is the only accepted input. Query parameters or a request body
+return `422 validation_failed`.
+
+Success returns `200 OK` with the complete Topic resource from Section 13.2 and
+no success `message`.
+
 Student equivalent is defined in Section 29.
 
 ---
 
-## 13.4 Update Draft/Editable Topic
+## 13.6 Update Editable Topic Metadata
 
 ```text
 PATCH /api/v1/teacher/topics/{topic}
 ```
 
-### Request
+The endpoint accepts a non-empty partial JSON object containing only:
 
-Allowed metadata:
+```text
+title
+description
+subject
+student_instructions
+lesson_at
+```
+
+Example:
 
 ```json
 {
@@ -2051,41 +2253,190 @@ Allowed metadata:
 }
 ```
 
-Group/Teacher ownership changes are not part of normal post-activity editing.
+Validation follows the corresponding field rules from Section 13.4.
+
+Rules:
+
+- Topic read/ownership scope from Section 13.2 is required.
+- The Topic Group must currently be `active`.
+- Topic status must be `draft` or `active`.
+- `status`, `group_id`, `teacher_id`, `institution_id`, lifecycle timestamps,
+  and every other protected field are rejected, not silently ignored.
+- Group/Teacher ownership is never changed by this endpoint.
+- Omitted fields retain their stored values.
+- Explicit `null` clears `description` or `lesson_at`; required string fields
+  cannot be null.
+- Query parameters, an empty/malformed/scalar/array body, or unknown keys return
+  `422 validation_failed`.
+- `closed` and `archived` Topics are read-only and return
+  `409 topic_not_editable`.
+- If the Group was archived after Topic creation, metadata mutation returns
+  `409 topic_not_editable`.
+- An exact no-op returns the current Topic resource without changing
+  `updated_at`.
+- A real update is atomic and changes no ownership or lifecycle state.
+
+Success returns `200 OK`, the complete Topic resource, and:
+
+```text
+message = Topic updated successfully.
+```
 
 ---
 
-## 13.5 Activate Topic
+## 13.7 Activate Topic
 
 ```text
 POST /api/v1/teacher/topics/{topic}/activate
 ```
 
-### Rules
+### Activation Preconditions
 
-Backend validates approved activation requirements.
+For the `draft → active` transition, the backend requires all of the following:
 
-Students gain access only after successful activation.
+- Teacher read/ownership scope from Section 13.2 still holds.
+- The Topic Group is currently `active`.
+- The Teacher still has a current membership in that Group.
+- Required Topic metadata remains valid.
+- The Topic has at least one current, non-removed Learning Material connected to
+  a current, non-removed learning-material File record.
+
+Homework is **not** a Topic-activation prerequisite. Homework authoring begins
+in the later Homework stage; Topic activation in the Topics/Learning Materials
+stage must be independently completable.
+
+On success the backend sets:
+
+```text
+status = active
+activated_at = authoritative server time
+```
+
+and leaves `closed_at` / `archived_at` null.
+
+A repeated activation of an already `active` Topic is idempotent `200`, performs
+no duplicate write, and preserves the original lifecycle timestamps and
+`updated_at`.
+
+Any other invalid activation transition returns:
+
+```text
+409 topic_not_editable
+```
+
+Students gain Topic access only after successful activation according to their
+own current Group relationship rules.
+
+Success returns `200 OK`, the complete Topic resource, and:
+
+```text
+message = Topic activated successfully.
+```
 
 ---
 
-## 13.6 Close Topic
+## 13.8 Close Topic
 
 ```text
 POST /api/v1/teacher/topics/{topic}/close
 ```
 
+Required transition:
+
+```text
+active → closed
+```
+
+Rules:
+
+- Teacher read/ownership scope from Section 13.2 is required.
+- A Topic whose Group was archived after activation may still be closed by its
+  owning Teacher while the Teacher's membership remains current.
+- Closing preserves Topic metadata, materials, and all historical learning data.
+- Connected assessment behavior, once implemented, follows the assessment/task
+  close contracts; Topic closure does not hard-delete or rewrite history.
+- Repeating `close` on an already `closed` Topic is idempotent `200`, performs
+  no write, and preserves `closed_at` and `updated_at`.
+- `draft` or `archived` → `closed` is rejected with
+  `409 topic_not_editable`.
+
+A real close sets:
+
+```text
+status = closed
+closed_at = authoritative server time
+```
+
+Success returns `200 OK`, the complete Topic resource, and:
+
+```text
+message = Topic closed successfully.
+```
+
 ---
 
-## 13.7 Archive Topic
+## 13.9 Archive Topic
 
 ```text
 POST /api/v1/teacher/topics/{topic}/archive
 ```
 
+Allowed real transitions:
+
+```text
+draft → archived
+closed → archived
+```
+
+Rules:
+
+- Teacher read/ownership scope from Section 13.2 is required.
+- `active → archived` is not allowed; an active Topic must be closed first.
+- `archived` is terminal and historical/read-only.
+- Repeating `archive` on an already `archived` Topic is idempotent `200`,
+  performs no write, and preserves `archived_at` and `updated_at`.
+- Any invalid archive transition returns `409 topic_not_editable`.
+- Archiving preserves materials, later tasks, submissions, results, and reports.
+
+A real archive sets:
+
+```text
+status = archived
+archived_at = authoritative server time
+```
+
+Success returns `200 OK`, the complete Topic resource, and:
+
+```text
+message = Topic archived successfully.
+```
+
+---
+
+## 13.10 Topic Lifecycle Matrix
+
+The public Topic lifecycle is controlled only through the explicit lifecycle
+endpoints. `PATCH /api/v1/teacher/topics/{topic}` never accepts arbitrary status
+assignment.
+
+| Current state | `activate` | `close` | `archive` |
+|---|---|---|---|
+| `draft` | `active` | `409 topic_not_editable` | `archived` |
+| `active` | idempotent `200` | `closed` | `409 topic_not_editable` |
+| `closed` | `409 topic_not_editable` | idempotent `200` | `archived` |
+| `archived` | `409 topic_not_editable` | `409 topic_not_editable` | idempotent `200` |
+
+No MVP endpoint returns a Topic to `draft` or reopens an archived Topic.
+Lifecycle transitions are atomic and serialize safely so concurrent stale
+requests cannot regress lifecycle state or overwrite authoritative timestamps.
+
 ---
 
 # 14. Learning Material APIs
+
+All Teacher material endpoints require the same authenticated Teacher scope as
+Section 13. A material is authorized through its Topic first; File UUID or
+storage metadata never grants access independently.
 
 Supported formats:
 
@@ -2103,12 +2454,32 @@ Platform hard maximum:
 = 26,214,400 bytes
 ```
 
-The effective limit is the smaller of:
+The effective limit is:
 
-- 25 MB platform maximum
-- Institution-configured `learning_material_max_mb`
+```text
+min(
+  26,214,400 bytes,
+  institution.learning_material_max_mb * 1,048,576 bytes
+)
+```
 
-Flutter shows the effective limit before upload for UX. Laravel performs authoritative validation.
+Flutter may use the server-provided effective limit for UX. Laravel remains
+authoritative and revalidates the actual upload.
+
+Material mutation requires:
+
+```text
+owning Teacher
++ same Institution
++ current Teacher–Group membership
++ active Group
++ Topic status in draft|active
+```
+
+`closed` / `archived` Topics are read-only. If a Group is archived after Topic
+creation, existing Topic/material records remain readable under the normal
+Teacher/Student read rules, but Teacher material mutations return
+`409 topic_not_editable`.
 
 ---
 
@@ -2116,6 +2487,56 @@ Flutter shows the effective limit before upload for UX. Laravel performs authori
 
 ```text
 GET /api/v1/teacher/topics/{topic}/materials
+```
+
+The Topic must satisfy Teacher read scope from Section 13.2. The Group may be
+archived for historical/read-only access while the Teacher membership remains
+current.
+
+### Success — 200
+
+```json
+{
+  "data": [
+    {
+      "id": "material-uuid",
+      "topic_id": "topic-uuid",
+      "title": "Lesson slides",
+      "file": {
+        "id": "file-uuid",
+        "original_name": "lesson.pptx",
+        "mime_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "extension": "pptx",
+        "size_bytes": 1250000
+      },
+      "created_at": "2026-08-07T15:00:00Z",
+      "updated_at": "2026-08-07T15:00:00Z"
+    }
+  ],
+  "meta": {
+    "upload": {
+      "max_size_bytes": 20971520,
+      "platform_max_size_bytes": 26214400,
+      "allowed_extensions": [
+        "pdf",
+        "docx",
+        "ppt",
+        "pptx"
+      ]
+    }
+  }
+}
+```
+
+`meta.upload.max_size_bytes` is the current effective Institution limit in
+bytes. It may change when Institution settings change and is advisory for
+Flutter UX only; upload acceptance always uses the server's current limit at
+request time.
+
+`meta.upload.platform_max_size_bytes` is always:
+
+```text
+26,214,400
 ```
 
 Student material listing is exposed through Student Topic APIs.
@@ -2141,6 +2562,24 @@ file
 title (optional)
 ```
 
+Rules:
+
+- Material mutation scope from Section 14 applies.
+- `file` is required and must be a successful non-empty upload.
+- Extension must be one of `pdf|docx|ppt|pptx`.
+- Server-detected file type/MIME must be consistent with an approved file type;
+  client filename/extension alone is not trusted.
+- Actual byte size must not exceed the effective limit current at request time.
+- `title`, when supplied, is nullable/optional display metadata with maximum
+  length 255.
+- `institution_id`, `topic_id`, `teacher_id`, `uploaded_by_user_id`, storage
+  disk/key, file category, MIME, extension, size, checksum, and lifecycle fields
+  are backend-controlled and are not accepted as authoritative multipart fields.
+- Storage key/path is server-generated and private.
+- A failed storage operation must not create a valid material attachment; a
+  failed persistence operation must not leave a newly uploaded object treated
+  as an attached material.
+
 ### Success — 201
 
 ```json
@@ -2156,7 +2595,8 @@ title (optional)
       "extension": "pptx",
       "size_bytes": 1250000
     },
-    "created_at": "2026-08-07T15:00:00Z"
+    "created_at": "2026-08-07T15:00:00Z",
+    "updated_at": "2026-08-07T15:00:00Z"
   }
 }
 ```
@@ -2166,8 +2606,11 @@ title (optional)
 - `422 unsupported_file_type`
 - `422 file_too_large`
 - `409 topic_not_editable`
+- `500 file_upload_failed` when storage fails unexpectedly and no valid
+  attachment is created
 
-For `file_too_large`, the validation response must expose the effective allowed size in the field message without relying on Flutter to calculate it.
+For `file_too_large`, the validation response must expose the effective allowed
+size in the field message without relying on Flutter to calculate it.
 
 ---
 
@@ -2183,7 +2626,22 @@ Multipart:
 file
 ```
 
-Maintains Material identity while replacing current file metadata/storage according to the approved MVP material model.
+Rules:
+
+- Material mutation scope from Section 14 applies.
+- File type, MIME/type agreement, non-empty upload, and effective-size rules are
+  identical to Section 14.2.
+- Replacement preserves the `learning_materials` identity.
+- The newly accepted file becomes the only current file represented by that
+  Material; full material version history is outside the MVP.
+- Storage/persistence replacement must not expose an intermediate state where a
+  failed replacement destroys the previously valid current material.
+
+Success returns `200 OK`, the current Material resource, and:
+
+```text
+message = Learning material replaced successfully.
+```
 
 ---
 
@@ -2201,6 +2659,21 @@ Request:
 }
 ```
 
+Rules:
+
+- Material mutation scope from Section 14 applies.
+- The JSON body must contain exactly the `title` field.
+- `title` is nullable; JSON `null` clears the optional display title.
+- Non-null title must be a string with maximum length 255.
+- Unknown/protected keys and query parameters return `422 validation_failed`.
+- An exact no-op returns the current resource without changing `updated_at`.
+
+Success returns `200 OK`, the current Material resource, and:
+
+```text
+message = Learning material updated successfully.
+```
+
 ---
 
 ## 14.5 Remove Material
@@ -2209,9 +2682,24 @@ Request:
 DELETE /api/v1/teacher/materials/{material}
 ```
 
-Allowed only while business rules permit removal.
+Rules:
 
-Does not delete Student submissions/results.
+- Material mutation scope from Section 14 applies.
+- Removal ends current Topic material availability without deleting the Topic or
+  any later Student submission/result history.
+- The removed Material/File must no longer be downloadable through the protected
+  file endpoint.
+- Removal is historical/non-destructive at the domain-record level; full
+  material version history is not created.
+- Repeating removal against a material that is already outside the Teacher's
+  current material scope returns scope-safe `404 resource_not_found` rather than
+  exposing removed/private state.
+
+Success:
+
+```text
+204 No Content
+```
 
 ---
 
@@ -3870,27 +4358,95 @@ file
 GET /api/v1/files/{file}/download
 ```
 
-### Allowed
+The endpoint accepts only the File UUID path parameter. Query parameters and a
+request body are rejected with `422 validation_failed`.
 
-Depending on connected file:
+Storage disk, storage key, filesystem path, or a public URL is never accepted as
+client authority.
 
-Learning material:
+### Learning Material Authorization
 
-- Authorized Teacher
-- Assigned Student
-- Permitted Institution Admin support/view context where explicitly allowed
+For a learning-material File, the backend first resolves the current,
+non-removed Learning Material and its Topic inside authenticated Institution
+scope.
 
-Submitted answer file:
+An authenticated Teacher may download when all are true:
 
-- Submitting Student where rules allow own file viewing
-- Authorized Teacher reviewer
-- Permitted institution management/support context only if business rules allow
+```text
+same Institution
++ Topic owned by authenticated Teacher
++ current Teacher–Group membership
++ Material not removed
++ File not removed
+```
 
-Parent full-file access is not required in MVP.
+The Topic may be `draft`, `active`, `closed`, or `archived` for an authorized
+Teacher read. Group archival by itself does not destroy historical Topic or
+material access; ending the Teacher–Group membership revokes normal future
+access.
 
-### Rule
+An authenticated Student may download when all are true:
 
-Storage path/key is never accepted directly from the client.
+```text
+same Institution
++ current Student–Group membership for the Topic Group
++ Topic status in active|closed|archived
++ Material not removed
++ File not removed
+```
+
+A draft Topic never grants Student material access. Group archival prevents new
+learning-content creation/activation but does not by itself rewrite or delete an
+already accessible historical Topic; current Student membership is still
+required.
+
+A missing File, foreign-Institution File, unrelated Topic/Group, ended
+membership, draft-only Student target, removed Material, or removed File returns
+the same privacy-safe:
+
+```text
+404 resource_not_found
+```
+
+Parent full learning-material file access is not required in the MVP.
+Institution Admin direct full-file access remains unavailable unless a separate,
+explicit support/view contract is approved; normal Institution Admin management
+visibility does not itself grant binary file download.
+
+### Submitted Answer File Authorization
+
+Submitted-answer File authorization remains defined by its Student Attempt /
+Submission scope:
+
+- Submitting Student where rules allow own file viewing.
+- Authorized Teacher reviewer.
+- Permitted Institution management/support context only when a separate business
+  rule explicitly grants that access.
+
+Parent full submitted-file access is not required in the MVP.
+
+### Success — 200
+
+After authorization, return the real binary file body with:
+
+```text
+Content-Type = validated stored MIME type
+Content-Disposition = attachment using a safely encoded original filename
+```
+
+The download response must not expose:
+
+```text
+storage_disk
+storage_key
+physical filesystem path
+private bucket/object key
+public storage URL
+```
+
+If an authorized current File record exists but the backing storage object is
+unexpectedly unavailable, use the stable `file_not_available` error without
+revealing internal storage paths or provider details.
 
 ---
 
@@ -5092,13 +5648,23 @@ or `403` only when disclosure does not create a privacy issue.
 
 ## 33.4 Teacher Scope
 
-Teacher mutations require:
+Teacher Topic/material reads require:
 
 ```text
 teacher.institution_id == resource.institution_id
++ resource is owned/authorized for that Teacher
++ current Teacher–Group membership
 ```
 
-and relevant active Teacher–Group membership.
+For creation, activation, metadata editing, and learning-material mutation, the
+Group must additionally be `active`. An archived Group cannot receive new or
+changed active learning content. Existing Topic/material records remain
+preserved; while the Teacher membership remains current, the owning Teacher may
+read them and may perform only the Topic `close` / `archive` lifecycle actions
+explicitly allowed by Section 13.
+
+Ending the Teacher–Group membership revokes future normal Teacher learning
+access without reassigning or deleting historical records.
 
 ---
 
@@ -5380,7 +5946,7 @@ MVP includes API support for:
 10. Parent-student relationships
 11. Institution assessment/timing/release/timezone/upload settings
 12. Understanding categories
-13. Teacher Topics
+13. Teacher assigned Groups and Topics
 14. Learning Materials
 15. Homework authoring
 16. Nine Question types
@@ -5466,8 +6032,8 @@ The public API now has one deterministic Homework deadline contract. An already 
 11. Teacher/Student Group relationship APIs are approved.
 12. Parent–Student relationship APIs are approved.
 13. Institution settings APIs expose threshold, Blitz timer-start mode, release modes, timezone, and effective upload limits.
-14. Topic APIs are approved.
-15. Learning Material APIs enforce the 25 MB platform maximum and lower institution limit.
+14. Teacher assigned-Group read and Topic APIs, including the controlled Topic lifecycle, are approved.
+15. Learning Material APIs expose the effective upload capability, enforce the 25 MB platform maximum/lower institution limit, and use protected file access.
 16. Homework APIs expose the fixed 3-attempt policy and do not accept `attempt_limit`.
 17. Nine Question payloads are approved.
 18. Approved partial-credit behavior is defined.
@@ -5587,9 +6153,11 @@ PUT /api/v1/institution/understanding-categories
 GET /api/v1/institution/reports/progress
 ```
 
-## Teacher Topics / Materials
+## Teacher Groups / Topics / Materials
 
 ```text
+GET   /api/v1/teacher/groups
+
 GET   /api/v1/teacher/topics
 POST  /api/v1/teacher/topics
 GET   /api/v1/teacher/topics/{topic}
