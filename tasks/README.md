@@ -792,7 +792,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
-| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-BE-002 — Teacher Topic Authoring API` planning/readiness |
+| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-BE-002 — Teacher Topic Authoring API` implementation |
 
 Current Stage 5 progress:
 
