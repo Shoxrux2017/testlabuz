@@ -24,7 +24,7 @@ class FileFactory extends Factory
                 ->state(['institution_id' => $attributes['institution_id']]),
             'category' => FileCategory::LearningMaterial,
             'original_name' => 'learning-material.pdf',
-            'storage_disk' => 'private',
+            'storage_disk' => 'local',
             'storage_key' => 'learning-materials/'.Str::uuid().'.pdf',
             'mime_type' => 'application/pdf',
             'extension' => FileExtension::Pdf,

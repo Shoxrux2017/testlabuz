@@ -134,6 +134,7 @@ class TopicLearningMaterialFactoryModelTest extends TestCase
 
         $this->assertSame(FileCategory::LearningMaterial, $file->category);
         $this->assertSame(FileExtension::Pdf, $file->extension);
+        $this->assertSame('local', $file->storage_disk);
         $this->assertSame('application/pdf', $file->mime_type);
         $this->assertGreaterThan(0, $file->size_bytes);
         $this->assertLessThanOrEqual(26_214_400, $file->size_bytes);
