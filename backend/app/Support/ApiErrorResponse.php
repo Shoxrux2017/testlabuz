@@ -30,6 +30,8 @@ final class ApiErrorResponse
 
     private const CODE_SERVER_ERROR = 'server_error';
 
+    private const CODE_TOPIC_NOT_EDITABLE = 'topic_not_editable';
+
     private const CODE_USER_INACTIVE = 'user_inactive';
 
     private const CODE_VALIDATION_FAILED = 'validation_failed';
@@ -193,6 +195,19 @@ final class ApiErrorResponse
             'The requested resource was not found.',
             self::CODE_RESOURCE_NOT_FOUND,
             Response::HTTP_NOT_FOUND,
+        );
+    }
+
+    public static function topicNotEditable(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The topic is not editable.',
+            self::CODE_TOPIC_NOT_EDITABLE,
+            Response::HTTP_CONFLICT,
         );
     }
 
