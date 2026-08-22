@@ -792,7 +792,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
-| Stage 5 — Topics and Learning Materials | `Not started` | Workflow v3 delivery, then Stage 5 planning/decomposition |
+| Stage 5 — Topics and Learning Materials | `Not started` | Stage 5 planning/decomposition |
 
 Before Stage 5 planning/decomposition:
 
