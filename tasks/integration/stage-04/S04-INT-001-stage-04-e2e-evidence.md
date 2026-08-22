@@ -3,8 +3,9 @@
 ## Result
 
 ```text
-AUTOMATED INTEGRATION FINDING
-OWNER SMOKE NOT STARTED
+AUTOMATED INTEGRATION PASS
+PROJECT OWNER MANUAL SMOKE PASS
+S04-INT-001 ACCEPTED / DELIVERED
 ```
 
 Automated acceptance and delivery are blocked by real Windows UI assertions in existing production presentation code. No production file was changed by this integration task.

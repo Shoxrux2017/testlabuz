@@ -13,7 +13,7 @@
 | Frontend implementation | `S04-FE-001…005 Accepted / Delivered — complete` |
 | Frontend Phase 2 contract | `Complete` |
 | Frontend Phase 2 verdict | `PASS — P1=0, P2=0, P3=1` |
-| Integration | `S04-INT-001 Approved / Not started` |
+| Integration | `S04-INT-001 Accepted / Delivered — PASS` |
 | Stage closure | `Pending` |
 
 This is the shared Stage 4 orchestration/status map.
@@ -251,14 +251,16 @@ P3 = 1
 
 ## 10. Integration Gate
 
-Integration planning/decomposition is now authorized because:
+Integration has been completed and accepted.
+
+Required entry checkpoints were satisfied:
 
 ```text
 Backend Phase 2 PASS
 Frontend Phase 2 PASS
 ```
 
-The next Stage 4 work must be an explicit integration task covering, where applicable:
+S04-INT-001 verified the Stage 4 scope through the real stack:
 
 ```text
 real Laravel–Flutter stack
@@ -270,11 +272,35 @@ Group create/detail/edit/archive
 Teacher/Student memberships
 Parent–Student relationships
 API/DTO/error agreement
-required Windows/E2E/security verification
-manual smoke evidence where required
+Windows mutation E2E
+database postconditions
+backend restart
+Windows persistence E2E
+foreign/unrelated data preservation
+Project Owner manual smoke
 ```
 
-Integration implementation/verification must be completed and accepted before Stage Closure Review.
+Final integration result:
+
+```text
+AUTOMATED INTEGRATION PASS
+PROJECT OWNER MANUAL SMOKE PASS
+S04-INT-001 ACCEPTED / DELIVERED
+```
+
+The production presentation defects discovered during the first integration attempt were fixed separately in PR #95 and merged as:
+
+```text
+3d62def08093507edf21ec9747537e1f4a524ac3
+```
+
+The integration assets and final PASS evidence were delivered in PR #96 and merged as:
+
+```text
+d9eb303719a1c6de5d161f905de9892596a91ae3
+```
+
+Integration no longer blocks Stage Closure Review.
 
 ---
 
@@ -296,9 +322,10 @@ Status:
 
 ```text
 Approved
-Implementation = Not started
-Automated integration = Pending
-Project Owner manual smoke = Pending
+Implementation = Accepted / Delivered
+Automated integration = PASS
+Project Owner manual smoke = PASS
+Final verdict = ACCEPTED
 ```
 
 Verification policy:
@@ -310,11 +337,16 @@ or previous-Stage broad E2E merely for integration.
 Run only focused integration-asset checks + one Stage 4 real-stack runner.
 ```
 
-After automated integration assets are delivered:
+Delivered integration evidence:
 
 ```text
-Project Owner manual smoke
-→ ChatGPT final integration verdict
+tasks/integration/stage-04/S04-INT-001-stage-04-e2e-evidence.md
+```
+
+Current gate transition:
+
+```text
+S04-INT-001 Accepted / Delivered
 → Stage Closure Review
 ```
 
@@ -353,7 +385,7 @@ Completion of FE-005 alone does not close Stage 4.
 | Frontend implementation block | `Complete` |
 | Frontend Phase 2 contract | `Complete` |
 | Frontend Phase 2 | `PASS — P1=0, P2=0, P3=1` |
-| Integration | `S04-INT-001 Approved / Not started` |
+| Integration | `S04-INT-001 Accepted / Delivered — PASS` |
 | Stage Closure | `Pending` |
 
 ---
@@ -361,19 +393,28 @@ Completion of FE-005 alone does not close Stage 4.
 ## 14. Next Permitted Gate
 
 ```text
-S04-INT-001 implementation / automated real-stack verification
+Stage 4 Closure Review
 ```
 
-Safe sequence:
+Completed sequence:
 
 ```text
 S04-INT-001 Approved
-→ implement focused E2E assets + run Stage 4 real-stack verification
-→ fix/reverify integration findings if any
-→ deliver automated integration assets/evidence
+→ focused E2E assets implemented
+→ initial integration finding identified
+→ production fix delivered through PR #95
+→ Stage 4 real-stack verification PASS
+→ integration assets/evidence delivered through PR #96
 → Project Owner manual smoke PASS
-→ ChatGPT integration PASS
-→ Stage Closure Review
+→ S04-INT-001 Accepted / Delivered
 ```
 
-Do not declare Stage 4 closed before integration and closure gates pass.
+Next:
+
+```text
+Stage Closure Review
+→ final Stage 4 closure decision
+→ final main synchronized and clean
+```
+
+Do not declare Stage 4 closed until the Stage Closure Review passes.
