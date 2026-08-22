@@ -4,25 +4,17 @@
 
 | Field | Value |
 |---|---|
-| Roadmap stage | `[Stage number and exact roadmap name]` |
+| Roadmap stage | `[Stage number and exact name]` |
 | Stage status | `Draft` |
-| Decomposition approved on | `[YYYY-MM-DD or Not approved]` |
+| Verification model | `Workflow v3 — Lean Verification` |
+| Decomposition approved on | `[date / Not approved]` |
 | Implementation started | `No` |
 | Backend checkpoint | `[Not started / PASS / NOT ACCEPTED / N/A]` |
 | Frontend checkpoint | `[Not started / PASS / NOT ACCEPTED / N/A]` |
 | Integration gate | `[Not started / PASS / NOT ACCEPTED / N/A]` |
 | Stage closed | `No` |
 
-Valid Stage statuses:
-
-- `Draft` — Stage is being analysed or decomposed;
-- `Approved` — decomposition and entry gate are approved;
-- `In Progress` — implementation/checkpoint/integration work has started;
-- `Blocked` — a required decision, dependency, or safety condition is unresolved;
-- `Closed` — Stage Closure Review passed and final delivery is complete.
-
-This index is the authoritative implementation map for the Stage. It organizes
-approved work but does not create or change product behavior.
+Valid Stage statuses: `Draft`, `Approved`, `In Progress`, `Blocked`, `Closed`.
 
 ---
 
@@ -30,328 +22,225 @@ approved work but does not create or change product behavior.
 
 ### Goal
 
-[Copy or closely summarize the approved roadmap Stage outcome.]
+[Approved roadmap Stage outcome.]
 
-### Included Stage Boundary
+### Included
 
-- [Approved Stage outcome]
-- [Approved role/workflow/API/UI/persistence boundary]
-- [Required Stage-level verification outcome]
+- [scope]
+- [scope]
 
-### Excluded Stage Boundary
+### Excluded
 
-- [Adjacent future Stage behavior]
-- [Post-MVP behavior]
-- [Refactor, platform, role, integration, or infrastructure work not included]
-
-Any scope change requires explicit planning approval and an index update. Do not
-silently broaden an implementation task.
+- [future Stage behavior]
+- [post-MVP/non-goal]
+- [unapproved refactor/infrastructure]
 
 ---
 
 ## 3. Authoritative Planning Inputs
 
-ChatGPT prepares and reviews this Stage using:
-
-| Source | Exact section/reference | Why it governs the Stage |
+| Source | Reference | Why it governs |
 |---|---|---|
-| `docs/06-roadmap.md` | `[Stage section]` | Stage scope, dependencies, acceptance criteria, Definition of Done |
-| `[docs/0X-name.md]` | `[Exact section]` | `[Resolved business/role/workflow rule]` |
-| `[docs/07-architecture.md]` | `[Exact section]` | `[Resolved architecture boundary]` |
-| `[docs/08-database.md]` | `[Exact section]` | `[Resolved persistence requirement]` |
-| `[docs/09-api-contracts.md]` | `[Exact section]` | `[Resolved API behavior]` |
-| `AGENTS.md` and applicable nested `AGENTS.md` | `[Relevant rule]` | Engineering and repository-safety constraints |
-| Current `origin/main` | `[Commit SHA]` | Authoritative implementation baseline |
-| Previous Stage closure | `[Review/commit/PR]` | Entry dependency |
+| `docs/06-roadmap.md` | `[Stage section]` | scope/acceptance/DoD |
+| relevant locked docs | `[sections]` | product/role/business rules |
+| `docs/07-architecture.md` | `[section]` | architecture |
+| `docs/08-database.md` | `[section]` | persistence |
+| `docs/09-api-contracts.md` | `[section]` | API |
+| `AGENTS.md` + nested rules | `[section]` | engineering/safety |
+| current `origin/main` | `[SHA]` | implementation baseline |
+| previous Stage closure | `[reference]` | dependency |
 
-These sources are planning and review inputs for ChatGPT.
-
-Codex receives the current approved implementation contract and must not open
-these sources to rediscover or reinterpret task requirements.
+These are ChatGPT planning inputs. Codex does not reopen them to derive task
+requirements.
 
 ---
 
 ## 4. Entry Gate
 
-Before the Stage becomes `Approved`:
+Before Stage becomes Approved:
 
-- [ ] Previous Stage is explicitly closed.
-- [ ] Current `origin/main` is verified.
-- [ ] Local `main` matches `origin/main`.
-- [ ] Relevant product, architecture, database, and API contracts were reviewed
-      by ChatGPT.
-- [ ] Relevant current implementation and tests were inspected.
-- [ ] Stage dependencies are available.
-- [ ] Stage decomposition and task order were discussed and approved.
-- [ ] Backend/frontend/integration boundaries are explicit.
-- [ ] Every roadmap acceptance criterion is mapped.
-- [ ] No unresolved product, architecture, API, database, security,
-      tenant-isolation, lifecycle, concurrency, idempotency, or UX decision
-      blocks the first task.
-
-If a required entry condition fails, keep the Stage `Draft` or mark it
-`Blocked`. Do not begin implementation.
+- [ ] previous Stage closed;
+- [ ] current synchronized clean `main`;
+- [ ] relevant locked docs reviewed by ChatGPT;
+- [ ] relevant implementation/tests inspected;
+- [ ] dependencies available;
+- [ ] decomposition/order approved;
+- [ ] backend/frontend/integration boundaries explicit;
+- [ ] roadmap criteria mapped;
+- [ ] no unresolved design/security/tenant/lifecycle/concurrency/UX decision.
 
 ---
 
 ## 5. Approved Task Order
 
-Implementation normally proceeds one task at a time in dependency order.
-
-| Order | Task ID | Area | Short outcome | Depends on | Task status | Delivery status | Contract file |
+| Order | Task ID | Area | Outcome | Depends on | Task status | Delivery status | Contract |
 |---:|---|---|---|---|---|---|---|
-| 1 | `[S00-BE-001]` | Backend | `[One focused outcome]` | `None` | `Draft` | `Not started` | `[path or Not created]` |
-| 2 | `[S00-BE-002]` | Backend | `[One focused outcome]` | `[Task ID]` | `Draft` | `Not started` | `[path or Not created]` |
-| 3 | `[S00-FE-001]` | Frontend | `[One focused outcome]` | `[Task/checkpoint]` | `Draft` | `Not started` | `[path or Not created]` |
-| 4 | `[S00-INT-001]` | Integration | `[One cross-layer outcome]` | `[Tasks/checkpoints]` | `Draft` | `Not started` | `[path or Not created]` |
+| 1 | `[S00-BE-001]` | Backend | `[outcome]` | `None` | `Draft` | `Not started` | `[path]` |
+| 2 | `[S00-FE-001]` | Frontend | `[outcome]` | `[checkpoint/task]` | `Draft` | `Not started` | `[path]` |
+| 3 | `[S00-INT-001]` | Integration | `[outcome]` | `[checkpoints]` | `Draft` | `Not started` | `[path]` |
 
-Task and delivery status meanings are defined in `tasks/README.md`.
-
-Do not add a per-task Phase 2 review column for Stage 4+.
-
-The Stage index may list future tasks before their detailed contracts exist.
-Detailed implementation contracts should be prepared or hardened in execution
-order. Do not create unnecessary task files or duplicated `CODEX-PROMPT` files
-for the whole Stage in advance.
+Detailed contracts are prepared/hardened in execution order.
 
 ---
 
 ## 6. Implementation Readiness Tracking
 
-A task becomes `Approved` only when its implementation contract passes the
-Implementation Readiness Gate.
-
-| Task ID | Scope/non-goals | Behavior/API/UI | Persistence/lifecycle | Auth/tenant/security | Errors/edge/concurrency | Tests/verification | Ready |
+| Task | Scope/non-goals | Behavior/API/UI | Persistence/lifecycle | Auth/tenant | Errors/concurrency | Tests/verification | Ready |
 |---|---|---|---|---|---|---|---|
-| `[Task ID]` | `[Yes/No/N/A]` | `[Yes/No/N/A]` | `[Yes/No/N/A]` | `[Yes/No/N/A]` | `[Yes/No/N/A]` | `[Yes/No]` | `[Yes/No]` |
+| `[ID]` | `[Y/N]` | `[Y/N/N/A]` | `[Y/N/N/A]` | `[Y/N/N/A]` | `[Y/N/N/A]` | `[Y/N]` | `[Y/N]` |
 
-For the current task, confirm:
-
-- [ ] one observable goal is defined;
-- [ ] included scope and explicit non-goals are complete;
-- [ ] current implementation context is accurate;
-- [ ] exact behavior and state transitions are resolved;
-- [ ] API/UI contract is resolved where applicable;
-- [ ] persistence/schema behavior is resolved where applicable;
-- [ ] authorization and tenant isolation are explicit;
-- [ ] validation and error semantics are explicit;
-- [ ] edge cases are explicit;
-- [ ] concurrency/idempotency/stale-async behavior is explicit where relevant;
-- [ ] acceptance criteria are objective;
-- [ ] focused tests and exact verification commands are defined;
-- [ ] delivery mode and allowed bookkeeping are defined;
-- [ ] Codex does not need to make a product or architecture decision.
+For the current task confirm exact scope, behavior, persistence, auth/tenant,
+errors/edge cases, concurrency/idempotency/stale async, acceptance criteria,
+focused tests, verification commands, and delivery mode.
 
 ---
 
 ## 7. Dependency and Checkpoint Map
 
-| Dependency or checkpoint | Required before | Evidence when satisfied |
+| Dependency/checkpoint | Required before | Evidence |
 |---|---|---|
-| `[Migration/API/shared infrastructure]` | `[Task ID]` | `[Task/commit/test]` |
-| Backend task block complete | Backend Phase 2 | `[Accepted task IDs]` |
-| Backend Phase 2 `PASS` | Frontend block, when required | `[Review file + audited SHA]` |
-| Frontend task block complete | Frontend Phase 2 | `[Accepted task IDs]` |
-| Frontend Phase 2 `PASS` | Integration gate | `[Review file + audited SHA]` |
-| Integration gate `PASS` | Stage Closure Review | `[Integration evidence]` |
-
-Do not hide a cross-layer dependency inside an unrelated backend or frontend
-task.
-
-A Stage without a backend or frontend block may mark the corresponding
-checkpoint `N/A` only with a clear Stage-specific reason.
+| Backend block complete | Backend Phase 2 | `[Accepted IDs]` |
+| Backend Phase 2 PASS | Frontend block when required | `[review+SHA]` |
+| Frontend block complete | Frontend Phase 2 | `[Accepted IDs]` |
+| Frontend Phase 2 PASS | Integration | `[review+SHA]` |
+| Integration PASS | Closure | `[evidence]` |
 
 ---
 
 ## 8. Per-Task Verification Map
 
-Each task contract defines proportional verification.
+| Task | Focused tests | Static/format | Direct regression | Task executor | Delivery owner | `git diff --check` |
+|---|---|---|---|---|---|---|
+| `[ID]` | `[command]` | `[command]` | `[command/None]` | `Codex` | `Project Owner` | `Required` |
 
-| Task ID | Focused tests | Static/format checks | Direct regression | Manual check | `git diff --check` |
-|---|---|---|---|---|---|
-| `[Task ID]` | `[Command/reference]` | `[Command/reference]` | `[Command or justified None]` | `[Steps or N/A]` | `Required` |
+Per-task Codex verification is focused only.
 
-Per-task verification normally includes:
-
-- focused tests for changed behavior;
-- required formatter/linter/static checks;
-- directly affected regression tests when justified;
-- `git diff --check`;
-- focused scope/diff self-check.
-
-Full backend/frontend suites, full builds, broad E2E, and Phase 2 reviews are
-checkpoint/integration work unless a task contract explicitly requires broader
-verification for a concrete risk.
+Full suites/builds/broad E2E are checkpoint/integration work unless a concrete
+task-specific risk explicitly justifies broader verification.
 
 ---
 
-## 9. Backend Phase 2 Checkpoint
-
-Run after all approved backend Stage tasks are `Accepted` and delivered.
+## 9. Backend Phase 2
 
 | Field | Value |
 |---|---|
-| Review file | `[tasks/.../STAGE_<NN>_BACKEND_BLOCK_REVIEW.md]` |
-| Audited `origin/main` | `[SHA]` |
-| Review date | `[YYYY-MM-DD]` |
+| Review file | `[path]` |
+| Audited SHA | `[SHA]` |
+| Verification executor | `Project Owner` |
 | Verdict | `[Not started / PASS / NOT ACCEPTED / N/A]` |
-| Findings | `[P1/P2/P3 counts or N/A]` |
+| Findings | `[P1/P2/P3]` |
 
-Required checkpoint evidence:
+Required initial evidence:
 
-- [ ] complete backend Stage scope reviewed read-only;
-- [ ] full backend regression suite passed;
-- [ ] required backend format/static checks passed;
-- [ ] architecture and responsibility boundaries reviewed;
-- [ ] API and error contracts are consistent;
-- [ ] migrations/schema/constraints/indexes/queries are coherent;
-- [ ] transactions/concurrency/idempotency/lifecycle rules compose correctly;
-- [ ] authorization and tenant isolation reviewed;
-- [ ] cross-tenant/existence-privacy behavior verified;
-- [ ] cross-task interactions reviewed;
-- [ ] prior Stage regression risk reviewed;
-- [ ] `P1 = 0`;
-- [ ] `P2 = 0`.
+- complete backend read-only review;
+- full backend suite;
+- required format/static checks;
+- architecture/API/database/tenant/security review;
+- cross-task/regression review.
 
-If `NOT ACCEPTED`, prepare focused fix contracts, implement and deliver the
-fixes, then re-run the affected checkpoint before frontend implementation
-continues.
+After a finding/fix, rerun only invalidated checkpoint evidence; any previously
+failing required command must pass.
 
 ---
 
-## 10. Frontend Phase 2 Checkpoint
-
-Run after:
-
-- backend checkpoint `PASS`, when the Stage has a backend block;
-- all approved frontend Stage tasks are `Accepted` and delivered.
+## 10. Frontend Phase 2
 
 | Field | Value |
 |---|---|
-| Review file | `[tasks/.../STAGE_<NN>_FRONTEND_BLOCK_REVIEW.md]` |
-| Audited `origin/main` | `[SHA]` |
-| Review date | `[YYYY-MM-DD]` |
+| Review file | `[path]` |
+| Audited SHA | `[SHA]` |
+| Verification executor | `Project Owner` |
 | Verdict | `[Not started / PASS / NOT ACCEPTED / N/A]` |
-| Findings | `[P1/P2/P3 counts or N/A]` |
+| Findings | `[P1/P2/P3]` |
 
-Required checkpoint evidence:
+Required initial evidence:
 
-- [ ] complete frontend Stage scope reviewed read-only;
-- [ ] full frontend test suite passed;
-- [ ] static analysis and format checks passed;
-- [ ] required target build passed;
-- [ ] frontend feature/layer boundaries reviewed;
-- [ ] API/DTO/error integration reviewed;
-- [ ] auth/session/routing/state behavior reviewed;
-- [ ] stale async completion safety reviewed;
-- [ ] loading/error/empty/success/mutation states reviewed;
-- [ ] cache/invalidation behavior reviewed;
-- [ ] backend-authoritative rule boundary preserved;
-- [ ] accessibility/focus/keyboard/responsiveness reviewed where required;
-- [ ] cross-task interactions reviewed;
-- [ ] prior Stage regression risk reviewed;
-- [ ] `P1 = 0`;
-- [ ] `P2 = 0`.
+- complete frontend read-only review;
+- full frontend suite;
+- analyze;
+- format;
+- required target build;
+- architecture/API/session/state/accessibility/regression review.
 
-If `NOT ACCEPTED`, prepare focused fix contracts, implement and deliver the
-fixes, then re-run the affected checkpoint before integration begins.
+After a focused fix, preserve still-valid evidence and rerun only invalidated
+surfaces.
 
 ---
 
 ## 11. Integration Gate
 
-Run only after all required block checkpoints are `PASS`.
-
 | Field | Value |
 |---|---|
-| Integration task(s) | `[Task IDs]` |
-| Verification reference | `[File/command/evidence]` |
-| Audited `origin/main` | `[SHA]` |
+| Integration task(s) | `[IDs]` |
+| Verification reference | `[path]` |
+| Automated execution owner | `Project Owner` |
+| Manual smoke owner | `Project Owner` |
 | Verdict | `[Not started / PASS / NOT ACCEPTED / N/A]` |
 
-Required integration evidence:
+Required evidence where applicable:
 
-- [ ] backend and frontend use the real agreed contract;
-- [ ] real-stack/E2E workflow passes;
-- [ ] authentication/session behavior passes;
-- [ ] role and active-state behavior passes;
-- [ ] direct-ID and cross-tenant denial passes;
-- [ ] lifecycle/state progression passes;
-- [ ] persistence effects match the contract;
-- [ ] routing/state/error reconciliation passes;
-- [ ] required platform/build target works;
-- [ ] required manual smoke path passes;
-- [ ] integration findings are fixed and re-verified;
-- [ ] accepted integration result is delivered to `origin/main`.
+- real backend/frontend contract;
+- auth/session;
+- role/active state;
+- direct-ID/cross-tenant denial;
+- lifecycle;
+- persistence;
+- routing/state/reconciliation;
+- target platform;
+- manual smoke;
+- findings fixed and affected integration rerun.
+
+Reuse fresh checkpoint evidence; do not rerun full suites merely for integration.
 
 ---
 
 ## 12. Roadmap Acceptance Matrix
 
-Map every roadmap Stage acceptance criterion.
-
-| Roadmap criterion | Implementing task(s) | Verification owner | Evidence | Status |
+| Criterion | Implementing task(s) | Verification owner | Evidence | Status |
 |---|---|---|---|---|
-| `[Exact criterion]` | `[Task IDs]` | `[Task / Backend checkpoint / Frontend checkpoint / Integration / Closure]` | `[Reference]` | `Not started` |
+| `[criterion]` | `[IDs]` | `[Task/Phase2/Integration/Closure]` | `[reference]` | `Not started` |
 
-A criterion with no implementation owner or verification owner is a
-decomposition gap.
-
-Every required criterion must pass before Stage closure.
+Every required criterion must pass before closure.
 
 ---
 
-## 13. Stage Risks and Stop Conditions
+## 13. Evidence Validity Notes
 
-| Risk or stop condition | Affected task/checkpoint | Mitigation or required decision | Status |
+| Change | Evidence considered | Valid? | Required rerun |
 |---|---|---|---|
-| `[Risk]` | `[Task/checkpoint]` | `[Mitigation]` | `[Open/Resolved]` |
+| `[change]` | `[suite/build/E2E/etc.]` | `[Yes/No]` | `[None/command]` |
+
+Use `tasks/README.md` Section 13A.
+
+---
+
+## 14. Risks and Stop Conditions
 
 Stop affected work when:
 
-- the implementation contract is not ready;
-- a locked product/architecture/API/database rule conflicts;
-- safe authorization or tenant isolation is unresolved;
-- a required dependency is missing;
-- implementation requires material scope expansion;
-- Git/repository state is unsafe;
-- a required task/checkpoint/integration verification fails;
-- a P1 or P2 finding remains unresolved.
-
-Codex reports implementation-contract gaps. ChatGPT resolves planning and design
-decisions before work resumes.
-
----
-
-## 14. Change Log
-
-| Date | Change | Reason | Approved by |
-|---|---|---|---|
-| `[YYYY-MM-DD]` | `[Decomposition/order/scope/checkpoint update]` | `[Reason]` | `[Project owner]` |
-
-Task order, scope, dependencies, or acceptance mapping must not change silently.
+- contract not ready;
+- locked requirements conflict;
+- auth/tenant safety unresolved;
+- dependency missing;
+- scope expansion required;
+- Git state unsafe;
+- required verification fails;
+- unresolved P1/P2 remains.
 
 ---
 
 ## 15. Closure Readiness
 
-- [ ] Every approved task is `Accepted`.
-- [ ] Every accepted task is delivered to `origin/main`.
-- [ ] Backend Phase 2 checkpoint is `PASS` or justified `N/A`.
-- [ ] Frontend Phase 2 checkpoint is `PASS` or justified `N/A`.
-- [ ] Integration gate is `PASS` or justified `N/A`.
-- [ ] All roadmap acceptance criteria are satisfied.
-- [ ] Required security and tenant-isolation checks pass.
-- [ ] Required full suites/static checks/builds/E2E/smoke evidence is current.
-- [ ] No unresolved P1 or P2 finding remains.
-- [ ] No blocking regression affects earlier Stages.
-- [ ] Relevant task, checkpoint, integration, and documentation state is current.
-- [ ] Complete accepted Stage result is on `origin/main`.
-- [ ] Local `main == origin/main`.
-- [ ] Ahead/behind is `0/0`.
-- [ ] Working tree is clean.
-- [ ] Stage Closure Review is completed.
-- [ ] Stage is explicitly marked `Closed`.
-
-The next Stage may enter planning/decomposition only after this Stage is
-explicitly closed.
+- [ ] every task Accepted / Delivered;
+- [ ] Backend Phase 2 PASS/N/A;
+- [ ] Frontend Phase 2 PASS/N/A;
+- [ ] Integration PASS/N/A;
+- [ ] roadmap criteria pass;
+- [ ] required security/tenant checks pass;
+- [ ] checkpoint/integration evidence current and valid;
+- [ ] manual smoke PASS where required;
+- [ ] no unresolved P1/P2;
+- [ ] accepted result on `origin/main`;
+- [ ] local main synchronized `0/0` and clean;
+- [ ] Stage Closure Review passes;
+- [ ] Stage explicitly marked Closed.
