@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\TopicStatus;
+use Database\Factories\TopicFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+#[Fillable([
+    'institution_id',
+    'group_id',
+    'teacher_id',
+    'title',
+    'description',
+    'subject',
+    'student_instructions',
+    'lesson_at',
+    'status',
+    'activated_at',
+    'closed_at',
+    'archived_at',
+])]
+class Topic extends Model
+{
+    /** @use HasFactory<TopicFactory> */
+    use HasFactory, HasUuids;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'status' => TopicStatus::class,
+            'lesson_at' => 'datetime',
+            'activated_at' => 'datetime',
+            'closed_at' => 'datetime',
+            'archived_at' => 'datetime',
+        ];
+    }
+
+    public function institution(): BelongsTo
+    {
+        return $this->belongsTo(Institution::class);
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(Group::class);
+    }
+
+    public function teacher(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'teacher_id');
+    }
+
+    public function learningMaterials(): HasMany
+    {
+        return $this->hasMany(LearningMaterial::class);
+    }
+}

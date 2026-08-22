@@ -58,6 +58,11 @@ class Group extends Model
         return $this->hasMany(GroupStudentMembership::class);
     }
 
+    public function topics(): HasMany
+    {
+        return $this->hasMany(Topic::class);
+    }
+
     public function scopeWithCurrentMembershipCounts(Builder $query): Builder
     {
         return $query->withCount([
