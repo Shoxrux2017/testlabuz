@@ -6,13 +6,16 @@
 |---|---|
 | Stage | `Stage 5 — Topics and Learning Materials` |
 | Area | Backend |
-| Status | `Approved` |
+| Status | Accepted |
 | Implementation type | Laravel Teacher Learning Material API + private file storage |
 | Depends on | `S05-BE-002 Accepted / Delivered`; `S05-BE-001` persistence foundation |
 | Planning baseline | `origin/main` @ `08fc5bca465562bf88f2824dd62f0d13aa29a478` |
-| Implementation baseline | `Freeze current origin/main after S05-BE-002 bookkeeping + this task contract are delivered and before Codex starts` |
+| Implementation baseline | `origin/main` @ `0065c953921fc16932bd11402382e9d8c9154ff6` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Delivery owner | `Project Owner` |
+| Delivery | Delivered — PR #108 |
+| Delivered merge | `dbcaaf02073bab269ce729173795f7ee55ea0909` |
+| Acceptance review | PASS — P1=0, P2=0, P3=0; initial P2 fixed and re-reviewed before merge |
 | Block checkpoint | Stage 5 Backend Phase 2 after `S05-BE-001…005` are Accepted / Delivered |
 
 ---
