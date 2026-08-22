@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Teacher;
 
+use App\Actions\Teacher\ActivateTeacherTopic;
+use App\Actions\Teacher\ArchiveTeacherTopic;
+use App\Actions\Teacher\CloseTeacherTopic;
 use App\Actions\Teacher\CreateTeacherTopic;
 use App\Actions\Teacher\ListTeacherTopics;
 use App\Actions\Teacher\ShowTeacherTopic;
@@ -9,6 +12,7 @@ use App\Actions\Teacher\UpdateTeacherTopic;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teacher\TeacherTopicCreateRequest;
 use App\Http\Requests\Teacher\TeacherTopicIndexRequest;
+use App\Http\Requests\Teacher\TeacherTopicLifecycleRequest;
 use App\Http\Requests\Teacher\TeacherTopicShowRequest;
 use App\Http\Requests\Teacher\TeacherTopicUpdateRequest;
 use App\Http\Resources\Teacher\TeacherTopicCollection;
@@ -74,6 +78,51 @@ class TeacherTopicController extends Controller
 
         return (new TeacherTopicResource($updatedTopic))
             ->additional(['message' => 'Topic updated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function activate(
+        TeacherTopicLifecycleRequest $request,
+        string $topic,
+        ActivateTeacherTopic $activateTeacherTopic,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $activatedTopic = $activateTeacherTopic($teacher, $topic);
+
+        return (new TeacherTopicResource($activatedTopic))
+            ->additional(['message' => 'Topic activated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function close(
+        TeacherTopicLifecycleRequest $request,
+        string $topic,
+        CloseTeacherTopic $closeTeacherTopic,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $closedTopic = $closeTeacherTopic($teacher, $topic);
+
+        return (new TeacherTopicResource($closedTopic))
+            ->additional(['message' => 'Topic closed successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function archive(
+        TeacherTopicLifecycleRequest $request,
+        string $topic,
+        ArchiveTeacherTopic $archiveTeacherTopic,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $archivedTopic = $archiveTeacherTopic($teacher, $topic);
+
+        return (new TeacherTopicResource($archivedTopic))
+            ->additional(['message' => 'Topic archived successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
     }
