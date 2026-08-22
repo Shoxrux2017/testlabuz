@@ -51,6 +51,21 @@ class Institution extends Model
         return $this->hasMany(Group::class);
     }
 
+    public function topics(): HasMany
+    {
+        return $this->hasMany(Topic::class);
+    }
+
+    public function files(): HasMany
+    {
+        return $this->hasMany(File::class);
+    }
+
+    public function learningMaterials(): HasMany
+    {
+        return $this->hasMany(LearningMaterial::class);
+    }
+
     public function setting(): HasOne
     {
         return $this->hasOne(InstitutionSetting::class);

@@ -78,4 +78,19 @@ class User extends Authenticatable
     {
         return $this->hasMany(ParentStudentRelationship::class, 'student_id');
     }
+
+    public function teacherTopics(): HasMany
+    {
+        return $this->hasMany(Topic::class, 'teacher_id');
+    }
+
+    public function uploadedFiles(): HasMany
+    {
+        return $this->hasMany(File::class, 'uploaded_by_user_id');
+    }
+
+    public function learningMaterials(): HasMany
+    {
+        return $this->hasMany(LearningMaterial::class, 'teacher_id');
+    }
 }
