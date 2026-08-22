@@ -97,6 +97,9 @@ Route::prefix('teacher')
         Route::post('topics', [TeacherTopicController::class, 'store']);
         Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
         Route::patch('topics/{topic}', [TeacherTopicController::class, 'update']);
+        Route::post('topics/{topic}/activate', [TeacherTopicController::class, 'activate']);
+        Route::post('topics/{topic}/close', [TeacherTopicController::class, 'close']);
+        Route::post('topics/{topic}/archive', [TeacherTopicController::class, 'archive']);
         Route::get('topics/{topic}/materials', [TeacherLearningMaterialController::class, 'index']);
         Route::post('topics/{topic}/materials', [TeacherLearningMaterialController::class, 'store']);
         Route::post('materials/{material}/replace', [TeacherLearningMaterialController::class, 'replace']);
