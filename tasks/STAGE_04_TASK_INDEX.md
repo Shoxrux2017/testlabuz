@@ -14,7 +14,7 @@
 | Frontend Phase 2 contract | `Complete` |
 | Frontend Phase 2 verdict | `PASS — P1=0, P2=0, P3=1` |
 | Integration | `S04-INT-001 Accepted / Delivered — PASS` |
-| Stage closure | `Pending` |
+| Stage closure | `Closed — PASS` |
 
 This is the shared Stage 4 orchestration/status map.
 
@@ -354,7 +354,7 @@ S04-INT-001 Accepted / Delivered
 
 ## 12. Stage Closure Gate
 
-Stage 4 closes only after:
+Stage 4 closure requirements are satisfied:
 
 ```text
 all implementation delivered
@@ -362,11 +362,23 @@ Backend Phase 2 PASS
 Frontend Phase 2 PASS
 integration PASS
 required fixes delivered
+Project Owner manual smoke PASS
 Stage Closure Review PASS
-final main synchronized and clean
+pre-closure main synchronized and clean
 ```
 
-Completion of FE-005 alone does not close Stage 4.
+Closure review:
+
+```text
+tasks/STAGE_04_CLOSURE_REVIEW.md
+audited pre-closure baseline:
+68a73a6253b81f9f8ee1ac0401e0ca12d7ce7fbb
+verdict:
+STAGE CLOSED
+```
+
+The closure/bookkeeping delivery changes documentation only and does not alter
+production behavior.
 
 ---
 
@@ -386,35 +398,23 @@ Completion of FE-005 alone does not close Stage 4.
 | Frontend Phase 2 contract | `Complete` |
 | Frontend Phase 2 | `PASS — P1=0, P2=0, P3=1` |
 | Integration | `S04-INT-001 Accepted / Delivered — PASS` |
-| Stage Closure | `Pending` |
+| Stage Closure | `Closed — PASS` |
 
 ---
 
 ## 14. Next Permitted Gate
 
-```text
-Stage 4 Closure Review
-```
+Stage 4 is closed.
 
-Completed sequence:
-
-```text
-S04-INT-001 Approved
-→ focused E2E assets implemented
-→ initial integration finding identified
-→ production fix delivered through PR #95
-→ Stage 4 real-stack verification PASS
-→ integration assets/evidence delivered through PR #96
-→ Project Owner manual smoke PASS
-→ S04-INT-001 Accepted / Delivered
-```
-
-Next:
+Before Stage 5 planning/decomposition, the project workflow may be aligned to
+the approved lean-verification direction without changing Stage 4 historical
+evidence.
 
 ```text
-Stage Closure Review
-→ final Stage 4 closure decision
-→ final main synchronized and clean
+Stage 4 Closed
+→ Workflow v3 — Lean Verification alignment
+→ Stage 5 planning/decomposition
 ```
 
-Do not declare Stage 4 closed until the Stage Closure Review passes.
+Stage 5 implementation is not authorized until its own decomposition,
+implementation-readiness gates, and approved task contracts are in place.

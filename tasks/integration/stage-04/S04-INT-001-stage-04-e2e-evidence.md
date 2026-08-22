@@ -8,11 +8,13 @@ PROJECT OWNER MANUAL SMOKE PASS
 S04-INT-001 ACCEPTED / DELIVERED
 ```
 
-Automated acceptance and delivery are blocked by real Windows UI assertions in existing production presentation code. No production file was changed by this integration task.
+Stage 4 real-stack integration completed successfully after the production
+presentation findings discovered during the initial run were fixed separately
+in PR #95.
 
 ## Audited Runtime
 
-- execution baseline: `ce373fbcb9540f000dc32961be81dea433a89ec7`
+- final product baseline after production fix: `3d62def08093507edf21ec9747537e1f4a524ac3`
 - backend container: `testlabuz-stage4-e2e-app`
 - API: `http://127.0.0.1:8817/api/v1`
 - Laravel environment: `testing`
@@ -20,70 +22,112 @@ Automated acceptance and delivery are blocked by real Windows UI assertions in e
 - PostgreSQL/network: `testlabuz-postgres-1` / `testlabuz_default`
 - transient password/token evidence: not recorded
 
-## Focused Verification
+## Focused Integration-Asset Verification
 
 - Stage 4 seeder test: `PASS` — 6 tests, 38 assertions.
 - focused Pint: `PASS` — 2 Stage 4 PHP files.
 - focused Dart format: `PASS` — 1 Stage 4 Dart file, 0 changes.
-- Stage 4 PowerShell parse check: `PASS` — runtime guard, guard verifier, oracle, runner, and manual-smoke scripts.
-- runtime guard negative matrix: `PASS` — 14 invalid targets, 4 invalid runtime identities, 6 invalid database-server identities, 5 invalid binding shapes, wrong container, and unbound port rejected; exact runtime accepted.
+- Stage 4 PowerShell parse check: `PASS` — runtime guard, guard verifier, oracle,
+  runner, and manual-smoke scripts.
+- runtime guard negative matrix: `PASS` — invalid target/runtime/database/binding
+  shapes were rejected and the exact dedicated runtime was accepted.
 - guarded seeder repeatability: `PASS` — two consecutive runs.
 - independent sanitized PostgreSQL oracle: `PASS`.
-- pre-mutation frozen foreign/unrelated baseline capture: `PASS`.
-- temporary oracle/frozen-artifact cleanup after failed runs: `PASS`.
+- pre-mutation foreign/unrelated baseline capture: `PASS`.
 - `git diff --check`: `PASS`.
 
-## Real-Stack Finding
+## Initial Integration Finding and Resolution
 
-The mutation test reached real UI login, Group create/edit, Teacher and Student assign/remove/reassign, Parent–Student connect/disconnect/reconnect, security probes, and Group archive. The resulting sanitized database state was:
+The first Windows mutation run reached the real UI and completed the intended
+Stage 4 mutations in the database, but Flutter reported two production
+presentation defects:
+
+1. Stage 4 horizontal tables used `Scrollbar` without an attached shared
+   horizontal `ScrollController`.
+2. Parent–Student feedback could build `MaterialBanner` with an empty
+   `actions` list.
+
+The integration task itself did not repair production code. The findings were
+fixed separately through:
 
 ```text
-UI Group: exactly 1, status archived
-Teacher history: 2 total / 1 ended / 1 current
-Student history: 2 total / 1 ended / 1 current
-Parent–Student history: 2 total / 1 ended / 1 current
+PR #95
+merge:
+3d62def08093507edf21ec9747537e1f4a524ac3
 ```
 
-The Windows test nevertheless failed because Flutter reported production presentation assertions:
+The fix changed only the three affected Institution Admin presentation files
+and their three focused widget-test files. Focused widget tests, Flutter
+analysis, focused format verification, and `git diff --check` passed.
 
-1. Stage 4 horizontal tables create `Scrollbar` widgets without a controller attached to the corresponding horizontal `SingleChildScrollView`. `ensureVisible`/scroll notifications triggered `Scrollbar's ScrollController has no ScrollPosition attached` in:
-   - `frontend/lib/features/institution_admin/presentation/institution_admin_groups_screen.dart`
-   - `frontend/lib/features/institution_admin/presentation/institution_group_membership_sections.dart`
-   - `frontend/lib/features/institution_admin/presentation/institution_admin_parent_student_connections_screen.dart`
-2. Parent–Student list feedback can build `MaterialBanner` with an empty `actions` list, triggering `widget.actions.isNotEmpty` in `frontend/lib/features/institution_admin/presentation/institution_admin_parent_student_connections_screen.dart`.
+## Final Automated Real-Stack Verification
 
-These are production-code defects outside the integration task's allowed files. Per contract, they were reported and not repaired here.
+After PR #95 was merged, the Stage 4 runner was executed again against the
+dedicated guarded runtime.
 
-## Incomplete Acceptance Evidence
+Final results:
 
-- Stage 4 mutation E2E: `FINDING` — database mutations completed, but the Flutter test failed on the production assertions above.
-- tenant/security matrix: probe code completed without a direct assertion failure, but is not credited as an overall PASS because the containing Windows test failed.
-- post-mutation foreign/unrelated byte comparison: not reached after the Windows test failure.
-- backend restart and fresh-process persistence E2E: not run.
-- final foreign/unrelated preservation comparison: not run.
-- Project Owner manual smoke: `Pending`; do not run until the automated finding is fixed and S04-INT-001 is re-authorized.
+```text
+Stage4RuntimeGuardMatrix: PASS
+Stage4RuntimeGuard: PASS
+Stage4SeederRepeatability: PASS
+Stage4IndependentOracle: PASS
+Stage4ForeignUnrelatedBaseline: SAVED
+Stage4WindowsMutationE2E: PASS
+Stage4MutationDatabasePostconditions: PASS
+Stage4ForeignUnrelatedPostMutation: PASS (byte-for-byte)
+Stage4BackendRestart: PASS
+Stage4WindowsPersistenceE2E: PASS
+Stage4PersistenceDatabasePostconditions: PASS
+Stage4ForeignUnrelatedPostRestart: PASS (byte-for-byte)
+Stage4TemporaryArtifactCleanup: PASS
+```
+
+The final automated run proved:
+
+- real Flutter Windows → Laravel → PostgreSQL operation;
+- normal Institution Admin login/session path;
+- Group create/detail/edit/archive lifecycle;
+- Teacher membership assign/remove/reassign history;
+- Student membership assign/remove/reassign history;
+- Parent–Student connect/disconnect/reconnect history;
+- privacy-safe direct-ID and cross-Institution behavior;
+- wrong-role authorization denial;
+- foreign/unrelated row preservation;
+- persistence after dedicated backend restart.
+
+## Project Owner Manual Smoke
+
+Final Project Owner manual smoke: `PASS`.
+
+Verified manually:
+
+- login as `e2e_s04_target_admin`;
+- Groups navigation and seeded active/archived Groups;
+- active Group Teacher/Student membership sections;
+- Users → Parent–Student Connections;
+- current relationship visibility from both `By Parent` and `By Student`
+  perspectives;
+- no obvious overflow, broken navigation, raw JSON/stack output, or
+  foreign-Institution data.
 
 ## Delivery
 
-No commit, push, PR, or merge was performed because automated integration did not pass.
+Integration assets and PASS evidence were delivered through:
 
+```text
+PR #96
+merge:
+d9eb303719a1c6de5d161f905de9892596a91ae3
+```
 
-## Final Result
+Final integration-status bookkeeping was delivered through PR #97.
 
-- Automated Stage 4 real-stack E2E: PASS
-- Runtime guard matrix: PASS
-- Seeder repeatability: PASS
-- Independent PostgreSQL oracle: PASS
-- Windows mutation flow: PASS
-- Mutation database postconditions: PASS
-- Foreign/unrelated preservation after mutation: PASS
-- Backend restart: PASS
-- Windows persistence flow: PASS
-- Persistence database postconditions: PASS
-- Foreign/unrelated preservation after restart: PASS
-- Temporary artifact cleanup: PASS
-- Project Owner manual smoke: PASS
+## Final Verdict
 
-Production finding discovered during the first integration attempt was resolved separately by PR #95 and merged as `3d62def08093507edf21ec9747537e1f4a524ac3`.
+```text
+S04-INT-001 — ACCEPTED / DELIVERED
+Stage 4 Integration Gate — PASS
+```
 
-Final verdict: `S04-INT-001 — ACCEPTED`.
+Next permitted gate: `Stage 4 Closure Review`.

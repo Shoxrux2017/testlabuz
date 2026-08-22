@@ -696,16 +696,20 @@ This workflow governs new Stage 4+ work only.
 | Stage 1 — Authentication and Role-Based Entry | `Closed` | Historical |
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
-| Stage 4 | `Not started` | Workflow documentation alignment, repository synchronization, then approved Stage 4 implementation |
+| Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
+| Stage 5 — Topics and Learning Materials | `Not started` | Workflow alignment, then Stage 5 planning/decomposition |
 
-Before Stage 4 implementation begins:
+Before Stage 5 planning/decomposition:
 
-- this workflow and the applicable `AGENTS.md` files must be delivered to
-  `origin/main`;
-- local `main` must match `origin/main`;
-- the Stage 4 task index and current approved implementation contract must be
-  present and consistent;
-- the first task must pass the Implementation Readiness Gate.
+- current `main` must remain synchronized and clean;
+- the Stage 4 closure review/bookkeeping must be delivered to `origin/main`;
+- the planned Lean Verification workflow alignment may be completed without
+  rewriting historical Stage 0–4 evidence;
+- ChatGPT must re-read the current Stage 5 roadmap/specification scope and
+  current implementation before proposing decomposition;
+- Stage 5 implementation remains unauthorized until its own decomposition,
+  readiness gates, and task contracts are approved.
+
 
 ---
 
