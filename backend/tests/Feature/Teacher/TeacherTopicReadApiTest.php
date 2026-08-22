@@ -49,7 +49,10 @@ class TeacherTopicReadApiTest extends TestCase
                 'uri' => $route->uri(),
                 'middleware' => $route->middleware(),
             ])
-            ->filter(fn (array $route): bool => str_starts_with($route['uri'], 'api/v1/teacher/topics'))
+            ->filter(fn (array $route): bool => in_array($route['uri'], [
+                'api/v1/teacher/topics',
+                'api/v1/teacher/topics/{topic}',
+            ], true))
             ->values()
             ->all();
 

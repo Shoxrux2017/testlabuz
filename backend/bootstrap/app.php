@@ -5,6 +5,9 @@ use App\Exceptions\Auth\InstitutionInactiveException;
 use App\Exceptions\Auth\InvalidCredentialsException;
 use App\Exceptions\Auth\PasswordChangeRequiredException;
 use App\Exceptions\Auth\UserInactiveException;
+use App\Exceptions\Files\FileTooLargeException;
+use App\Exceptions\Files\FileUploadFailedException;
+use App\Exceptions\Files\UnsupportedFileTypeException;
 use App\Exceptions\Institution\GroupArchivedException;
 use App\Exceptions\Institution\InactiveGroupMemberException;
 use App\Exceptions\Institution\InactiveParentStudentRelationshipUserException;
@@ -33,6 +36,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->convertEmptyStringsToNull(except: [
+            fn (Request $request): bool => ($request->isMethod('post') && $request->is('api/v1/teacher/topics/*/materials'))
+                || ($request->isMethod('patch') && $request->is('api/v1/teacher/materials/*')),
+        ]);
+
         $middleware->alias([
             'active.account' => EnsureAccountIsActive::class,
             'password.changed' => EnsurePasswordChanged::class,
@@ -57,6 +65,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (InactiveGroupMemberException $e, Request $request) => ApiErrorResponse::inactiveGroupMember($request));
         $exceptions->render(fn (InactiveParentStudentRelationshipUserException $e, Request $request) => ApiErrorResponse::inactiveParentStudentRelationshipUser($request));
         $exceptions->render(fn (TopicNotEditableException $e, Request $request) => ApiErrorResponse::topicNotEditable($request));
+        $exceptions->render(fn (UnsupportedFileTypeException $e, Request $request) => ApiErrorResponse::unsupportedFileType($request));
+        $exceptions->render(fn (FileTooLargeException $e, Request $request) => ApiErrorResponse::fileTooLarge($e->maxSizeBytes, $request));
+        $exceptions->render(fn (FileUploadFailedException $e, Request $request) => ApiErrorResponse::fileUploadFailed($request));
         $exceptions->render(fn (NotFoundHttpException $e, Request $request) => ApiErrorResponse::resourceNotFound($request));
         $exceptions->render(fn (ThrottleRequestsException $e, Request $request) => ApiErrorResponse::rateLimited($request));
         $exceptions->render(fn (Throwable $e, Request $request) => ApiErrorResponse::serverError($request));
