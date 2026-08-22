@@ -175,7 +175,7 @@ Implementation proceeds one task at a time in dependency order.
 | Order | Task ID | Area | Short outcome | Depends on | Task status | Delivery status | Contract file |
 |---:|---|---|---|---|---|---|---|
 | 1 | `S05-BE-001` | Backend | Topic and Learning Material Persistence Foundation | Stage 4 closed | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-001-topic-learning-material-persistence-foundation.md` |
-| 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Draft` | `Not started` | `Not created` |
+| 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Approved` | `Not started` | `tasks/backend/stage-05/S05-BE-002-teacher-topic-authoring-api.md` |
 | 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Draft` | `Not started` | `Not created` |
 | 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Draft` | `Not started` | `Not created` |
 | 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Draft` | `Not started` | `Not created` |
@@ -355,7 +355,7 @@ Implementation Readiness Gate.
 | Task ID | Scope/non-goals | Behavior/API/UI | Persistence/lifecycle | Auth/tenant/security | Errors/edge/concurrency | Tests/verification | Ready |
 |---|---|---|---|---|---|---|---|
 | `S05-BE-001` | `Yes` | `N/A` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
-| `S05-BE-002` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-002` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-003` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
 | `S05-BE-004` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
 | `S05-BE-005` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
@@ -883,27 +883,20 @@ closure bookkeeping delivered to origin/main
 
 `S05-BE-001` is Accepted / Delivered.
 
-Delivery evidence:
+`S05-BE-002` is Approved and its implementation contract is delivered.
 
-PR #102
-merge:
-17129ede0e266087c23355f135f9a340ccdaaf92
+Current implementation baseline candidate:
 
-Next permitted task:
+f978b0e324d873e721a33670e90e7979dc83e6ae
 
-S05-BE-002 — Teacher Topic Authoring API
+Next permitted action:
 
-Before implementation:
+1. Synchronize local `main` with current `origin/main`.
+2. Verify ahead/behind = `0/0` and clean working tree.
+3. Freeze the exact current `origin/main` SHA.
+4. Start Codex implementation of `S05-BE-002`.
 
-1. ChatGPT re-checks current `origin/main` and directly relevant source/tests.
-2. Discuss and resolve the complete `S05-BE-002` implementation contract.
-3. Create only the `S05-BE-002` task file.
-4. Run the Implementation Readiness Gate.
-5. Deliver the Approved contract/bookkeeping to `origin/main`.
-6. Freeze the new implementation baseline.
-7. Only then start Codex implementation.
-
-Do not prepare `S05-BE-003` or later detailed contracts in advance.
+Do not prepare `S05-BE-003` before `S05-BE-002` is Accepted / Delivered.
 
 ---
 
