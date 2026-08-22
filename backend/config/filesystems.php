@@ -15,6 +15,8 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
+    'private_files_disk' => env('PRIVATE_FILES_DISK', 'local'),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks

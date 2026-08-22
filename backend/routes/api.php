@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
 use App\Support\Auth\LoginRateLimitKey;
 use Illuminate\Support\Facades\Route;
@@ -96,4 +97,9 @@ Route::prefix('teacher')
         Route::post('topics', [TeacherTopicController::class, 'store']);
         Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
         Route::patch('topics/{topic}', [TeacherTopicController::class, 'update']);
+        Route::get('topics/{topic}/materials', [TeacherLearningMaterialController::class, 'index']);
+        Route::post('topics/{topic}/materials', [TeacherLearningMaterialController::class, 'store']);
+        Route::post('materials/{material}/replace', [TeacherLearningMaterialController::class, 'replace']);
+        Route::patch('materials/{material}', [TeacherLearningMaterialController::class, 'update']);
+        Route::delete('materials/{material}', [TeacherLearningMaterialController::class, 'destroy']);
     });

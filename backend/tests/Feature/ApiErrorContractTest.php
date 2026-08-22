@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\Files\FileTooLargeException;
+use App\Exceptions\Files\FileUploadFailedException;
+use App\Exceptions\Files\UnsupportedFileTypeException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -67,6 +70,46 @@ class ApiErrorContractTest extends TestCase
 
         $decoded = $this->assertErrorContract($response, 409, 'topic_not_editable');
         $this->assertSame('The topic is not editable.', $decoded->message);
+    }
+
+    public function test_unsupported_file_type_exception_returns_exact_file_error_contract(): void
+    {
+        Route::post('/api/v1/test-unsupported-file-type', function () {
+            throw new UnsupportedFileTypeException;
+        });
+
+        $response = $this->postJson('/api/v1/test-unsupported-file-type');
+
+        $decoded = $this->assertErrorContract($response, 422, 'unsupported_file_type');
+        $this->assertSame('The uploaded file type is not supported.', $decoded->message);
+        $this->assertSame(['Supported file types are PDF, DOCX, PPT, and PPTX.'], $decoded->errors->file);
+    }
+
+    public function test_file_too_large_exception_returns_exact_effective_limit_contract(): void
+    {
+        Route::post('/api/v1/test-file-too-large', function () {
+            throw new FileTooLargeException(20 * 1_048_576);
+        });
+
+        $response = $this->postJson('/api/v1/test-file-too-large');
+
+        $decoded = $this->assertErrorContract($response, 422, 'file_too_large');
+        $this->assertSame('The uploaded file exceeds the allowed size.', $decoded->message);
+        $this->assertSame(['The file must not exceed 20971520 bytes (20 MiB).'], $decoded->errors->file);
+    }
+
+    public function test_file_upload_failed_exception_returns_exact_safe_storage_error_contract(): void
+    {
+        Route::post('/api/v1/test-file-upload-failed', function () {
+            throw new FileUploadFailedException('sensitive disk path');
+        });
+
+        $response = $this->postJson('/api/v1/test-file-upload-failed');
+
+        $decoded = $this->assertErrorContract($response, 500, 'file_upload_failed');
+        $this->assertSame('The file could not be uploaded.', $decoded->message);
+        $this->assertSame([], get_object_vars($decoded->errors));
+        $this->assertStringNotContainsString('sensitive', $response->getContent());
     }
 
     public function test_rate_limit_exception_returns_rate_limited_contract(): void

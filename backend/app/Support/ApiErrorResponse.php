@@ -24,6 +24,10 @@ final class ApiErrorResponse
 
     private const CODE_FORBIDDEN = 'forbidden';
 
+    private const CODE_FILE_TOO_LARGE = 'file_too_large';
+
+    private const CODE_FILE_UPLOAD_FAILED = 'file_upload_failed';
+
     private const CODE_RATE_LIMITED = 'rate_limited';
 
     private const CODE_RESOURCE_NOT_FOUND = 'resource_not_found';
@@ -31,6 +35,8 @@ final class ApiErrorResponse
     private const CODE_SERVER_ERROR = 'server_error';
 
     private const CODE_TOPIC_NOT_EDITABLE = 'topic_not_editable';
+
+    private const CODE_UNSUPPORTED_FILE_TYPE = 'unsupported_file_type';
 
     private const CODE_USER_INACTIVE = 'user_inactive';
 
@@ -208,6 +214,49 @@ final class ApiErrorResponse
             'The topic is not editable.',
             self::CODE_TOPIC_NOT_EDITABLE,
             Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function unsupportedFileType(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The uploaded file type is not supported.',
+            self::CODE_UNSUPPORTED_FILE_TYPE,
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            ['file' => ['Supported file types are PDF, DOCX, PPT, and PPTX.']],
+        );
+    }
+
+    public static function fileTooLarge(int $maxSizeBytes, Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        $maxSizeMiB = intdiv($maxSizeBytes, 1_048_576);
+
+        return self::json(
+            'The uploaded file exceeds the allowed size.',
+            self::CODE_FILE_TOO_LARGE,
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            ['file' => ["The file must not exceed {$maxSizeBytes} bytes ({$maxSizeMiB} MiB)."]],
+        );
+    }
+
+    public static function fileUploadFailed(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The file could not be uploaded.',
+            self::CODE_FILE_UPLOAD_FAILED,
+            Response::HTTP_INTERNAL_SERVER_ERROR,
         );
     }
 
