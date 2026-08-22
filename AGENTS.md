@@ -1,263 +1,339 @@
-# TestLabUz Codex Engineering Rules — Lean Verification
+# TestLabUz Codex Engineering Rules
 
 ## 1. Purpose
 
-This file defines how Codex implements approved TestLabUz changes.
+This file defines **how Codex must implement code** in TestLabUz.
 
-It does not define product requirements, business behavior, API behavior,
-database behavior, lifecycle rules, or Stage scope.
+It does not define product requirements, business behavior, API behavior, database behavior, lifecycle rules, or Stage scope.
 
 For every task:
 
-- the approved implementation contract defines **what** to build;
-- this file defines **how** to build it safely and well;
-- applicable nested `backend/AGENTS.md` / `frontend/AGENTS.md` add
-  implementation-specific rules.
+- the approved implementation contract defines **what to build**;
+- this file defines the general engineering standard for **how to build it well**;
+- `backend/AGENTS.md` defines additional engineering rules for backend work;
+- `frontend/AGENTS.md` defines additional engineering rules for frontend work.
 
-Codex is an implementation agent, not the product/architecture decision maker.
+The applicable nested `AGENTS.md` applies automatically based on the files being changed. The implementation contract does not need to repeat or explicitly name those rules.
 
----
+Codex is an implementation agent. It implements an already designed solution; it does not redesign the product.
 
-## 2. Context Discipline
+The Lean Verification workflow reduces duplicated context and unnecessary broad
+verification only. It does not reduce implementation quality, focused test
+coverage, security, tenant isolation, or final Stage assurance.
+
+## 2. Authoritative Input and Context Discipline
+
+The current approved implementation contract is the complete source of task-specific product and implementation requirements.
+
+The applicable `AGENTS.md` files remain authoritative for general engineering, security, quality, and repository-safety rules.
 
 Read only:
 
 1. the current approved implementation contract;
 2. this root `AGENTS.md`;
-3. applicable nested `AGENTS.md`;
-4. source/tests/migrations/config/infrastructure directly required by the task.
+3. the applicable nested `backend/AGENTS.md` and/or `frontend/AGENTS.md` based on the files being changed;
+4. existing source code, tests, migrations, configuration, and infrastructure directly required to implement the task.
 
-Do not read product specifications, roadmap, architecture/API/database docs,
-previous task files, Stage history, checkpoint reviews, or closure reviews to
-decide what to implement.
+Do not read product specifications, roadmap files, architecture/specification documents, previous task files, Stage history, closure reviews, or unrelated modules to determine what to implement.
 
-Do not broaden context “just in case”.
+Do not broaden context “just in case.” Inspect additional files only when a concrete code dependency requires them.
 
-If the contract is materially incomplete or conflicts with current
-implementation or applicable engineering rules, return `BLOCKED`.
+Do not modify this file or another instruction file unless the task explicitly requires that change.
 
----
+## 3. Instruction Priority and Conflict Handling
 
-## 3. Decision Boundary
+Use this priority:
+
+1. the current implementation contract controls task-specific scope, behavior, public contracts, allowed files, acceptance criteria, and verification;
+2. the applicable root/nested `AGENTS.md` files control general engineering, security, quality, and repository-safety rules;
+3. existing code patterns guide local implementation details only when they do not conflict with the contract or applicable `AGENTS.md`.
+
+A task-specific requirement may specialize a general engineering rule when necessary for the approved implementation, but it must never silently weaken:
+
+- authentication or authorization;
+- tenant/institution isolation;
+- data integrity;
+- secret handling;
+- repository/Git safety;
+- approved public behavior or contracts.
+
+If the task materially conflicts with an engineering rule or the existing implementation, do not choose silently and do not invent a reconciliation. Report:
+
+- the exact conflicting requirement;
+- the affected file or implementation boundary;
+- why implementation cannot proceed safely as written.
+
+Minor local differences that do not alter public behavior, architecture, security, data integrity, or repository safety are not conflicts.
+
+## 4. Codex Decision Boundary
 
 Codex may make ordinary local implementation choices when they:
 
-- stay inside approved scope;
-- preserve public behavior/contracts;
-- follow established project patterns;
-- do not create new cross-cutting architecture;
+- stay inside the approved scope;
+- preserve all public behavior and contracts;
+- follow an established project pattern;
+- do not create a new cross-cutting architecture;
 - do not weaken security, tenant isolation, or data integrity.
 
-Codex must not independently decide/change:
+Examples of allowed local choices:
 
-- product/business behavior;
-- public API semantics;
-- schema/database contracts;
-- lifecycle/state transitions;
-- authorization/tenant rules;
+- private variable and method names;
+- extracting a small focused helper;
+- choosing between equivalent local control-flow structures;
+- reusing an existing abstraction that already owns the responsibility;
+- organizing private implementation details inside the approved layer.
+
+Codex must not independently decide or change:
+
+- product or business behavior;
+- public API shape or semantics;
+- database/schema contracts;
+- lifecycle or state transitions;
+- authorization or tenant rules;
 - error semantics;
-- concurrency/idempotency policy;
+- concurrency or idempotency policy;
 - cross-feature architecture;
 - package/dependency strategy;
-- unresolved UX behavior.
+- UX behavior not resolved by the task.
 
----
+If one of these decisions is missing, the task is not implementation-ready; report the exact gap.
 
-## 4. Scope and Change Control
+## 5. Scope and Change Control
 
-Implement exactly the approved contract.
+Implement exactly the approved task.
 
 Do not:
 
 - add unrelated functionality;
 - perform unrelated refactors;
-- create speculative future infrastructure;
-- add packages/dependencies unless explicitly approved;
-- change unrelated public API/schema/routes/serialization;
-- edit docs/task history/Stage bookkeeping unless explicitly approved;
-- format/reorganize unrelated files.
+- redesign working modules;
+- create speculative infrastructure for future tasks;
+- add a package or dependency unless explicitly required;
+- change unrelated public interfaces, serialization, schema, routes, or behavior;
+- edit documentation, task history, or Stage bookkeeping unless explicitly required;
+- format or reorganize unrelated files.
 
-Report unrelated defects separately unless they directly block the task.
+If an unrelated defect is discovered, report it separately unless it directly blocks the assigned task.
 
----
+Preserve backward compatibility unless the task explicitly changes the relevant contract.
 
-## 5. Production Code Quality
+Do not manually edit generated files. Run an existing generator only when the task requires generated output.
 
-Code must be readable, maintainable, testable, and production-suitable.
+Do not change dependency lockfiles unless dependencies actually change as part of the approved task.
 
-### Responsibilities and placement
+## 6. Production Code Quality
 
-- one clear responsibility per class/module/widget/action;
-- put logic in the owning feature/layer;
-- avoid God classes/files and catch-all services;
-- reuse existing abstractions only when they genuinely own the responsibility;
-- avoid premature generic abstractions.
+Code must be readable, maintainable, testable, and suitable for a real production project.
 
-### Errors and edge cases
+### Naming
 
-- implement contract-defined negative/edge behavior;
-- do not swallow unexpected failures;
-- do not expose stack traces, SQL, secrets, or internal exceptions;
-- atomic operations must not leave partial persistent state.
+Use specific names that communicate purpose and responsibility.
 
-### Dead/debug code
+Avoid vague catch-all names such as `data`, `temp`, `manager`, `common`, `misc`, `helper2`, or `doSomething` in production code.
 
-Do not leave debug output, commented-out alternatives, obsolete code, unused
-code, or TODOs that hide incomplete acceptance criteria.
+### Responsibilities
 
----
+A function, class, service, widget, file, or module should have one clear reason to change.
 
-## 6. Security and Data Protection
+Keep unrelated concerns separated. Do not create God classes, God files, catch-all services, or universal helpers.
 
-Never weaken:
+### Placement
+
+Put code in the feature, module, and layer that owns the responsibility.
+
+Do not add logic to a convenient file when another layer owns it.
+
+### Reuse and Abstraction
+
+Inspect existing patterns before creating a new helper, service, repository, controller, provider, client, or abstraction.
+
+Reuse an existing abstraction only when it genuinely owns the same responsibility.
+
+Avoid both copy-pasting stable shared behavior and creating premature abstractions from superficial similarity.
+
+### Complexity
+
+Prefer focused, composable code with clear inputs and outputs.
+
+Refactor when code mixes layers, contains multiple independent responsibilities, has difficult nesting, or cannot be tested without unrelated setup.
+
+Do not split straightforward code into meaningless tiny methods merely to reduce line count.
+
+### Errors and Edge Cases
+
+Implement all task-defined failure and edge behavior, not only the happy path.
+
+Do not swallow exceptions, hide programming errors behind broad catch-all handling, or expose internal exceptions, stack traces, SQL details, or secrets.
+
+Operations defined as atomic by the task must not leave partial persistent state.
+
+### Comments and Dead Code
+
+Prefer clear code over comments that restate it.
+
+Use comments only for non-obvious reasons, security boundaries, compatibility constraints, concurrency safeguards, or technical invariants.
+
+Do not leave debug output, commented-out code, obsolete alternatives, unused code, or TODOs that hide incomplete acceptance criteria.
+
+## 7. Security and Data Protection
+
+Never weaken existing:
 
 - authentication;
 - authorization;
 - tenant/institution isolation;
-- ownership/relationship checks;
+- ownership and relationship checks;
 - protected-resource access;
-- secret/token handling;
+- secret and token handling;
 - historical-data integrity.
 
-A valid UUID is not authorization.
+A syntactically valid identifier does not grant access.
 
-For tenant-owned access:
+For tenant-owned operations, resolve and scope access from trusted authenticated context before returning or mutating records.
 
-```text
-trusted authenticated context
-→ tenant-scoped resolution
-→ role/relationship/lifecycle checks
-→ read/write
-```
+Do not allow direct identifiers, filters, pagination, routes, URLs, cache state, or stale asynchronous results to bypass security boundaries.
 
-Do not log/expose passwords, bearer tokens, credentials, private keys, secrets,
-or sensitive internal payloads.
+Do not log or expose passwords, bearer tokens, credentials, private keys, secrets, or sensitive internal payloads.
 
----
+Security-sensitive behavior must be explicit and testable.
 
-## 7. Tests
+## 8. Tests
 
-Tests are production-quality implementation.
+Tests are production-quality code.
 
-Add/update the focused tests required by the contract.
+Add or update focused tests for the behavior changed by the task, including required negative and edge cases.
 
-Tests must:
+Use behavior-oriented test names and keep important actor, scope, state, and input setup understandable.
 
-- exercise the boundary that owns the behavior;
-- include required positive/negative/tenant/security/lifecycle/concurrency/async
-  cases where relevant;
-- remain deterministic.
+Do not:
 
-Do not delete/skip/weaken tests merely to make code pass.
-Do not hide defects by changing fixtures/mocks only.
-Avoid arbitrary sleeps, uncontrolled time, and real external networks.
+- delete, skip, weaken, or rewrite an existing test merely to make implementation pass;
+- relax an assertion without an explicit contract change;
+- hide a defect by changing only fixtures or mocks;
+- use arbitrary sleeps, real external networks, uncontrolled current time, or other avoidable nondeterminism.
 
----
+An existing test may change only when the implementation task explicitly changes the behavior that test represents.
 
-## 8. Proportional Verification
+## 9. Proportional Verification
 
-The contract defines the minimum sufficient task verification.
+ChatGPT defines the minimum sufficient verification scope and exact commands in
+the approved implementation contract.
 
-After each implementation task, Codex runs:
+After each implementation task, Codex runs only the required task-level focused
+verification:
 
-- focused tests for changed functionality;
+- focused tests for the changed functionality;
 - necessary format/static checks;
 - specifically named directly affected regression tests when justified;
 - `git diff --check`;
 - focused scope/diff self-review.
 
-Additional narrow diagnostics/reruns are allowed only to understand a concrete
-failure.
+Additional narrow diagnostic commands or focused reruns are allowed when needed
+to understand or confirm a concrete failure.
 
-Do not independently expand to:
+Do not independently expand verification to full backend/frontend suites, full
+builds, broad E2E, Phase 2, or unrelated regression areas unless the
+implementation contract explicitly requires broader verification for a concrete
+task-specific risk.
 
-```text
-full backend suite
-full frontend suite
-full build
-broad E2E
-Phase 2
-```
+Block-level full suites, required builds, Phase 2 verification, real-stack E2E,
+and Stage-level verification are outside normal per-task Codex execution. They
+are orchestrated by ChatGPT and executed by the Project Owner or CI by default.
 
-unless the contract explicitly requires broader verification for a concrete
-risk.
+If implementation necessarily touches shared infrastructure beyond the
+verification assumptions encoded in the contract, report the exact mismatch or
+material regression risk rather than silently launching broad verification.
 
-Heavy checkpoint/build/E2E verification is orchestrated outside the task and is
-normally executed by Project Owner/CI.
+If a later checkpoint or integration review identifies a focused production
+defect, Codex implements only the approved fix contract and runs its focused
+verification. ChatGPT decides whether earlier PASS evidence remains valid and
+which broader checkpoint/integration checks, if any, the Project Owner or CI
+must rerun.
 
-Never claim a command passed when it was not run or did not pass.
+Never claim that a command passed when it was not run or did not pass. Report
+unavailable tooling and pre-existing failures truthfully.
 
----
+## 10. Preserve Existing User Work
 
-## 9. Preserve Existing User Work
+Preserve all pre-existing user changes and untracked files.
 
-Before editing, inspect repository status.
+Do not overwrite, revert, delete, move, format, stage, or include unrelated existing work in the task result.
 
-Do not overwrite, revert, delete, move, format, stage, or include unrelated
-existing work.
+Before editing, inspect repository status and identify changes that do not belong to the task.
 
-If safe isolation is impossible, return `BLOCKED`.
+If safe isolation is not possible, report the exact conflict.
 
----
-
-## 10. Git Safety and Delivery
+## 11. Git Safety
 
 Do not:
 
 - force-push;
 - rewrite shared history;
-- bypass hooks/checks;
+- bypass hooks or checks with `--no-verify`;
 - modify global Git configuration;
 - silently replace an unexpected remote;
-- use destructive reset/clean as normal workflow;
-- commit secrets/local-only files.
+- use destructive `git reset --hard` or destructive `git clean` as normal workflow;
+- commit credentials, tokens, private keys, certificates, environment secrets, or local-only files.
 
-Git/GitHub delivery is Project Owner-owned by default.
+For Stage 5+ routine Git/GitHub delivery is owned by the Project Owner by
+default.
 
-Codex must not commit, push, open/merge PRs, or update task/Stage bookkeeping
-unless the task explicitly assigns delivery to Codex.
+Codex must not commit, push, create or merge a PR, or modify task/Stage
+bookkeeping merely because implementation and focused verification passed.
 
----
+Codex performs a delivery action only when the current implementation contract
+explicitly assigns that action to Codex. Otherwise, leave delivery to the
+Project Owner and report the current Git state needed for safe handoff.
 
-## 11. Final Diff Self-Review
+## 12. Final Diff Review
 
 Before reporting implementation complete, inspect the complete diff and verify:
 
 - every changed file is necessary;
-- implementation matches contract;
+- the implementation matches the task exactly;
 - non-goals remain excluded;
-- no unrelated refactor/format churn;
-- correct feature/module/layer placement;
-- no unintended API/schema/route/serialization behavior change;
-- security and tenant boundaries intact;
-- task-defined edge/error behavior covered;
-- focused tests cover actual change;
-- no debug code, secrets, generated junk, or temporary artifacts.
+- no unrelated refactor or formatting churn exists;
+- code is in the correct feature/module/layer;
+- responsibilities and names are clear;
+- established patterns are reused appropriately;
+- no public API, schema, serialization, route, or behavior changed unintentionally;
+- security and tenant boundaries remain intact;
+- task-defined error and edge behavior is covered;
+- focused tests cover the actual change;
+- no debug code, secrets, generated junk, or temporary artifacts are included.
 
----
+## 13. Completion Report
 
-## 12. Completion Report
+Return a concise evidence-based report.
 
-Return concise evidence:
+Use one implementation status:
 
-1. implementation summary;
-2. changed files and purpose;
-3. exact focused verification commands/results;
-4. directly affected regression results;
-5. `git diff --check`;
-6. scope/non-goal confirmation;
-7. deviations/blockers;
-8. current Git status when relevant.
+```text
+IMPLEMENTATION COMPLETE
+BLOCKED
+```
 
-Do not repeat the full contract.
+Use `DELIVERY BLOCKED` only when the implementation contract explicitly assigns
+GitHub delivery to Codex and that delivery cannot complete safely.
 
-Do not report task `Accepted`; ChatGPT assigns acceptance after approved delivery.
+The report should contain only:
 
----
+- implementation summary;
+- changed files and purpose;
+- exact focused verification commands and results;
+- directly affected regression checks required by the task;
+- `git diff --check` result;
+- scope/non-goal confirmation;
+- deviations, pre-existing failures, unresolved conflicts, or blockers;
+- current Git status when relevant.
+
+Do not output task `Accepted`. ChatGPT assigns acceptance only after required
+verification and approved delivery are complete.
+
+Do not repeat the full task contract or paste large successful command logs.
+Summarize successful evidence compactly and include detailed output only when it
+is needed to explain a failure or blocker.
 
 ## Final Rule
 
-> The approved contract defines what to build. Codex implements it with
-> production-quality code/tests and only the minimum focused verification.
-> Heavy checkpoint/integration verification and routine Git delivery stay
-> outside Codex by default.
+> The approved implementation contract defines exactly **what** to build. The applicable `AGENTS.md` files define **how** to build it well and safely. Codex implements the approved design; it does not create a new one.
