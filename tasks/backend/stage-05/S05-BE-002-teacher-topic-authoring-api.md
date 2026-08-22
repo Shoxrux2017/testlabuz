@@ -6,13 +6,16 @@
 |---|---|
 | Stage | `Stage 5 — Topics and Learning Materials` |
 | Area | Backend |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Implementation type | Laravel teacher learning-context and Topic authoring API |
 | Depends on | `S05-BE-001 Accepted / Delivered`; Stage 4 Teacher–Group graph |
 | Planning baseline | `origin/main` @ `17129ede0e266087c23355f135f9a340ccdaaf92` |
-| Implementation baseline | `Freeze current origin/main after bookkeeping + this task contract are delivered and before Codex starts` |
+| Implementation baseline | `origin/main` @ `938d1f4952aca2e91211e9573b8a2887fa02b45c` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Delivery owner | `Project Owner` |
+| Delivery | `Delivered — PR #105` |
+| Delivered merge | `08fc5bca465562bf88f2824dd62f0d13aa29a478` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Block checkpoint | Stage 5 Backend Phase 2 after `S05-BE-001…005` are Accepted / Delivered |
 
 ---

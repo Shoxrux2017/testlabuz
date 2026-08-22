@@ -9,7 +9,7 @@
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition approved on | `2026-08-22` |
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
-| Implementation started | `Yes — S05-BE-001 Accepted / Delivered` |
+| Implementation started | `Yes — S05-BE-001 Accepted / Delivered` |  `Yes — S05-BE-001…002 Accepted / Delivered` |
 | Backend checkpoint | `Not started` |
 | Frontend checkpoint | `Not started` |
 | Integration gate | `Not started` |
@@ -175,7 +175,7 @@ Implementation proceeds one task at a time in dependency order.
 | Order | Task ID | Area | Short outcome | Depends on | Task status | Delivery status | Contract file |
 |---:|---|---|---|---|---|---|---|
 | 1 | `S05-BE-001` | Backend | Topic and Learning Material Persistence Foundation | Stage 4 closed | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-001-topic-learning-material-persistence-foundation.md` |
-| 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Approved` | `Not started` | `tasks/backend/stage-05/S05-BE-002-teacher-topic-authoring-api.md` |
+| 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-002-teacher-topic-authoring-api.md` |
 | 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Draft` | `Not started` | `Not created` |
 | 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Draft` | `Not started` | `Not created` |
 | 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Draft` | `Not started` | `Not created` |
@@ -396,7 +396,7 @@ For the current task, ChatGPT must confirm before approval:
 | Stage 4 Teacher–Group graph | `S05-BE-002`, Teacher Topic authorization | Current membership persistence/API from Stage 4 |
 | Stage 4 Student–Group graph | `S05-BE-005`, Student Topic delivery | Current membership persistence/API from Stage 4 |
 | Stage 5 persistence foundation | `S05-BE-002` | `S05-BE-001 Accepted / Delivered — PR #102, merge 17129ede0e266087c23355f135f9a340ccdaaf92` |
-| Teacher Topic authoring | material management | `S05-BE-002 Accepted / Delivered` |
+| Teacher Topic authoring | material management | `S05-BE-002 Accepted / Delivered — PR #105, merge 08fc5bca465562bf88f2824dd62f0d13aa29a478` |
 | material management | Topic activation/lifecycle | `S05-BE-003 Accepted / Delivered` |
 | Topic lifecycle + materials | Student delivery/download | `S05-BE-004 Accepted / Delivered` |
 | backend task block complete | Backend Phase 2 | `S05-BE-001…005 Accepted / Delivered` |
@@ -876,28 +876,38 @@ closure bookkeeping delivered to origin/main
 | `2026-08-22` | Initial Stage 5 decomposition: 5 Backend + 4 Frontend + 1 Integration task, Workflow v3 checkpoints and closure map | Prepare Stage 5 Topics and Learning Materials implementation under Lean Verification | `Project Owner` |
 | `2026-08-22` | Teacher assigned-Groups projection folded into `S05-BE-002` instead of a separate backend task | Reduce unnecessary task/Codex overhead without weakening architecture or verification | `Project Owner` |
 | `2026-08-22` | `S05-BE-001` Accepted / Delivered — PR #102, merge `17129ede0e266087c23355f135f9a340ccdaaf92` | Topic and Learning Material persistence foundation implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
+| `2026-08-22` | `S05-BE-002` Accepted / Delivered — PR #105, merge `08fc5bca465562bf88f2824dd62f0d13aa29a478` | Teacher assigned-Group projection and Topic authoring API implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 
 ---
 
 ## 19. Next Permitted Action
 
-`S05-BE-001` is Accepted / Delivered.
+`S05-BE-001` and `S05-BE-002` are Accepted / Delivered.
 
-`S05-BE-002` is Approved and its implementation contract is delivered.
+Latest delivery evidence:
 
-Current implementation baseline candidate:
+S05-BE-002
+PR #105
+merge:
+08fc5bca465562bf88f2824dd62f0d13aa29a478
 
-f978b0e324d873e721a33670e90e7979dc83e6ae
+Next permitted task:
 
-Next permitted action:
+S05-BE-003 — Learning Material Management and Private Storage
 
-1. Synchronize local `main` with current `origin/main`.
-2. Verify ahead/behind = `0/0` and clean working tree.
-3. Freeze the exact current `origin/main` SHA.
-4. Start Codex implementation of `S05-BE-002`.
+Before implementation:
 
-Do not prepare `S05-BE-003` before `S05-BE-002` is Accepted / Delivered.
+1. ChatGPT re-checks current `origin/main`.
+2. ChatGPT inspects the delivered Topic API, File/LearningMaterial persistence,
+   filesystem configuration, Institution upload limits, and directly relevant tests.
+3. Resolve the exact S05-BE-003 storage/DB consistency and replacement semantics.
+4. Prepare only the S05-BE-003 implementation contract.
+5. Run the Implementation Readiness Gate.
+6. Deliver bookkeeping + Approved S05-BE-003 contract.
+7. Freeze the new implementation baseline.
+8. Start Codex only after those gates pass.
 
+Do not prepare S05-BE-004 before S05-BE-003 is Accepted / Delivered.
 ---
 
 # Final Stage 5 Planning Principle
