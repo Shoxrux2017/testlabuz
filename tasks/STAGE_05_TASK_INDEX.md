@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 5 — Topics and Learning Materials` |
-| Stage status | `Approved` |
+| Stage status | `In Progress` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition approved on | `2026-08-22` |
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
-| Implementation started | `No` |
+| Implementation started | `Yes — S05-BE-001 Accepted / Delivered` |
 | Backend checkpoint | `Not started` |
 | Frontend checkpoint | `Not started` |
 | Integration gate | `Not started` |
@@ -154,10 +154,10 @@ Before `S05-BE-001` implementation begins:
 - [x] Stage-level authorization, tenant-isolation, lifecycle, and file-protection
       boundaries are explicit.
 - [x] Stage 5 API-contract refinements were prepared.
-- [ ] Stage 5 planning package is delivered to current `origin/main`.
-- [ ] Project Owner verifies local repository safety/synchronization before the
+- [x] Stage 5 planning package is delivered to current `origin/main`.
+- [x] Project Owner verifies local repository safety/synchronization before the
       first implementation task.
-- [ ] `S05-BE-001` detailed implementation contract is created and independently
+- [x] `S05-BE-001` detailed implementation contract is created and independently
       passes the Implementation Readiness Gate.
 
 If any remaining entry condition fails, implementation must not begin.
@@ -174,7 +174,7 @@ Implementation proceeds one task at a time in dependency order.
 
 | Order | Task ID | Area | Short outcome | Depends on | Task status | Delivery status | Contract file |
 |---:|---|---|---|---|---|---|---|
-| 1 | `S05-BE-001` | Backend | Topic and Learning Material Persistence Foundation | Stage 4 closed | `Draft` | `Not started` | `Not created` |
+| 1 | `S05-BE-001` | Backend | Topic and Learning Material Persistence Foundation | Stage 4 closed | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-001-topic-learning-material-persistence-foundation.md` |
 | 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Draft` | `Not started` | `Not created` |
 | 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Draft` | `Not started` | `Not created` |
 | 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Draft` | `Not started` | `Not created` |
@@ -354,7 +354,7 @@ Implementation Readiness Gate.
 
 | Task ID | Scope/non-goals | Behavior/API/UI | Persistence/lifecycle | Auth/tenant/security | Errors/edge/concurrency | Tests/verification | Ready |
 |---|---|---|---|---|---|---|---|
-| `S05-BE-001` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-001` | `Yes` | `N/A` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-002` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
 | `S05-BE-003` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
 | `S05-BE-004` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
@@ -395,7 +395,7 @@ For the current task, ChatGPT must confirm before approval:
 | Stage 4 closure | Stage 5 implementation | `tasks/STAGE_04_CLOSURE_REVIEW.md` = `STAGE CLOSED` |
 | Stage 4 Teacher–Group graph | `S05-BE-002`, Teacher Topic authorization | Current membership persistence/API from Stage 4 |
 | Stage 4 Student–Group graph | `S05-BE-005`, Student Topic delivery | Current membership persistence/API from Stage 4 |
-| Stage 5 persistence foundation | `S05-BE-002` | `S05-BE-001 Accepted / Delivered` |
+| Stage 5 persistence foundation | `S05-BE-002` | `S05-BE-001 Accepted / Delivered — PR #102, merge 17129ede0e266087c23355f135f9a340ccdaaf92` |
 | Teacher Topic authoring | material management | `S05-BE-002 Accepted / Delivered` |
 | material management | Topic activation/lifecycle | `S05-BE-003 Accepted / Delivered` |
 | Topic lifecycle + materials | Student delivery/download | `S05-BE-004 Accepted / Delivered` |
@@ -783,7 +783,7 @@ from Stage 4.
 
 | Risk or stop condition | Affected task/checkpoint | Mitigation / required decision | Status |
 |---|---|---|---|
-| Stage 5 API refinement not yet present on `origin/main` | Stage entry | Deliver updated `docs/09-api-contracts.md` with this index in the planning package before implementation | `Open until planning delivery` |
+| Stage 5 API refinement delivery | Stage entry | Updated `docs/09-api-contracts.md` and Stage 5 planning package delivered in PR #101 | `Resolved` | 
 | Topic activation wording in general business rules mentions Homework preparation, while Homework starts Stage 6 | `S05-BE-004` | Stage 5 specialization: require at least one current Learning Material; Homework gate begins when Stage 6 contract is available | `Resolved` |
 | Exact storage replacement/cleanup transaction strategy is implementation-sensitive | `S05-BE-003` | ChatGPT must resolve it in the BE-003 implementation contract before approval | `Open — later readiness gate` |
 | Exact Flutter package/platform strategy for select/save/open is not yet approved | `S05-FE-003` | ChatGPT must inspect current dependencies and explicitly approve any dependency change in FE-003 contract | `Open — later readiness gate` |
@@ -875,35 +875,35 @@ closure bookkeeping delivered to origin/main
 |---|---|---|---|
 | `2026-08-22` | Initial Stage 5 decomposition: 5 Backend + 4 Frontend + 1 Integration task, Workflow v3 checkpoints and closure map | Prepare Stage 5 Topics and Learning Materials implementation under Lean Verification | `Project Owner` |
 | `2026-08-22` | Teacher assigned-Groups projection folded into `S05-BE-002` instead of a separate backend task | Reduce unnecessary task/Codex overhead without weakening architecture or verification | `Project Owner` |
+| `2026-08-22` | `S05-BE-001` Accepted / Delivered — PR #102, merge `17129ede0e266087c23355f135f9a340ccdaaf92` | Topic and Learning Material persistence foundation implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 
 ---
 
 ## 19. Next Permitted Action
 
+`S05-BE-001` is Accepted / Delivered.
+
+Delivery evidence:
+
+PR #102
+merge:
+17129ede0e266087c23355f135f9a340ccdaaf92
+
+Next permitted task:
+
+S05-BE-002 — Teacher Topic Authoring API
+
 Before implementation:
 
-```text
-1. Deliver the Stage 5 planning package:
-   - updated docs/09-api-contracts.md
-   - tasks/STAGE_05_TASK_INDEX.md
+1. ChatGPT re-checks current `origin/main` and directly relevant source/tests.
+2. Discuss and resolve the complete `S05-BE-002` implementation contract.
+3. Create only the `S05-BE-002` task file.
+4. Run the Implementation Readiness Gate.
+5. Deliver the Approved contract/bookkeeping to `origin/main`.
+6. Freeze the new implementation baseline.
+7. Only then start Codex implementation.
 
-2. Verify current origin/main and local repository safety.
-
-3. Re-read current source/tests relevant to S05-BE-001.
-
-4. Discuss and prepare only:
-   S05-BE-001 — Topic and Learning Material Persistence Foundation
-
-5. Run the S05-BE-001 Implementation Readiness Gate.
-
-6. Only after Project Owner approval:
-   S05-BE-001 → Approved → Codex implementation.
-```
-
-Do not prepare all Stage 5 detailed task contracts in advance.
-
-Do not begin `S05-BE-002` planning as an implementation contract until the
-current task/delivery state makes it the next permitted task.
+Do not prepare `S05-BE-003` or later detailed contracts in advance.
 
 ---
 

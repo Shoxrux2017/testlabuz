@@ -6,13 +6,16 @@
 |---|---|
 | Stage | `Stage 5 — Topics and Learning Materials` |
 | Area | Backend |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Implementation type | Laravel/PostgreSQL persistence foundation |
 | Depends on | Stage 4 closed; Stage 5 decomposition approved |
 | Planning baseline | `origin/main` @ `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
-| Implementation baseline | `Freeze current origin/main after Stage 5 planning-package delivery and before Codex starts` |
+| Implementation baseline | `origin/main` @ `a51c328d9243cf6559b5587b8b3fc781a700b4c8` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Delivery owner | `Project Owner` |
+| Delivery | `Delivered — PR #102` |
+| Delivered merge | `17129ede0e266087c23355f135f9a340ccdaaf92` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Block checkpoint | Stage 5 Backend Phase 2 after `S05-BE-001…005` are Accepted / Delivered |
 
 ---
