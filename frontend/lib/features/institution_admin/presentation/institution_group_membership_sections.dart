@@ -546,7 +546,7 @@ class _MembershipResult extends StatelessWidget {
   }
 }
 
-class _MembershipTable extends StatelessWidget {
+class _MembershipTable extends StatefulWidget {
   const _MembershipTable({
     required this.state,
     required this.kind,
@@ -570,9 +570,30 @@ class _MembershipTable extends StatelessWidget {
   final ValueChanged<InstitutionGroupMembershipSort>? onSort;
 
   @override
+  State<_MembershipTable> createState() => _MembershipTableState();
+}
+
+class _MembershipTableState extends State<_MembershipTable> {
+  late final ScrollController _horizontalScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scrollbar(
+      controller: _horizontalScrollController,
       child: SingleChildScrollView(
+        controller: _horizontalScrollController,
         scrollDirection: Axis.horizontal,
         child: DataTable(
           columns: [
@@ -580,16 +601,19 @@ class _MembershipTable extends StatelessWidget {
               label: Semantics(
                 button: true,
                 sortKey: OrdinalSortKey(
-                  state.query.sort == InstitutionGroupMembershipSort.fullName
+                  widget.state.query.sort ==
+                          InstitutionGroupMembershipSort.fullName
                       ? 0
                       : 1,
                 ),
                 label:
                     'Full name, ${_sortDescription(InstitutionGroupMembershipSort.fullName)}',
                 child: TextButton(
-                  onPressed: onSort == null
+                  onPressed: widget.onSort == null
                       ? null
-                      : () => onSort!(InstitutionGroupMembershipSort.fullName),
+                      : () => widget.onSort!(
+                          InstitutionGroupMembershipSort.fullName,
+                        ),
                   child: const Text('Full name'),
                 ),
               ),
@@ -603,9 +627,11 @@ class _MembershipTable extends StatelessWidget {
                 label:
                     'Assigned, ${_sortDescription(InstitutionGroupMembershipSort.startedAt)}',
                 child: TextButton(
-                  onPressed: onSort == null
+                  onPressed: widget.onSort == null
                       ? null
-                      : () => onSort!(InstitutionGroupMembershipSort.startedAt),
+                      : () => widget.onSort!(
+                          InstitutionGroupMembershipSort.startedAt,
+                        ),
                   child: const Text('Assigned'),
                 ),
               ),
@@ -613,7 +639,7 @@ class _MembershipTable extends StatelessWidget {
             const DataColumn(label: Text('Action')),
           ],
           rows: [
-            for (final membership in state.result!.memberships)
+            for (final membership in widget.state.result!.memberships)
               DataRow(
                 cells: [
                   DataCell(Text(membership.fullName)),
@@ -624,14 +650,17 @@ class _MembershipTable extends StatelessWidget {
                     Text(formatInstitutionGroupUtc(membership.startedAt)),
                   ),
                   DataCell(
-                    showMutationActions
+                    widget.showMutationActions
                         ? TextButton(
                             key: Key(
-                              'remove${kind.singularTitle}-${membership.id}-${membership.startedAt.toIso8601String()}',
+                              'remove${widget.kind.singularTitle}-${membership.id}-${membership.startedAt.toIso8601String()}',
                             ),
-                            focusNode: removeFocusNode(kind, membership),
-                            onPressed: canMutateRows
-                                ? () => onRemove(membership)
+                            focusNode: widget.removeFocusNode(
+                              widget.kind,
+                              membership,
+                            ),
+                            onPressed: widget.canMutateRows
+                                ? () => widget.onRemove(membership)
                                 : null,
                             child: const Text('Remove'),
                           )
@@ -646,10 +675,11 @@ class _MembershipTable extends StatelessWidget {
   }
 
   String _sortDescription(InstitutionGroupMembershipSort sort) {
-    if (state.query.sort != sort) {
+    if (widget.state.query.sort != sort) {
       return 'not sorted';
     }
-    return state.query.direction == InstitutionGroupMembershipSortDirection.asc
+    return widget.state.query.direction ==
+            InstitutionGroupMembershipSortDirection.asc
         ? 'sorted ascending'
         : 'sorted descending';
   }

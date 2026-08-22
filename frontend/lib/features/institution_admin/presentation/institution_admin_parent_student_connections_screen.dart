@@ -651,7 +651,7 @@ class _RelationshipBody extends StatelessWidget {
   }
 }
 
-class _RelationshipTable extends StatelessWidget {
+class _RelationshipTable extends StatefulWidget {
   const _RelationshipTable({
     required this.state,
     required this.result,
@@ -673,28 +673,49 @@ class _RelationshipTable extends StatelessWidget {
   final ValueChanged<InstitutionParentStudentRelationshipSort> onSort;
 
   @override
+  State<_RelationshipTable> createState() => _RelationshipTableState();
+}
+
+class _RelationshipTableState extends State<_RelationshipTable> {
+  late final ScrollController _horizontalScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scrollbar(
+      controller: _horizontalScrollController,
       child: SingleChildScrollView(
         key: const Key('institutionParentStudentHorizontalScroll'),
+        controller: _horizontalScrollController,
         scrollDirection: Axis.horizontal,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: _tableMinWidth),
           child: DataTable(
             key: const Key('institutionParentStudentRelationshipTable'),
             sortColumnIndex:
-                state.query.sort ==
+                widget.state.query.sort ==
                     InstitutionParentStudentRelationshipSort.fullName
                 ? 0
                 : 4,
             sortAscending:
-                state.query.direction ==
+                widget.state.query.direction ==
                 InstitutionParentStudentRelationshipSortDirection.asc,
             columns: [
               DataColumn(
-                label: Text(state.perspective.relatedLabel),
-                onSort: enabled
-                    ? (_, _) => onSort(
+                label: Text(widget.state.perspective.relatedLabel),
+                onSort: widget.enabled
+                    ? (_, _) => widget.onSort(
                         InstitutionParentStudentRelationshipSort.fullName,
                       )
                     : null,
@@ -704,8 +725,8 @@ class _RelationshipTable extends StatelessWidget {
               const DataColumn(label: Text('Status')),
               DataColumn(
                 label: const Text('Connected'),
-                onSort: enabled
-                    ? (_, _) => onSort(
+                onSort: widget.enabled
+                    ? (_, _) => widget.onSort(
                         InstitutionParentStudentRelationshipSort.startedAt,
                       )
                     : null,
@@ -713,7 +734,7 @@ class _RelationshipTable extends StatelessWidget {
               const DataColumn(label: Text('Action')),
             ],
             rows: [
-              for (final relationship in result.relationships)
+              for (final relationship in widget.result.relationships)
                 DataRow(
                   key: ValueKey(
                     'institutionParentStudentRow${relationship.id}',
@@ -737,12 +758,12 @@ class _RelationshipTable extends StatelessWidget {
                         key: ValueKey(
                           'institutionParentStudentDisconnect${relationship.id}',
                         ),
-                        focusNode: disconnectFocusNode(
-                          state.perspective,
+                        focusNode: widget.disconnectFocusNode(
+                          widget.state.perspective,
                           relationship,
                         ),
-                        onPressed: enabled
-                            ? () => onDisconnect(relationship)
+                        onPressed: widget.enabled
+                            ? () => widget.onDisconnect(relationship)
                             : null,
                         child: const Text('Disconnect'),
                       ),
@@ -1501,14 +1522,21 @@ class _FeedbackBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
-      child: MaterialBanner(
-        key: const Key('institutionParentStudentFeedback'),
-        content: Text(message),
-        actions: [
-          if (onDismiss != null)
-            TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
-        ],
-      ),
+      child: onDismiss == null
+          ? Material(
+              key: const Key('institutionParentStudentFeedback'),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(message),
+              ),
+            )
+          : MaterialBanner(
+              key: const Key('institutionParentStudentFeedback'),
+              content: Text(message),
+              actions: [
+                TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
+              ],
+            ),
     );
   }
 }
