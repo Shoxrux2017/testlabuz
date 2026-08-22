@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -147,6 +148,33 @@ void main() {
       expect(find.byKey(const Key('institutionGroupListData')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+      'groups horizontal table renders without Scrollbar assertion on Windows',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+        try {
+          await _pumpApp(tester, repository: _FakeGroupListRepository());
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const Key('institutionGroupHorizontalScroll')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: find.byKey(const Key('institutionGroupListData')),
+              matching: find.byType(Scrollbar),
+            ),
+            findsWidgets,
+          );
+          expect(tester.takeException(), isNull);
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      },
+    );
 
     testWidgets(
       'keyboard search filter sort size paging and clear send exact queries',

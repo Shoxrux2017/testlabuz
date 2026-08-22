@@ -424,7 +424,7 @@ class _GroupListData extends StatelessWidget {
   }
 }
 
-class _GroupTable extends StatelessWidget {
+class _GroupTable extends StatefulWidget {
   const _GroupTable({
     required this.result,
     required this.query,
@@ -440,10 +440,31 @@ class _GroupTable extends StatelessWidget {
   final ValueChanged<InstitutionGroup> onOpenGroup;
 
   @override
+  State<_GroupTable> createState() => _GroupTableState();
+}
+
+class _GroupTableState extends State<_GroupTable> {
+  late final ScrollController _horizontalScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalScrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scrollbar(
+      controller: _horizontalScrollController,
       child: SingleChildScrollView(
         key: const Key('institutionGroupHorizontalScroll'),
+        controller: _horizontalScrollController,
         scrollDirection: Axis.horizontal,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minWidth: _tableMinWidth),
@@ -455,9 +476,9 @@ class _GroupTable extends StatelessWidget {
             child: DataTable(
               key: const Key('institutionGroupTable'),
               showCheckboxColumn: false,
-              sortColumnIndex: _sortColumnIndex(query.sort),
+              sortColumnIndex: _sortColumnIndex(widget.query.sort),
               sortAscending:
-                  query.direction == InstitutionGroupSortDirection.asc,
+                  widget.query.direction == InstitutionGroupSortDirection.asc,
               columns: [
                 _sortableColumn('Name', InstitutionGroupListSort.name),
                 const DataColumn(label: Text('Level')),
@@ -469,8 +490,12 @@ class _GroupTable extends StatelessWidget {
                 _sortableColumn('Updated', InstitutionGroupListSort.updatedAt),
               ],
               rows: [
-                for (var index = 0; index < result.groups.length; index++)
-                  _groupRow(result.groups[index], index),
+                for (
+                  var index = 0;
+                  index < widget.result.groups.length;
+                  index++
+                )
+                  _groupRow(widget.result.groups[index], index),
               ],
             ),
           ),
@@ -480,38 +505,40 @@ class _GroupTable extends StatelessWidget {
   }
 
   DataColumn _sortableColumn(String label, InstitutionGroupListSort sort) {
-    final selected = query.sort == sort;
-    final direction = selected ? _directionLabel(query.direction) : 'ascending';
+    final selected = widget.query.sort == sort;
+    final direction = selected
+        ? _directionLabel(widget.query.direction)
+        : 'ascending';
 
     return DataColumn(
       label: Semantics(
-        label: canSort
+        label: widget.canSort
             ? selected
                   ? '$label, sorted $direction. Activate to change sorting.'
                   : '$label. Activate to sort ascending.'
             : '$label sorting is unavailable while groups are loading.',
-        button: canSort,
-        enabled: canSort,
+        button: widget.canSort,
+        enabled: widget.canSort,
         child: Text(label),
       ),
       tooltip: selected
           ? 'Sorted $direction; activate to change sorting'
           : 'Sort by $label ascending',
-      onSort: canSort ? (_, _) => onSort(sort) : null,
+      onSort: widget.canSort ? (_, _) => widget.onSort(sort) : null,
     );
   }
 
   DataRow _groupRow(InstitutionGroup group, int index) {
     return DataRow(
       key: ValueKey('institutionGroupRow${group.id}'),
-      onSelectChanged: (_) => onOpenGroup(group),
+      onSelectChanged: (_) => widget.onOpenGroup(group),
       cells: [
         DataCell(
           _BoundedGroupText(
             value: group.name,
             key: Key('institutionGroupName$index'),
             semanticsLabel: 'Open group details for ${group.name}',
-            onSemanticsTap: () => onOpenGroup(group),
+            onSemanticsTap: () => widget.onOpenGroup(group),
           ),
         ),
         DataCell(_BoundedGroupText(value: group.level ?? '—')),

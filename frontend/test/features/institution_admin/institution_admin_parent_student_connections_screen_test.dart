@@ -1,7 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
+import 'package:testlabuz_client/core/network/api_error_response.dart';
+import 'package:testlabuz_client/core/network/api_failure.dart';
+import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_parent_student_relationship_repository_impl.dart';
 import 'package:testlabuz_client/features/institution_admin/data/institution_user_list_repository_impl.dart';
@@ -89,6 +94,71 @@ void main() {
     expect(relationship.lastDisconnectedId, testRelationshipId);
     expect(find.text('Parent and student disconnected.'), findsOneWidget);
   });
+
+  testWidgets(
+    'parent-student horizontal table renders without Scrollbar assertion on Windows',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      try {
+        final relationship = _FakeRelationshipRepository();
+        final users = _FakeUserRepository();
+
+        await _pump(tester, relationship: relationship, users: users);
+        await tester.pumpAndSettle();
+        await _selectParentAnchor(tester);
+
+        expect(
+          find.byKey(const Key('institutionParentStudentHorizontalScroll')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('institutionParentStudentRelationshipTable')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+  testWidgets(
+    'non-dismissible parent-student feedback renders without MaterialBanner assertion',
+    (tester) async {
+      final relationship = _FakeRelationshipRepository(
+        onFetch: (_, _, _) async => throw ApiRequestException(
+          ApiFailure.fromServerError(
+            statusCode: 404,
+            error: ApiErrorResponse(
+              message: 'Private',
+              code: ApiErrorCodes.resourceNotFound,
+              fieldErrors: {},
+              requestId: null,
+            ),
+          ),
+        ),
+      );
+      final users = _FakeUserRepository();
+
+      await _pump(tester, relationship: relationship, users: users);
+      await tester.pumpAndSettle();
+      await _selectParentAnchor(tester);
+
+      final feedback = find.byKey(
+        const Key('institutionParentStudentFeedback'),
+      );
+      expect(feedback, findsOneWidget);
+      expect(tester.widget(feedback), isA<Material>());
+      expect(find.byType(MaterialBanner), findsNothing);
+      expect(
+        find.text(
+          'The selected user is no longer available for relationship management.',
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('connect dialog owns independent active selectors and confirms', (
     tester,
@@ -231,6 +301,21 @@ Future<void> _pump(
   await tester.pump();
 }
 
+Future<void> _selectParentAnchor(WidgetTester tester) async {
+  await tester.tap(
+    find.byKey(const Key('institutionParentStudentSelectAnchor')),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.byKey(const ValueKey('institutionUserSelection$testParentId')),
+  );
+  await tester.pump();
+  await tester.tap(
+    find.byKey(const Key('institutionParentStudentAnchorSelect')),
+  );
+  await tester.pumpAndSettle();
+}
+
 class _RelationshipFetch {
   const _RelationshipFetch(this.perspective, this.anchorId, this.query);
   final InstitutionParentStudentPerspective perspective;
@@ -240,6 +325,14 @@ class _RelationshipFetch {
 
 class _FakeRelationshipRepository
     implements InstitutionParentStudentRelationshipRepository {
+  _FakeRelationshipRepository({this.onFetch});
+
+  final Future<InstitutionParentStudentRelationshipListPage> Function(
+    InstitutionParentStudentPerspective perspective,
+    String anchorId,
+    InstitutionParentStudentRelationshipQuery query,
+  )?
+  onFetch;
   final fetches = <_RelationshipFetch>[];
   var connectCalls = 0;
   var disconnectCalls = 0;
@@ -252,6 +345,9 @@ class _FakeRelationshipRepository
     required InstitutionParentStudentRelationshipQuery query,
   }) async {
     fetches.add(_RelationshipFetch(perspective, anchorId, query));
+    if (onFetch != null) {
+      return onFetch!(perspective, anchorId, query);
+    }
     return InstitutionParentStudentRelationshipListPage(
       relationships: [
         testRelationship(perspective: perspective, relatedActive: false),

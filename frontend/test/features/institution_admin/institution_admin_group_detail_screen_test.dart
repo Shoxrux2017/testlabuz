@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -154,6 +155,37 @@ void main() {
             .onPressed,
         isNull,
       );
+    },
+  );
+
+  testWidgets(
+    'group membership horizontal table renders without Scrollbar assertion on Windows',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      try {
+        await _pump(
+          tester,
+          _FakeDetailRepository(),
+          membership: _FakeMembershipRepository(withTeacher: true),
+        );
+        await tester.pumpAndSettle();
+
+        final teacherSection = find.byKey(
+          const Key('institutionGroupTeachersSection'),
+        );
+        expect(
+          find.descendant(of: teacherSection, matching: find.byType(Scrollbar)),
+          findsWidgets,
+        );
+        expect(
+          find.descendant(of: teacherSection, matching: find.byType(DataTable)),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
     },
   );
 
