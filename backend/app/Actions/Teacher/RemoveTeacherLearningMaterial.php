@@ -18,7 +18,7 @@ class RemoveTeacherLearningMaterial
     public function __invoke(User $teacher, string $materialId): void
     {
         $preliminaryMaterial = $this->access->resolveMaterial($teacher, $materialId);
-        $removed = DB::transaction(function () use ($teacher, $preliminaryMaterial): array {
+        DB::transaction(function () use ($teacher, $preliminaryMaterial): void {
             $locked = $this->access->lockEditableMaterial($teacher, $preliminaryMaterial);
             $removedAt = now();
             $material = $locked['material'];
@@ -30,18 +30,14 @@ class RemoveTeacherLearningMaterial
             $file->removed_at = $removedAt;
             $file->save();
 
-            return [
-                'disk_name' => $file->storage_disk,
-                'storage_key' => $file->storage_key,
-                'file_id' => $file->id,
-            ];
+            DB::afterCommit(function () use ($file): void {
+                $this->storage->deleteBestEffort(
+                    $file->storage_disk,
+                    $file->storage_key,
+                    'remove_blob_cleanup',
+                    $file->id,
+                );
+            });
         });
-
-        $this->storage->deleteBestEffort(
-            $removed['disk_name'],
-            $removed['storage_key'],
-            'remove_blob_cleanup',
-            $removed['file_id'],
-        );
     }
 }

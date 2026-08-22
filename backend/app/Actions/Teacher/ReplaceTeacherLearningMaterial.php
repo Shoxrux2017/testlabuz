@@ -38,9 +38,20 @@ class ReplaceTeacherLearningMaterial
             $metadata->extension->value,
         );
         $diskName = $this->storage->store($upload, $storageKey);
+        $newBlobCleanupAttempted = false;
+        $cleanupNewBlob = function () use ($diskName, $storageKey, &$newBlobCleanupAttempted): void {
+            if ($newBlobCleanupAttempted) {
+                return;
+            }
+
+            $newBlobCleanupAttempted = true;
+            $this->storage->deleteBestEffort($diskName, $storageKey, 'replace_compensation');
+        };
 
         try {
-            $replacement = DB::transaction(function () use ($teacher, $preliminaryMaterial, $metadata, $diskName, $storageKey): array {
+            return DB::transaction(function () use ($teacher, $preliminaryMaterial, $metadata, $diskName, $storageKey, $cleanupNewBlob): LearningMaterial {
+                DB::afterRollBack($cleanupNewBlob);
+
                 $locked = $this->access->lockEditableMaterial($teacher, $preliminaryMaterial);
                 $setting = InstitutionSetting::query()
                     ->whereKey($teacher->institution_id)
@@ -73,29 +84,22 @@ class ReplaceTeacherLearningMaterial
                 $material->touch();
                 $material->setRelation('file', $file);
 
-                return [
-                    'material' => $material,
-                    'old_disk_name' => $oldDiskName,
-                    'old_storage_key' => $oldStorageKey,
-                ];
+                DB::afterCommit(function () use ($oldDiskName, $oldStorageKey, $file): void {
+                    $this->storage->deleteBestEffort(
+                        $oldDiskName,
+                        $oldStorageKey,
+                        'replace_old_blob_cleanup',
+                        $file->id,
+                    );
+                });
+
+                return $material;
             });
         } catch (Throwable $exception) {
-            $this->storage->deleteBestEffort($diskName, $storageKey, 'replace_compensation');
+            $cleanupNewBlob();
 
             throw $exception;
         }
-
-        /** @var LearningMaterial $material */
-        $material = $replacement['material'];
-        $file = $material->getRelation('file');
-        $this->storage->deleteBestEffort(
-            $replacement['old_disk_name'],
-            $replacement['old_storage_key'],
-            'replace_old_blob_cleanup',
-            $file instanceof File ? $file->id : null,
-        );
-
-        return $material;
     }
 
     private function institutionSetting(User $teacher): InstitutionSetting

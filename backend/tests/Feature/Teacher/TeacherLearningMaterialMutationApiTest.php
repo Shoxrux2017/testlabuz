@@ -153,6 +153,8 @@ class TeacherLearningMaterialMutationApiTest extends TestCase
         $oldFile = File::query()->findOrFail($material->file_id);
         $storage = new class($group->id, $teacher->id) extends PrivateFileStorage
         {
+            public int $deleteAttempts = 0;
+
             public function __construct(private readonly string $groupId, private readonly string $teacherId) {}
 
             public function store(UploadedFile $upload, string $storageKey): string
@@ -165,6 +167,13 @@ class TeacherLearningMaterialMutationApiTest extends TestCase
 
                 return $disk;
             }
+
+            public function deleteBestEffort(string $diskName, string $storageKey, string $operation, ?string $fileId = null): bool
+            {
+                $this->deleteAttempts++;
+
+                return parent::deleteBestEffort($diskName, $storageKey, $operation, $fileId);
+            }
         };
         $this->app->instance(PrivateFileStorage::class, $storage);
 
@@ -175,6 +184,7 @@ class TeacherLearningMaterialMutationApiTest extends TestCase
         $this->assertNull($material->fresh()->removed_at);
         Storage::disk('local')->assertExists($oldFile->storage_key);
         $this->assertSame([$oldFile->storage_key], Storage::disk('local')->allFiles());
+        $this->assertSame(1, $storage->deleteAttempts);
     }
 
     public function test_old_blob_cleanup_failure_does_not_roll_back_successful_replace(): void
@@ -203,6 +213,67 @@ class TeacherLearningMaterialMutationApiTest extends TestCase
         $this->assertNotSame($oldFile->storage_key, $newFile->storage_key);
         Storage::disk('local')->assertExists($oldFile->storage_key);
         Storage::disk('local')->assertExists($newFile->storage_key);
+    }
+
+    public function test_replace_outer_rollback_restores_old_authority_and_cleans_new_blob(): void
+    {
+        [$institution, $teacher, , , $topic] = $this->context();
+        $material = $this->material($institution, $topic, $teacher);
+        $oldFile = File::query()->findOrFail($material->file_id);
+        $oldStorageKey = $oldFile->storage_key;
+        $baseTransactionLevel = DB::transactionLevel();
+        DB::beginTransaction();
+
+        try {
+            $response = $this->multipart($teacher, 'POST', $this->replaceUri($material), [], $this->pdf('outer-rollback.pdf'));
+            $response->assertOk();
+            $newStorageKey = File::query()->findOrFail($oldFile->id)->storage_key;
+
+            $this->assertNotSame($oldStorageKey, $newStorageKey);
+            Storage::disk('local')->assertExists($oldStorageKey);
+            Storage::disk('local')->assertExists($newStorageKey);
+
+            DB::rollBack();
+        } finally {
+            if (DB::transactionLevel() > $baseTransactionLevel) {
+                DB::rollBack($baseTransactionLevel);
+            }
+        }
+
+        $this->assertSame($oldStorageKey, File::query()->findOrFail($oldFile->id)->storage_key);
+        $this->assertNull(LearningMaterial::query()->findOrFail($material->id)->removed_at);
+        Storage::disk('local')->assertExists($oldStorageKey);
+        Storage::disk('local')->assertMissing($newStorageKey);
+    }
+
+    public function test_replace_outer_commit_deletes_old_blob_and_keeps_new_authority(): void
+    {
+        [$institution, $teacher, , , $topic] = $this->context();
+        $material = $this->material($institution, $topic, $teacher);
+        $oldFile = File::query()->findOrFail($material->file_id);
+        $oldStorageKey = $oldFile->storage_key;
+        $baseTransactionLevel = DB::transactionLevel();
+        DB::beginTransaction();
+
+        try {
+            $response = $this->multipart($teacher, 'POST', $this->replaceUri($material), [], $this->pdf('outer-commit.pdf'));
+            $response->assertOk();
+            $newStorageKey = File::query()->findOrFail($oldFile->id)->storage_key;
+
+            $this->assertNotSame($oldStorageKey, $newStorageKey);
+            Storage::disk('local')->assertExists($oldStorageKey);
+            Storage::disk('local')->assertExists($newStorageKey);
+
+            DB::commit();
+        } finally {
+            if (DB::transactionLevel() > $baseTransactionLevel) {
+                DB::rollBack($baseTransactionLevel);
+            }
+        }
+
+        $this->assertSame($newStorageKey, File::query()->findOrFail($oldFile->id)->storage_key);
+        Storage::disk('local')->assertMissing($oldStorageKey);
+        Storage::disk('local')->assertExists($newStorageKey);
     }
 
     public function test_replace_accepts_only_one_file_and_rejects_query_or_protected_fields(): void
@@ -314,6 +385,60 @@ class TeacherLearningMaterialMutationApiTest extends TestCase
         $this->assertNotNull($material->fresh()->removed_at);
         $this->assertNotNull($file->fresh()->removed_at);
         Storage::disk('local')->assertExists($file->storage_key);
+    }
+
+    public function test_remove_outer_rollback_restores_current_rows_and_keeps_blob(): void
+    {
+        [$institution, $teacher, , , $topic] = $this->context();
+        $material = $this->material($institution, $topic, $teacher);
+        $file = File::query()->findOrFail($material->file_id);
+        $baseTransactionLevel = DB::transactionLevel();
+        DB::beginTransaction();
+
+        try {
+            $this->request($teacher, 'DELETE', $this->materialUri($material))->assertNoContent();
+
+            $this->assertNotNull(LearningMaterial::query()->findOrFail($material->id)->removed_at);
+            $this->assertNotNull(File::query()->findOrFail($file->id)->removed_at);
+            Storage::disk('local')->assertExists($file->storage_key);
+
+            DB::rollBack();
+        } finally {
+            if (DB::transactionLevel() > $baseTransactionLevel) {
+                DB::rollBack($baseTransactionLevel);
+            }
+        }
+
+        $this->assertNull(LearningMaterial::query()->findOrFail($material->id)->removed_at);
+        $this->assertNull(File::query()->findOrFail($file->id)->removed_at);
+        Storage::disk('local')->assertExists($file->storage_key);
+    }
+
+    public function test_remove_outer_commit_keeps_rows_historically_removed_and_deletes_blob(): void
+    {
+        [$institution, $teacher, , , $topic] = $this->context();
+        $material = $this->material($institution, $topic, $teacher);
+        $file = File::query()->findOrFail($material->file_id);
+        $baseTransactionLevel = DB::transactionLevel();
+        DB::beginTransaction();
+
+        try {
+            $this->request($teacher, 'DELETE', $this->materialUri($material))->assertNoContent();
+
+            $this->assertNotNull(LearningMaterial::query()->findOrFail($material->id)->removed_at);
+            $this->assertNotNull(File::query()->findOrFail($file->id)->removed_at);
+            Storage::disk('local')->assertExists($file->storage_key);
+
+            DB::commit();
+        } finally {
+            if (DB::transactionLevel() > $baseTransactionLevel) {
+                DB::rollBack($baseTransactionLevel);
+            }
+        }
+
+        $this->assertNotNull(LearningMaterial::query()->findOrFail($material->id)->removed_at);
+        $this->assertNotNull(File::query()->findOrFail($file->id)->removed_at);
+        Storage::disk('local')->assertMissing($file->storage_key);
     }
 
     public function test_direct_mutations_hide_foreign_other_teacher_ended_and_removed_materials_before_lifecycle_disclosure(): void

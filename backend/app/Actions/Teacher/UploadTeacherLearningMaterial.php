@@ -35,9 +35,20 @@ class UploadTeacherLearningMaterial
 
         $storageKey = $this->storageKey($teacher->institution_id, $preliminaryTopic->id, $metadata->extension->value);
         $diskName = $this->storage->store($upload, $storageKey);
+        $newBlobCleanupAttempted = false;
+        $cleanupNewBlob = function () use ($diskName, $storageKey, &$newBlobCleanupAttempted): void {
+            if ($newBlobCleanupAttempted) {
+                return;
+            }
+
+            $newBlobCleanupAttempted = true;
+            $this->storage->deleteBestEffort($diskName, $storageKey, 'upload_compensation');
+        };
 
         try {
-            return DB::transaction(function () use ($teacher, $preliminaryTopic, $metadata, $diskName, $storageKey, $title): LearningMaterial {
+            return DB::transaction(function () use ($teacher, $preliminaryTopic, $metadata, $diskName, $storageKey, $title, $cleanupNewBlob): LearningMaterial {
+                DB::afterRollBack($cleanupNewBlob);
+
                 $topic = $this->access->lockEditableTopic($teacher, $preliminaryTopic);
                 $setting = InstitutionSetting::query()
                     ->whereKey($teacher->institution_id)
@@ -92,7 +103,7 @@ class UploadTeacherLearningMaterial
                 return $material;
             });
         } catch (Throwable $exception) {
-            $this->storage->deleteBestEffort($diskName, $storageKey, 'upload_compensation');
+            $cleanupNewBlob();
 
             throw $exception;
         }

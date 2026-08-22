@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Support\Files\PrivateFileStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -214,6 +215,8 @@ class TeacherLearningMaterialUploadApiTest extends TestCase
         [, $teacher, , $group, $topic] = $this->context();
         $storage = new class($group->id, $teacher->id) extends PrivateFileStorage
         {
+            public int $deleteAttempts = 0;
+
             public function __construct(private readonly string $groupId, private readonly string $teacherId) {}
 
             public function store(UploadedFile $upload, string $storageKey): string
@@ -226,6 +229,13 @@ class TeacherLearningMaterialUploadApiTest extends TestCase
 
                 return $disk;
             }
+
+            public function deleteBestEffort(string $diskName, string $storageKey, string $operation, ?string $fileId = null): bool
+            {
+                $this->deleteAttempts++;
+
+                return parent::deleteBestEffort($diskName, $storageKey, $operation, $fileId);
+            }
         };
         $this->app->instance(PrivateFileStorage::class, $storage);
 
@@ -234,6 +244,36 @@ class TeacherLearningMaterialUploadApiTest extends TestCase
         $this->assertDatabaseCount('files', 0);
         $this->assertDatabaseCount('learning_materials', 0);
         $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertSame(1, $storage->deleteAttempts);
+    }
+
+    public function test_upload_outer_rollback_removes_database_attachment_and_cleans_new_blob(): void
+    {
+        [, $teacher, , , $topic] = $this->context();
+        $baseTransactionLevel = DB::transactionLevel();
+        DB::beginTransaction();
+
+        try {
+            $response = $this->multipart($teacher, 'POST', $this->uri($topic), [], $this->pdf('outer-rollback.pdf'));
+            $response->assertCreated();
+            $materialId = $response->json('data.id');
+            $fileId = $response->json('data.file.id');
+            $newStorageKey = File::query()->findOrFail($fileId)->storage_key;
+
+            $this->assertDatabaseHas('learning_materials', ['id' => $materialId, 'file_id' => $fileId]);
+            $this->assertDatabaseHas('files', ['id' => $fileId, 'storage_key' => $newStorageKey]);
+            Storage::disk('local')->assertExists($newStorageKey);
+
+            DB::rollBack();
+        } finally {
+            if (DB::transactionLevel() > $baseTransactionLevel) {
+                DB::rollBack($baseTransactionLevel);
+            }
+        }
+
+        $this->assertDatabaseMissing('learning_materials', ['id' => $materialId]);
+        $this->assertDatabaseMissing('files', ['id' => $fileId]);
+        Storage::disk('local')->assertMissing($newStorageKey);
     }
 
     public function test_explicit_public_or_missing_private_disk_is_rejected_as_server_configuration_failure(): void
