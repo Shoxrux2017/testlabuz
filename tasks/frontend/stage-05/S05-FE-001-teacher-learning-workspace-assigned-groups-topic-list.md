@@ -7,12 +7,16 @@
 | Task ID | `S05-FE-001` |
 | Stage | `Stage 5 — Topics and Learning Materials` |
 | Area | Frontend |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Planning / readiness baseline | `origin/main @ a407cf9250357f7d4a674da806a52f469476ba51` |
+| Implementation baseline | `origin/main @ 84bc4755709e8db49f0369420dc365cb3905ec8c` |
 | Dependency gate | `S05-BE-001…005 Accepted / Delivered; Backend Phase 2 PASS` |
 | Backend Phase 2 audited baseline | `999f477f6a281f2266ad4abbded8b0732b5d789c` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Delivery owner | `Project Owner` |
+| Delivery | `Delivered — PR #116` |
+| Delivered merge | `41e6595589c9c92a079659639f69953d007066dd` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 
 This file is the complete task-specific implementation contract for Codex.
 
