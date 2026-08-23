@@ -358,7 +358,7 @@ Implementation Readiness Gate.
 | `S05-BE-002` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-003` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-004` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
-| `S05-BE-005` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-005` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-FE-001` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
 | `S05-FE-002` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
 | `S05-FE-003` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
