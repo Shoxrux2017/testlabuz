@@ -2,6 +2,7 @@
 
 namespace App\Support\Files;
 
+use App\Exceptions\Files\FileNotAvailableException;
 use App\Exceptions\Files\FileUploadFailedException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
@@ -51,6 +52,34 @@ class PrivateFileStorage
         }
 
         return $diskName;
+    }
+
+    /** @return resource */
+    public function openReadStream(string $storedDiskName, string $storedStorageKey, string $fileId): mixed
+    {
+        $disks = config('filesystems.disks');
+
+        if (! is_array($disks) || ! array_key_exists($storedDiskName, $disks)) {
+            throw new FileNotAvailableException;
+        }
+
+        $diskConfiguration = $disks[$storedDiskName];
+
+        if (! is_array($diskConfiguration) || ($diskConfiguration['visibility'] ?? null) === 'public') {
+            throw new FileNotAvailableException;
+        }
+
+        try {
+            $stream = Storage::disk($storedDiskName)->getDriver()->readStream($storedStorageKey);
+        } catch (Throwable $exception) {
+            throw new FileNotAvailableException(previous: $exception);
+        }
+
+        if (! is_resource($stream)) {
+            throw new FileNotAvailableException;
+        }
+
+        return $stream;
     }
 
     public function deleteBestEffort(string $diskName, string $storageKey, string $operation, ?string $fileId = null): bool

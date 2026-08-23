@@ -26,6 +26,8 @@ final class ApiErrorResponse
 
     private const CODE_FILE_TOO_LARGE = 'file_too_large';
 
+    private const CODE_FILE_NOT_AVAILABLE = 'file_not_available';
+
     private const CODE_FILE_UPLOAD_FAILED = 'file_upload_failed';
 
     private const CODE_RATE_LIMITED = 'rate_limited';
@@ -256,6 +258,19 @@ final class ApiErrorResponse
         return self::json(
             'The file could not be uploaded.',
             self::CODE_FILE_UPLOAD_FAILED,
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+        );
+    }
+
+    public static function fileNotAvailable(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The requested file is currently unavailable.',
+            self::CODE_FILE_NOT_AVAILABLE,
             Response::HTTP_INTERNAL_SERVER_ERROR,
         );
     }

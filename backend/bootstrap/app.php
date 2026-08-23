@@ -5,6 +5,7 @@ use App\Exceptions\Auth\InstitutionInactiveException;
 use App\Exceptions\Auth\InvalidCredentialsException;
 use App\Exceptions\Auth\PasswordChangeRequiredException;
 use App\Exceptions\Auth\UserInactiveException;
+use App\Exceptions\Files\FileNotAvailableException;
 use App\Exceptions\Files\FileTooLargeException;
 use App\Exceptions\Files\FileUploadFailedException;
 use App\Exceptions\Files\UnsupportedFileTypeException;
@@ -68,6 +69,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (UnsupportedFileTypeException $e, Request $request) => ApiErrorResponse::unsupportedFileType($request));
         $exceptions->render(fn (FileTooLargeException $e, Request $request) => ApiErrorResponse::fileTooLarge($e->maxSizeBytes, $request));
         $exceptions->render(fn (FileUploadFailedException $e, Request $request) => ApiErrorResponse::fileUploadFailed($request));
+        $exceptions->render(fn (FileNotAvailableException $e, Request $request) => ApiErrorResponse::fileNotAvailable($request));
         $exceptions->render(fn (NotFoundHttpException $e, Request $request) => ApiErrorResponse::resourceNotFound($request));
         $exceptions->render(fn (ThrottleRequestsException $e, Request $request) => ApiErrorResponse::rateLimited($request));
         $exceptions->render(fn (Throwable $e, Request $request) => ApiErrorResponse::serverError($request));
