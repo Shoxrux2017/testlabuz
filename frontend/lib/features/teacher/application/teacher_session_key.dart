@@ -13,6 +13,7 @@ class TeacherSessionSnapshot {
     required this.mustChangePassword,
     required this.institutionId,
     required this.institutionStatus,
+    required this.institutionTimezone,
     required this.surface,
   });
 
@@ -33,6 +34,7 @@ class TeacherSessionSnapshot {
       mustChangePassword: user?.mustChangePassword,
       institutionId: institution?.id,
       institutionStatus: institution?.status,
+      institutionTimezone: institution?.timezone,
       surface: surface,
     );
   }
@@ -46,12 +48,14 @@ class TeacherSessionSnapshot {
   final bool? mustChangePassword;
   final String? institutionId;
   final String? institutionStatus;
+  final String? institutionTimezone;
   final AppDeviceSurface surface;
 
   TeacherSessionKey? get eligibleKey {
     final currentUserId = userId;
     final currentUserInstance = userInstance;
     final currentInstitutionId = userInstitutionId;
+    final currentInstitutionTimezone = institutionTimezone;
     if (status != AuthSessionStatus.authenticated ||
         currentUserId == null ||
         currentUserInstance == null ||
@@ -62,6 +66,8 @@ class TeacherSessionSnapshot {
         currentInstitutionId.trim().isEmpty ||
         institutionId != currentInstitutionId ||
         institutionStatus != 'active' ||
+        currentInstitutionTimezone == null ||
+        currentInstitutionTimezone.trim().isEmpty ||
         (surface != AppDeviceSurface.desktop &&
             surface != AppDeviceSurface.mobile)) {
       return null;
@@ -71,6 +77,7 @@ class TeacherSessionSnapshot {
       userId: currentUserId,
       userInstance: currentUserInstance,
       institutionId: currentInstitutionId,
+      institutionTimezone: currentInstitutionTimezone,
       surface: surface,
     );
   }
@@ -81,12 +88,14 @@ class TeacherSessionKey {
     required this.userId,
     required this.userInstance,
     required this.institutionId,
+    required this.institutionTimezone,
     required this.surface,
   });
 
   final String userId;
   final Object userInstance;
   final String institutionId;
+  final String institutionTimezone;
   final AppDeviceSurface surface;
 
   @override
@@ -96,6 +105,7 @@ class TeacherSessionKey {
             other.userId == userId &&
             identical(other.userInstance, userInstance) &&
             other.institutionId == institutionId &&
+            other.institutionTimezone == institutionTimezone &&
             other.surface == surface;
   }
 
@@ -104,6 +114,7 @@ class TeacherSessionKey {
     userId,
     identityHashCode(userInstance),
     institutionId,
+    institutionTimezone,
     surface,
   );
 }

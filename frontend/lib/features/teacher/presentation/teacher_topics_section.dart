@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
+import '../../../app/router/app_route_paths.dart';
 import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/teacher_topic_list_controller.dart';
 import '../application/teacher_topic_list_state.dart';
-import '../domain/teacher_group.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_list_query.dart';
 import 'teacher_workspace_list_widgets.dart';
+import 'teacher_topic_formatters.dart';
 
 const _controlSpacing = 12.0;
 
@@ -26,6 +29,7 @@ class TeacherTopicsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(teacherTopicListControllerProvider.notifier);
+    final surface = ref.watch(appDeviceSurfaceProvider);
     final canChangeFilters =
         state.searchErrorText == null && !state.isRequestInFlight;
 
@@ -55,6 +59,15 @@ class TeacherTopicsSection extends ConsumerWidget {
             runSpacing: _controlSpacing,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              if (surface == AppDeviceSurface.desktop)
+                FilledButton.icon(
+                  key: const Key('teacherCreateTopicButton'),
+                  onPressed: state.isRequestInFlight
+                      ? null
+                      : () => context.go(AppRoutePaths.teacherTopicCreate),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Create Topic'),
+                ),
               SizedBox(
                 width: 190,
                 child: InputDecorator(
@@ -229,33 +242,38 @@ class _TopicCard extends StatelessWidget {
     return Card(
       key: ValueKey('teacherTopicCard${topic.id}'),
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(topic.title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
-            Text('Subject: ${topic.subject}'),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                Chip(
-                  label: Text(
-                    'Topic: ${teacherTopicStatusLabel(topic.status)}',
+      child: InkWell(
+        onTap: () =>
+            context.go(AppRoutePaths.teacherTopicDetailLocation(topic.id)),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(topic.title, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 6),
+              Text('Subject: ${topic.subject}'),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  Chip(
+                    label: Text(
+                      'Topic: ${teacherTopicStatusLabel(topic.status)}',
+                    ),
                   ),
-                ),
-                Chip(
-                  label: Text(
-                    'Group: ${topic.group.name} '
-                    '(${_groupStatusLabel(topic.group.status)})',
+                  Chip(
+                    label: Text(
+                      'Group: ${topic.group.name} '
+                      '(${teacherGroupStatusLabel(topic.group.status)})',
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -281,21 +299,5 @@ String _topicFailureMessage(ApiFailure failure) {
       ApiFailureKind.validation ||
       ApiFailureKind.unknown => 'The Topic list could not be loaded.',
     },
-  };
-}
-
-String teacherTopicStatusLabel(TeacherTopicStatus status) {
-  return switch (status) {
-    TeacherTopicStatus.draft => 'Draft',
-    TeacherTopicStatus.active => 'Active',
-    TeacherTopicStatus.closed => 'Closed',
-    TeacherTopicStatus.archived => 'Archived',
-  };
-}
-
-String _groupStatusLabel(TeacherGroupStatus status) {
-  return switch (status) {
-    TeacherGroupStatus.active => 'Active',
-    TeacherGroupStatus.archived => 'Archived',
   };
 }

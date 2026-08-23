@@ -15,6 +15,8 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list_repository.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_mutation.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_repository.dart';
 
 Future<void> flushTeacherControllers() async {
   await Future<void>.delayed(Duration.zero);
@@ -71,6 +73,10 @@ TeacherTopic teacherTopic({
   String title = 'Linear equations',
   TeacherGroupSummary? group,
   TeacherTopicStatus status = TeacherTopicStatus.draft,
+  String? description,
+  String subject = 'Algebra',
+  String studentInstructions = 'Read the examples.',
+  DateTime? lessonAt,
 }) {
   final activatedAt = switch (status) {
     TeacherTopicStatus.draft => null,
@@ -88,10 +94,10 @@ TeacherTopic teacherTopic({
     id: id,
     group: group ?? teacherGroup(),
     title: title,
-    description: null,
-    subject: 'Algebra',
-    studentInstructions: 'Read the examples.',
-    lessonAt: DateTime.utc(2026, 8, 25, 8),
+    description: description,
+    subject: subject,
+    studentInstructions: studentInstructions,
+    lessonAt: lessonAt ?? DateTime.utc(2026, 8, 25, 8),
     status: status,
     activatedAt: activatedAt,
     closedAt: closedAt,
@@ -184,6 +190,67 @@ class FakeTeacherTopicListRepository implements TeacherTopicListRepository {
 
     return onFetch?.call(query) ??
         Future.value(teacherTopicPage(page: query.page));
+  }
+}
+
+class FakeTeacherTopicRepository implements TeacherTopicRepository {
+  FakeTeacherTopicRepository({
+    this.onCreate,
+    this.onFetch,
+    this.onUpdate,
+    this.onLifecycle,
+  });
+
+  Future<TeacherTopic> Function(TeacherTopicCreateRequest request)? onCreate;
+  Future<TeacherTopic> Function(String topicId)? onFetch;
+  Future<TeacherTopic> Function(
+    String topicId,
+    TeacherTopicEditRequest request,
+  )?
+  onUpdate;
+  Future<TeacherTopic> Function(
+    String topicId,
+    TeacherTopicLifecycleAction action,
+  )?
+  onLifecycle;
+
+  final createRequests = <TeacherTopicCreateRequest>[];
+  final fetchIds = <String>[];
+  final updateRequests =
+      <({String topicId, TeacherTopicEditRequest request})>[];
+  final lifecycleRequests =
+      <({String topicId, TeacherTopicLifecycleAction action})>[];
+
+  @override
+  Future<TeacherTopic> createTopic(TeacherTopicCreateRequest request) {
+    createRequests.add(request);
+    return onCreate?.call(request) ?? Future.value(teacherTopic());
+  }
+
+  @override
+  Future<TeacherTopic> fetchTopic(String topicId) {
+    fetchIds.add(topicId);
+    return onFetch?.call(topicId) ?? Future.value(teacherTopic(id: topicId));
+  }
+
+  @override
+  Future<TeacherTopic> updateTopic(
+    String topicId,
+    TeacherTopicEditRequest request,
+  ) {
+    updateRequests.add((topicId: topicId, request: request));
+    return onUpdate?.call(topicId, request) ??
+        Future.value(teacherTopic(id: topicId));
+  }
+
+  @override
+  Future<TeacherTopic> performLifecycleAction(
+    String topicId,
+    TeacherTopicLifecycleAction action,
+  ) {
+    lifecycleRequests.add((topicId: topicId, action: action));
+    return onLifecycle?.call(topicId, action) ??
+        Future.value(teacherTopic(id: topicId, status: action.expectedStatus));
   }
 }
 

@@ -26,6 +26,9 @@ import '../../features/platform_admin/presentation/platform_owner_institution_ed
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
 import '../../features/teacher/presentation/teacher_learning_workspace_screen.dart';
+import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
+import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
+import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
 import 'app_route_paths.dart';
 import 'technical_root_screen.dart';
 
@@ -249,6 +252,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: AppRouteNames.teacher,
         path: AppRoutePaths.teacher,
         builder: (context, state) => const TeacherLearningWorkspaceScreen(),
+        routes: [
+          GoRoute(
+            name: AppRouteNames.teacherTopicCreate,
+            path:
+                '${AppRoutePaths.teacherTopicsSegment}/${AppRoutePaths.teacherTopicCreateSegment}',
+            builder: (context, state) => const TeacherTopicCreateScreen(),
+          ),
+          GoRoute(
+            name: AppRouteNames.teacherTopicDetail,
+            path:
+                '${AppRoutePaths.teacherTopicsSegment}/:${AppRoutePaths.teacherTopicIdParameter}',
+            builder: (context, state) => TeacherTopicDetailScreen(
+              topicId:
+                  state.pathParameters[AppRoutePaths.teacherTopicIdParameter] ??
+                  '',
+            ),
+            routes: [
+              GoRoute(
+                name: AppRouteNames.teacherTopicEdit,
+                path: AppRoutePaths.teacherTopicEditSegment,
+                builder: (context, state) => TeacherTopicEditScreen(
+                  topicId:
+                      state.pathParameters[AppRoutePaths
+                          .teacherTopicIdParameter] ??
+                      '',
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         name: AppRouteNames.student,
@@ -310,7 +343,11 @@ String? _authRedirect(
 
   if (session.status == AuthSessionStatus.initial ||
       session.status == AuthSessionStatus.bootstrapping) {
-    if (_keepsLocationDuringBootstrap(location)) {
+    if (_keepsLocationDuringBootstrap(
+      location,
+      surface,
+      hasQueryOrFragment: hasQueryOrFragment,
+    )) {
       return null;
     }
 
@@ -362,6 +399,33 @@ String? _authRedirect(
     }
   }
 
+  if (_canUseTeacherDestinations(user.role, surface) &&
+      AppRoutePaths.isTeacherSegment(location)) {
+    if (hasQueryOrFragment) {
+      return AppRoutePaths.teacher;
+    }
+    if (surface == AppDeviceSurface.desktop &&
+        AppRoutePaths.isTeacherApprovedLocation(location)) {
+      return null;
+    }
+    if (surface == AppDeviceSurface.mobile) {
+      if (AppRoutePaths.isTeacherTopicDetailPath(location)) {
+        return null;
+      }
+      if (AppRoutePaths.isTeacherTopicEditPath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location);
+        return topicId == null
+            ? AppRoutePaths.teacher
+            : AppRoutePaths.teacherTopicDetailLocation(topicId);
+      }
+      if (location == AppRoutePaths.teacher) {
+        return null;
+      }
+    }
+
+    return AppRoutePaths.teacher;
+  }
+
   if (location == entryPath) {
     return null;
   }
@@ -381,11 +445,31 @@ bool _canUseInstitutionAdminDestinations(
       surface == AppDeviceSurface.desktop;
 }
 
-bool _keepsLocationDuringBootstrap(String location) {
+bool _keepsLocationDuringBootstrap(
+  String location,
+  AppDeviceSurface surface, {
+  required bool hasQueryOrFragment,
+}) {
+  if (hasQueryOrFragment) {
+    return false;
+  }
+
   return (AppRoutePaths.protected.contains(location) &&
           !AppRoutePaths.isInstitutionAdminSegment(location)) ||
       AppRoutePaths.isPlatformOwnerSegment(location) ||
-      AppRoutePaths.isInstitutionAdminApprovedLocation(location);
+      AppRoutePaths.isInstitutionAdminApprovedLocation(location) ||
+      (AppRoutePaths.isTeacherTopicDetailPath(location) &&
+          (surface == AppDeviceSurface.desktop ||
+              surface == AppDeviceSurface.mobile)) ||
+      (surface == AppDeviceSurface.desktop &&
+          (AppRoutePaths.isTeacherTopicCreatePath(location) ||
+              AppRoutePaths.isTeacherTopicEditPath(location)));
+}
+
+bool _canUseTeacherDestinations(UserRole role, AppDeviceSurface surface) {
+  return role == UserRole.teacher &&
+      (surface == AppDeviceSurface.desktop ||
+          surface == AppDeviceSurface.mobile);
 }
 
 class _AppRouterRefresh extends ChangeNotifier {

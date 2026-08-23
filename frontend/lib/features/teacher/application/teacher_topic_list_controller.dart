@@ -23,14 +23,43 @@ final teacherTopicListControllerProvider =
       TeacherTopicListState
     >(TeacherTopicListController.new);
 
+final teacherTopicListRetainedQueryProvider =
+    Provider<TeacherTopicListRetainedQueryStore>((ref) {
+      final store = TeacherTopicListRetainedQueryStore();
+
+      ref.listen(authSessionControllerProvider, (_, next) {
+        store.clearUnlessMatches(
+          TeacherSessionSnapshot.fromSession(
+            next,
+            ref.read(appDeviceSurfaceProvider),
+          ).eligibleKey,
+        );
+      });
+      ref.listen(appDeviceSurfaceProvider, (_, next) {
+        store.clearUnlessMatches(
+          TeacherSessionSnapshot.fromSession(
+            ref.read(authSessionControllerProvider),
+            next,
+          ).eligibleKey,
+        );
+      });
+
+      return store;
+    });
+
 const teacherSelectedGroupUnavailableNotice =
     'The selected group is no longer available. Showing topics you can currently access.';
+
+const teacherTopicCreateRecoveryNotice =
+    'Creation result remains unconfirmed. Review recent draft Topics before creating another Topic.';
 
 class TeacherTopicListController extends Notifier<TeacherTopicListState> {
   TeacherSessionKey? _activeSessionKey;
   TeacherTopicListQuery? _inFlightQuery;
   Timer? _searchDebounce;
   int _operationGeneration = 0;
+  String? _recoveryNotice;
+  var _authoritativeRowsStale = false;
   var _isDisposed = false;
   var _disposeRegistered = false;
 
@@ -64,22 +93,40 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
     _searchDebounce?.cancel();
     _invalidateOperations();
     _activeSessionKey = sessionKey;
-    const query = TeacherTopicListQuery.initial();
+    final retainedStore = ref.read(teacherTopicListRetainedQueryProvider);
+    retainedStore.clearUnlessMatches(sessionKey);
+    final retained = retainedStore.value;
+    final retainedMatches = retained?.matches(sessionKey) == true;
+    final query = retainedMatches
+        ? retained!.query
+        : const TeacherTopicListQuery.initial();
+    final searchDraft = retainedMatches
+        ? retained!.searchDraft
+        : query.search ?? '';
+    final selectedGroup = retainedMatches ? retained!.selectedGroup : null;
+    _authoritativeRowsStale =
+        retainedMatches && retained!.authoritativeRowsStale;
+    _recoveryNotice = retainedMatches && retained!.recoveryNoticePending
+        ? teacherTopicCreateRecoveryNotice
+        : null;
+    if (_recoveryNotice != null) {
+      retainedStore.consumeRecoveryNotice(sessionKey);
+    }
     scheduleMicrotask(() {
       if (_matchesSession(sessionKey)) {
         _startLogicalLoad(
           query,
-          searchDraft: '',
-          selectedGroup: null,
+          searchDraft: searchDraft,
+          selectedGroup: selectedGroup,
           presentation: _LoadPresentation.initial,
         );
       }
     });
 
-    return const TeacherTopicListState.loading(
+    return TeacherTopicListState.loading(
       query: query,
-      searchDraft: '',
-      selectedGroup: null,
+      searchDraft: searchDraft,
+      selectedGroup: selectedGroup,
     );
   }
 
@@ -90,6 +137,7 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
       value,
       errorText: isValid ? null : 'Search must be 254 characters or fewer.',
     );
+    _rememberQuery();
     if (!isValid) {
       return;
     }
@@ -239,6 +287,8 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
 
   void consumeNotice() {
     state = state.withoutNotice();
+    _recoveryNotice = null;
+    _rememberQuery();
   }
 
   TeacherTopicListQuery? _queryWithCommittedDraft() {
@@ -323,6 +373,15 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
       ),
       _LoadPresentation.retry => state.retrying(),
     };
+    if (_recoveryNotice != null && state.notice == null) {
+      state = TeacherTopicListState.queryLoading(
+        query: query,
+        searchDraft: searchDraft,
+        selectedGroup: selectedGroup,
+        notice: _recoveryNotice,
+      );
+    }
+    _rememberQuery();
     unawaited(
       _load(
         query,
@@ -382,8 +441,10 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
         searchDraft: state.searchDraft,
         selectedGroup: state.selectedGroup,
         result: result,
-        notice: notice,
+        notice: notice ?? _recoveryNotice,
       );
+      _authoritativeRowsStale = false;
+      _rememberQuery();
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, sessionKey, query)) {
         return;
@@ -518,6 +579,8 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
 
   void _clearActiveSession() {
     _activeSessionKey = null;
+    _recoveryNotice = null;
+    _authoritativeRowsStale = false;
     _searchDebounce?.cancel();
     _invalidateOperations();
   }
@@ -526,6 +589,111 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
     _operationGeneration += 1;
     _inFlightQuery = null;
   }
+
+  void _rememberQuery() {
+    final sessionKey = _activeSessionKey;
+    if (sessionKey == null) {
+      return;
+    }
+
+    ref
+        .read(teacherTopicListRetainedQueryProvider)
+        .value = TeacherTopicListRetainedQuery(
+      sessionKey: sessionKey,
+      query: state.query,
+      searchDraft: state.searchDraft,
+      selectedGroup: state.selectedGroup,
+      authoritativeRowsStale: _authoritativeRowsStale,
+    );
+  }
 }
+
+class TeacherTopicListRetainedQueryStore {
+  TeacherTopicListRetainedQuery? value;
+
+  void clear() => value = null;
+
+  void clearUnlessMatches(TeacherSessionKey? key) {
+    if (key == null || value?.matches(key) != true) {
+      value = null;
+    }
+  }
+
+  void markAuthoritativeRowsStale(TeacherSessionKey key) {
+    final retained = value;
+    value = retained?.matches(key) == true
+        ? retained!.copyWith(authoritativeRowsStale: true)
+        : TeacherTopicListRetainedQuery(
+            sessionKey: key,
+            query: const TeacherTopicListQuery.initial(),
+            searchDraft: '',
+            selectedGroup: null,
+            authoritativeRowsStale: true,
+          );
+  }
+
+  void prepareUnknownCreateRecovery(TeacherSessionKey key, String groupId) {
+    value = TeacherTopicListRetainedQuery(
+      sessionKey: key,
+      query: const TeacherTopicListQuery.initial()
+          .withGroupId(groupId)
+          .withStatus(TeacherTopicStatus.draft),
+      searchDraft: '',
+      selectedGroup: null,
+      authoritativeRowsStale: true,
+      recoveryNoticePending: true,
+    );
+  }
+
+  void consumeRecoveryNotice(TeacherSessionKey key) {
+    final retained = value;
+    if (retained?.matches(key) == true && retained!.recoveryNoticePending) {
+      value = retained.copyWith(recoveryNoticePending: false);
+    }
+  }
+}
+
+class TeacherTopicListRetainedQuery {
+  const TeacherTopicListRetainedQuery({
+    required this.sessionKey,
+    required this.query,
+    required this.searchDraft,
+    required this.selectedGroup,
+    this.authoritativeRowsStale = false,
+    this.recoveryNoticePending = false,
+  });
+
+  final TeacherSessionKey sessionKey;
+  final TeacherTopicListQuery query;
+  final String searchDraft;
+  final TeacherGroupSummary? selectedGroup;
+  final bool authoritativeRowsStale;
+  final bool recoveryNoticePending;
+
+  bool matches(TeacherSessionKey key) => sessionKey == key;
+
+  TeacherTopicListRetainedQuery copyWith({
+    TeacherTopicListQuery? query,
+    String? searchDraft,
+    Object? selectedGroup = _retainedUnchanged,
+    bool? authoritativeRowsStale,
+    bool? recoveryNoticePending,
+  }) {
+    return TeacherTopicListRetainedQuery(
+      sessionKey: sessionKey,
+      query: query ?? this.query,
+      searchDraft: searchDraft ?? this.searchDraft,
+      selectedGroup: identical(selectedGroup, _retainedUnchanged)
+          ? this.selectedGroup
+          : selectedGroup as TeacherGroupSummary?,
+      authoritativeRowsStale:
+          authoritativeRowsStale ?? this.authoritativeRowsStale,
+      recoveryNoticePending:
+          recoveryNoticePending ?? this.recoveryNoticePending,
+    );
+  }
+}
+
+const _retainedUnchanged = Object();
 
 enum _LoadPresentation { initial, query, refresh, retry }

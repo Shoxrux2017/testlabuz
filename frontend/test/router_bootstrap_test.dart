@@ -455,7 +455,12 @@ void main() {
           expect(find.text('Assigned Groups'), findsOneWidget);
           expect(find.text('Topics'), findsOneWidget);
           expect(find.text('Device: ${testCase.surface.label}'), findsNothing);
-          expect(find.text('Create Topic'), findsNothing);
+          expect(
+            find.text('Create Topic'),
+            testCase.surface == AppDeviceSurface.desktop
+                ? findsOneWidget
+                : findsNothing,
+          );
         } else {
           _expectNoFutureFeatureText();
         }
