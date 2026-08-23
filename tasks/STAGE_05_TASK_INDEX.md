@@ -947,7 +947,7 @@ S05-FE-003 = Accepted / Delivered
 S05-FE-004 = Approved / Not started
 ```
 
-`S05-FE-002` delivery evidence:
+`S05-FE-003` delivery evidence:
 
 ```text
 PR #120
@@ -1004,13 +1004,6 @@ Frontend Phase 2 = PASS
 ```
 
 Do not start `S05-FE-004` early merely because its contract is already approved.
-
-Integration remains blocked until:
-
-```text
-S05-FE-001…004 = Accepted / Delivered
-Frontend Phase 2 = PASS
-```
 
 ---
 
