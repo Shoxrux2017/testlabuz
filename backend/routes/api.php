@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\ChangePasswordController;
 use App\Http\Controllers\Api\V1\Auth\CurrentUserController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
+use App\Http\Controllers\Api\V1\Files\ProtectedFileDownloadController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionAssessmentSettingsController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionDashboardController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionGroupController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
+use App\Http\Controllers\Api\V1\Student\StudentTopicController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
@@ -106,3 +108,18 @@ Route::prefix('teacher')
         Route::patch('materials/{material}', [TeacherLearningMaterialController::class, 'update']);
         Route::delete('materials/{material}', [TeacherLearningMaterialController::class, 'destroy']);
     });
+
+Route::prefix('student')
+    ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::Student->value])
+    ->group(function (): void {
+        Route::get('topics', [StudentTopicController::class, 'index']);
+        Route::get('topics/{topic}', [StudentTopicController::class, 'show']);
+    });
+
+Route::get('files/{file}/download', ProtectedFileDownloadController::class)
+    ->middleware([
+        'auth:sanctum',
+        'active.account',
+        'password.changed',
+        'role:'.UserRole::Teacher->value.','.UserRole::Student->value,
+    ]);

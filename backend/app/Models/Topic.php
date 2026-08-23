@@ -80,4 +80,24 @@ class Topic extends Model
                     ->whereNull('group_teacher_memberships.ended_at');
             });
     }
+
+    public function scopeVisibleToStudent(Builder $query, User $student): Builder
+    {
+        return $query
+            ->where('topics.institution_id', $student->institution_id)
+            ->whereIn('topics.status', [
+                TopicStatus::Active->value,
+                TopicStatus::Closed->value,
+                TopicStatus::Archived->value,
+            ])
+            ->whereExists(function ($query) use ($student): void {
+                $query
+                    ->selectRaw('1')
+                    ->from('group_student_memberships')
+                    ->whereColumn('group_student_memberships.group_id', 'topics.group_id')
+                    ->where('group_student_memberships.institution_id', $student->institution_id)
+                    ->where('group_student_memberships.student_id', $student->id)
+                    ->whereNull('group_student_memberships.ended_at');
+            });
+    }
 }
