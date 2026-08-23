@@ -9,8 +9,8 @@
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition approved on | `2026-08-22` |
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
-| Implementation started | `Yes — S05-BE-001…004 Accepted / Delivered` |
-| Backend checkpoint | `Not started` |
+| Implementation started | `Yes — S05-BE-001…005 Accepted / Delivered` |
+| Backend checkpoint | `PASS — audited origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c` |
 | Frontend checkpoint | `Not started` |
 | Integration gate | `Not started` |
 | Stage closed | `No` |
@@ -178,7 +178,7 @@ Implementation proceeds one task at a time in dependency order.
 | 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-002-teacher-topic-authoring-api.md` |
 | 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-003-learning-material-management-private-storage.md` |
 | 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-004-topic-lifecycle.md` |
-| 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Approved` | `Not started` | `tasks/backend/stage-05/S05-BE-005-student-topic-access-protected-file-download.md` |
+| 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-005-student-topic-access-protected-file-download.md` |
 | 6 | `S05-FE-001` | Frontend | Teacher Learning Workspace, Assigned Groups and Topic List | Backend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
 | 7 | `S05-FE-002` | Frontend | Teacher Topic Create, Detail, Edit and Lifecycle | `S05-FE-001` | `Draft` | `Not started` | `Not created` |
 | 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Draft` | `Not started` | `Not created` |
@@ -399,8 +399,8 @@ For the current task, ChatGPT must confirm before approval:
 | Teacher Topic authoring | material management | `S05-BE-002 Accepted / Delivered — PR #105, merge 08fc5bca465562bf88f2824dd62f0d13aa29a478` |
 | material management | Topic activation/lifecycle | `S05-BE-003 Accepted / Delivered — PR #108, merge dbcaaf02073bab269ce729173795f7ee55ea0909` |
 | Topic lifecycle + materials | Student delivery/download | `S05-BE-004 Accepted / Delivered — PR #110, merge 8dee9f91f08a7c032429ab7c07e31d911c67b065` |
-| backend task block complete | Backend Phase 2 | `S05-BE-001…005 Accepted / Delivered` |
-| Backend Phase 2 `PASS` | frontend implementation | backend block review + audited `origin/main` |
+| backend task block complete | Backend Phase 2 | `S05-BE-001…005 Accepted / Delivered — final backend delivery PR #112, merge 3ec963c682b14c08cd4b8a8eee606756bd6fa8de` |
+| Backend Phase 2 `PASS` | frontend implementation | `PASS — audited origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c` |
 | frontend task block complete | Frontend Phase 2 | `S05-FE-001…004 Accepted / Delivered` |
 | Frontend Phase 2 `PASS` | `S05-INT-001` | frontend block review + audited `origin/main` |
 | Integration `PASS` + manual smoke `PASS` | Stage Closure Review | accepted integration evidence |
@@ -494,36 +494,36 @@ tasks/backend/stage-05/S05-BE-PHASE-2-backend-block-review.md
 
 | Field | Value |
 |---|---|
-| Audited `origin/main` | `To be recorded at checkpoint` |
-| Review date | `Not started` |
+| Audited `origin/main` | `999f477f6a281f2266ad4abbded8b0732b5d789c` |
+| Review date | `2026-08-23` |
 | Verification executor | `Project Owner` |
-| Verdict | `Not started` |
-| Findings | `N/A` |
+| Verdict | `PASS` |
+| Findings | `P1=0, P2=0, P3=0` |
 
 Required checkpoint evidence:
 
-- [ ] complete Stage 5 backend block reviewed read-only;
-- [ ] full backend regression suite passes;
-- [ ] required backend format/static checks pass;
-- [ ] `git diff --check` passes;
-- [ ] modular-monolith responsibilities remain coherent;
-- [ ] Topic/File/LearningMaterial schema, constraints, indexes, and relations are
+- [x] complete Stage 5 backend block reviewed read-only;
+- [x] full backend regression suite passes;
+- [x] required backend format/static checks pass;
+- [x] `git diff --check` passes;
+- [x] modular-monolith responsibilities remain coherent;
+- [x] Topic/File/LearningMaterial schema, constraints, indexes, and relations are
       coherent;
-- [ ] current Teacher/Student Group membership is consumed correctly;
-- [ ] tenant-first resource resolution and existence privacy are correct;
-- [ ] Topic lifecycle transitions compose correctly;
-- [ ] lifecycle concurrency/locking is sufficient and not excessive;
-- [ ] upload extension + MIME + exact size enforcement is correct;
-- [ ] Institution lower upload limit is authoritative;
-- [ ] private storage is not publicly addressable;
-- [ ] upload/replace/remove DB-storage consistency is reviewed;
-- [ ] protected download never authorizes by File UUID alone;
-- [ ] removed/unavailable file behavior is correct;
-- [ ] closed/archived history remains non-destructive;
-- [ ] Stage 4 authorization/membership behavior has no blocking regression;
-- [ ] cross-task API/resource/error behavior is consistent;
-- [ ] `P1 = 0`;
-- [ ] `P2 = 0`.
+- [x] current Teacher/Student Group membership is consumed correctly;
+- [x] tenant-first resource resolution and existence privacy are correct;
+- [x] Topic lifecycle transitions compose correctly;
+- [x] lifecycle concurrency/locking is sufficient and not excessive;
+- [x] upload extension + MIME + exact size enforcement is correct;
+- [x] Institution lower upload limit is authoritative;
+- [x] private storage is not publicly addressable;
+- [x] upload/replace/remove DB-storage consistency is reviewed;
+- [x] protected download never authorizes by File UUID alone;
+- [x] removed/unavailable file behavior is correct;
+- [x] closed/archived history remains non-destructive;
+- [x] Stage 4 authorization/membership behavior has no blocking regression;
+- [x] cross-task API/resource/error behavior is consistent;
+- [x] `P1 = 0`;
+- [x] `P2 = 0`.
 
 Backend Phase 2 `PASS` is required before frontend Stage 5 implementation begins.
 
@@ -785,10 +785,10 @@ from Stage 4.
 |---|---|---|---|
 | Stage 5 API refinement delivery | Stage entry | Updated `docs/09-api-contracts.md` and Stage 5 planning package delivered in PR #101 | `Resolved` |
 | Topic activation wording in general business rules mentions Homework preparation, while Homework starts Stage 6 | `S05-BE-004` | Stage 5 specialization: require at least one current Learning Material; Homework gate begins when Stage 6 contract is available | `Resolved` |
-| Exact storage replacement/cleanup transaction strategy is implementation-sensitive | `S05-BE-003` | ChatGPT must resolve it in the BE-003 implementation contract before approval | `Open — later readiness gate` |
+| Exact storage replacement/cleanup transaction strategy is implementation-sensitive | `S05-BE-003` | Transaction-aware compensation plus after-commit/after-rollback cleanup implemented and independently reviewed | `Resolved — S05-BE-003 / Backend Phase 2 PASS` |
 | Exact Flutter package/platform strategy for select/save/open is not yet approved | `S05-FE-003` | ChatGPT must inspect current dependencies and explicitly approve any dependency change in FE-003 contract | `Open — later readiness gate` |
-| Private file handling can create DB/storage inconsistency on partial failure | `S05-BE-003`, Backend Phase 2 | BE-003 contract must define write/replace/remove failure semantics and cleanup behavior | `Open — later readiness gate` |
-| Direct IDs/cross-tenant file access could leak existence/content | `S05-BE-005`, Backend Phase 2, Integration | tenant-first connected-resource resolution + privacy-safe denial + negative tests/E2E | `Resolved at architecture level; implementation pending` |
+| Private file handling can create DB/storage inconsistency on partial failure | `S05-BE-003`, Backend Phase 2 | Upload/replace/remove failure semantics and transaction-aware cleanup implemented and reviewed | `Resolved — Backend Phase 2 PASS` |
+| Direct IDs/cross-tenant file access could leak existence/content | `S05-BE-005`, Backend Phase 2, Integration | Tenant-first connected-resource resolution, privacy-safe denial and protected streaming implemented; integration remains later confirmation | `Resolved for backend — Backend Phase 2 PASS` |
 | Mobile file behavior may differ from Windows | `S05-FE-003`, `S05-FE-004`, Frontend Phase 2 | verify required Windows + Android paths; do not assume desktop-only behavior | `Open — implementation pending` |
 
 Stop affected work when:
@@ -879,26 +879,42 @@ closure bookkeeping delivered to origin/main
 | `2026-08-22` | `S05-BE-002` Accepted / Delivered — PR #105, merge `08fc5bca465562bf88f2824dd62f0d13aa29a478` | Teacher assigned-Group projection and Topic authoring API implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 | `2026-08-22` | `S05-BE-003` Accepted / Delivered — PR #108, merge `dbcaaf02073bab269ce729173795f7ee55ea0909` | Teacher Learning Material management/private storage implemented; transaction-aware blob cleanup P2 fixed, focused-verified, independently re-reviewed, and delivered | `Project Owner / ChatGPT review` |
 | `2026-08-22` | `S05-BE-004` Accepted / Delivered — PR #110, merge `8dee9f91f08a7c032429ab7c07e31d911c67b065` | Controlled Teacher Topic lifecycle implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
+| `2026-08-23` | `S05-BE-005` Accepted / Delivered — PR #112, merge `3ec963c682b14c08cd4b8a8eee606756bd6fa8de` | Student Topic access and protected Teacher/Student Learning Material download implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
+| `2026-08-23` | Stage 5 Backend Phase 2 `PASS` — audited `origin/main` @ `999f477f6a281f2266ad4abbded8b0732b5d789c` | Full backend regression suite PASS, Pint PASS, Stage-wide diff hygiene PASS after docs-only PR #113; read-only architecture/API/database/authorization/tenant/concurrency review found P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 
 ---
 
 ## 19. Next Permitted Action
-`S05-BE-001` and `S05-BE-002` are Accepted / Delivered.
 
-`S05-BE-003` is Approved and its implementation contract is delivered.
+Stage 5 backend implementation block is complete:
 
-Current implementation baseline candidate:
+```text
+S05-BE-001…005 = Accepted / Delivered
+Backend Phase 2 = PASS
+```
 
-a4774992527a86dbb7ce2bc9442a1f43d30ca7be
+Authoritative backend checkpoint:
+
+```text
+audited origin/main:
+999f477f6a281f2266ad4abbded8b0732b5d789c
+```
 
 Next permitted action:
 
-1. Synchronize local `main` with current `origin/main`.
-2. Verify ahead/behind = `0/0` and clean working tree.
-3. Freeze the exact current `origin/main` SHA.
-4. Start Codex implementation of `S05-BE-003`.
+1. synchronize local `main` with current `origin/main`;
+2. begin read-only preparation for `S05-FE-001`;
+3. re-check current frontend implementation, tests, backend API contracts, and
+   Stage status;
+4. pass the `S05-FE-001` Implementation Readiness Gate;
+5. create and deliver only the `S05-FE-001` implementation contract;
+6. start Codex only after that contract is approved and delivered.
 
-Do not prepare `S05-BE-004` before `S05-BE-003` is Accepted / Delivered.
+`S05-FE-002` and later frontend task contracts must not be created in advance.
+
+Integration remains blocked until the complete frontend block is Accepted /
+Delivered and Frontend Phase 2 is PASS.
+
 ---
 
 # Final Stage 5 Planning Principle

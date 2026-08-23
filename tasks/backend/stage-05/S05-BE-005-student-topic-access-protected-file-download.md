@@ -6,14 +6,17 @@
 |---|---|
 | Stage | `Stage 5 — Topics and Learning Materials` |
 | Area | Backend |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Implementation type | Laravel Student Topic read API + protected Learning Material binary download |
 | Depends on | `S05-BE-003 Accepted / Delivered`; `S05-BE-004 Accepted / Delivered`; Stage 4 Student–Group graph |
 | Planning baseline | `origin/main` @ `8dee9f91f08a7c032429ab7c07e31d911c67b065` |
-| Implementation baseline | `Freeze current origin/main after S05-BE-004 bookkeeping + this task contract are delivered and before Codex starts` |
+| Implementation baseline | `origin/main` @ `5f3dc5fbb930dc2bd20396eb22dea848f0ab747c` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Delivery owner | `Project Owner` |
-| Block checkpoint | Stage 5 Backend Phase 2 immediately after `S05-BE-001…005` are Accepted / Delivered |
+| Delivery | `Delivered — PR #112` |
+| Delivered merge | `3ec963c682b14c08cd4b8a8eee606756bd6fa8de` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
+| Block checkpoint | `Backend Phase 2 PASS — audited origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c` |
 
 ---
 
