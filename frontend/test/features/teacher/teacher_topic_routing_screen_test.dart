@@ -13,6 +13,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_state.da
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_create_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_edit_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
@@ -777,6 +778,7 @@ Future<void> _pumpApp(
   FakeTeacherTopicRepository? topics,
   FakeTeacherGroupListRepository? groups,
   FakeTeacherAuthSessionController? auth,
+  FakeTeacherLearningMaterialRepository? materials,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
 }) async {
   await tester.pumpWidget(
@@ -800,6 +802,9 @@ Future<void> _pumpApp(
         ),
         teacherTopicRepositoryProvider.overrideWithValue(
           topics ?? FakeTeacherTopicRepository(),
+        ),
+        teacherLearningMaterialRepositoryProvider.overrideWithValue(
+          materials ?? FakeTeacherLearningMaterialRepository(),
         ),
       ],
       child: const TestLabUzApp(),

@@ -232,6 +232,105 @@ void main() {
         expect(failure.serverCode, ApiErrorCodes.authenticationRequired);
       }
     });
+
+    test(
+      'byte authentication_required invalidates only the current session',
+      () async {
+        final tokenStore = AuthTokenStore(FakeSecureValueStore());
+        await tokenStore.write('token-a');
+        final signal = SessionInvalidationSignal();
+        final events = <SessionInvalidationEvent>[];
+        final subscription = signal.stream.listen(events.add);
+        final dio = _dioWithAuth(
+          tokenStore: tokenStore,
+          signal: signal,
+          adapter: RecordingAdapter(
+            (_) =>
+                _byteErrorResponse(401, ApiErrorCodes.authenticationRequired),
+          ),
+        );
+
+        await expectLater(
+          dio.get<List<int>>(
+            '/files/file-id/download',
+            options: Options(responseType: ResponseType.bytes),
+          ),
+          throwsA(isA<DioException>()),
+        );
+        await pumpEventQueue();
+
+        expect(events, hasLength(1));
+        expect(events.single.tokenVersion, tokenStore.version);
+        await subscription.cancel();
+        await signal.dispose();
+      },
+    );
+
+    test('stale token version ignores byte authentication error', () async {
+      final tokenStore = AuthTokenStore(FakeSecureValueStore());
+      await tokenStore.write('token-a');
+      final signal = SessionInvalidationSignal();
+      final events = <SessionInvalidationEvent>[];
+      final subscription = signal.stream.listen(events.add);
+      final dio = _dioWithAuth(
+        tokenStore: tokenStore,
+        signal: signal,
+        adapter: RecordingAdapter((_) async {
+          await tokenStore.write('token-b');
+          return _byteErrorResponse(401, ApiErrorCodes.authenticationRequired);
+        }),
+      );
+
+      await expectLater(
+        dio.get<List<int>>(
+          '/files/file-id/download',
+          options: Options(responseType: ResponseType.bytes),
+        ),
+        throwsA(isA<DioException>()),
+      );
+      await pumpEventQueue();
+
+      expect(events, isEmpty);
+      await subscription.cancel();
+      await signal.dispose();
+    });
+
+    test('non-401 and malformed byte errors do not invalidate', () async {
+      for (final response in [
+        _byteErrorResponse(403, ApiErrorCodes.authenticationRequired),
+        ResponseBody.fromBytes(
+          Uint8List.fromList([0xc3, 0x28]),
+          401,
+          headers: {
+            Headers.contentTypeHeader: [Headers.jsonContentType],
+          },
+        ),
+      ]) {
+        final tokenStore = AuthTokenStore(FakeSecureValueStore());
+        await tokenStore.write('token-a');
+        final signal = SessionInvalidationSignal();
+        final events = <SessionInvalidationEvent>[];
+        final subscription = signal.stream.listen(events.add);
+        final dio = _dioWithAuth(
+          tokenStore: tokenStore,
+          signal: signal,
+          adapter: RecordingAdapter((_) => response),
+        );
+
+        await expectLater(
+          dio.get<List<int>>(
+            '/files/file-id/download',
+            options: Options(responseType: ResponseType.bytes),
+          ),
+          throwsA(isA<DioException>()),
+        );
+        await pumpEventQueue();
+
+        expect(events, isEmpty);
+        await subscription.cancel();
+        await signal.dispose();
+      }
+    });
   });
 }
 
@@ -270,6 +369,16 @@ Map<String, Object?> _error(String code) {
 ResponseBody _jsonResponse(int statusCode, Object? body) {
   return ResponseBody.fromString(
     jsonEncode(body),
+    statusCode,
+    headers: {
+      Headers.contentTypeHeader: [Headers.jsonContentType],
+    },
+  );
+}
+
+ResponseBody _byteErrorResponse(int statusCode, String code) {
+  return ResponseBody.fromBytes(
+    Uint8List.fromList(utf8.encode(jsonEncode(_error(code)))),
     statusCode,
     headers: {
       Headers.contentTypeHeader: [Headers.jsonContentType],

@@ -10,10 +10,12 @@ import '../application/teacher_topic_detail_controller.dart';
 import '../application/teacher_topic_detail_state.dart';
 import '../application/teacher_topic_lifecycle_controller.dart';
 import '../application/teacher_topic_lifecycle_state.dart';
+import '../application/teacher_material_mutation_activity.dart';
 import '../application/teacher_session_key.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_mutation.dart';
 import 'teacher_topic_formatters.dart';
+import 'teacher_learning_material_section.dart';
 
 class TeacherTopicDetailScreen extends ConsumerWidget {
   const TeacherTopicDetailScreen({required this.topicId, super.key});
@@ -34,6 +36,9 @@ class TeacherTopicDetailScreen extends ConsumerWidget {
     final lifecycle = surface == AppDeviceSurface.desktop
         ? ref.watch(lifecycleProvider)
         : const TeacherTopicLifecycleState();
+    final materialMutationActive = surface == AppDeviceSurface.desktop
+        ? ref.watch(teacherMaterialMutationActivityProvider(topicId)).isActive
+        : false;
     if (surface == AppDeviceSurface.desktop) {
       ref.listen<String?>(lifecycleProvider.select((state) => state.feedback), (
         _,
@@ -84,6 +89,7 @@ class TeacherTopicDetailScreen extends ConsumerWidget {
             surface: surface,
             refreshing: detail.status == TeacherTopicDetailStatus.refreshing,
             lifecycle: lifecycle,
+            materialMutationActive: materialMutationActive,
             onRefresh: ref.read(detailProvider.notifier).refresh,
             onEdit: () => context.go(
               AppRoutePaths.teacherTopicEditLocation(detail.topic!.id),
@@ -111,6 +117,7 @@ class _TopicDetailContent extends StatelessWidget {
     required this.surface,
     required this.refreshing,
     required this.lifecycle,
+    required this.materialMutationActive,
     required this.onRefresh,
     required this.onEdit,
     required this.onLifecycle,
@@ -122,6 +129,7 @@ class _TopicDetailContent extends StatelessWidget {
   final AppDeviceSurface surface;
   final bool refreshing;
   final TeacherTopicLifecycleState lifecycle;
+  final bool materialMutationActive;
   final VoidCallback onRefresh;
   final VoidCallback onEdit;
   final ValueChanged<TeacherTopicLifecycleAction> onLifecycle;
@@ -206,7 +214,8 @@ class _TopicDetailContent extends StatelessWidget {
                                 key: ValueKey(
                                   'teacherTopicLifecycle${action.name}',
                                 ),
-                                onPressed: lifecycle.isBusy
+                                onPressed:
+                                    lifecycle.isBusy || materialMutationActive
                                     ? null
                                     : () => onLifecycle(action),
                                 icon: Icon(_lifecycleIcon(action)),
@@ -279,13 +288,9 @@ class _TopicDetailContent extends StatelessWidget {
               ),
               if (isDesktop) ...[
                 const SizedBox(height: 12),
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'Learning Materials are required before Topic activation.',
-                    ),
-                  ),
+                TeacherLearningMaterialSection(
+                  topic: topic,
+                  lifecycleBusy: lifecycle.isBusy,
                 ),
               ],
             ],

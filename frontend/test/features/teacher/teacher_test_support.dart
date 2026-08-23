@@ -11,6 +11,9 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_group_list.dart
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_list_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_list_pagination.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_learning_material.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_learning_material_mutation.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_learning_material_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list_query.dart';
@@ -106,6 +109,47 @@ TeacherTopic teacherTopic({
         : null,
     createdAt: DateTime.utc(2026, 8, 19, 10),
     updatedAt: DateTime.utc(2026, 8, 22, 10),
+  );
+}
+
+TeacherLearningMaterial teacherMaterial({
+  String id = '20000000-0000-0000-0000-000000000001',
+  String topicId = '10000000-0000-0000-0000-000000000001',
+  String? title = 'Lesson slides',
+  String fileId = '30000000-0000-0000-0000-000000000001',
+  String originalName = 'lesson.pptx',
+  String extension = 'pptx',
+  String mimeType =
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  int sizeBytes = 1_250_000,
+}) {
+  return TeacherLearningMaterial(
+    id: id,
+    topicId: topicId,
+    title: title,
+    file: TeacherLearningMaterialFile(
+      id: fileId,
+      originalName: originalName,
+      mimeType: mimeType,
+      extension: extension,
+      sizeBytes: sizeBytes,
+    ),
+    createdAt: DateTime.utc(2026, 8, 7, 15),
+    updatedAt: DateTime.utc(2026, 8, 7, 15),
+  );
+}
+
+TeacherLearningMaterialCollection teacherMaterialCollection({
+  List<TeacherLearningMaterial>? materials,
+  int maxSizeBytes = 20_971_520,
+}) {
+  return TeacherLearningMaterialCollection(
+    materials: materials ?? [teacherMaterial()],
+    uploadCapability: TeacherMaterialUploadCapability(
+      maxSizeBytes: maxSizeBytes,
+      platformMaxSizeBytes: 26_214_400,
+      allowedExtensions: const ['pdf', 'docx', 'ppt', 'pptx'],
+    ),
   );
 }
 
@@ -251,6 +295,116 @@ class FakeTeacherTopicRepository implements TeacherTopicRepository {
     lifecycleRequests.add((topicId: topicId, action: action));
     return onLifecycle?.call(topicId, action) ??
         Future.value(teacherTopic(id: topicId, status: action.expectedStatus));
+  }
+}
+
+class FakeTeacherLearningMaterialRepository
+    implements TeacherLearningMaterialRepository {
+  FakeTeacherLearningMaterialRepository({
+    this.onFetch,
+    this.onUpload,
+    this.onReplace,
+    this.onUpdateTitle,
+    this.onRemove,
+  });
+
+  Future<TeacherLearningMaterialCollection> Function(String topicId)? onFetch;
+  Future<TeacherLearningMaterial> Function(
+    String topicId,
+    TeacherMaterialUploadFile file,
+    String? title,
+    TeacherMaterialUploadProgress? onProgress,
+  )?
+  onUpload;
+  Future<TeacherLearningMaterial> Function(
+    String topicId,
+    TeacherLearningMaterial current,
+    TeacherMaterialUploadFile file,
+    TeacherMaterialUploadProgress? onProgress,
+  )?
+  onReplace;
+  Future<TeacherLearningMaterial> Function(
+    String topicId,
+    TeacherLearningMaterial current,
+    String? title,
+  )?
+  onUpdateTitle;
+  Future<void> Function(String topicId, TeacherLearningMaterial current)?
+  onRemove;
+
+  final fetchIds = <String>[];
+  final uploadRequests =
+      <({String topicId, TeacherMaterialUploadFile file, String? title})>[];
+  final replaceRequests =
+      <
+        ({
+          String topicId,
+          TeacherLearningMaterial current,
+          TeacherMaterialUploadFile file,
+        })
+      >[];
+  final titleRequests =
+      <({String topicId, TeacherLearningMaterial current, String? title})>[];
+  final removeRequests =
+      <({String topicId, TeacherLearningMaterial current})>[];
+
+  @override
+  Future<TeacherLearningMaterialCollection> fetchMaterials(String topicId) {
+    fetchIds.add(topicId);
+    return onFetch?.call(topicId) ?? Future.value(teacherMaterialCollection());
+  }
+
+  @override
+  Future<TeacherLearningMaterial> uploadMaterial({
+    required String topicId,
+    required TeacherMaterialUploadFile file,
+    required String? title,
+    TeacherMaterialUploadProgress? onProgress,
+  }) {
+    uploadRequests.add((topicId: topicId, file: file, title: title));
+    return onUpload?.call(topicId, file, title, onProgress) ??
+        Future.value(teacherMaterial(title: title));
+  }
+
+  @override
+  Future<TeacherLearningMaterial> replaceMaterialFile({
+    required String topicId,
+    required TeacherLearningMaterial current,
+    required TeacherMaterialUploadFile file,
+    TeacherMaterialUploadProgress? onProgress,
+  }) {
+    replaceRequests.add((topicId: topicId, current: current, file: file));
+    return onReplace?.call(topicId, current, file, onProgress) ??
+        Future.value(current);
+  }
+
+  @override
+  Future<TeacherLearningMaterial> updateMaterialTitle({
+    required String topicId,
+    required TeacherLearningMaterial current,
+    required String? title,
+  }) {
+    titleRequests.add((topicId: topicId, current: current, title: title));
+    return onUpdateTitle?.call(topicId, current, title) ??
+        Future.value(
+          TeacherLearningMaterial(
+            id: current.id,
+            topicId: current.topicId,
+            title: title,
+            file: current.file,
+            createdAt: current.createdAt,
+            updatedAt: current.updatedAt,
+          ),
+        );
+  }
+
+  @override
+  Future<void> removeMaterial({
+    required String topicId,
+    required TeacherLearningMaterial current,
+  }) {
+    removeRequests.add((topicId: topicId, current: current));
+    return onRemove?.call(topicId, current) ?? Future.value();
   }
 }
 

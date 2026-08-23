@@ -11,6 +11,7 @@ import '../data/teacher_topic_repository_impl.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_mutation.dart';
 import 'teacher_session_key.dart';
+import 'teacher_material_mutation_activity.dart';
 import 'teacher_topic_detail_controller.dart';
 import 'teacher_topic_lifecycle_state.dart';
 import 'teacher_topic_list_controller.dart';
@@ -58,6 +59,7 @@ class TeacherTopicLifecycleController
         .read(teacherTopicDetailControllerProvider(topicId))
         .topic;
     if (state.isBusy ||
+        ref.read(teacherMaterialMutationActivityProvider(topicId)).isActive ||
         key == null ||
         current == null ||
         !teacherTopicLifecycleActions(current).contains(action) ||

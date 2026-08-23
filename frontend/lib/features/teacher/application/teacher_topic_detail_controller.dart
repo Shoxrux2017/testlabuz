@@ -60,6 +60,14 @@ class TeacherTopicDetailController extends Notifier<TeacherTopicDetailState> {
     unawaited(_load(key, retainTopic: state.topic != null));
   }
 
+  Future<TeacherTopic?> refreshForMaterialReconciliation() async {
+    final key = _activeSessionKey;
+    if (key == null || state.isLoading || !_matchesSession(key)) {
+      return null;
+    }
+    return _load(key, retainTopic: state.topic != null);
+  }
+
   void acceptAuthoritativeTopic(TeacherTopic topic) {
     final key = _activeSessionKey;
     if (key == null ||
@@ -85,7 +93,10 @@ class TeacherTopicDetailController extends Notifier<TeacherTopicDetailState> {
     );
   }
 
-  Future<void> _load(TeacherSessionKey key, {required bool retainTopic}) async {
+  Future<TeacherTopic?> _load(
+    TeacherSessionKey key, {
+    required bool retainTopic,
+  }) async {
     final generation = ++_generation;
     final retainedTopic = retainTopic ? state.topic : null;
     state = TeacherTopicDetailState(
@@ -99,30 +110,32 @@ class TeacherTopicDetailController extends Notifier<TeacherTopicDetailState> {
           .read(teacherTopicRepositoryProvider)
           .fetchTopic(topicId);
       if (!_canPublish(generation, key)) {
-        return;
+        return null;
       }
       state = TeacherTopicDetailState(
         status: TeacherTopicDetailStatus.data,
         topic: topic,
       );
+      return topic;
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, key)) {
-        return;
+        return null;
       }
       if (_clearForSessionFailure(exception.failure)) {
-        return;
+        return null;
       }
       if (exception.failure.statusCode == 404 &&
           exception.failure.serverCode == ApiErrorCodes.resourceNotFound) {
         state = const TeacherTopicDetailState(
           status: TeacherTopicDetailStatus.notFound,
         );
-        return;
+        return null;
       }
       state = TeacherTopicDetailState(
         status: TeacherTopicDetailStatus.error,
         failure: exception.failure,
       );
+      return null;
     } catch (_) {
       if (_canPublish(generation, key)) {
         state = TeacherTopicDetailState(
@@ -133,6 +146,7 @@ class TeacherTopicDetailController extends Notifier<TeacherTopicDetailState> {
           ),
         );
       }
+      return null;
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class ApiErrorResponse {
   ApiErrorResponse({
     required this.message,
@@ -7,10 +9,25 @@ class ApiErrorResponse {
   }) : fieldErrors = _freezeFieldErrors(fieldErrors);
 
   static ApiErrorResponse? tryParse(Object? json) {
-    if (json is! Map) {
+    if (json is Map) {
+      return _tryParseMap(json);
+    }
+    if (json is! List<int> || json.length > _maximumBinaryErrorBytes) {
       return null;
     }
 
+    try {
+      final decoded = jsonDecode(utf8.decode(json, allowMalformed: false));
+      if (decoded is! Map) {
+        return null;
+      }
+      return _tryParseMap(decoded);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static ApiErrorResponse? _tryParseMap(Map json) {
     final message = json['message'];
     if (message is! String || message.trim().isEmpty) {
       return null;
@@ -70,3 +87,5 @@ class ApiErrorResponse {
     return Map<String, List<String>>.unmodifiable(frozen);
   }
 }
+
+const _maximumBinaryErrorBytes = 64 * 1024;
