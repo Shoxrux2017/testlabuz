@@ -29,6 +29,7 @@ import '../../features/teacher/presentation/teacher_learning_workspace_screen.da
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
+import '../../features/teacher/application/teacher_session_key.dart';
 import 'app_route_paths.dart';
 import 'technical_root_screen.dart';
 
@@ -251,32 +252,42 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRouteNames.teacher,
         path: AppRoutePaths.teacher,
-        builder: (context, state) => const TeacherLearningWorkspaceScreen(),
+        builder: (context, state) =>
+            _buildTeacherDestination(const TeacherLearningWorkspaceScreen()),
         routes: [
           GoRoute(
             name: AppRouteNames.teacherTopicCreate,
             path:
                 '${AppRoutePaths.teacherTopicsSegment}/${AppRoutePaths.teacherTopicCreateSegment}',
-            builder: (context, state) => const TeacherTopicCreateScreen(),
+            builder: (context, state) => _buildTeacherDestination(
+              const TeacherTopicCreateScreen(),
+              authoring: true,
+            ),
           ),
           GoRoute(
             name: AppRouteNames.teacherTopicDetail,
             path:
                 '${AppRoutePaths.teacherTopicsSegment}/:${AppRoutePaths.teacherTopicIdParameter}',
-            builder: (context, state) => TeacherTopicDetailScreen(
-              topicId:
-                  state.pathParameters[AppRoutePaths.teacherTopicIdParameter] ??
-                  '',
+            builder: (context, state) => _buildTeacherDestination(
+              TeacherTopicDetailScreen(
+                topicId:
+                    state.pathParameters[AppRoutePaths
+                        .teacherTopicIdParameter] ??
+                    '',
+              ),
             ),
             routes: [
               GoRoute(
                 name: AppRouteNames.teacherTopicEdit,
                 path: AppRoutePaths.teacherTopicEditSegment,
-                builder: (context, state) => TeacherTopicEditScreen(
-                  topicId:
-                      state.pathParameters[AppRoutePaths
-                          .teacherTopicIdParameter] ??
-                      '',
+                builder: (context, state) => _buildTeacherDestination(
+                  TeacherTopicEditScreen(
+                    topicId:
+                        state.pathParameters[AppRoutePaths
+                            .teacherTopicIdParameter] ??
+                        '',
+                  ),
+                  authoring: true,
                 ),
               ),
             ],
@@ -314,6 +325,31 @@ Widget _buildInstitutionAdminShell(GoRouterState state, Widget child) {
   return InstitutionAdminShell(locationPath: state.uri.path, child: child);
 }
 
+Widget _buildTeacherDestination(Widget child, {bool authoring = false}) {
+  return _TeacherDestinationGate(authoring: authoring, child: child);
+}
+
+class _TeacherDestinationGate extends ConsumerWidget {
+  const _TeacherDestinationGate({required this.authoring, required this.child});
+
+  final bool authoring;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionKey = TeacherSessionSnapshot.fromSession(
+      ref.watch(authSessionControllerProvider),
+      ref.watch(appDeviceSurfaceProvider),
+    ).eligibleKey;
+    if (sessionKey == null ||
+        (authoring && sessionKey.surface != AppDeviceSurface.desktop)) {
+      return const TechnicalRootScreen();
+    }
+
+    return child;
+  }
+}
+
 String _safeInitialLocation(String requestedLocation) {
   final uri = Uri.tryParse(requestedLocation);
   if (uri == null) {
@@ -343,6 +379,17 @@ String? _authRedirect(
 
   if (session.status == AuthSessionStatus.initial ||
       session.status == AuthSessionStatus.bootstrapping) {
+    if (!hasQueryOrFragment &&
+        surface == AppDeviceSurface.mobile &&
+        AppRoutePaths.isTeacherSegment(location)) {
+      if (AppRoutePaths.isTeacherTopicEditPath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location)!;
+        return AppRoutePaths.teacherTopicDetailLocation(topicId);
+      }
+      if (AppRoutePaths.isTeacherTopicCreatePath(location)) {
+        return AppRoutePaths.teacher;
+      }
+    }
     if (_keepsLocationDuringBootstrap(
       location,
       surface,

@@ -15,6 +15,7 @@ class TeacherTopicMetadataFields extends StatelessWidget {
     required this.descriptionFocusNode,
     required this.subjectFocusNode,
     required this.instructionsFocusNode,
+    required this.lessonAtFocusNode,
     required this.groupControl,
     required this.lessonAt,
     required this.errorFor,
@@ -36,6 +37,7 @@ class TeacherTopicMetadataFields extends StatelessWidget {
   final FocusNode descriptionFocusNode;
   final FocusNode subjectFocusNode;
   final FocusNode instructionsFocusNode;
+  final FocusNode lessonAtFocusNode;
   final Widget groupControl;
   final InstitutionWallClock? lessonAt;
   final String? Function(TeacherTopicFormField field) errorFor;
@@ -140,6 +142,7 @@ class TeacherTopicMetadataFields extends StatelessWidget {
               ),
               OutlinedButton.icon(
                 key: const Key('teacherTopicChooseLessonAtButton'),
+                focusNode: lessonAtFocusNode,
                 onPressed: enabled ? onChooseLessonAt : null,
                 icon: const Icon(Icons.event_outlined),
                 label: Text(lessonAt == null ? 'Choose' : 'Change'),

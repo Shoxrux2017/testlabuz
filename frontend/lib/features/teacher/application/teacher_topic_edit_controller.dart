@@ -89,6 +89,15 @@ class TeacherTopicEditController extends Notifier<TeacherTopicEditState> {
       _initialized = true;
       return const TeacherTopicEditState.unavailable();
     }
+    if (detail.status == TeacherTopicDetailStatus.error && !_initialized) {
+      return TeacherTopicEditState.initialLoadError(
+        detail.failure ??
+            ApiFailure.local(
+              kind: ApiFailureKind.unknown,
+              message: 'Unexpected Teacher Topic detail failure.',
+            ),
+      );
+    }
 
     return _initialized ? state : const TeacherTopicEditState.loading();
   }
@@ -98,6 +107,17 @@ class TeacherTopicEditController extends Notifier<TeacherTopicEditState> {
       _ownsRoute = true;
       _routeGeneration += 1;
     }
+  }
+
+  void retryInitialLoad() {
+    final key = _activeSessionKey;
+    if (state.status != TeacherTopicEditStatus.initialLoadError ||
+        key == null ||
+        !_ownsRoute ||
+        !_matchesSession(key)) {
+      return;
+    }
+    ref.read(teacherTopicDetailControllerProvider(topicId).notifier).refresh();
   }
 
   void updateTitle(String value) =>

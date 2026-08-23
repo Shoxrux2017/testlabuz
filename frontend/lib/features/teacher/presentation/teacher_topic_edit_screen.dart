@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/time/institution_timezone.dart';
 import '../../auth/application/auth_session_controller.dart';
+import '../application/teacher_session_key.dart';
 import '../application/teacher_topic_edit_controller.dart';
 import '../application/teacher_topic_edit_state.dart';
 import '../domain/teacher_topic_mutation.dart';
@@ -30,6 +33,7 @@ class _TeacherTopicEditScreenState
   final _descriptionFocusNode = FocusNode();
   final _subjectFocusNode = FocusNode();
   final _instructionsFocusNode = FocusNode();
+  final _lessonAtFocusNode = FocusNode();
   TeacherTopicFormField? _handledError;
   var _handledSuccess = false;
 
@@ -55,6 +59,7 @@ class _TeacherTopicEditScreenState
     _descriptionFocusNode.dispose();
     _subjectFocusNode.dispose();
     _instructionsFocusNode.dispose();
+    _lessonAtFocusNode.dispose();
     super.dispose();
   }
 
@@ -92,6 +97,15 @@ class _TeacherTopicEditScreenState
                     key: Key('teacherTopicEditLoading'),
                     semanticsLabel: 'Loading Topic edit form',
                   ),
+                )
+              : state.status == TeacherTopicEditStatus.initialLoadError
+              ? _TeacherTopicEditInitialLoadError(
+                  failure: state.initialLoadFailure!,
+                  onRetry: controller.retryInitialLoad,
+                  onBack: () {
+                    controller.leaveRoute();
+                    context.go(AppRoutePaths.teacher);
+                  },
                 )
               : FocusTraversalGroup(
                   policy: WidgetOrderTraversalPolicy(),
@@ -135,6 +149,7 @@ class _TeacherTopicEditScreenState
                                 descriptionFocusNode: _descriptionFocusNode,
                                 subjectFocusNode: _subjectFocusNode,
                                 instructionsFocusNode: _instructionsFocusNode,
+                                lessonAtFocusNode: _lessonAtFocusNode,
                                 groupControl: InputDecorator(
                                   key: const Key(
                                     'teacherTopicEditReadOnlyGroup',
@@ -231,6 +246,10 @@ class _TeacherTopicEditScreenState
       return;
     }
     if (state.isDirty) {
+      final owner = _currentSessionOwner();
+      if (owner == null) {
+        return;
+      }
       final discard = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -249,7 +268,7 @@ class _TeacherTopicEditScreenState
           ],
         ),
       );
-      if (discard != true || !mounted) {
+      if (discard != true || !_isCurrentSessionOwner(owner)) {
         return;
       }
     }
@@ -264,12 +283,12 @@ class _TeacherTopicEditScreenState
   }
 
   Future<void> _chooseLessonAt() async {
-    final timezone = ref.read(
-      authSessionControllerProvider.select(
-        (session) => session.user?.institution?.timezone,
-      ),
-    );
-    if (timezone == null || InstitutionTimezone.tryResolve(timezone) == null) {
+    final owner = _currentSessionOwner();
+    if (owner == null) {
+      return;
+    }
+    final timezone = owner.institutionTimezone;
+    if (InstitutionTimezone.tryResolve(timezone) == null) {
       _showTimezoneUnavailable();
       return;
     }
@@ -295,14 +314,14 @@ class _TeacherTopicEditScreenState
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (date == null || !mounted) {
+    if (date == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;
     }
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: initial.hour, minute: initial.minute),
     );
-    if (time == null || !mounted) {
+    if (time == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;
     }
     ref
@@ -366,9 +385,20 @@ class _TeacherTopicEditScreenState
     TeacherTopicFormField.description => _descriptionFocusNode,
     TeacherTopicFormField.subject => _subjectFocusNode,
     TeacherTopicFormField.studentInstructions => _instructionsFocusNode,
-    TeacherTopicFormField.lessonAt ||
+    TeacherTopicFormField.lessonAt => _lessonAtFocusNode,
     TeacherTopicFormField.groupId => _instructionsFocusNode,
   };
+
+  TeacherSessionKey? _currentSessionOwner() {
+    return TeacherSessionSnapshot.fromSession(
+      ref.read(authSessionControllerProvider),
+      ref.read(appDeviceSurfaceProvider),
+    ).eligibleKey;
+  }
+
+  bool _isCurrentSessionOwner(TeacherSessionKey owner) {
+    return mounted && _currentSessionOwner() == owner;
+  }
 
   void _syncControllers(TeacherTopicFormValue form) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -389,5 +419,59 @@ class _TeacherTopicEditScreenState
         selection: TextSelection.collapsed(offset: value.length),
       );
     }
+  }
+}
+
+class _TeacherTopicEditInitialLoadError extends StatelessWidget {
+  const _TeacherTopicEditInitialLoadError({
+    required this.failure,
+    required this.onRetry,
+    required this.onBack,
+  });
+
+  final ApiFailure failure;
+  final VoidCallback onRetry;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = switch (failure.kind) {
+      ApiFailureKind.connection =>
+        'Could not reach the server. Check the connection and try again.',
+      ApiFailureKind.timeout => 'The Topic request timed out.',
+      _ => 'The Topic could not be loaded.',
+    };
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Unable to load Topic for editing',
+              key: const Key('teacherTopicEditInitialLoadError'),
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                TextButton(onPressed: onBack, child: const Text('Back')),
+                FilledButton.icon(
+                  key: const Key('teacherTopicEditInitialLoadRetryButton'),
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

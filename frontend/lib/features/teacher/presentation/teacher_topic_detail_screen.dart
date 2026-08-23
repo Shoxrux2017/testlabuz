@@ -10,6 +10,7 @@ import '../application/teacher_topic_detail_controller.dart';
 import '../application/teacher_topic_detail_state.dart';
 import '../application/teacher_topic_lifecycle_controller.dart';
 import '../application/teacher_topic_lifecycle_state.dart';
+import '../application/teacher_session_key.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_mutation.dart';
 import 'teacher_topic_formatters.dart';
@@ -89,6 +90,7 @@ class TeacherTopicDetailScreen extends ConsumerWidget {
             ),
             onLifecycle: (action) => _confirmLifecycle(
               context,
+              ref,
               action,
               () => ref.read(lifecycleProvider.notifier).perform(action),
             ),
@@ -412,9 +414,17 @@ class _TopicDetailError extends StatelessWidget {
 
 Future<void> _confirmLifecycle(
   BuildContext context,
+  WidgetRef ref,
   TeacherTopicLifecycleAction action,
   VoidCallback confirm,
 ) async {
+  final owner = TeacherSessionSnapshot.fromSession(
+    ref.read(authSessionControllerProvider),
+    ref.read(appDeviceSurfaceProvider),
+  ).eligibleKey;
+  if (owner == null) {
+    return;
+  }
   final accepted = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
@@ -433,7 +443,13 @@ Future<void> _confirmLifecycle(
       ],
     ),
   );
-  if (accepted == true && context.mounted) {
+  if (accepted == true &&
+      context.mounted &&
+      TeacherSessionSnapshot.fromSession(
+            ref.read(authSessionControllerProvider),
+            ref.read(appDeviceSurfaceProvider),
+          ).eligibleKey ==
+          owner) {
     confirm();
   }
 }

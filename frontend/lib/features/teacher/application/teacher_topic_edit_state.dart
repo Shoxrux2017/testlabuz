@@ -1,8 +1,10 @@
+import '../../../core/network/api_failure.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_mutation.dart';
 
 enum TeacherTopicEditStatus {
   loading,
+  initialLoadError,
   editing,
   localValidationFailure,
   serverValidationFailure,
@@ -27,6 +29,7 @@ class TeacherTopicEditState {
     required this.formError,
     required this.firstErrorField,
     required this.pendingRequest,
+    required this.initialLoadFailure,
   });
 
   const TeacherTopicEditState.loading()
@@ -40,6 +43,21 @@ class TeacherTopicEditState {
         formError: null,
         firstErrorField: null,
         pendingRequest: null,
+        initialLoadFailure: null,
+      );
+
+  const TeacherTopicEditState.initialLoadError(ApiFailure failure)
+    : this._(
+        status: TeacherTopicEditStatus.initialLoadError,
+        topic: null,
+        form: null,
+        initial: null,
+        attemptedDraft: null,
+        fieldErrors: const {},
+        formError: null,
+        firstErrorField: null,
+        pendingRequest: null,
+        initialLoadFailure: failure,
       );
 
   const TeacherTopicEditState.editing({
@@ -59,6 +77,7 @@ class TeacherTopicEditState {
          formError: formError,
          firstErrorField: null,
          pendingRequest: null,
+         initialLoadFailure: null,
        );
 
   TeacherTopicEditState.validation({
@@ -78,6 +97,7 @@ class TeacherTopicEditState {
          formError: formError,
          firstErrorField: _firstField(fieldErrors),
          pendingRequest: null,
+         initialLoadFailure: null,
        );
 
   const TeacherTopicEditState.busy({
@@ -96,6 +116,7 @@ class TeacherTopicEditState {
          formError: null,
          firstErrorField: null,
          pendingRequest: request,
+         initialLoadFailure: null,
        );
 
   const TeacherTopicEditState.review({
@@ -115,6 +136,7 @@ class TeacherTopicEditState {
          formError: formError,
          firstErrorField: null,
          pendingRequest: request,
+         initialLoadFailure: null,
        );
 
   const TeacherTopicEditState.success({required TeacherTopic topic})
@@ -128,6 +150,7 @@ class TeacherTopicEditState {
         formError: null,
         firstErrorField: null,
         pendingRequest: null,
+        initialLoadFailure: null,
       );
 
   const TeacherTopicEditState.unavailable({
@@ -142,6 +165,7 @@ class TeacherTopicEditState {
          formError: message,
          firstErrorField: null,
          pendingRequest: null,
+         initialLoadFailure: null,
        );
 
   final TeacherTopicEditStatus status;
@@ -153,6 +177,7 @@ class TeacherTopicEditState {
   final String? formError;
   final TeacherTopicFormField? firstErrorField;
   final TeacherTopicEditRequest? pendingRequest;
+  final ApiFailure? initialLoadFailure;
 
   bool get isBusy =>
       status == TeacherTopicEditStatus.submitting ||
@@ -204,6 +229,7 @@ class TeacherTopicEditState {
       formError: errors.isEmpty ? null : formError,
       firstErrorField: _firstField(errors),
       pendingRequest: null,
+      initialLoadFailure: null,
     );
   }
 }

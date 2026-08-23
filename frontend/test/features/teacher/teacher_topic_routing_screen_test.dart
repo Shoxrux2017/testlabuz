@@ -4,8 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/app/app.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_router.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
+import 'package:testlabuz_client/core/network/api_failure.dart';
+import 'package:testlabuz_client/core/network/api_request_exception.dart';
+import 'package:testlabuz_client/core/time/institution_timezone.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_topic_create_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_edit_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
@@ -165,6 +170,194 @@ void main() {
     expect(topics.fetchIds, [_topicId]);
   });
 
+  testWidgets(
+    'desktop create deep link stays neutral and protected until bootstrap completes',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController(
+        const AuthSessionState.bootstrapping(),
+      );
+      final topics = FakeTeacherTopicRepository();
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicCreate,
+        topics: topics,
+        auth: auth,
+      );
+      await tester.pump();
+
+      expect(find.text('Loading'), findsOneWidget);
+      expect(find.byKey(const Key('teacherTopicCreateScreen')), findsNothing);
+      expect(
+        find.byKey(const Key('teacherTopicCreateSubmitButton')),
+        findsNothing,
+      );
+      expect(topics.fetchIds, isEmpty);
+
+      auth.replaceUser(teacherUser('teacher-a'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('teacherTopicCreateScreen')), findsOneWidget);
+      expect(topics.fetchIds, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'desktop edit deep link stays neutral and dispatches no GET before bootstrap completes',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController(
+        const AuthSessionState.bootstrapping(),
+      );
+      final topics = FakeTeacherTopicRepository();
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        topics: topics,
+        auth: auth,
+      );
+      await tester.pump();
+
+      expect(find.text('Loading'), findsOneWidget);
+      expect(find.byKey(const Key('teacherTopicEditScreen')), findsNothing);
+      expect(topics.fetchIds, isEmpty);
+
+      auth.replaceUser(teacherUser('teacher-a'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('teacherTopicEditScreen')), findsOneWidget);
+      expect(topics.fetchIds, [_topicId]);
+    },
+  );
+
+  testWidgets('mobile detail deep link stays neutral through bootstrap', (
+    tester,
+  ) async {
+    final auth = FakeTeacherAuthSessionController(
+      const AuthSessionState.bootstrapping(),
+    );
+    final topics = FakeTeacherTopicRepository();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherTopicDetailLocation(_topicId),
+      topics: topics,
+      auth: auth,
+      surface: AppDeviceSurface.mobile,
+    );
+    await tester.pump();
+
+    expect(find.text('Loading'), findsOneWidget);
+    expect(find.byKey(const Key('teacherTopicDetailScreen')), findsNothing);
+    expect(topics.fetchIds, isEmpty);
+
+    auth.replaceUser(teacherUser('teacher-a'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('teacherTopicDetailScreen')), findsOneWidget);
+    expect(topics.fetchIds, [_topicId]);
+  });
+
+  testWidgets(
+    'mobile edit canonicalizes during bootstrap and preserves Topic identity',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController(
+        const AuthSessionState.bootstrapping(),
+      );
+      final topics = FakeTeacherTopicRepository();
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        topics: topics,
+        auth: auth,
+        surface: AppDeviceSurface.mobile,
+      );
+      await tester.pump();
+
+      expect(find.text('Loading'), findsOneWidget);
+      expect(find.byKey(const Key('teacherTopicEditScreen')), findsNothing);
+      expect(topics.fetchIds, isEmpty);
+
+      auth.replaceUser(teacherUser('teacher-a'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('teacherTopicDetailScreen')), findsOneWidget);
+      expect(find.byKey(const Key('teacherTopicEditScreen')), findsNothing);
+      expect(topics.fetchIds, [_topicId]);
+    },
+  );
+
+  testWidgets('mobile create resolves to Teacher during bootstrap', (
+    tester,
+  ) async {
+    final auth = FakeTeacherAuthSessionController(
+      const AuthSessionState.bootstrapping(),
+    );
+    final topics = FakeTeacherTopicRepository();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherTopicCreate,
+      topics: topics,
+      auth: auth,
+      surface: AppDeviceSurface.mobile,
+    );
+    await tester.pump();
+
+    expect(find.text('Loading'), findsOneWidget);
+    expect(find.byKey(const Key('teacherTopicCreateScreen')), findsNothing);
+    expect(find.byKey(const Key('teacherTopicEditScreen')), findsNothing);
+    expect(topics.fetchIds, isEmpty);
+
+    auth.replaceUser(teacherUser('teacher-a'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('teacherLearningWorkspace')), findsOneWidget);
+    expect(find.byKey(const Key('teacherTopicCreateScreen')), findsNothing);
+    expect(topics.fetchIds, isEmpty);
+  });
+
+  testWidgets(
+    'initial Edit GET failure is recoverable through one GET-only Retry',
+    (tester) async {
+      var fetches = 0;
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (id) async {
+          fetches += 1;
+          if (fetches == 1) {
+            throw teacherLocalFailure(ApiFailureKind.connection);
+          }
+          return teacherTopic(id: id);
+        },
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('teacherTopicEditInitialLoadError')),
+        findsOneWidget,
+      );
+      expect(topics.fetchIds, [_topicId]);
+      expect(topics.updateRequests, isEmpty);
+
+      await tester.tap(
+        find.byKey(const Key('teacherTopicEditInitialLoadRetryButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(topics.fetchIds, [_topicId, _topicId]);
+      expect(
+        find.byKey(const Key('teacherTopicEditReadOnlyGroup')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('teacherTopicEditSaveButton')),
+        findsOneWidget,
+      );
+      expect(topics.updateRequests, isEmpty);
+    },
+  );
+
   testWidgets('Topic card opens detail and desktop exposes Create Topic', (
     tester,
   ) async {
@@ -208,6 +401,121 @@ void main() {
     expect(groups.queries.last.search, 'Alpha');
   });
 
+  testWidgets(
+    'stale Group picker result is ignored after session replacement',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController.authenticated(
+        teacherUser('teacher-a'),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicCreate,
+        auth: auth,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('teacherTopicChooseGroupButton')));
+      await tester.pumpAndSettle();
+
+      final dialog = find.byKey(const Key('teacherTopicGroupPickerDialog'));
+      expect(dialog, findsOneWidget);
+      final dialogContext = tester.element(dialog);
+      auth.replaceUser(teacherUser('teacher-b'));
+      await tester.pump();
+      Navigator.of(dialogContext).pop(teacherGroup(name: 'Stale Group'));
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('teacherTopicCreateScreen'))),
+      );
+      expect(
+        container.read(teacherTopicCreateControllerProvider).form.selectedGroup,
+        isNull,
+      );
+      expect(find.text('Stale Group'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'stale Create lesson date is ignored before the time picker opens',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController.authenticated(
+        teacherUser('teacher-a'),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicCreate,
+        auth: auth,
+      );
+      await tester.pumpAndSettle();
+      final lessonButton = find.byKey(
+        const Key('teacherTopicChooseLessonAtButton'),
+      );
+      await tester.ensureVisible(lessonButton);
+      await tester.tap(lessonButton);
+      await tester.pumpAndSettle();
+      expect(find.byType(DatePickerDialog), findsOneWidget);
+
+      auth.replaceUser(teacherUser('teacher-b'));
+      await tester.pump();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TimePickerDialog), findsNothing);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('teacherTopicCreateScreen'))),
+      );
+      expect(
+        container.read(teacherTopicCreateControllerProvider).form.lessonAt,
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'stale Edit lesson time result is ignored after session replacement',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController.authenticated(
+        teacherUser('teacher-a'),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        auth: auth,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('teacherTopicChooseLessonAtButton')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('26'));
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimePickerDialog), findsOneWidget);
+
+      auth.replaceUser(teacherUser('teacher-b'));
+      await tester.pump();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('teacherTopicEditScreen'))),
+      );
+      expect(
+        container
+            .read(teacherTopicEditControllerProvider(_topicId))
+            .form!
+            .lessonAt,
+        const InstitutionWallClock(
+          year: 2026,
+          month: 8,
+          day: 25,
+          hour: 13,
+          minute: 0,
+        ),
+      );
+    },
+  );
+
   testWidgets('lifecycle action requires confirmation before POST', (
     tester,
   ) async {
@@ -239,6 +547,36 @@ void main() {
     );
   });
 
+  testWidgets(
+    'stale lifecycle confirmation dispatches no POST after session replacement',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController.authenticated(
+        teacherUser('teacher-a'),
+      );
+      final topics = FakeTeacherTopicRepository();
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicDetailLocation(_topicId),
+        topics: topics,
+        auth: auth,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('teacherTopicLifecycleactivate')),
+      );
+      await tester.pumpAndSettle();
+      auth.replaceUser(teacherUser('teacher-b'));
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const Key('teacherTopicLifecycleConfirmButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(topics.lifecycleRequests, isEmpty);
+    },
+  );
+
   testWidgets('dirty edit navigation asks before discarding', (tester) async {
     await _pumpApp(
       tester,
@@ -265,6 +603,111 @@ void main() {
     await tester.tap(find.byKey(const Key('teacherTopicKeepEditingButton')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('teacherTopicEditScreen')), findsOneWidget);
+  });
+
+  testWidgets(
+    'stale dirty-discard confirmation cannot navigate replacement session',
+    (tester) async {
+      final auth = FakeTeacherAuthSessionController.authenticated(
+        teacherUser('teacher-a'),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        auth: auth,
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('teacherTopicTitleField')),
+        'Changed by old session',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('teacherTopicEditBackButton')));
+      await tester.pump();
+      expect(find.text('Discard unsaved Topic changes?'), findsOneWidget);
+
+      auth.replaceUser(teacherUser('teacher-b'));
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const Key('teacherTopicDiscardChangesButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('teacherTopicEditScreen')), findsOneWidget);
+      expect(find.byKey(const Key('teacherTopicDetailScreen')), findsNothing);
+    },
+  );
+
+  testWidgets('Create lesson_at validation focuses the lesson control', (
+    tester,
+  ) async {
+    final topics = FakeTeacherTopicRepository(
+      onCreate: (_) async => throw _lessonAtValidationFailure(),
+    );
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherTopicCreate,
+      topics: topics,
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('teacherTopicCreateScreen'))),
+    );
+    container.read(teacherTopicCreateControllerProvider.notifier)
+      ..selectGroup(teacherGroup())
+      ..updateTitle('Topic title')
+      ..updateSubject('Subject')
+      ..updateStudentInstructions('Instructions');
+    await tester.pump();
+
+    final submit = find.byKey(const Key('teacherTopicCreateSubmitButton'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<OutlinedButton>(
+      find.byKey(const Key('teacherTopicChooseLessonAtButton')),
+    );
+    expect(button.focusNode!.hasFocus, isTrue);
+  });
+
+  testWidgets('Edit lesson_at validation focuses the lesson control', (
+    tester,
+  ) async {
+    final topics = FakeTeacherTopicRepository(
+      onUpdate: (_, _) async => throw _lessonAtValidationFailure(),
+    );
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+      topics: topics,
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('teacherTopicEditScreen'))),
+    );
+    container
+        .read(teacherTopicEditControllerProvider(_topicId).notifier)
+        .updateLessonAt(
+          const InstitutionWallClock(
+            year: 2026,
+            month: 8,
+            day: 26,
+            hour: 13,
+            minute: 0,
+          ),
+        );
+    await tester.pump();
+
+    final save = find.byKey(const Key('teacherTopicEditSaveButton'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<OutlinedButton>(
+      find.byKey(const Key('teacherTopicChooseLessonAtButton')),
+    );
+    expect(button.focusNode!.hasFocus, isTrue);
   });
 
   testWidgets(
@@ -312,6 +755,20 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+ApiRequestException _lessonAtValidationFailure() {
+  return ApiRequestException(
+    ApiFailure(
+      kind: ApiFailureKind.validation,
+      statusCode: 422,
+      serverCode: ApiErrorCodes.validationFailed,
+      message: 'Raw validation response.',
+      fieldErrors: const {
+        'lesson_at': ['Raw lesson error.'],
+      },
+    ),
+  );
 }
 
 Future<void> _pumpApp(

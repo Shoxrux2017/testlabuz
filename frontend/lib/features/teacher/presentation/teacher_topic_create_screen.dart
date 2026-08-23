@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
 import '../../../core/time/institution_timezone.dart';
 import '../../auth/application/auth_session_controller.dart';
+import '../application/teacher_session_key.dart';
 import '../application/teacher_topic_create_controller.dart';
 import '../application/teacher_topic_create_state.dart';
 import '../application/teacher_topic_group_picker_controller.dart';
@@ -35,6 +37,7 @@ class _TeacherTopicCreateScreenState
   final _descriptionFocusNode = FocusNode();
   final _subjectFocusNode = FocusNode();
   final _instructionsFocusNode = FocusNode();
+  final _lessonAtFocusNode = FocusNode();
   TeacherTopicFormField? _handledError;
   String? _handledSuccessId;
 
@@ -59,6 +62,7 @@ class _TeacherTopicCreateScreenState
     _descriptionFocusNode.dispose();
     _subjectFocusNode.dispose();
     _instructionsFocusNode.dispose();
+    _lessonAtFocusNode.dispose();
     super.dispose();
   }
 
@@ -135,6 +139,7 @@ class _TeacherTopicCreateScreenState
                               descriptionFocusNode: _descriptionFocusNode,
                               subjectFocusNode: _subjectFocusNode,
                               instructionsFocusNode: _instructionsFocusNode,
+                              lessonAtFocusNode: _lessonAtFocusNode,
                               groupControl: _CreateGroupControl(
                                 selectedGroup: state.form.selectedGroup,
                                 enabled: state.canEdit,
@@ -209,11 +214,15 @@ class _TeacherTopicCreateScreenState
   }
 
   Future<void> _chooseGroup() async {
+    final owner = _currentSessionOwner();
+    if (owner == null) {
+      return;
+    }
     final group = await showDialog<TeacherGroupSummary>(
       context: context,
       builder: (_) => const _TeacherTopicGroupPickerDialog(),
     );
-    if (group != null && mounted) {
+    if (group != null && _isCurrentSessionOwner(owner)) {
       ref
           .read(teacherTopicCreateControllerProvider.notifier)
           .selectGroup(group);
@@ -221,12 +230,12 @@ class _TeacherTopicCreateScreenState
   }
 
   Future<void> _chooseLessonAt() async {
-    final timezone = ref.read(
-      authSessionControllerProvider.select(
-        (session) => session.user?.institution?.timezone,
-      ),
-    );
-    if (timezone == null || InstitutionTimezone.tryResolve(timezone) == null) {
+    final owner = _currentSessionOwner();
+    if (owner == null) {
+      return;
+    }
+    final timezone = owner.institutionTimezone;
+    if (InstitutionTimezone.tryResolve(timezone) == null) {
       _showTimezoneUnavailable();
       return;
     }
@@ -252,14 +261,14 @@ class _TeacherTopicCreateScreenState
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (date == null || !mounted) {
+    if (date == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;
     }
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: initial.hour, minute: initial.minute),
     );
-    if (time == null || !mounted) {
+    if (time == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;
     }
     ref
@@ -323,8 +332,19 @@ class _TeacherTopicCreateScreenState
     TeacherTopicFormField.description => _descriptionFocusNode,
     TeacherTopicFormField.subject => _subjectFocusNode,
     TeacherTopicFormField.studentInstructions => _instructionsFocusNode,
-    TeacherTopicFormField.lessonAt => _instructionsFocusNode,
+    TeacherTopicFormField.lessonAt => _lessonAtFocusNode,
   };
+
+  TeacherSessionKey? _currentSessionOwner() {
+    return TeacherSessionSnapshot.fromSession(
+      ref.read(authSessionControllerProvider),
+      ref.read(appDeviceSurfaceProvider),
+    ).eligibleKey;
+  }
+
+  bool _isCurrentSessionOwner(TeacherSessionKey owner) {
+    return mounted && _currentSessionOwner() == owner;
+  }
 
   void _syncControllers(TeacherTopicFormValue form) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
