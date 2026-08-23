@@ -22,6 +22,9 @@ abstract final class AppRouteNames {
   static const institutionAdminInstitution = 'institution-admin-institution';
   static const institutionAdminSettings = 'institution-admin-settings';
   static const teacher = 'teacher';
+  static const teacherTopicCreate = 'teacher-topic-create';
+  static const teacherTopicDetail = 'teacher-topic-detail';
+  static const teacherTopicEdit = 'teacher-topic-edit';
   static const student = 'student';
   static const parent = 'parent';
   static const unsupportedDevice = 'unsupported-device';
@@ -75,6 +78,16 @@ abstract final class AppRoutePaths {
   static const institutionAdminSettings =
       '$institutionAdmin/$institutionAdminSettingsSegment';
   static const teacher = '/teacher';
+  static const teacherTopicsSegment = 'topics';
+  static const teacherTopicCreateSegment = 'new';
+  static const teacherTopicEditSegment = 'edit';
+  static const teacherTopicIdParameter = 'topicId';
+  static const teacherTopicCreate =
+      '$teacher/$teacherTopicsSegment/$teacherTopicCreateSegment';
+  static const teacherTopicDetail =
+      '$teacher/$teacherTopicsSegment/:$teacherTopicIdParameter';
+  static const teacherTopicEdit =
+      '$teacherTopicDetail/$teacherTopicEditSegment';
   static const student = '/student';
   static const parent = '/parent';
   static const unsupportedDevice = '/unsupported-device';
@@ -128,6 +141,9 @@ abstract final class AppRoutePaths {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _institutionAdminGroupIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _teacherTopicIdPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
@@ -248,5 +264,68 @@ abstract final class AppRoutePaths {
     }
 
     return '$institutionAdminGroups/${Uri.encodeComponent(groupId)}';
+  }
+
+  static bool isTeacherSegment(String path) {
+    return path == teacher || path.startsWith('$teacher/');
+  }
+
+  static bool isTeacherTopicCreatePath(String path) {
+    return path == teacherTopicCreate;
+  }
+
+  static bool isTeacherTopicDetailPath(String path) {
+    final topicId = teacherTopicIdFromPath(path);
+    return topicId != null && !path.endsWith('/$teacherTopicEditSegment');
+  }
+
+  static bool isTeacherTopicEditPath(String path) {
+    const suffix = '/$teacherTopicEditSegment';
+    if (!path.endsWith(suffix)) {
+      return false;
+    }
+
+    return teacherTopicIdFromPath(path) != null;
+  }
+
+  static bool isTeacherApprovedLocation(String path) {
+    return path == teacher ||
+        isTeacherTopicCreatePath(path) ||
+        isTeacherTopicDetailPath(path) ||
+        isTeacherTopicEditPath(path);
+  }
+
+  static String? teacherTopicIdFromPath(String path) {
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return null;
+    }
+    var remainder = path.substring(prefix.length);
+    const editSuffix = '/$teacherTopicEditSegment';
+    if (remainder.endsWith(editSuffix)) {
+      remainder = remainder.substring(0, remainder.length - editSuffix.length);
+    }
+    if (remainder == teacherTopicCreateSegment ||
+        !_teacherTopicIdPattern.hasMatch(remainder)) {
+      return null;
+    }
+
+    return remainder;
+  }
+
+  static String teacherTopicDetailLocation(String topicId) {
+    if (!_teacherTopicIdPattern.hasMatch(topicId)) {
+      throw ArgumentError.value(
+        topicId,
+        'topicId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+
+    return '$teacher/$teacherTopicsSegment/${Uri.encodeComponent(topicId)}';
+  }
+
+  static String teacherTopicEditLocation(String topicId) {
+    return '${teacherTopicDetailLocation(topicId)}/$teacherTopicEditSegment';
   }
 }

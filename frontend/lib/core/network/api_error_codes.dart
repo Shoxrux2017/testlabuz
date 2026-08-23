@@ -11,4 +11,5 @@ abstract final class ApiErrorCodes {
   static const serverError = 'server_error';
   static const currentPasswordInvalid = 'current_password_invalid';
   static const rateLimited = 'rate_limited';
+  static const topicNotEditable = 'topic_not_editable';
 }

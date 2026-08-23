@@ -15,7 +15,7 @@ import 'package:testlabuz_client/features/teacher/presentation/teacher_learning_
 import 'teacher_test_support.dart';
 
 void main() {
-  testWidgets('wide desktop renders two independent read-only sections', (
+  testWidgets('wide desktop renders two independent sections and create', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -35,7 +35,7 @@ void main() {
     expect(find.text('Topics'), findsOneWidget);
     expect(find.text('Group A'), findsWidgets);
     expect(find.text('Linear equations'), findsOneWidget);
-    expect(find.text('Create Topic'), findsNothing);
+    expect(find.text('Create Topic'), findsOneWidget);
     expect(find.text('Edit'), findsNothing);
     expect(find.text('Activate'), findsNothing);
     expect(find.text('Close'), findsNothing);

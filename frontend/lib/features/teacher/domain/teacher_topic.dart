@@ -1,5 +1,13 @@
 import 'teacher_group.dart';
 
+final canonicalTeacherTopicIdPattern = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+);
+
+bool isCanonicalTeacherTopicId(String value) {
+  return canonicalTeacherTopicIdPattern.hasMatch(value);
+}
+
 enum TeacherTopicStatus {
   draft('draft'),
   active('active'),
