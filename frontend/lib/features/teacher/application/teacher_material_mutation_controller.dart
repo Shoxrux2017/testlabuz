@@ -11,6 +11,7 @@ import '../data/teacher_learning_material_repository_impl.dart';
 import '../domain/teacher_learning_material.dart';
 import '../domain/teacher_learning_material_mutation.dart';
 import '../domain/teacher_topic.dart';
+import '../domain/teacher_topic_mutation.dart';
 import 'teacher_material_list_controller.dart';
 import 'teacher_material_mutation_activity.dart';
 import 'teacher_material_mutation_state.dart';
@@ -65,6 +66,9 @@ class TeacherMaterialMutationController
     required TeacherMaterialUploadFile file,
     required String title,
   }) async {
+    if (state.canCheckCurrent) {
+      return false;
+    }
     final capability = ref
         .read(teacherMaterialListControllerProvider(topicId))
         .collection
@@ -115,6 +119,9 @@ class TeacherMaterialMutationController
     required TeacherLearningMaterial current,
     required TeacherMaterialUploadFile file,
   }) async {
+    if (state.canCheckCurrent) {
+      return false;
+    }
     final capability = ref
         .read(teacherMaterialListControllerProvider(topicId))
         .collection
@@ -167,6 +174,9 @@ class TeacherMaterialMutationController
     required String title,
     required bool useOriginalFileName,
   }) async {
+    if (state.canCheckCurrent) {
+      return false;
+    }
     final normalizedTitle = useOriginalFileName ? null : title.trim();
     if (!useOriginalFileName && normalizedTitle!.isEmpty) {
       state = TeacherMaterialMutationState(
@@ -229,6 +239,9 @@ class TeacherMaterialMutationController
   }
 
   Future<bool> removeMaterial(TeacherLearningMaterial current) async {
+    if (state.canCheckCurrent) {
+      return false;
+    }
     final owner = _begin(
       TeacherMaterialMutationOperation.remove,
       TeacherMaterialMutationActivityKind.remove,
@@ -301,10 +314,16 @@ class TeacherMaterialMutationController
     final transfer = ref.read(
       teacherMaterialTransferControllerProvider(topicId),
     );
+    final currentTopic = ref
+        .read(teacherTopicDetailControllerProvider(topicId))
+        .topic;
     if (state.isBusy ||
+        state.canCheckCurrent ||
         key == null ||
         lifecycleBusy ||
-        activity.isActive ||
+        activity.isActiveFor(key) ||
+        currentTopic == null ||
+        !teacherTopicCanEdit(currentTopic) ||
         !_matchesSession(key) ||
         !_targetIsCurrent(current) ||
         (refuseWhileTargetTransfers &&
@@ -319,6 +338,7 @@ class TeacherMaterialMutationController
     final activityGeneration = ref
         .read(teacherMaterialMutationActivityProvider(topicId).notifier)
         .activate(
+          owner: key,
           kind: activityKind,
           materialId: current?.id,
           fileId: current?.file.id,

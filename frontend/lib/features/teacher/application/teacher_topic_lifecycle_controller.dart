@@ -59,8 +59,10 @@ class TeacherTopicLifecycleController
         .read(teacherTopicDetailControllerProvider(topicId))
         .topic;
     if (state.isBusy ||
-        ref.read(teacherMaterialMutationActivityProvider(topicId)).isActive ||
         key == null ||
+        ref
+            .read(teacherMaterialMutationActivityProvider(topicId))
+            .isActiveFor(key) ||
         current == null ||
         !teacherTopicLifecycleActions(current).contains(action) ||
         !_matchesSession(key)) {

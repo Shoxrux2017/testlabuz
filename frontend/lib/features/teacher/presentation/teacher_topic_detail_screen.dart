@@ -27,17 +27,20 @@ class TeacherTopicDetailScreen extends ConsumerWidget {
     final detailProvider = teacherTopicDetailControllerProvider(topicId);
     final detail = ref.watch(detailProvider);
     final surface = ref.watch(appDeviceSurfaceProvider);
-    final timezone = ref.watch(
-      authSessionControllerProvider.select(
-        (session) => session.user?.institution?.timezone,
-      ),
-    );
+    final session = ref.watch(authSessionControllerProvider);
+    final timezone = session.user?.institution?.timezone;
+    final materialActivityOwner = TeacherSessionSnapshot.fromSession(
+      session,
+      surface,
+    ).eligibleKey;
     final lifecycleProvider = teacherTopicLifecycleControllerProvider(topicId);
     final lifecycle = surface == AppDeviceSurface.desktop
         ? ref.watch(lifecycleProvider)
         : const TeacherTopicLifecycleState();
     final materialMutationActive = surface == AppDeviceSurface.desktop
-        ? ref.watch(teacherMaterialMutationActivityProvider(topicId)).isActive
+        ? ref
+              .watch(teacherMaterialMutationActivityProvider(topicId))
+              .isActiveFor(materialActivityOwner)
         : false;
     if (surface == AppDeviceSurface.desktop) {
       ref.listen<String?>(lifecycleProvider.select((state) => state.feedback), (

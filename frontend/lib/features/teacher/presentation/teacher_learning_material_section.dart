@@ -12,6 +12,10 @@ import '../application/teacher_material_mutation_state.dart';
 import '../application/teacher_material_transfer_controller.dart';
 import '../application/teacher_material_transfer_state.dart';
 import '../application/teacher_session_key.dart';
+import '../application/teacher_topic_detail_controller.dart';
+import '../application/teacher_topic_detail_state.dart';
+import '../application/teacher_topic_lifecycle_controller.dart';
+import '../application/teacher_topic_lifecycle_state.dart';
 import '../domain/teacher_learning_material.dart';
 import '../domain/teacher_learning_material_mutation.dart';
 import '../domain/teacher_topic.dart';
@@ -42,6 +46,10 @@ class TeacherLearningMaterialSection extends ConsumerWidget {
       teacherMaterialMutationActivityProvider(topic.id),
     );
     final transfer = ref.watch(transferProvider);
+    final activityOwner = TeacherSessionSnapshot.fromSession(
+      ref.watch(authSessionControllerProvider),
+      ref.watch(appDeviceSurfaceProvider),
+    ).eligibleKey;
 
     ref.listen<String?>(mutationProvider.select((state) => state.feedback), (
       _,
@@ -69,7 +77,8 @@ class TeacherLearningMaterialSection extends ConsumerWidget {
         teacherTopicCanEdit(topic) &&
         !lifecycleBusy &&
         !mutation.isBusy &&
-        !activity.isActive;
+        !mutation.canCheckCurrent &&
+        !activity.isActiveFor(activityOwner);
 
     return Card(
       key: const Key('teacherLearningMaterialsSection'),
@@ -92,7 +101,10 @@ class TeacherLearningMaterialSection extends ConsumerWidget {
                 IconButton(
                   key: const Key('teacherMaterialsRefreshButton'),
                   tooltip: 'Refresh learning materials',
-                  onPressed: list.isLoading || mutation.isBusy
+                  onPressed:
+                      list.isLoading ||
+                          mutation.isBusy ||
+                          mutation.canCheckCurrent
                       ? null
                       : ref.read(listProvider.notifier).refresh,
                   icon: const Icon(Icons.refresh),
@@ -121,7 +133,9 @@ class TeacherLearningMaterialSection extends ConsumerWidget {
               const SizedBox(height: 10),
               Text(
                 list.isStale
-                    ? 'The displayed materials may be out of date. Refresh to check current materials.'
+                    ? mutation.canCheckCurrent
+                          ? 'The displayed materials may be out of date. Use Check current materials before making another change.'
+                          : 'The displayed materials may be out of date. Refresh to check current materials.'
                     : 'Learning materials could not be loaded.',
                 key: const Key('teacherMaterialsStaleMessage'),
               ),
@@ -142,26 +156,39 @@ class TeacherLearningMaterialSection extends ConsumerWidget {
                 onRetry: ref.read(listProvider.notifier).refresh,
               ),
               TeacherMaterialListStatus.data ||
-              TeacherMaterialListStatus.refreshing => _MaterialListContent(
-                topic: topic,
-                collection: collection!,
-                mutationActionsVisible: teacherTopicCanEdit(topic),
-                mutationsEnabled: materialMutationsEnabled,
-                activity: activity,
-                transfer: transfer,
-                onUpload: () => _showUploadDialog(context, ref, topic.id),
-                onReplace: (material) =>
-                    _showReplaceDialog(context, ref, topic, material),
-                onEditTitle: (material) =>
-                    _showEditTitleDialog(context, ref, topic.id, material),
-                onRemove: (material) =>
-                    _confirmRemove(context, ref, topic.id, material),
-                onSaveAs: ref.read(transferProvider.notifier).saveAs,
-                onOpen: ref.read(transferProvider.notifier).open,
-                onCheckCurrent: mutation.canCheckCurrent
-                    ? ref.read(mutationProvider.notifier).checkCurrentMaterials
-                    : null,
-              ),
+              TeacherMaterialListStatus.refreshing =>
+                collection == null
+                    ? _MaterialListError(
+                        onRetry: ref.read(listProvider.notifier).refresh,
+                      )
+                    : _MaterialListContent(
+                        topic: topic,
+                        collection: collection,
+                        mutationActionsVisible: teacherTopicCanEdit(topic),
+                        mutationsEnabled: materialMutationsEnabled,
+                        activity: activity,
+                        activityOwner: activityOwner,
+                        transfer: transfer,
+                        onUpload: () =>
+                            _showUploadDialog(context, ref, topic.id),
+                        onReplace: (material) =>
+                            _showReplaceDialog(context, ref, topic, material),
+                        onEditTitle: (material) => _showEditTitleDialog(
+                          context,
+                          ref,
+                          topic.id,
+                          material,
+                        ),
+                        onRemove: (material) =>
+                            _confirmRemove(context, ref, topic.id, material),
+                        onSaveAs: ref.read(transferProvider.notifier).saveAs,
+                        onOpen: ref.read(transferProvider.notifier).open,
+                        onCheckCurrent: mutation.canCheckCurrent
+                            ? ref
+                                  .read(mutationProvider.notifier)
+                                  .checkCurrentMaterials
+                            : null,
+                      ),
             },
           ],
         ),
@@ -177,6 +204,7 @@ class _MaterialListContent extends StatelessWidget {
     required this.mutationActionsVisible,
     required this.mutationsEnabled,
     required this.activity,
+    required this.activityOwner,
     required this.transfer,
     required this.onUpload,
     required this.onReplace,
@@ -192,6 +220,7 @@ class _MaterialListContent extends StatelessWidget {
   final bool mutationActionsVisible;
   final bool mutationsEnabled;
   final TeacherMaterialMutationActivityState activity;
+  final TeacherSessionKey? activityOwner;
   final TeacherMaterialTransferState transfer;
   final VoidCallback onUpload;
   final ValueChanged<TeacherLearningMaterial> onReplace;
@@ -250,6 +279,7 @@ class _MaterialListContent extends StatelessWidget {
               mutationActionsVisible: mutationActionsVisible,
               mutationsEnabled: mutationsEnabled,
               activity: activity,
+              activityOwner: activityOwner,
               transfer: transfer,
               onReplace: onReplace,
               onEditTitle: onEditTitle,
@@ -269,6 +299,7 @@ class _MaterialRow extends StatelessWidget {
     required this.mutationActionsVisible,
     required this.mutationsEnabled,
     required this.activity,
+    required this.activityOwner,
     required this.transfer,
     required this.onReplace,
     required this.onEditTitle,
@@ -281,6 +312,7 @@ class _MaterialRow extends StatelessWidget {
   final bool mutationActionsVisible;
   final bool mutationsEnabled;
   final TeacherMaterialMutationActivityState activity;
+  final TeacherSessionKey? activityOwner;
   final TeacherMaterialTransferState transfer;
   final ValueChanged<TeacherLearningMaterial> onReplace;
   final ValueChanged<TeacherLearningMaterial> onEditTitle;
@@ -291,7 +323,7 @@ class _MaterialRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final transferBusy = transfer.isBusyForMaterial(material.id);
-    final transferBlocked = activity.blocksTransfer(material.id);
+    final transferBlocked = activity.blocksTransfer(material.id, activityOwner);
     return Column(
       key: ValueKey('teacherMaterial${material.id}'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -435,18 +467,23 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_stillOwned()) {
+    final projection = _watchMaterialDialogProjection(
+      ref,
+      topicId: widget.topicId,
+      owner: widget.owner,
+    );
+    final collection = projection.collection;
+    if (!projection.isCurrent || collection == null) {
       _closeStaleDialog(context);
       return const SizedBox.shrink();
     }
-    final mutation = ref.watch(
-      teacherMaterialMutationControllerProvider(widget.topicId),
+    final mutation = projection.mutation;
+    final capability = collection.uploadCapability;
+    final fieldErrors = _fieldErrorsFor(
+      mutation,
+      TeacherMaterialMutationOperation.upload,
     );
-    final capability = ref
-        .watch(teacherMaterialListControllerProvider(widget.topicId))
-        .collection!
-        .uploadCapability;
-    final fileError = _pickerError ?? mutation.fieldErrors['file'];
+    final fileError = _pickerError ?? fieldErrors['file'];
     return AlertDialog(
       key: const Key('teacherMaterialUploadDialog'),
       title: const Text('Upload material'),
@@ -460,7 +497,7 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
               OutlinedButton.icon(
                 key: const Key('teacherMaterialChooseFileButton'),
                 focusNode: _fileFocus,
-                onPressed: mutation.isBusy ? null : _pickFile,
+                onPressed: projection.canInteract ? _pickFile : null,
                 icon: const Icon(Icons.attach_file),
                 label: Text(_file?.name ?? 'Choose file *'),
               ),
@@ -475,7 +512,7 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
                   labelText: 'Title (optional)',
                   helperText:
                       'Leave the title empty to use the original file name.',
-                  errorText: mutation.fieldErrors['title'],
+                  errorText: fieldErrors['title'],
                 ),
               ),
               const SizedBox(height: 6),
@@ -483,8 +520,7 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
                 'Allowed: PDF, DOCX, PPT, PPTX\n'
                 'Maximum size: ${formatTeacherMaterialBytes(capability.maxSizeBytes)}',
               ),
-              if (mutation.fieldErrors['form'] case final error?)
-                _FieldError(error),
+              if (fieldErrors['form'] case final error?) _FieldError(error),
             ],
           ),
         ),
@@ -496,7 +532,7 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
         ),
         FilledButton(
           key: const Key('teacherMaterialUploadSubmitButton'),
-          onPressed: mutation.isBusy ? null : _submit,
+          onPressed: projection.canInteract ? _submit : null,
           child: const Text('Upload'),
         ),
       ],
@@ -506,7 +542,7 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
   Future<void> _pickFile() async {
     try {
       final file = await ref.read(teacherMaterialFilePickerProvider).pickFile();
-      if (!mounted || file == null || !_stillOwned()) {
+      if (!mounted || file == null || !_readProjection().canInteract) {
         return;
       }
       setState(() {
@@ -514,14 +550,14 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
         _pickerError = null;
       });
     } catch (_) {
-      if (mounted) {
+      if (mounted && _readProjection().canInteract) {
         setState(() => _pickerError = 'The file picker could not be opened.');
       }
     }
   }
 
   Future<void> _submit() async {
-    if (!_stillOwned()) {
+    if (!_readProjection().canInteract) {
       Navigator.of(context).pop();
       return;
     }
@@ -544,7 +580,7 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
     final state = ref.read(
       teacherMaterialMutationControllerProvider(widget.topicId),
     );
-    if (success) {
+    if (success || !_readProjection().isCurrent) {
       Navigator.of(context).pop();
     } else {
       _focusFirstError(state);
@@ -552,14 +588,24 @@ class _UploadMaterialDialogState extends ConsumerState<_UploadMaterialDialog> {
   }
 
   void _focusFirstError(TeacherMaterialMutationState state) {
-    if (state.fieldErrors.containsKey('file')) {
+    final errors = _fieldErrorsFor(
+      state,
+      TeacherMaterialMutationOperation.upload,
+    );
+    if (errors.containsKey('file')) {
       _fileFocus.requestFocus();
-    } else if (state.fieldErrors.containsKey('title')) {
+    } else if (errors.containsKey('title')) {
       _titleFocus.requestFocus();
     }
   }
 
-  bool _stillOwned() => _currentOwner(ref) == widget.owner;
+  _MaterialDialogProjection _readProjection() {
+    return _readMaterialDialogProjection(
+      ref,
+      topicId: widget.topicId,
+      owner: widget.owner,
+    );
+  }
 }
 
 class _ReplaceMaterialDialog extends ConsumerStatefulWidget {
@@ -592,17 +638,24 @@ class _ReplaceMaterialDialogState
 
   @override
   Widget build(BuildContext context) {
-    if (!_stillOwned()) {
+    final projection = _watchMaterialDialogProjection(
+      ref,
+      topicId: widget.topic.id,
+      owner: widget.owner,
+      target: widget.material,
+    );
+    final collection = projection.collection;
+    if (!projection.isCurrent || collection == null) {
       _closeStaleDialog(context);
       return const SizedBox.shrink();
     }
-    final mutation = ref.watch(
-      teacherMaterialMutationControllerProvider(widget.topic.id),
+    final mutation = projection.mutation;
+    final capability = collection.uploadCapability;
+    final fieldErrors = _fieldErrorsFor(
+      mutation,
+      TeacherMaterialMutationOperation.replace,
+      materialId: widget.material.id,
     );
-    final capability = ref
-        .watch(teacherMaterialListControllerProvider(widget.topic.id))
-        .collection!
-        .uploadCapability;
     return AlertDialog(
       key: const Key('teacherMaterialReplaceDialog'),
       title: const Text('Replace this file?'),
@@ -621,11 +674,11 @@ class _ReplaceMaterialDialogState
             OutlinedButton.icon(
               key: const Key('teacherMaterialReplaceChooseFileButton'),
               focusNode: _fileFocus,
-              onPressed: mutation.isBusy ? null : _pickFile,
+              onPressed: projection.canInteract ? _pickFile : null,
               icon: const Icon(Icons.attach_file),
               label: Text(_file?.name ?? 'Choose replacement file *'),
             ),
-            if (_pickerError ?? mutation.fieldErrors['file'] case final error?)
+            if (_pickerError ?? fieldErrors['file'] case final error?)
               _FieldError(error),
             const SizedBox(height: 8),
             Text(
@@ -642,7 +695,7 @@ class _ReplaceMaterialDialogState
         ),
         FilledButton(
           key: const Key('teacherMaterialReplaceConfirmButton'),
-          onPressed: mutation.isBusy ? null : _submit,
+          onPressed: projection.canInteract ? _submit : null,
           child: const Text('Replace file'),
         ),
       ],
@@ -652,7 +705,7 @@ class _ReplaceMaterialDialogState
   Future<void> _pickFile() async {
     try {
       final file = await ref.read(teacherMaterialFilePickerProvider).pickFile();
-      if (!mounted || file == null || !_stillOwned()) {
+      if (!mounted || file == null || !_readProjection().canInteract) {
         return;
       }
       setState(() {
@@ -660,14 +713,14 @@ class _ReplaceMaterialDialogState
         _pickerError = null;
       });
     } catch (_) {
-      if (mounted) {
+      if (mounted && _readProjection().canInteract) {
         setState(() => _pickerError = 'The file picker could not be opened.');
       }
     }
   }
 
   Future<void> _submit() async {
-    if (!_stillOwned()) {
+    if (!_readProjection().canInteract) {
       Navigator.of(context).pop();
       return;
     }
@@ -682,14 +735,24 @@ class _ReplaceMaterialDialogState
           teacherMaterialMutationControllerProvider(widget.topic.id).notifier,
         )
         .replaceMaterialFile(current: widget.material, file: file);
-    if (success && mounted) {
+    if (!mounted) {
+      return;
+    }
+    if (success || !_readProjection().isCurrent) {
       Navigator.of(context).pop();
-    } else if (mounted) {
+    } else {
       _fileFocus.requestFocus();
     }
   }
 
-  bool _stillOwned() => _currentOwner(ref) == widget.owner;
+  _MaterialDialogProjection _readProjection() {
+    return _readMaterialDialogProjection(
+      ref,
+      topicId: widget.topic.id,
+      owner: widget.owner,
+      target: widget.material,
+    );
+  }
 }
 
 class _EditMaterialTitleDialog extends ConsumerStatefulWidget {
@@ -730,12 +793,21 @@ class _EditMaterialTitleDialogState
 
   @override
   Widget build(BuildContext context) {
-    if (_currentOwner(ref) != widget.owner) {
+    final projection = _watchMaterialDialogProjection(
+      ref,
+      topicId: widget.topicId,
+      owner: widget.owner,
+      target: widget.material,
+    );
+    if (!projection.isCurrent) {
       _closeStaleDialog(context);
       return const SizedBox.shrink();
     }
-    final mutation = ref.watch(
-      teacherMaterialMutationControllerProvider(widget.topicId),
+    final mutation = projection.mutation;
+    final fieldErrors = _fieldErrorsFor(
+      mutation,
+      TeacherMaterialMutationOperation.updateTitle,
+      materialId: widget.material.id,
     );
     return AlertDialog(
       key: const Key('teacherMaterialEditTitleDialog'),
@@ -749,12 +821,12 @@ class _EditMaterialTitleDialogState
               key: const Key('teacherMaterialEditTitleField'),
               controller: _controller,
               focusNode: _focus,
-              enabled: !_useOriginal && !mutation.isBusy,
+              enabled: !_useOriginal && projection.canInteract,
               autofocus: !_useOriginal,
               maxLength: TeacherMaterialMutationController.titleMaxLength,
               decoration: InputDecoration(
                 labelText: 'Title',
-                errorText: mutation.fieldErrors['title'],
+                errorText: fieldErrors['title'],
               ),
             ),
             CheckboxListTile(
@@ -762,7 +834,7 @@ class _EditMaterialTitleDialogState
               value: _useOriginal,
               contentPadding: EdgeInsets.zero,
               title: const Text('Use original file name'),
-              onChanged: mutation.isBusy
+              onChanged: !projection.canInteract
                   ? null
                   : (value) => setState(() => _useOriginal = value ?? false),
             ),
@@ -776,7 +848,7 @@ class _EditMaterialTitleDialogState
         ),
         FilledButton(
           key: const Key('teacherMaterialEditTitleSaveButton'),
-          onPressed: mutation.isBusy ? null : _submit,
+          onPressed: projection.canInteract ? _submit : null,
           child: const Text('Save'),
         ),
       ],
@@ -784,7 +856,7 @@ class _EditMaterialTitleDialogState
   }
 
   Future<void> _submit() async {
-    if (_currentOwner(ref) != widget.owner) {
+    if (!_readProjection().canInteract) {
       Navigator.of(context).pop();
       return;
     }
@@ -800,11 +872,26 @@ class _EditMaterialTitleDialogState
       return;
     }
     final state = ref.read(provider);
-    if (success || state.status == TeacherMaterialMutationStatus.noChanges) {
+    if (success ||
+        state.status == TeacherMaterialMutationStatus.noChanges ||
+        !_readProjection().isCurrent) {
       Navigator.of(context).pop();
-    } else if (state.fieldErrors.containsKey('title')) {
+    } else if (_fieldErrorsFor(
+      state,
+      TeacherMaterialMutationOperation.updateTitle,
+      materialId: widget.material.id,
+    ).containsKey('title')) {
       _focus.requestFocus();
     }
+  }
+
+  _MaterialDialogProjection _readProjection() {
+    return _readMaterialDialogProjection(
+      ref,
+      topicId: widget.topicId,
+      owner: widget.owner,
+      target: widget.material,
+    );
   }
 }
 
@@ -831,7 +918,12 @@ Future<void> _showUploadDialog(
   String topicId,
 ) async {
   final owner = _currentOwner(ref);
-  if (owner == null) {
+  if (owner == null ||
+      !_readMaterialDialogProjection(
+        ref,
+        topicId: topicId,
+        owner: owner,
+      ).canInteract) {
     return;
   }
   return showDialog<void>(
@@ -848,7 +940,13 @@ Future<void> _showReplaceDialog(
   TeacherLearningMaterial material,
 ) async {
   final owner = _currentOwner(ref);
-  if (owner == null) {
+  if (owner == null ||
+      !_readMaterialDialogProjection(
+        ref,
+        topicId: topic.id,
+        owner: owner,
+        target: material,
+      ).canInteract) {
     return;
   }
   return showDialog<void>(
@@ -866,7 +964,13 @@ Future<void> _showEditTitleDialog(
   TeacherLearningMaterial material,
 ) async {
   final owner = _currentOwner(ref);
-  if (owner == null) {
+  if (owner == null ||
+      !_readMaterialDialogProjection(
+        ref,
+        topicId: topicId,
+        owner: owner,
+        target: material,
+      ).canInteract) {
     return;
   }
   return showDialog<void>(
@@ -887,12 +991,61 @@ Future<void> _confirmRemove(
   TeacherLearningMaterial material,
 ) async {
   final owner = _currentOwner(ref);
-  if (owner == null) {
+  if (owner == null ||
+      !_readMaterialDialogProjection(
+        ref,
+        topicId: topicId,
+        owner: owner,
+        target: material,
+      ).canInteract) {
     return;
   }
   final accepted = await showDialog<bool>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (_) => _RemoveMaterialDialog(
+      topicId: topicId,
+      material: material,
+      owner: owner,
+    ),
+  );
+  if (accepted == true &&
+      context.mounted &&
+      _readMaterialDialogProjection(
+        ref,
+        topicId: topicId,
+        owner: owner,
+        target: material,
+      ).canInteract) {
+    await ref
+        .read(teacherMaterialMutationControllerProvider(topicId).notifier)
+        .removeMaterial(material);
+  }
+}
+
+class _RemoveMaterialDialog extends ConsumerWidget {
+  const _RemoveMaterialDialog({
+    required this.topicId,
+    required this.material,
+    required this.owner,
+  });
+
+  final String topicId;
+  final TeacherLearningMaterial material;
+  final TeacherSessionKey owner;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final projection = _watchMaterialDialogProjection(
+      ref,
+      topicId: topicId,
+      owner: owner,
+      target: material,
+    );
+    if (!projection.isCurrent) {
+      _closeStaleDialog(context);
+      return const SizedBox.shrink();
+    }
+    return AlertDialog(
       title: const Text('Remove this learning material?'),
       content: const Text(
         'The material will no longer be available through the current Topic. Historical server records are preserved.',
@@ -904,17 +1057,145 @@ Future<void> _confirmRemove(
         ),
         FilledButton(
           key: const Key('teacherMaterialRemoveConfirmButton'),
-          onPressed: () => Navigator.of(context).pop(true),
+          onPressed: projection.canInteract
+              ? () => Navigator.of(context).pop(true)
+              : null,
           child: const Text('Remove material'),
         ),
       ],
-    ),
-  );
-  if (accepted == true && context.mounted && _currentOwner(ref) == owner) {
-    await ref
-        .read(teacherMaterialMutationControllerProvider(topicId).notifier)
-        .removeMaterial(material);
+    );
   }
+}
+
+class _MaterialDialogProjection {
+  const _MaterialDialogProjection({
+    required this.mutation,
+    required this.collection,
+    required this.isCurrent,
+    required this.canInteract,
+  });
+
+  final TeacherMaterialMutationState mutation;
+  final TeacherLearningMaterialCollection? collection;
+  final bool isCurrent;
+  final bool canInteract;
+}
+
+_MaterialDialogProjection _watchMaterialDialogProjection(
+  WidgetRef ref, {
+  required String topicId,
+  required TeacherSessionKey owner,
+  TeacherLearningMaterial? target,
+}) {
+  final currentOwner = TeacherSessionSnapshot.fromSession(
+    ref.watch(authSessionControllerProvider),
+    ref.watch(appDeviceSurfaceProvider),
+  ).eligibleKey;
+  return _materialDialogProjection(
+    currentOwner: currentOwner,
+    owner: owner,
+    topicId: topicId,
+    target: target,
+    detail: ref.watch(teacherTopicDetailControllerProvider(topicId)),
+    list: ref.watch(teacherMaterialListControllerProvider(topicId)),
+    mutation: ref.watch(teacherMaterialMutationControllerProvider(topicId)),
+    activity: ref.watch(teacherMaterialMutationActivityProvider(topicId)),
+    lifecycle: ref.watch(teacherTopicLifecycleControllerProvider(topicId)),
+  );
+}
+
+_MaterialDialogProjection _readMaterialDialogProjection(
+  WidgetRef ref, {
+  required String topicId,
+  required TeacherSessionKey owner,
+  TeacherLearningMaterial? target,
+}) {
+  final currentOwner = _currentOwner(ref);
+  return _materialDialogProjection(
+    currentOwner: currentOwner,
+    owner: owner,
+    topicId: topicId,
+    target: target,
+    detail: ref.read(teacherTopicDetailControllerProvider(topicId)),
+    list: ref.read(teacherMaterialListControllerProvider(topicId)),
+    mutation: ref.read(teacherMaterialMutationControllerProvider(topicId)),
+    activity: ref.read(teacherMaterialMutationActivityProvider(topicId)),
+    lifecycle: ref.read(teacherTopicLifecycleControllerProvider(topicId)),
+  );
+}
+
+_MaterialDialogProjection _materialDialogProjection({
+  required TeacherSessionKey? currentOwner,
+  required TeacherSessionKey owner,
+  required String topicId,
+  required TeacherLearningMaterial? target,
+  required TeacherTopicDetailState detail,
+  required TeacherMaterialListState list,
+  required TeacherMaterialMutationState mutation,
+  required TeacherMaterialMutationActivityState activity,
+  required TeacherTopicLifecycleState lifecycle,
+}) {
+  final topic = detail.topic;
+  final collection = list.collection;
+  final currentTarget = target == null || collection == null
+      ? null
+      : collection.materialById(target.id);
+  final topicIsCurrent =
+      topic != null &&
+      (detail.status == TeacherTopicDetailStatus.data ||
+          detail.status == TeacherTopicDetailStatus.refreshing) &&
+      topic.id.toLowerCase() == topicId.toLowerCase() &&
+      teacherTopicCanEdit(topic);
+  final ownsMaterialList =
+      collection != null &&
+      (list.status == TeacherMaterialListStatus.data ||
+          list.status == TeacherMaterialListStatus.refreshing);
+  final targetIsCurrent =
+      target == null ||
+      (currentTarget != null &&
+          currentTarget.file.id.toLowerCase() == target.file.id.toLowerCase() &&
+          currentTarget.topicId.toLowerCase() == topicId.toLowerCase());
+  final recoveryOrAuthoritativeExit = switch (mutation.status) {
+    TeacherMaterialMutationStatus.outcomeUnknown ||
+    TeacherMaterialMutationStatus.unconfirmedCurrentState ||
+    TeacherMaterialMutationStatus.notEditable => true,
+    _ => false,
+  };
+  final isCurrent =
+      currentOwner == owner &&
+      topicIsCurrent &&
+      ownsMaterialList &&
+      targetIsCurrent &&
+      !lifecycle.isBusy &&
+      !recoveryOrAuthoritativeExit;
+  final canInteract =
+      isCurrent &&
+      detail.status == TeacherTopicDetailStatus.data &&
+      list.status == TeacherMaterialListStatus.data &&
+      !list.isStale &&
+      !mutation.isBusy &&
+      !activity.isActiveFor(owner);
+  return _MaterialDialogProjection(
+    mutation: mutation,
+    collection: collection,
+    isCurrent: isCurrent,
+    canInteract: canInteract,
+  );
+}
+
+Map<String, String> _fieldErrorsFor(
+  TeacherMaterialMutationState state,
+  TeacherMaterialMutationOperation operation, {
+  String? materialId,
+}) {
+  if (state.operation != operation) {
+    return const {};
+  }
+  if (materialId != null &&
+      state.materialId?.toLowerCase() != materialId.toLowerCase()) {
+    return const {};
+  }
+  return state.fieldErrors;
 }
 
 TeacherSessionKey? _currentOwner(WidgetRef ref) {

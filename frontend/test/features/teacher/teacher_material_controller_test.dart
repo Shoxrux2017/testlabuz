@@ -10,6 +10,7 @@ import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_material_file_picker.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_material_list_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_material_mutation_activity.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_material_mutation_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_material_mutation_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_detail_controller.dart';
@@ -17,6 +18,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_topic_life
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_group.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_learning_material.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_learning_material_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
@@ -262,38 +264,118 @@ void main() {
       },
     );
 
+    test('unknown remove with failed GET remains outcomeUnknown', () async {
+      var fetches = 0;
+      final materials = FakeTeacherLearningMaterialRepository(
+        onFetch: (_) async {
+          fetches += 1;
+          if (fetches == 2) {
+            throw teacherLocalFailure(ApiFailureKind.connection);
+          }
+          return teacherMaterialCollection();
+        },
+        onRemove: (_, _) async =>
+            throw const TeacherMaterialMutationOutcomeUnknownException(),
+      );
+      final harness = await _Harness.ready(materials: materials);
+
+      await harness.container
+          .read(teacherMaterialMutationControllerProvider(_topicId).notifier)
+          .removeMaterial(teacherMaterial());
+
+      expect(
+        harness.mutation.status,
+        TeacherMaterialMutationStatus.outcomeUnknown,
+      );
+      expect(
+        harness.mutation.operation,
+        TeacherMaterialMutationOperation.remove,
+      );
+      expect(harness.mutation.materialId, teacherMaterial().id);
+      expect(harness.mutation.canCheckCurrent, isTrue);
+      expect(materials.removeRequests, hasLength(1));
+    });
+
     test(
-      'failed unknown reconciliation exposes GET-only check action',
+      'failed title reconciliation permits GET-only recovery and retains evidence',
       () async {
         var fetches = 0;
         final materials = FakeTeacherLearningMaterialRepository(
           onFetch: (_) async {
             fetches += 1;
-            if (fetches == 2) {
+            if (fetches == 2 || fetches == 3) {
               throw teacherLocalFailure(ApiFailureKind.connection);
             }
             return teacherMaterialCollection(
-              materials: fetches == 1 ? [teacherMaterial()] : [],
+              materials: [
+                teacherMaterial(
+                  title: fetches == 1 ? 'Lesson slides' : 'Recovered title',
+                ),
+              ],
             );
           },
-          onRemove: (_, _) async =>
+          onUpdateTitle: (_, _, _) async =>
               throw const TeacherMaterialMutationOutcomeUnknownException(),
         );
         final harness = await _Harness.ready(materials: materials);
         final controller = harness.container.read(
           teacherMaterialMutationControllerProvider(_topicId).notifier,
         );
+        final original = teacherMaterial();
 
-        await controller.removeMaterial(teacherMaterial());
-        expect(harness.mutation.canCheckCurrent, isTrue);
+        await controller.updateMaterialTitle(
+          current: original,
+          title: ' Recovered title ',
+          useOriginalFileName: false,
+        );
+        final unresolved = harness.mutation;
+        expect(unresolved.status, TeacherMaterialMutationStatus.outcomeUnknown);
+        expect(
+          unresolved.operation,
+          TeacherMaterialMutationOperation.updateTitle,
+        );
+        expect(unresolved.materialId, original.id);
+
+        await controller.uploadMaterial(
+          file: _uploadFile('another.pdf'),
+          title: '',
+        );
+        await controller.replaceMaterialFile(
+          current: original,
+          file: _uploadFile('replacement.pdf'),
+        );
+        await controller.updateMaterialTitle(
+          current: original,
+          title: 'Different title',
+          useOriginalFileName: false,
+        );
+        await controller.removeMaterial(original);
+
+        expect(materials.uploadRequests, isEmpty);
+        expect(materials.replaceRequests, isEmpty);
+        expect(materials.removeRequests, isEmpty);
+        expect(materials.titleRequests, hasLength(1));
+        expect(harness.mutation.operation, unresolved.operation);
+        expect(harness.mutation.materialId, unresolved.materialId);
+
         await controller.checkCurrentMaterials();
-
-        expect(materials.removeRequests, hasLength(1));
         expect(materials.fetchIds, [_topicId, _topicId, _topicId]);
+        expect(materials.titleRequests, hasLength(1));
+        expect(
+          harness.mutation.status,
+          TeacherMaterialMutationStatus.outcomeUnknown,
+        );
+        expect(harness.mutation.operation, unresolved.operation);
+        expect(harness.mutation.materialId, unresolved.materialId);
+
+        await controller.checkCurrentMaterials();
+        expect(materials.fetchIds, [_topicId, _topicId, _topicId, _topicId]);
+        expect(materials.titleRequests, hasLength(1));
         expect(
           harness.mutation.status,
           TeacherMaterialMutationStatus.confirmedSuccess,
         );
+        expect(harness.mutation.feedback, 'Learning material title updated.');
       },
     );
 
@@ -412,6 +494,25 @@ void main() {
       await lifecycleFuture;
     });
 
+    test('_begin enforces active Group and draft or active Topic', () async {
+      for (final topic in [
+        teacherTopic(status: TeacherTopicStatus.closed),
+        teacherTopic(group: teacherGroup(status: TeacherGroupStatus.archived)),
+      ]) {
+        final materials = FakeTeacherLearningMaterialRepository();
+        final harness = await _Harness.ready(
+          materials: materials,
+          topics: FakeTeacherTopicRepository(onFetch: (_) async => topic),
+        );
+
+        await harness.container
+            .read(teacherMaterialMutationControllerProvider(_topicId).notifier)
+            .uploadMaterial(file: _uploadFile('lesson.pdf'), title: '');
+
+        expect(materials.uploadRequests, isEmpty);
+      }
+    });
+
     test(
       'stale session upload completion cannot publish or reconcile',
       () async {
@@ -436,6 +537,87 @@ void main() {
         expect(materials.uploadRequests, hasLength(1));
         expect(materials.fetchIds, [_topicId, _topicId]);
         expect(harness.mutation.feedback, isNull);
+      },
+    );
+
+    test(
+      'replacement Teacher session releases old activity generation-safely',
+      () async {
+        final oldUpload = Completer<TeacherLearningMaterial>();
+        final newUpload = Completer<TeacherLearningMaterial>();
+        var uploadCalls = 0;
+        final materials = FakeTeacherLearningMaterialRepository(
+          onUpload: (_, _, _, _) {
+            uploadCalls += 1;
+            return uploadCalls == 1 ? oldUpload.future : newUpload.future;
+          },
+        );
+        final topics = FakeTeacherTopicRepository();
+        final auth = FakeTeacherAuthSessionController.authenticated(
+          teacherUser('teacher-a'),
+        );
+        final harness = await _Harness.ready(
+          materials: materials,
+          topics: topics,
+          auth: auth,
+        );
+        final provider = teacherMaterialMutationControllerProvider(_topicId);
+
+        final oldFuture = harness.container
+            .read(provider.notifier)
+            .uploadMaterial(file: _uploadFile('old.pdf'), title: 'Old');
+        await flushTeacherControllers();
+        final oldActivity = harness.container.read(
+          teacherMaterialMutationActivityProvider(_topicId),
+        );
+        expect(oldActivity.isActive, isTrue);
+
+        auth.replaceUser(teacherUser('teacher-b'));
+        await flushTeacherControllers();
+        await flushTeacherControllers();
+        await harness.container
+            .read(teacherTopicLifecycleControllerProvider(_topicId).notifier)
+            .perform(TeacherTopicLifecycleAction.activate);
+        expect(topics.lifecycleRequests, hasLength(1));
+
+        final newFuture = harness.container
+            .read(provider.notifier)
+            .uploadMaterial(file: _uploadFile('new.pdf'), title: 'New');
+        await flushTeacherControllers();
+        expect(materials.uploadRequests, hasLength(2));
+        final newActivity = harness.container.read(
+          teacherMaterialMutationActivityProvider(_topicId),
+        );
+        expect(newActivity.isActive, isTrue);
+        expect(newActivity.generation, greaterThan(oldActivity.generation));
+
+        oldUpload.complete(teacherMaterial(title: 'Old'));
+        expect(await oldFuture, isFalse);
+        expect(harness.mutation.feedback, isNull);
+        expect(
+          harness.mutation.status,
+          TeacherMaterialMutationStatus.submitting,
+        );
+        expect(
+          harness.container
+              .read(teacherMaterialMutationActivityProvider(_topicId))
+              .generation,
+          newActivity.generation,
+        );
+        expect(
+          harness.container
+              .read(teacherMaterialMutationActivityProvider(_topicId))
+              .isActive,
+          isTrue,
+        );
+
+        await harness.container
+            .read(teacherTopicLifecycleControllerProvider(_topicId).notifier)
+            .perform(TeacherTopicLifecycleAction.close);
+        expect(topics.lifecycleRequests, hasLength(1));
+
+        newUpload.complete(teacherMaterial(title: 'New'));
+        expect(await newFuture, isTrue);
       },
     );
   });

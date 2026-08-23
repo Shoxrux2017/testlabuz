@@ -259,7 +259,7 @@ class TeacherMaterialTransferController
   bool _targetMutationBlocks(String materialId) {
     return ref
         .read(teacherMaterialMutationActivityProvider(topicId))
-        .blocksTransfer(materialId);
+        .blocksTransfer(materialId, _activeSessionKey);
   }
 
   void _clearActive() {
