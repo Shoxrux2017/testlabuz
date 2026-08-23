@@ -27,6 +27,11 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboa
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
+import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/student/domain/student_topic.dart';
+import 'package:testlabuz_client/features/student/domain/student_topic_list.dart';
+import 'package:testlabuz_client/features/student/domain/student_topic_list_query.dart';
+import 'package:testlabuz_client/features/student/domain/student_topic_repository.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 
@@ -373,6 +378,108 @@ void main() {
     });
   });
 
+  group('Student Topic routing', () {
+    test('route helpers accept only canonical Student Topic locations', () {
+      const topicId = '10000000-0000-0000-0000-000000000001';
+      final location = AppRoutePaths.studentTopicDetailLocation(topicId);
+
+      expect(location, '/student/topics/$topicId');
+      expect(AppRoutePaths.isStudentSegment(location), isTrue);
+      expect(AppRoutePaths.isStudentTopicDetailPath(location), isTrue);
+      expect(AppRoutePaths.isStudentApprovedLocation(location), isTrue);
+      expect(
+        AppRoutePaths.isStudentTopicDetailPath('/student/topics/not-a-uuid'),
+        isFalse,
+      );
+      expect(
+        AppRoutePaths.isStudentApprovedLocation('$location/extra'),
+        isFalse,
+      );
+      expect(
+        () => AppRoutePaths.studentTopicDetailLocation('not-a-uuid'),
+        throwsArgumentError,
+      );
+    });
+
+    testWidgets('valid desktop and mobile deep links survive bootstrap', (
+      tester,
+    ) async {
+      const topicId = '10000000-0000-0000-0000-000000000001';
+      final location = AppRoutePaths.studentTopicDetailLocation(topicId);
+      for (final surface in [
+        AppDeviceSurface.desktop,
+        AppDeviceSurface.mobile,
+      ]) {
+        final topics = FakeStudentTopicRepository();
+        await _pumpApp(
+          tester,
+          initialLocation: location,
+          repository: _authenticatedRepository(
+            _user(loginName: 'student01', role: UserRole.student),
+          ),
+          surface: surface,
+          studentTopics: topics,
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('studentTopicDetailScreen')),
+          findsOneWidget,
+        );
+        expect(find.text('Direct Student Topic'), findsOneWidget);
+        expect(topics.detailIds, [topicId]);
+      }
+    });
+
+    testWidgets(
+      'invalid Student child routes fall back without detail request',
+      (tester) async {
+        const topicId = '10000000-0000-0000-0000-000000000001';
+        final valid = AppRoutePaths.studentTopicDetailLocation(topicId);
+        for (final location in [
+          '/student/topics/not-a-uuid',
+          '$valid/extra',
+          '$valid?preview=true',
+          '$valid#fragment',
+        ]) {
+          final topics = FakeStudentTopicRepository();
+          await _pumpApp(
+            tester,
+            initialLocation: location,
+            repository: _authenticatedRepository(
+              _user(loginName: 'student01', role: UserRole.student),
+            ),
+            studentTopics: topics,
+          );
+          await tester.pumpAndSettle();
+
+          expect(
+            find.byKey(const Key('studentLearningWorkspace')),
+            findsOneWidget,
+          );
+          expect(topics.detailIds, isEmpty);
+        }
+      },
+    );
+
+    testWidgets('other roles cannot enter Student Topic detail', (
+      tester,
+    ) async {
+      const topicId = '10000000-0000-0000-0000-000000000001';
+      await _pumpApp(
+        tester,
+        initialLocation: AppRoutePaths.studentTopicDetailLocation(topicId),
+        repository: _authenticatedRepository(
+          _user(loginName: 'teacher01', role: UserRole.teacher),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Teacher'), findsOneWidget);
+      expect(find.byKey(const Key('studentTopicDetailScreen')), findsNothing);
+    });
+  });
+
   group('entry shell content and logout', () {
     testWidgets('minimal shells show only current session identity', (
       tester,
@@ -510,10 +617,8 @@ void main() {
           expect(find.text('Assigned Groups'), findsOneWidget);
           expect(find.text('Topics'), findsOneWidget);
         } else {
-          expect(
-            find.text('Device: ${testCase.surface.label}'),
-            findsOneWidget,
-          );
+          expect(find.text('Device: ${testCase.surface.label}'), findsNothing);
+          expect(find.text('My Topics'), findsOneWidget);
         }
       }
     });
@@ -780,6 +885,7 @@ Future<void> _pumpApp(
   required FakeAuthRepository repository,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
   SessionInvalidationSignal? signal,
+  FakeStudentTopicRepository? studentTopics,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -802,6 +908,9 @@ Future<void> _pumpApp(
         ),
         teacherTopicListRepositoryProvider.overrideWithValue(
           FakeTeacherTopicListRepository(),
+        ),
+        studentTopicRepositoryProvider.overrideWithValue(
+          studentTopics ?? FakeStudentTopicRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
@@ -838,6 +947,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       teacherTopicListRepositoryProvider.overrideWithValue(
         FakeTeacherTopicListRepository(),
+      ),
+      studentTopicRepositoryProvider.overrideWithValue(
+        FakeStudentTopicRepository(),
       ),
     ],
   );
@@ -1097,6 +1209,45 @@ class FakePlatformInstitutionListRepository
         total: 1,
         lastPage: 1,
       ),
+    );
+  }
+}
+
+class FakeStudentTopicRepository implements StudentTopicRepository {
+  final detailIds = <String>[];
+
+  @override
+  Future<StudentTopicListPage> fetchTopics(StudentTopicListQuery query) async {
+    return StudentTopicListPage(
+      topics: const [],
+      pagination: StudentListPagination(
+        page: query.page,
+        perPage: StudentTopicListQuery.perPage,
+        total: 0,
+        lastPage: 1,
+      ),
+    );
+  }
+
+  @override
+  Future<StudentTopicDetail> fetchTopic(String topicId) async {
+    detailIds.add(topicId);
+    return StudentTopicDetail(
+      id: topicId,
+      group: const StudentGroupSummary(
+        id: '00000000-0000-0000-0000-000000000001',
+        name: '9-A',
+        level: 'Grade 9',
+        subjectDirection: 'Informatics',
+        status: StudentGroupStatus.active,
+      ),
+      title: 'Direct Student Topic',
+      description: null,
+      subject: 'Informatics',
+      studentInstructions: 'Study the Topic.',
+      lessonAt: null,
+      status: StudentTopicStatus.active,
+      materials: const [],
     );
   }
 }
