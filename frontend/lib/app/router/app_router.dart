@@ -548,7 +548,11 @@ bool _keepsLocationDuringBootstrap(
   AppDeviceSurface surface, {
   required bool hasQueryOrFragment,
 }) {
-  if (hasQueryOrFragment) {
+  final isInstitutionAdminStaticLocation =
+      AppRoutePaths.isInstitutionAdminApprovedLocation(location) &&
+      !AppRoutePaths.isInstitutionAdminUserDetailPath(location) &&
+      !AppRoutePaths.isInstitutionAdminGroupDetailPath(location);
+  if (hasQueryOrFragment && !isInstitutionAdminStaticLocation) {
     return false;
   }
 
