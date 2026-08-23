@@ -783,7 +783,7 @@ from Stage 4.
 
 | Risk or stop condition | Affected task/checkpoint | Mitigation / required decision | Status |
 |---|---|---|---|
-| Stage 5 API refinement delivery | Stage entry | Updated `docs/09-api-contracts.md` and Stage 5 planning package delivered in PR #101 | `Resolved` | 
+| Stage 5 API refinement delivery | Stage entry | Updated `docs/09-api-contracts.md` and Stage 5 planning package delivered in PR #101 | `Resolved` |
 | Topic activation wording in general business rules mentions Homework preparation, while Homework starts Stage 6 | `S05-BE-004` | Stage 5 specialization: require at least one current Learning Material; Homework gate begins when Stage 6 contract is available | `Resolved` |
 | Exact storage replacement/cleanup transaction strategy is implementation-sensitive | `S05-BE-003` | ChatGPT must resolve it in the BE-003 implementation contract before approval | `Open — later readiness gate` |
 | Exact Flutter package/platform strategy for select/save/open is not yet approved | `S05-FE-003` | ChatGPT must inspect current dependencies and explicitly approve any dependency change in FE-003 contract | `Open — later readiness gate` |
