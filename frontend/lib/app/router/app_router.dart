@@ -25,6 +25,9 @@ import '../../features/platform_admin/presentation/platform_owner_institution_de
 import '../../features/platform_admin/presentation/platform_owner_institution_edit_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
+import '../../features/student/application/student_session_key.dart';
+import '../../features/student/presentation/student_learning_workspace_screen.dart';
+import '../../features/student/presentation/student_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_learning_workspace_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
@@ -297,10 +300,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRouteNames.student,
         path: AppRoutePaths.student,
-        builder: (context, state) => RoleEntryScreen(
-          expectedRole: UserRole.student,
-          surface: ref.read(appDeviceSurfaceProvider),
-        ),
+        builder: (context, state) =>
+            _buildStudentDestination(const StudentLearningWorkspaceScreen()),
+        routes: [
+          GoRoute(
+            name: AppRouteNames.studentTopicDetail,
+            path:
+                '${AppRoutePaths.studentTopicsSegment}/:${AppRoutePaths.studentTopicIdParameter}',
+            builder: (context, state) => _buildStudentDestination(
+              StudentTopicDetailScreen(
+                topicId:
+                    state.pathParameters[AppRoutePaths
+                        .studentTopicIdParameter] ??
+                    '',
+              ),
+            ),
+          ),
+        ],
       ),
       GoRoute(
         name: AppRouteNames.parent,
@@ -329,6 +345,10 @@ Widget _buildTeacherDestination(Widget child, {bool authoring = false}) {
   return _TeacherDestinationGate(authoring: authoring, child: child);
 }
 
+Widget _buildStudentDestination(Widget child) {
+  return _StudentDestinationGate(child: child);
+}
+
 class _TeacherDestinationGate extends ConsumerWidget {
   const _TeacherDestinationGate({required this.authoring, required this.child});
 
@@ -343,6 +363,25 @@ class _TeacherDestinationGate extends ConsumerWidget {
     ).eligibleKey;
     if (sessionKey == null ||
         (authoring && sessionKey.surface != AppDeviceSurface.desktop)) {
+      return const TechnicalRootScreen();
+    }
+
+    return child;
+  }
+}
+
+class _StudentDestinationGate extends ConsumerWidget {
+  const _StudentDestinationGate({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionKey = StudentSessionSnapshot.fromSession(
+      ref.watch(authSessionControllerProvider),
+      ref.watch(appDeviceSurfaceProvider),
+    ).eligibleKey;
+    if (sessionKey == null) {
       return const TechnicalRootScreen();
     }
 
@@ -473,6 +512,18 @@ String? _authRedirect(
     return AppRoutePaths.teacher;
   }
 
+  if (_canUseStudentDestinations(user.role, surface) &&
+      AppRoutePaths.isStudentSegment(location)) {
+    if (hasQueryOrFragment) {
+      return AppRoutePaths.student;
+    }
+    if (AppRoutePaths.isStudentApprovedLocation(location)) {
+      return null;
+    }
+
+    return AppRoutePaths.student;
+  }
+
   if (location == entryPath) {
     return null;
   }
@@ -508,6 +559,9 @@ bool _keepsLocationDuringBootstrap(
       (AppRoutePaths.isTeacherTopicDetailPath(location) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
+      (AppRoutePaths.isStudentTopicDetailPath(location) &&
+          (surface == AppDeviceSurface.desktop ||
+              surface == AppDeviceSurface.mobile)) ||
       (surface == AppDeviceSurface.desktop &&
           (AppRoutePaths.isTeacherTopicCreatePath(location) ||
               AppRoutePaths.isTeacherTopicEditPath(location)));
@@ -515,6 +569,12 @@ bool _keepsLocationDuringBootstrap(
 
 bool _canUseTeacherDestinations(UserRole role, AppDeviceSurface surface) {
   return role == UserRole.teacher &&
+      (surface == AppDeviceSurface.desktop ||
+          surface == AppDeviceSurface.mobile);
+}
+
+bool _canUseStudentDestinations(UserRole role, AppDeviceSurface surface) {
+  return role == UserRole.student &&
       (surface == AppDeviceSurface.desktop ||
           surface == AppDeviceSurface.mobile);
 }

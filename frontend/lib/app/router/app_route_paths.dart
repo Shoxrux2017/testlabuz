@@ -26,6 +26,7 @@ abstract final class AppRouteNames {
   static const teacherTopicDetail = 'teacher-topic-detail';
   static const teacherTopicEdit = 'teacher-topic-edit';
   static const student = 'student';
+  static const studentTopicDetail = 'student-topic-detail';
   static const parent = 'parent';
   static const unsupportedDevice = 'unsupported-device';
 }
@@ -89,6 +90,10 @@ abstract final class AppRoutePaths {
   static const teacherTopicEdit =
       '$teacherTopicDetail/$teacherTopicEditSegment';
   static const student = '/student';
+  static const studentTopicsSegment = 'topics';
+  static const studentTopicIdParameter = 'topicId';
+  static const studentTopicDetail =
+      '$student/$studentTopicsSegment/:$studentTopicIdParameter';
   static const parent = '/parent';
   static const unsupportedDevice = '/unsupported-device';
 
@@ -144,6 +149,9 @@ abstract final class AppRoutePaths {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _teacherTopicIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _studentTopicIdPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
@@ -327,5 +335,38 @@ abstract final class AppRoutePaths {
 
   static String teacherTopicEditLocation(String topicId) {
     return '${teacherTopicDetailLocation(topicId)}/$teacherTopicEditSegment';
+  }
+
+  static bool isStudentSegment(String path) {
+    return path == student || path.startsWith('$student/');
+  }
+
+  static bool isStudentTopicDetailPath(String path) {
+    return studentTopicIdFromPath(path) != null;
+  }
+
+  static bool isStudentApprovedLocation(String path) {
+    return path == student || isStudentTopicDetailPath(path);
+  }
+
+  static String? studentTopicIdFromPath(String path) {
+    const prefix = '$student/$studentTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return null;
+    }
+    final topicId = path.substring(prefix.length);
+    return _studentTopicIdPattern.hasMatch(topicId) ? topicId : null;
+  }
+
+  static String studentTopicDetailLocation(String topicId) {
+    if (!_studentTopicIdPattern.hasMatch(topicId)) {
+      throw ArgumentError.value(
+        topicId,
+        'topicId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+
+    return '$student/$studentTopicsSegment/${Uri.encodeComponent(topicId)}';
   }
 }
