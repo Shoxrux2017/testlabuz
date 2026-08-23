@@ -18,13 +18,32 @@
 This index is the authoritative implementation map for Stage 5 after this
 planning package is delivered to `origin/main`.
 
-The `Approved` state records Project Owner approval of the Stage decomposition.
-Implementation must still not start until the planning-package delivery is
-verified on current `origin/main` and the first implementation task
-(`S05-BE-001`) independently passes the Implementation Readiness Gate.
+The `Approved` state records that a detailed implementation contract has passed
+the Implementation Readiness Gate and has been approved by the Project Owner.
+`Approved` does not mean implemented, accepted, or delivered.
+
+The Stage 5 frontend contracts `S05-FE-001…004` are prepared and approved in
+advance as one planning package, but frontend implementation remains strictly
+sequential:
+
+```text
+S05-FE-001
+→ S05-FE-002
+→ S05-FE-003
+→ S05-FE-004
+```
+
+Before each frontend task is given to Codex, ChatGPT must re-check current
+`origin/main`, the actual implementation/tests produced by the previous task,
+and dependency delivery state, then freeze the current implementation baseline.
+
+Frontend implementation must not start until this frontend planning package is
+delivered to `origin/main` and `S05-FE-001` passes that immediate pre-execution
+baseline revalidation.
 
 This index organizes approved work but does not create or change product
 behavior.
+
 
 ---
 
@@ -179,16 +198,33 @@ Implementation proceeds one task at a time in dependency order.
 | 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-003-learning-material-management-private-storage.md` |
 | 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-004-topic-lifecycle.md` |
 | 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-005-student-topic-access-protected-file-download.md` |
-| 6 | `S05-FE-001` | Frontend | Teacher Learning Workspace, Assigned Groups and Topic List | Backend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
-| 7 | `S05-FE-002` | Frontend | Teacher Topic Create, Detail, Edit and Lifecycle | `S05-FE-001` | `Draft` | `Not started` | `Not created` |
-| 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Draft` | `Not started` | `Not created` |
-| 9 | `S05-FE-004` | Frontend | Student Topics and Learning Materials | `S05-FE-003` | `Draft` | `Not started` | `Not created` |
+| 6 | `S05-FE-001` | Frontend | Teacher Learning Workspace, Assigned Groups and Topic List | Backend Phase 2 `PASS` | `Approved` | `Not started` | `tasks/frontend/stage-05/S05-FE-001-teacher-learning-workspace-assigned-groups-topic-list.md` |
+| 7 | `S05-FE-002` | Frontend | Teacher Topic Create, Detail, Edit and Lifecycle | `S05-FE-001` | `Approved` | `Not started` | `tasks/frontend/stage-05/S05-FE-002-teacher-topic-create-detail-edit-lifecycle.md` |
+| 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Approved` | `Not started` | `tasks/frontend/stage-05/S05-FE-003-teacher-learning-material-management.md` |
+| 9 | `S05-FE-004` | Frontend | Student Topics and Learning Materials | `S05-FE-003` | `Approved` | `Not started` | `tasks/frontend/stage-05/S05-FE-004-student-topics-learning-materials.md` |
 | 10 | `S05-INT-001` | Integration | Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
 
 No per-task Phase 2 review exists for Stage 5+.
 
-The Stage index lists future tasks before their detailed contracts exist.
-Detailed implementation contracts are created/hardened in execution order only.
+All four Stage 5 frontend implementation contracts are prepared and approved
+before frontend implementation begins. Their approval does not authorize
+parallel or out-of-order implementation.
+
+Frontend implementation remains strictly sequential:
+
+```text
+S05-FE-001
+→ S05-FE-002
+→ S05-FE-003
+→ S05-FE-004
+```
+
+Immediately before each frontend task is given to Codex, ChatGPT must re-check
+the current `origin/main`, confirm the previous dependency is
+`Accepted / Delivered`, inspect the directly relevant current source/tests, and
+freeze the current implementation baseline. If the current implementation
+materially conflicts with the pre-approved contract, the contract must be
+revalidated before Codex starts.
 
 Do not create duplicated `CODEX-PROMPT` files for the Stage.
 
@@ -359,10 +395,10 @@ Implementation Readiness Gate.
 | `S05-BE-003` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-004` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-005` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
-| `S05-FE-001` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
-| `S05-FE-002` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
-| `S05-FE-003` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
-| `S05-FE-004` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
+| `S05-FE-001` | `Yes` | `Yes` | `N/A` | `Yes` | `Yes` | `Yes` | `Yes` |
+| `S05-FE-002` | `Yes` | `Yes` | `N/A` | `Yes` | `Yes` | `Yes` | `Yes` |
+| `S05-FE-003` | `Yes` | `Yes` | `N/A` | `Yes` | `Yes` | `Yes` | `Yes` |
+| `S05-FE-004` | `Yes` | `Yes` | `N/A` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-INT-001` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
 
 For the current task, ChatGPT must confirm before approval:
@@ -401,10 +437,13 @@ For the current task, ChatGPT must confirm before approval:
 | Topic lifecycle + materials | Student delivery/download | `S05-BE-004 Accepted / Delivered — PR #110, merge 8dee9f91f08a7c032429ab7c07e31d911c67b065` |
 | backend task block complete | Backend Phase 2 | `S05-BE-001…005 Accepted / Delivered — final backend delivery PR #112, merge 3ec963c682b14c08cd4b8a8eee606756bd6fa8de` |
 | Backend Phase 2 `PASS` | frontend implementation | `PASS — audited origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c` |
+| Frontend implementation contracts approved and delivered | `S05-FE-001` implementation | `S05-FE-001…004` detailed contracts = `Approved`; contract files and updated Stage index are present on current `origin/main` |
 | frontend task block complete | Frontend Phase 2 | `S05-FE-001…004 Accepted / Delivered` |
 | Frontend Phase 2 `PASS` | `S05-INT-001` | frontend block review + audited `origin/main` |
 | Integration `PASS` + manual smoke `PASS` | Stage Closure Review | accepted integration evidence |
 | Stage Closure `PASS` | Stage 6 planning | `tasks/STAGE_05_CLOSURE_REVIEW.md` |
+
+
 
 Exact implementation chain:
 
@@ -786,7 +825,7 @@ from Stage 4.
 | Stage 5 API refinement delivery | Stage entry | Updated `docs/09-api-contracts.md` and Stage 5 planning package delivered in PR #101 | `Resolved` |
 | Topic activation wording in general business rules mentions Homework preparation, while Homework starts Stage 6 | `S05-BE-004` | Stage 5 specialization: require at least one current Learning Material; Homework gate begins when Stage 6 contract is available | `Resolved` |
 | Exact storage replacement/cleanup transaction strategy is implementation-sensitive | `S05-BE-003` | Transaction-aware compensation plus after-commit/after-rollback cleanup implemented and independently reviewed | `Resolved — S05-BE-003 / Backend Phase 2 PASS` |
-| Exact Flutter package/platform strategy for select/save/open is not yet approved | `S05-FE-003` | ChatGPT must inspect current dependencies and explicitly approve any dependency change in FE-003 contract | `Open — later readiness gate` |
+| Flutter timezone/file select/save/open package and shared platform strategy | `S05-FE-002`, `S05-FE-003`, `S05-FE-004` | Approved: `timezone ^0.11.1` with shared `core/time`; `file_picker ^12.0.0` + `open_file ^4.0.0` with shared protected `core/files` boundary; FE-004 adds no new package | `Resolved — frontend contracts approved` |
 | Private file handling can create DB/storage inconsistency on partial failure | `S05-BE-003`, Backend Phase 2 | Upload/replace/remove failure semantics and transaction-aware cleanup implemented and reviewed | `Resolved — Backend Phase 2 PASS` |
 | Direct IDs/cross-tenant file access could leak existence/content | `S05-BE-005`, Backend Phase 2, Integration | Tenant-first connected-resource resolution, privacy-safe denial and protected streaming implemented; integration remains later confirmation | `Resolved for backend — Backend Phase 2 PASS` |
 | Mobile file behavior may differ from Windows | `S05-FE-003`, `S05-FE-004`, Frontend Phase 2 | verify required Windows + Android paths; do not assume desktop-only behavior | `Open — implementation pending` |
@@ -881,7 +920,7 @@ closure bookkeeping delivered to origin/main
 | `2026-08-22` | `S05-BE-004` Accepted / Delivered — PR #110, merge `8dee9f91f08a7c032429ab7c07e31d911c67b065` | Controlled Teacher Topic lifecycle implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 | `2026-08-23` | `S05-BE-005` Accepted / Delivered — PR #112, merge `3ec963c682b14c08cd4b8a8eee606756bd6fa8de` | Student Topic access and protected Teacher/Student Learning Material download implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 | `2026-08-23` | Stage 5 Backend Phase 2 `PASS` — audited `origin/main` @ `999f477f6a281f2266ad4abbded8b0732b5d789c` | Full backend regression suite PASS, Pint PASS, Stage-wide diff hygiene PASS after docs-only PR #113; read-only architecture/API/database/authorization/tenant/concurrency review found P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
-
+| `2026-08-23` | `S05-FE-001…004` detailed frontend contracts prepared, cross-task reviewed, and Approved before implementation | Frontend planning timing changed to prepare the complete Stage 5 frontend contract block first while preserving strict sequential implementation and per-task `origin/main` revalidation; shared `core/time` and `core/files` boundaries and required Flutter dependencies were resolved before Codex execution | `Project Owner / ChatGPT review` |
 ---
 
 ## 19. Next Permitted Action
@@ -893,27 +932,57 @@ S05-BE-001…005 = Accepted / Delivered
 Backend Phase 2 = PASS
 ```
 
-Authoritative backend checkpoint:
+The Stage 5 frontend implementation contracts are also prepared and approved:
 
 ```text
-audited origin/main:
-999f477f6a281f2266ad4abbded8b0732b5d789c
+S05-FE-001 = Approved
+S05-FE-002 = Approved
+S05-FE-003 = Approved
+S05-FE-004 = Approved
 ```
 
-Next permitted action:
+These approvals authorize the planned contracts only. They do not mean frontend
+implementation has started.
 
-1. synchronize local `main` with current `origin/main`;
-2. begin read-only preparation for `S05-FE-001`;
-3. re-check current frontend implementation, tests, backend API contracts, and
-   Stage status;
-4. pass the `S05-FE-001` Implementation Readiness Gate;
-5. create and deliver only the `S05-FE-001` implementation contract;
-6. start Codex only after that contract is approved and delivered.
+After this frontend planning/bookkeeping package is delivered to current
+`origin/main`, the next permitted implementation action is `S05-FE-001`.
 
-`S05-FE-002` and later frontend task contracts must not be created in advance.
+Before Codex starts `S05-FE-001`, ChatGPT / orchestration must:
 
-Integration remains blocked until the complete frontend block is Accepted /
-Delivered and Frontend Phase 2 is PASS.
+1. verify the frontend planning package and all four contract files are present
+   on current `origin/main`;
+2. re-check the exact current `origin/main` SHA;
+3. inspect the current Teacher placeholder/router/network/test baseline affected
+   by `S05-FE-001`;
+4. confirm Backend Phase 2 PASS evidence remains valid;
+5. freeze that current SHA as the `S05-FE-001` implementation baseline;
+6. confirm the local repository is clean and synchronized;
+7. give Codex only the approved `S05-FE-001` contract, applicable `AGENTS.md`,
+   and directly relevant current source/tests.
+
+After `S05-FE-001` is implemented, focused-verified, independently reviewed,
+Accepted, and Delivered, repeat the same current-`main` revalidation before
+starting `S05-FE-002`.
+
+The frontend implementation order remains:
+
+```text
+S05-FE-001
+→ S05-FE-002
+→ S05-FE-003
+→ S05-FE-004
+→ Frontend Phase 2
+```
+
+Do not start `S05-FE-002`, `S05-FE-003`, or `S05-FE-004` early merely because
+their contracts are already approved.
+
+Integration remains blocked until:
+
+```text
+S05-FE-001…004 = Accepted / Delivered
+Frontend Phase 2 = PASS
+```
 
 ---
 
