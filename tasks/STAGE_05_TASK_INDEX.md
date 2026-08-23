@@ -9,7 +9,7 @@
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition approved on | `2026-08-22` |
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
-| Implementation started | `Yes — S05-BE-001…003 Accepted / Delivered` |
+| Implementation started | `Yes — S05-BE-001…004 Accepted / Delivered` |
 | Backend checkpoint | `Not started` |
 | Frontend checkpoint | `Not started` |
 | Integration gate | `Not started` |
@@ -177,8 +177,8 @@ Implementation proceeds one task at a time in dependency order.
 | 1 | `S05-BE-001` | Backend | Topic and Learning Material Persistence Foundation | Stage 4 closed | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-001-topic-learning-material-persistence-foundation.md` |
 | 2 | `S05-BE-002` | Backend | Teacher Topic Authoring API, including assigned Groups projection | `S05-BE-001` + Stage 4 Teacher–Group graph | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-002-teacher-topic-authoring-api.md` |
 | 3 | `S05-BE-003` | Backend | Learning Material Management and Private Storage | `S05-BE-002` | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-003-learning-material-management-private-storage.md` |
-| 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Approved` | `Not started` | `tasks/backend/stage-05/S05-BE-004-topic-lifecycle.md` |
-| 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Draft` | `Not started` | `Not created` |
+| 4 | `S05-BE-004` | Backend | Topic Lifecycle | `S05-BE-003` | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-004-topic-lifecycle.md` |
+| 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Approved` | `Not started` | `tasks/backend/stage-05/S05-BE-005-student-topic-access-protected-file-download.md` |
 | 6 | `S05-FE-001` | Frontend | Teacher Learning Workspace, Assigned Groups and Topic List | Backend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
 | 7 | `S05-FE-002` | Frontend | Teacher Topic Create, Detail, Edit and Lifecycle | `S05-FE-001` | `Draft` | `Not started` | `Not created` |
 | 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Draft` | `Not started` | `Not created` |
@@ -358,7 +358,7 @@ Implementation Readiness Gate.
 | `S05-BE-002` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-003` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-BE-004` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
-| `S05-BE-005` | `No` | `No` | `No` | `No` | `No` | `No` | `No` |
+| `S05-BE-005` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` | `Yes` |
 | `S05-FE-001` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
 | `S05-FE-002` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
 | `S05-FE-003` | `No` | `No` | `N/A` | `No` | `No` | `No` | `No` |
@@ -398,7 +398,7 @@ For the current task, ChatGPT must confirm before approval:
 | Stage 5 persistence foundation | `S05-BE-002` | `S05-BE-001 Accepted / Delivered — PR #102, merge 17129ede0e266087c23355f135f9a340ccdaaf92` |
 | Teacher Topic authoring | material management | `S05-BE-002 Accepted / Delivered — PR #105, merge 08fc5bca465562bf88f2824dd62f0d13aa29a478` |
 | material management | Topic activation/lifecycle | `S05-BE-003 Accepted / Delivered — PR #108, merge dbcaaf02073bab269ce729173795f7ee55ea0909` |
-| Topic lifecycle + materials | Student delivery/download | `S05-BE-004 Accepted / Delivered` |
+| Topic lifecycle + materials | Student delivery/download | `S05-BE-004 Accepted / Delivered — PR #110, merge 8dee9f91f08a7c032429ab7c07e31d911c67b065` |
 | backend task block complete | Backend Phase 2 | `S05-BE-001…005 Accepted / Delivered` |
 | Backend Phase 2 `PASS` | frontend implementation | backend block review + audited `origin/main` |
 | frontend task block complete | Frontend Phase 2 | `S05-FE-001…004 Accepted / Delivered` |
@@ -878,6 +878,7 @@ closure bookkeeping delivered to origin/main
 | `2026-08-22` | `S05-BE-001` Accepted / Delivered — PR #102, merge `17129ede0e266087c23355f135f9a340ccdaaf92` | Topic and Learning Material persistence foundation implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 | `2026-08-22` | `S05-BE-002` Accepted / Delivered — PR #105, merge `08fc5bca465562bf88f2824dd62f0d13aa29a478` | Teacher assigned-Group projection and Topic authoring API implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 | `2026-08-22` | `S05-BE-003` Accepted / Delivered — PR #108, merge `dbcaaf02073bab269ce729173795f7ee55ea0909` | Teacher Learning Material management/private storage implemented; transaction-aware blob cleanup P2 fixed, focused-verified, independently re-reviewed, and delivered | `Project Owner / ChatGPT review` |
+| `2026-08-22` | `S05-BE-004` Accepted / Delivered — PR #110, merge `8dee9f91f08a7c032429ab7c07e31d911c67b065` | Controlled Teacher Topic lifecycle implemented, focused-verified, independently reviewed, and delivered | `Project Owner / ChatGPT review` |
 
 ---
 

@@ -792,7 +792,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
-| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-BE-004 — Topic Lifecycle` implementation |
+| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-BE-005 — Student Topic Access and Protected File Download` implementation |
 
 Current Stage 5 progress:
 
@@ -803,10 +803,12 @@ Current Stage 5 progress:
   merge `08fc5bca465562bf88f2824dd62f0d13aa29a478`.
 - `S05-BE-003`: Accepted / Delivered — PR #108,
   merge `dbcaaf02073bab269ce729173795f7ee55ea0909`.
-- `S05-BE-004`: Approved / implementation contract ready for delivery.
+- `S05-BE-004`: Accepted / Delivered — PR #110,
+  merge `8dee9f91f08a7c032429ab7c07e31d911c67b065`.
+- `S05-BE-005`: Approved / implementation contract ready for delivery.
 - Backend Phase 2: Not started; runs only after `S05-BE-001…005`
   are Accepted / Delivered.
-- Next permitted action: `S05-BE-004` implementation after contract delivery.
+- Next permitted action: `S05-BE-005` implementation after contract delivery.
 
 ---
 
