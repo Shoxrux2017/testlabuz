@@ -27,6 +27,10 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboa
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
+
+import 'features/teacher/teacher_test_support.dart';
 
 void main() {
   group('router auth guard precedence', () {
@@ -447,6 +451,11 @@ void main() {
           expect(find.text('Institution'), findsOneWidget);
           expect(find.text('Settings'), findsOneWidget);
           expect(find.text('Device: desktop'), findsNothing);
+        } else if (testCase.role == UserRole.teacher) {
+          expect(find.text('Assigned Groups'), findsOneWidget);
+          expect(find.text('Topics'), findsOneWidget);
+          expect(find.text('Device: ${testCase.surface.label}'), findsNothing);
+          expect(find.text('Create Topic'), findsNothing);
         } else {
           _expectNoFutureFeatureText();
         }
@@ -491,7 +500,16 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text(testCase.expectedTitle), findsOneWidget);
-        expect(find.text('Device: ${testCase.surface.label}'), findsOneWidget);
+        if (testCase.role == UserRole.teacher) {
+          expect(find.text('Device: ${testCase.surface.label}'), findsNothing);
+          expect(find.text('Assigned Groups'), findsOneWidget);
+          expect(find.text('Topics'), findsOneWidget);
+        } else {
+          expect(
+            find.text('Device: ${testCase.surface.label}'),
+            findsOneWidget,
+          );
+        }
       }
     });
 
@@ -774,6 +792,12 @@ Future<void> _pumpApp(
         institutionDashboardRepositoryProvider.overrideWithValue(
           FakeInstitutionDashboardRepository(),
         ),
+        teacherGroupListRepositoryProvider.overrideWithValue(
+          FakeTeacherGroupListRepository(),
+        ),
+        teacherTopicListRepositoryProvider.overrideWithValue(
+          FakeTeacherTopicListRepository(),
+        ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
       ],
@@ -803,6 +827,12 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       institutionDashboardRepositoryProvider.overrideWithValue(
         FakeInstitutionDashboardRepository(),
+      ),
+      teacherGroupListRepositoryProvider.overrideWithValue(
+        FakeTeacherGroupListRepository(),
+      ),
+      teacherTopicListRepositoryProvider.overrideWithValue(
+        FakeTeacherTopicListRepository(),
       ),
     ],
   );

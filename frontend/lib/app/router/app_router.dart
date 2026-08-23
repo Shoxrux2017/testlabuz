@@ -25,6 +25,7 @@ import '../../features/platform_admin/presentation/platform_owner_institution_de
 import '../../features/platform_admin/presentation/platform_owner_institution_edit_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
+import '../../features/teacher/presentation/teacher_learning_workspace_screen.dart';
 import 'app_route_paths.dart';
 import 'technical_root_screen.dart';
 
@@ -247,10 +248,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRouteNames.teacher,
         path: AppRoutePaths.teacher,
-        builder: (context, state) => RoleEntryScreen(
-          expectedRole: UserRole.teacher,
-          surface: ref.read(appDeviceSurfaceProvider),
-        ),
+        builder: (context, state) => const TeacherLearningWorkspaceScreen(),
       ),
       GoRoute(
         name: AppRouteNames.student,
