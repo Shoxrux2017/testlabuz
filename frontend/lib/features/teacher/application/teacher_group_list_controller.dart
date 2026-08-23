@@ -176,9 +176,17 @@ class TeacherGroupListController extends Notifier<TeacherGroupListState> {
       return;
     }
 
-    _searchDebounce?.cancel();
+    final query = _queryWithCommittedDraft();
+    if (query == null) {
+      return;
+    }
+    if (query != state.query) {
+      _commitQuery(query);
+      return;
+    }
+
     _startLogicalLoad(
-      state.query,
+      query,
       searchDraft: state.searchDraft,
       presentation: _LoadPresentation.retry,
     );

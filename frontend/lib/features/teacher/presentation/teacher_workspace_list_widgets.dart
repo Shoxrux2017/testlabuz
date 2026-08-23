@@ -147,6 +147,7 @@ class TeacherListError extends StatelessWidget {
   const TeacherListError({
     required this.title,
     required this.message,
+    required this.canRetry,
     required this.isRetrying,
     required this.onRetry,
     super.key,
@@ -154,6 +155,7 @@ class TeacherListError extends StatelessWidget {
 
   final String title;
   final String message;
+  final bool canRetry;
   final bool isRetrying;
   final VoidCallback onRetry;
 
@@ -170,7 +172,7 @@ class TeacherListError extends StatelessWidget {
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: isRetrying ? null : onRetry,
+            onPressed: canRetry && !isRetrying ? onRetry : null,
             icon: isRetrying
                 ? const SizedBox.square(
                     dimension: 18,

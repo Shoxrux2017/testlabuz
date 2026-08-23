@@ -165,6 +165,74 @@ void main() {
     },
   );
 
+  testWidgets('Retry is disabled only while its search draft is invalid', (
+    tester,
+  ) async {
+    final repositories = _Repositories(
+      groups: FakeTeacherGroupListRepository(
+        onFetch: (_) async =>
+            throw teacherLocalFailure(ApiFailureKind.connection),
+      ),
+      topics: FakeTeacherTopicListRepository(
+        onFetch: (_) async => throw teacherLocalFailure(ApiFailureKind.timeout),
+      ),
+    );
+    await _pumpWorkspace(tester, repositories: repositories);
+    await tester.pumpAndSettle();
+
+    final groupRetry = find.descendant(
+      of: find.byKey(const Key('teacherGroupListError')),
+      matching: find.byType(FilledButton),
+    );
+    final topicRetry = find.descendant(
+      of: find.byKey(const Key('teacherTopicListError')),
+      matching: find.byType(FilledButton),
+    );
+    final invalidDraft = String.fromCharCodes(List.filled(255, 0x1f600));
+
+    expect(tester.widget<FilledButton>(groupRetry).onPressed, isNotNull);
+    await tester.enterText(
+      find.byKey(const Key('teacherGroupSearchField')),
+      invalidDraft,
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(groupRetry).onPressed, isNull);
+    expect(
+      find.descendant(of: groupRetry, matching: find.text('Retry')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: groupRetry, matching: find.text('Retrying')),
+      findsNothing,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('teacherGroupSearchField')),
+      'corrected',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(groupRetry).onPressed, isNotNull);
+
+    expect(tester.widget<FilledButton>(topicRetry).onPressed, isNotNull);
+    await tester.enterText(
+      find.byKey(const Key('teacherTopicSearchField')),
+      invalidDraft,
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(topicRetry).onPressed, isNull);
+    expect(
+      find.descendant(of: topicRetry, matching: find.text('Retry')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('teacherTopicSearchField')),
+      '',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(topicRetry).onPressed, isNotNull);
+  });
+
   testWidgets('sign out remains available and clears Teacher feature state', (
     tester,
   ) async {

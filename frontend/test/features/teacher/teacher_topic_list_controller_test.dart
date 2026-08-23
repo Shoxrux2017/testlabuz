@@ -173,8 +173,13 @@ void main() {
       controller.refresh();
       await flushTeacherControllers();
       expect(subscription.read().status, TeacherTopicListStatus.error);
+      controller.updateSearchDraft('   ');
+      final callsBeforeRetry = repositories.topics.queries.length;
       controller.retry();
       await flushTeacherControllers();
+      expect(repositories.topics.queries, hasLength(callsBeforeRetry + 1));
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      expect(repositories.topics.queries, hasLength(callsBeforeRetry + 1));
       expect(subscription.read().status, TeacherTopicListStatus.data);
 
       expect(
@@ -212,6 +217,68 @@ void main() {
         TeacherTopicListStatus.emptyPage,
       );
     });
+
+    test(
+      'retry blocks an invalid draft and commits one valid pending search',
+      () async {
+        var failNext = false;
+        final topics = FakeTeacherTopicListRepository(
+          onFetch: (query) async {
+            if (failNext) {
+              failNext = false;
+              throw teacherLocalFailure(ApiFailureKind.timeout);
+            }
+            return teacherTopicPage(page: query.page, total: 60, lastPage: 3);
+          },
+        );
+        final repositories = _Repositories(topics: topics);
+        final container = _container(repositories: repositories);
+        final subscription = _listenTopics(container);
+        await flushTeacherControllers();
+        final controller = container.read(
+          teacherTopicListControllerProvider.notifier,
+        );
+        final selectedGroup = teacherGroup(name: 'Selected');
+
+        controller.selectGroup(selectedGroup);
+        await flushTeacherControllers();
+        controller.setStatus(TeacherTopicStatus.active);
+        await flushTeacherControllers();
+        controller.nextPage();
+        await flushTeacherControllers();
+        expect(subscription.read().query.page, 2);
+        failNext = true;
+        controller.refresh();
+        await flushTeacherControllers();
+        expect(subscription.read().status, TeacherTopicListStatus.error);
+        final callsAtError = topics.queries.length;
+
+        controller.updateSearchDraft(
+          String.fromCharCodes(List.filled(255, 0x1f600)),
+        );
+        controller.retry();
+        await flushTeacherControllers();
+        expect(topics.queries, hasLength(callsAtError));
+        expect(
+          subscription.read().searchErrorText,
+          'Search must be 254 characters or fewer.',
+        );
+
+        controller.updateSearchDraft('  Geometry  ');
+        expect(subscription.read().searchErrorText, isNull);
+        controller.retry();
+        await flushTeacherControllers();
+
+        expect(topics.queries, hasLength(callsAtError + 1));
+        expect(topics.queries.last.search, 'Geometry');
+        expect(topics.queries.last.page, 1);
+        expect(topics.queries.last.groupId, selectedGroup.id);
+        expect(topics.queries.last.status, TeacherTopicStatus.active);
+        expect(subscription.read().selectedGroup?.id, selectedGroup.id);
+        await Future<void>.delayed(const Duration(milliseconds: 320));
+        expect(topics.queries, hasLength(callsAtError + 1));
+      },
+    );
 
     test('empty-page correction is bounded to one request', () async {
       var correctionPhase = false;

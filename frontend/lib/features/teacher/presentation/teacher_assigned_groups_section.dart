@@ -102,6 +102,7 @@ class _GroupListBody extends ConsumerWidget {
         key: const Key('teacherGroupListError'),
         title: 'Unable to load assigned groups',
         message: _groupFailureMessage(state.failure!),
+        canRetry: state.searchErrorText == null,
         isRetrying: state.isRetryInFlight,
         onRetry: controller.retry,
       ),

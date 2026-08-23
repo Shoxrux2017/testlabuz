@@ -136,8 +136,13 @@ void main() {
         controller.refresh();
         await flushTeacherControllers();
         expect(subscription.read().status, TeacherGroupListStatus.error);
+        controller.updateSearchDraft('   ');
+        final callsBeforeRetry = repository.queries.length;
         controller.retry();
         await flushTeacherControllers();
+        expect(repository.queries, hasLength(callsBeforeRetry + 1));
+        await Future<void>.delayed(const Duration(milliseconds: 320));
+        expect(repository.queries, hasLength(callsBeforeRetry + 1));
         expect(subscription.read().status, TeacherGroupListStatus.data);
 
         expect(
@@ -169,6 +174,60 @@ void main() {
           ).status,
           TeacherGroupListStatus.emptyPage,
         );
+      },
+    );
+
+    test(
+      'retry blocks an invalid draft and commits one valid pending search',
+      () async {
+        var failNext = false;
+        final repository = FakeTeacherGroupListRepository(
+          onFetch: (query) async {
+            if (failNext) {
+              failNext = false;
+              throw teacherLocalFailure(ApiFailureKind.connection);
+            }
+            return teacherGroupPage(page: query.page, total: 60, lastPage: 3);
+          },
+        );
+        final container = _container(repository: repository);
+        final subscription = _listen(container);
+        await flushTeacherControllers();
+        final controller = container.read(
+          teacherGroupListControllerProvider.notifier,
+        );
+
+        controller.nextPage();
+        await flushTeacherControllers();
+        expect(subscription.read().query.page, 2);
+        failNext = true;
+        controller.refresh();
+        await flushTeacherControllers();
+        expect(subscription.read().status, TeacherGroupListStatus.error);
+        final callsAtError = repository.queries.length;
+
+        controller.updateSearchDraft(
+          String.fromCharCodes(List.filled(255, 0x1f600)),
+        );
+        controller.retry();
+        await flushTeacherControllers();
+        expect(repository.queries, hasLength(callsAtError));
+        expect(
+          subscription.read().searchErrorText,
+          'Search must be 254 characters or fewer.',
+        );
+
+        controller.updateSearchDraft('  Replacement  ');
+        expect(subscription.read().searchErrorText, isNull);
+        controller.retry();
+        await flushTeacherControllers();
+
+        expect(repository.queries, hasLength(callsAtError + 1));
+        expect(repository.queries.last.search, 'Replacement');
+        expect(repository.queries.last.page, 1);
+        expect(subscription.read().query, repository.queries.last);
+        await Future<void>.delayed(const Duration(milliseconds: 320));
+        expect(repository.queries, hasLength(callsAtError + 1));
       },
     );
 

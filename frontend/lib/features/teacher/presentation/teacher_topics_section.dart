@@ -149,6 +149,7 @@ class _TopicListBody extends ConsumerWidget {
         key: const Key('teacherTopicListError'),
         title: 'Unable to load topics',
         message: _topicFailureMessage(state.failure!),
+        canRetry: state.searchErrorText == null,
         isRetrying: state.isRetryInFlight,
         onRetry: controller.retry,
       ),

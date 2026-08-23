@@ -220,9 +220,17 @@ class TeacherTopicListController extends Notifier<TeacherTopicListState> {
       return;
     }
 
-    _searchDebounce?.cancel();
+    final query = _queryWithCommittedDraft();
+    if (query == null) {
+      return;
+    }
+    if (query != state.query) {
+      _commitQuery(query, selectedGroup: state.selectedGroup);
+      return;
+    }
+
     _startLogicalLoad(
-      state.query,
+      query,
       searchDraft: state.searchDraft,
       selectedGroup: state.selectedGroup,
       presentation: _LoadPresentation.retry,
