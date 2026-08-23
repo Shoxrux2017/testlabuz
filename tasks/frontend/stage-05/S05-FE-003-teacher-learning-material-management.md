@@ -7,13 +7,16 @@
 | Task ID | `S05-FE-003` |
 | Stage | `Stage 5 — Topics and Learning Materials` |
 | Area | `Frontend` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | `S05-FE-002 Accepted / Delivered` |
 | Planning/readiness baseline | `origin/main @ a407cf9250357f7d4a674da806a52f469476ba51` |
+| Implementation baseline | `origin/main @ 2efdc47969ef8e7c7866af8c4c7cc71193c45598` |
 | Backend gate | `S05-BE-001…005 Accepted / Delivered; Backend Phase 2 PASS` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Approved new dependencies | `file_picker: ^12.0.0`, `open_file: ^4.0.0` |
-| Implementation baseline | `Must be re-frozen from current origin/main after S05-FE-002 Accepted / Delivered` |
+| Delivery | `Delivered — PR #120` |
+| Delivered merge | `5679b63ea3964bbefd71b82950be6593021e724c` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 
 This file is the complete implementation contract for `S05-FE-003`.
 

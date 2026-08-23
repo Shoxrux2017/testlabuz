@@ -9,7 +9,7 @@
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition approved on | `2026-08-22` |
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
-| Implementation started | `Yes — S05-BE-001…005 and S05-FE-001…002 Accepted / Delivered` |
+| Implementation started | `Yes — S05-BE-001…005 and S05-FE-001…003 Accepted / Delivered` |
 | Backend checkpoint | `PASS — audited origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c` |
 | Frontend checkpoint | `Not started` |
 | Integration gate | `Not started` |
@@ -200,7 +200,7 @@ Implementation proceeds one task at a time in dependency order.
 | 5 | `S05-BE-005` | Backend | Student Topic Access and Protected File Download | `S05-BE-003` + `S05-BE-004` + Stage 4 Student–Group graph | `Accepted` | `Delivered` | `tasks/backend/stage-05/S05-BE-005-student-topic-access-protected-file-download.md` |
 | 6 | `S05-FE-001` | Frontend | Teacher Learning Workspace, Assigned Groups and Topic List | Backend Phase 2 `PASS` | `Accepted` | `Delivered` | `tasks/frontend/stage-05/S05-FE-001-teacher-learning-workspace-assigned-groups-topic-list.md` |
 | 7 | `S05-FE-002` | Frontend | Teacher Topic Create, Detail, Edit and Lifecycle | `S05-FE-001` | `Accepted` | `Delivered` | `tasks/frontend/stage-05/S05-FE-002-teacher-topic-create-detail-edit-lifecycle.md` |
-| 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Approved` | `Not started` | `tasks/frontend/stage-05/S05-FE-003-teacher-learning-material-management.md` |
+| 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Accepted` | `Delivered` | `tasks/frontend/stage-05/S05-FE-003-teacher-learning-material-management.md` |
 | 9 | `S05-FE-004` | Frontend | Student Topics and Learning Materials | `S05-FE-003` | `Approved` | `Not started` | `tasks/frontend/stage-05/S05-FE-004-student-topics-learning-materials.md` |
 | 10 | `S05-INT-001` | Integration | Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Draft` | `Not started` | `Not created` |
 
@@ -440,6 +440,7 @@ For the current task, ChatGPT must confirm before approval:
 | Frontend implementation contracts approved and delivered | `S05-FE-001` implementation | `S05-FE-001…004` detailed contracts = `Approved`; contract files and updated Stage index are present on current `origin/main` |
 | `S05-FE-001` Teacher learning workspace | `S05-FE-002` implementation | `S05-FE-001 Accepted / Delivered — PR #116, merge 41e6595589c9c92a079659639f69953d007066dd` |
 | `S05-FE-002` Teacher Topic authoring and lifecycle | `S05-FE-003` implementation | `S05-FE-002 Accepted / Delivered — PR #118, merge cfa6b9cb1981ea5c3e5416cf6e343319718044fb` |
+| `S05-FE-003` Teacher Learning Material management | `S05-FE-004` implementation | `S05-FE-003 Accepted / Delivered — PR #120, merge 5679b63ea3964bbefd71b82950be6593021e724c` |
 | frontend task block complete | Frontend Phase 2 | `S05-FE-001…004 Accepted / Delivered` |
 | Frontend Phase 2 `PASS` | `S05-INT-001` | frontend block review + audited `origin/main` |
 | Integration `PASS` + manual smoke `PASS` | Stage Closure Review | accepted integration evidence |
@@ -925,6 +926,7 @@ closure bookkeeping delivered to origin/main
 | `2026-08-23` | `S05-FE-001…004` detailed frontend contracts prepared, cross-task reviewed, and Approved before implementation | Frontend planning timing changed to prepare the complete Stage 5 frontend contract block first while preserving strict sequential implementation and per-task `origin/main` revalidation; shared `core/time` and `core/files` boundaries and required Flutter dependencies were resolved before Codex execution | `Project Owner / ChatGPT review` |
 | `2026-08-23` | `S05-FE-001` Accepted / Delivered — PR #116, merge `41e6595589c9c92a079659639f69953d007066dd` | Teacher Learning Workspace, assigned Groups and Topic list implemented and focused-verified; independent review P2 for retry/search-validation interaction was fixed and re-reviewed with final P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 | `2026-08-23` | `S05-FE-002` Accepted / Delivered — PR #118, merge `cfa6b9cb1981ea5c3e5416cf6e343319718044fb` | Teacher Topic create/detail/edit/lifecycle, Institution-timezone handling, routing and mutation reconciliation implemented and focused-verified; independent review findings were fixed and re-reviewed with final P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
+| `2026-08-23` | `S05-FE-003` Accepted / Delivered — PR #120, merge `5679b63ea3964bbefd71b82950be6593021e724c` | Teacher Learning Material management, protected file transfer, Save/Open, binary API-error handling and lifecycle coordination implemented and focused-verified; independent review findings were fixed and re-reviewed with final P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 ---
 
 ## 19. Next Permitted Action
@@ -941,56 +943,58 @@ Frontend implementation progress:
 ```text
 S05-FE-001 = Accepted / Delivered
 S05-FE-002 = Accepted / Delivered
-S05-FE-003 = Approved / Not started
+S05-FE-003 = Accepted / Delivered
 S05-FE-004 = Approved / Not started
 ```
 
-`S05-FE-002` delivery evidence:
+`S05-FE-003` delivery evidence:
 
 ```text
-PR #118
-merge: cfa6b9cb1981ea5c3e5416cf6e343319718044fb
+PR #120
+merge: 5679b63ea3964bbefd71b82950be6593021e724c
 acceptance review: PASS — P1=0, P2=0, P3=0
 ```
 
-The next permitted action is delivery of this docs-only `S05-FE-002`
+The next permitted action is delivery of this docs-only `S05-FE-003`
 bookkeeping update to `origin/main`.
 
-`S05-FE-003` implementation must not start before that bookkeeping delivery is
+`S05-FE-004` implementation must not start before that bookkeeping delivery is
 confirmed.
 
 After the bookkeeping update is delivered, ChatGPT / orchestration must perform
-the mandatory `S05-FE-003` implementation-entry revalidation:
+the mandatory `S05-FE-004` implementation-entry revalidation:
 
 1. re-check the exact current `origin/main` SHA;
-2. confirm `S05-FE-002 = Accepted / Delivered` is recorded on current
+2. confirm `S05-FE-003 = Accepted / Delivered` is recorded on current
    `origin/main`;
-3. inspect the actual delivered FE-002 Teacher Topic routes, controllers,
-   repositories, lifecycle state, Topic Detail presentation, shared
-   `core/time` boundary, dependencies, and directly relevant tests;
-4. compare the delivered FE-002 implementation with the pre-approved
-   `S05-FE-003` Learning Material contract;
-5. confirm that the FE-003 file-transfer/shared-core assumptions remain valid;
-6. confirm Backend Phase 2 PASS evidence remains valid;
-7. freeze the current `origin/main` SHA as the `S05-FE-003` implementation
+3. inspect the actual delivered FE-003 shared `core/files` boundary,
+   protected file-transfer behavior, binary API-error integration,
+   dependencies, Teacher Material implementation, and directly relevant tests;
+4. inspect the current Student entry/router/session baseline directly relevant
+   to `S05-FE-004`;
+5. compare the delivered FE-003 implementation with the pre-approved
+   `S05-FE-004` Student Topics and Learning Materials contract;
+6. confirm that FE-004 can directly reuse the delivered shared `core/files`
+   boundary without duplication or architectural extraction;
+7. confirm that the shared Institution-time boundary from FE-002 remains valid
+   for Student educational timestamp display;
+8. confirm Backend Phase 2 PASS evidence remains valid;
+9. freeze the current `origin/main` SHA as the `S05-FE-004` implementation
    baseline;
-8. confirm the local repository is clean and synchronized;
-9. only then give Codex the approved `S05-FE-003` contract, applicable
-   `AGENTS.md`, and directly relevant current source/tests.
+10. confirm the local repository is clean and synchronized;
+11. only then give Codex the approved `S05-FE-004` contract, applicable
+    `AGENTS.md`, and directly relevant current source/tests.
 
-If the delivered FE-002 implementation materially conflicts with the
-pre-approved `S05-FE-003` contract, ChatGPT must resolve and revalidate the
+If the delivered FE-003 implementation materially conflicts with the
+pre-approved `S05-FE-004` contract, ChatGPT must resolve and revalidate the
 contract before Codex starts.
 
 The remaining frontend implementation order is:
 
 ```text
-S05-FE-003
-→ S05-FE-004
+S05-FE-004
 → Frontend Phase 2
 ```
-
-Do not start `S05-FE-004` early merely because its contract is already approved.
 
 Integration remains blocked until:
 
@@ -998,6 +1002,8 @@ Integration remains blocked until:
 S05-FE-001…004 = Accepted / Delivered
 Frontend Phase 2 = PASS
 ```
+
+Do not start `S05-FE-004` early merely because its contract is already approved.
 
 ---
 
