@@ -140,16 +140,20 @@ if (app()->environment() !== 'testing' || DB::scalar('select current_database()'
     throw new RuntimeException('Stage 5 frozen oracle refused the runtime.');
 }
 $targetInstitution = '05000000-0000-4000-8000-000000000101';
-$excludedFixedTopics = ['05000000-0000-4000-c000-000000000102', '05000000-0000-4000-c000-000000000104'];
+$lifecycleTopicExclusions = ['05000000-0000-4000-c000-000000000102', '05000000-0000-4000-c000-000000000104'];
 $dynamic = DB::table('topics')->where('institution_id', $targetInstitution)->where('title', 'E2E S05 UI Topic')->pluck('id')->all();
 throw_unless(count($dynamic) <= 1, 'Stage 5 dynamic Topic identity is ambiguous.');
-$excludedTopics = [...$excludedFixedTopics, ...$dynamic];
+$topicRowExclusions = [...$lifecycleTopicExclusions, ...$dynamic];
+$contentBlobExclusions = $dynamic;
 $canonical = static function (string $sql, array $bindings = []): string {
     $row = DB::selectOne($sql, $bindings);
     if ($row === null || ! is_string($row->payload)) { throw new RuntimeException('Stage 5 frozen query returned no payload.'); }
     return $row->payload;
 };
-$placeholders = implode(',', array_fill(0, count($excludedTopics), '?'));
+$topicRowPlaceholders = implode(',', array_fill(0, count($topicRowExclusions), '?'));
+$contentBlobPlaceholders = implode(',', array_fill(0, count($contentBlobExclusions), '?'));
+$materialContentFilter = $contentBlobExclusions === [] ? '' : " where topic_id not in ($contentBlobPlaceholders)";
+$fileContentFilter = $contentBlobExclusions === [] ? '' : " where id not in (select file_id from learning_materials where topic_id in ($contentBlobPlaceholders))";
 $snapshot = [
     'institutions' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from institutions) s"),
     'settings' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.institution_id), '[]'::jsonb)::text payload from (select * from institution_settings) s"),
@@ -157,9 +161,9 @@ $snapshot = [
     'groups' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from groups) s"),
     'teacher_memberships' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from group_teacher_memberships) s"),
     'student_memberships' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from group_student_memberships) s"),
-    'topics' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from topics where id not in ($placeholders)) s", $excludedTopics),
-    'materials' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from learning_materials where topic_id not in ($placeholders)) s", $excludedTopics),
-    'files' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from files where id not in (select file_id from learning_materials where topic_id in ($placeholders))) s", $excludedTopics),
+    'topics' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from topics where id not in ($topicRowPlaceholders)) s", $topicRowExclusions),
+    'materials' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from learning_materials$materialContentFilter) s", $contentBlobExclusions),
+    'files' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from files$fileContentFilter) s", $contentBlobExclusions),
     'tokens' => $canonical("select coalesce(jsonb_agg(to_jsonb(s) order by s.id), '[]'::jsonb)::text payload from (select * from personal_access_tokens where tokenable_id not in (select id from users where login_name like 'e2e_s05_%')) s"),
 ];
 $privateRoot = config('filesystems.disks.local.root');
@@ -171,7 +175,7 @@ if (is_dir($privateRoot)) {
         throw_unless(! $entry->isLink() && $entry->isFile(), 'Stage 5 frozen oracle encountered an unsafe private entry.');
         $relative = str_replace('\\', '/', substr($entry->getPathname(), strlen($privateRoot) + 1));
         $excluded = false;
-        foreach ($excludedTopics as $topicId) {
+        foreach ($contentBlobExclusions as $topicId) {
             if (str_starts_with($relative, "learning-materials/$targetInstitution/$topicId/")) { $excluded = true; break; }
         }
         if (! $excluded) { $blobHashes[$relative] = hash_file('sha256', $entry->getPathname()); }
@@ -266,8 +270,16 @@ $publicNamespace = $publicRoot.'/'.str_replace('/', DIRECTORY_SEPARATOR, $namesp
 throw_unless(! is_dir($publicNamespace) || count(glob($publicNamespace.'/*') ?: []) === 0, 'Owned Stage 5 blob leaked to public storage.');
 $draft = DB::table('topics')->where('id', '05000000-0000-4000-c000-000000000102')->first();
 $groupC = DB::table('topics')->where('id', '05000000-0000-4000-c000-000000000104')->first();
+$archivedGroupC = DB::table('groups')->where('id', '05000000-0000-4000-a000-000000000103')->first();
+$groupCMaterial = DB::table('learning_materials')->where('id', '05000000-0000-4000-d000-000000000103')->first();
+$groupCFile = DB::table('files')->where('id', '05000000-0000-4000-e000-000000000103')->first();
 throw_unless($draft !== null && $draft->status === 'archived' && $draft->activated_at === null && $draft->closed_at === null && $draft->archived_at !== null, 'Seeded draft final lifecycle is invalid.');
+throw_unless(strtotime($draft->created_at) <= strtotime($draft->archived_at), 'Seeded draft lifecycle order is invalid.');
 throw_unless($groupC !== null && $groupC->status === 'archived' && $groupC->activated_at !== null && $groupC->closed_at !== null && $groupC->archived_at !== null, 'Archived Group Topic final lifecycle is invalid.');
+throw_unless($archivedGroupC !== null && $archivedGroupC->archived_at !== null && $groupCMaterial !== null && $groupCFile !== null && $groupCMaterial->topic_id === $groupC->id && $groupCMaterial->file_id === $groupCFile->id, 'Archived Group C historical content is incomplete.');
+throw_unless(strtotime($groupC->created_at) <= strtotime($groupC->activated_at), 'Archived Group Topic activation order is invalid.');
+throw_unless(strtotime($groupC->created_at) < strtotime($archivedGroupC->archived_at) && strtotime($groupCMaterial->created_at) < strtotime($archivedGroupC->archived_at) && strtotime($groupCFile->created_at) < strtotime($archivedGroupC->archived_at), 'Archived Group C historical content order is invalid.');
+throw_unless(strtotime($archivedGroupC->archived_at) <= strtotime($groupC->closed_at) && strtotime($groupC->closed_at) <= strtotime($groupC->archived_at), 'Archived Group Topic final lifecycle order is invalid.');
 $dynamic = [
     'topic_id' => $topic->id, 'status' => 'archived',
     'replacement_material_id' => $replacement->material_id, 'replacement_file_id' => $replacement->file_id,

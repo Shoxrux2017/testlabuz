@@ -674,7 +674,7 @@ class Stage5E2eSeeder extends Seeder
 
     private function createInstitutions(): void
     {
-        $createdAt = Carbon::parse('2035-05-01 08:00:00+00');
+        $createdAt = Carbon::parse('2020-05-01 08:00:00+00');
         foreach ($this->institutionManifest() as $id => $specification) {
             Institution::query()->create([
                 'id' => $id,
@@ -696,7 +696,7 @@ class Stage5E2eSeeder extends Seeder
 
     private function createUsers(string $password): void
     {
-        $createdAt = Carbon::parse('2035-05-02 08:00:00+00');
+        $createdAt = Carbon::parse('2020-05-02 08:00:00+00');
         foreach ($this->userManifest() as $id => $specification) {
             User::query()->create([
                 'id' => $id,
@@ -721,7 +721,7 @@ class Stage5E2eSeeder extends Seeder
 
     private function createSettings(): void
     {
-        $createdAt = Carbon::parse('2035-05-02 10:00:00+00');
+        $createdAt = Carbon::parse('2020-05-02 10:00:00+00');
         foreach (array_keys($this->institutionManifest()) as $institutionId) {
             InstitutionSetting::query()->create([
                 'institution_id' => $institutionId,
@@ -742,9 +742,10 @@ class Stage5E2eSeeder extends Seeder
 
     private function createGroups(): void
     {
-        $createdAt = Carbon::parse('2035-05-03 08:00:00+00');
+        $createdAt = Carbon::parse('2020-05-03 08:00:00+00');
         foreach ($this->groupManifest() as $id => $specification) {
             $archived = $specification['status'] === GroupStatus::Archived->value;
+            $archivedAt = $archived ? Carbon::parse('2020-05-04 12:00:00+00') : null;
             Group::query()->create([
                 'id' => $id,
                 'institution_id' => $specification['institution_id'],
@@ -754,9 +755,9 @@ class Stage5E2eSeeder extends Seeder
                 'description' => 'E2E S05 deterministic Group.',
                 'status' => $specification['status'],
                 'created_by_user_id' => $specification['created_by_user_id'],
-                'archived_at' => $archived ? Carbon::parse('2035-05-04 12:00:00+00') : null,
+                'archived_at' => $archivedAt,
                 'created_at' => $createdAt,
-                'updated_at' => $createdAt,
+                'updated_at' => $archivedAt ?? $createdAt,
             ]);
             $createdAt = $createdAt->copy()->addMinute();
         }
@@ -764,7 +765,7 @@ class Stage5E2eSeeder extends Seeder
 
     private function createMemberships(): void
     {
-        $startedAt = Carbon::parse('2035-05-03 10:00:00+00');
+        $startedAt = Carbon::parse('2020-05-03 10:00:00+00');
         foreach ($this->teacherMembershipManifest() as $id => $specification) {
             $this->createMembership(GroupTeacherMembership::class, 'teacher_id', $id, $specification, $startedAt);
             $startedAt = $startedAt->copy()->addMinute();
@@ -781,6 +782,7 @@ class Stage5E2eSeeder extends Seeder
      */
     private function createMembership(string $model, string $memberColumn, string $id, array $specification, Carbon $startedAt): void
     {
+        $endedAt = $specification['ended'] ? $startedAt->copy()->addHour() : null;
         $model::query()->create([
             'id' => $id,
             'institution_id' => $specification['institution_id'],
@@ -788,17 +790,18 @@ class Stage5E2eSeeder extends Seeder
             $memberColumn => $specification['member_id'],
             'assigned_by_user_id' => $specification['actor_id'],
             'started_at' => $startedAt,
-            'ended_at' => $specification['ended'] ? $startedAt->copy()->addHour() : null,
+            'ended_at' => $endedAt,
             'created_at' => $startedAt,
-            'updated_at' => $startedAt,
+            'updated_at' => $endedAt ?? $startedAt,
         ]);
     }
 
     private function createTopics(): void
     {
-        $createdAt = Carbon::parse('2035-05-04 08:00:00+00');
+        $createdAt = Carbon::parse('2020-05-04 08:00:00+00');
         foreach ($this->topicManifest() as $id => $specification) {
             $active = $specification['status'] === TopicStatus::Active->value;
+            $activatedAt = $active ? $createdAt->copy()->addMinute() : null;
             Topic::query()->create([
                 'id' => $id,
                 'institution_id' => $specification['institution_id'],
@@ -810,11 +813,11 @@ class Stage5E2eSeeder extends Seeder
                 'student_instructions' => $specification['instructions'],
                 'lesson_at' => null,
                 'status' => $specification['status'],
-                'activated_at' => $active ? $createdAt->copy()->addMinute() : null,
+                'activated_at' => $activatedAt,
                 'closed_at' => null,
                 'archived_at' => null,
                 'created_at' => $createdAt,
-                'updated_at' => $createdAt,
+                'updated_at' => $activatedAt ?? $createdAt,
             ]);
             $createdAt = $createdAt->copy()->addMinutes(5);
         }
@@ -822,7 +825,7 @@ class Stage5E2eSeeder extends Seeder
 
     private function createFilesAndMaterials(): void
     {
-        $createdAt = Carbon::parse('2035-05-04 09:00:00+00');
+        $createdAt = Carbon::parse('2020-05-04 09:00:00+00');
         foreach ($this->materialManifest() as $materialId => $materialSpecification) {
             $fileSpecification = $this->fileManifest()[$materialSpecification['file_id']];
             $bytes = $this->seededPdfBytes($fileSpecification['fixture_key']);

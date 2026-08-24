@@ -10,6 +10,7 @@ use App\Models\Institution;
 use App\Models\LearningMaterial;
 use App\Models\Topic;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Database\Seeders\Stage5E2eSeeder;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -312,7 +313,9 @@ class Stage5E2eSeederTest extends TestCase
 
     public function test_two_consecutive_runs_produce_the_same_logical_baseline_and_matching_blob_checksums(): void
     {
+        $executionStartedAt = CarbonImmutable::now();
         $this->stage5Seeder()->run();
+        $this->assertDeterministicInitialChronology($executionStartedAt);
         $first = $this->logicalSnapshot();
         $this->stage5Seeder()->run();
         $second = $this->logicalSnapshot();
@@ -398,6 +401,108 @@ class Stage5E2eSeederTest extends TestCase
     private function fixedTargetBlobKey(): string
     {
         return $this->dynamicBlobKey(self::SEEDED_TARGET_TOPIC_ID, '05000000-0000-4000-f000-000000000101.pdf');
+    }
+
+    private function assertDeterministicInitialChronology(CarbonImmutable $executionStartedAt): void
+    {
+        $institutions = DB::table('institutions')->whereIn('id', $this->stage5InstitutionIds())->get();
+        $settings = DB::table('institution_settings')->whereIn('institution_id', $this->stage5InstitutionIds())->get();
+        $users = DB::table('users')->where('login_name', 'like', 'e2e_s05_%')->get();
+        $groups = DB::table('groups')->whereIn('id', $this->stage5GroupIds())->get();
+        $teacherMemberships = DB::table('group_teacher_memberships')->whereIn('group_id', $this->stage5GroupIds())->get();
+        $studentMemberships = DB::table('group_student_memberships')->whereIn('group_id', $this->stage5GroupIds())->get();
+        $topics = DB::table('topics')->where('title', 'like', 'E2E S05%')->get();
+        $materials = DB::table('learning_materials')->whereIn('institution_id', $this->stage5InstitutionIds())->get();
+        $files = DB::table('files')->whereIn('institution_id', $this->stage5InstitutionIds())->get();
+
+        self::assertSame(
+            CarbonImmutable::parse('2020-05-01 08:00:00+00')->getTimestamp(),
+            $this->timestamp($institutions->min('created_at')),
+        );
+
+        $prerequisiteCreationTimestamps = collect([
+            ...$institutions->pluck('created_at'),
+            ...$users->pluck('created_at'),
+            ...$groups->pluck('created_at'),
+            ...$teacherMemberships->pluck('created_at'),
+            ...$studentMemberships->pluck('created_at'),
+        ])->map(fn (mixed $value): int => $this->timestamp($value));
+        $topicCreationTimestamps = $topics->pluck('created_at')->map(fn (mixed $value): int => $this->timestamp($value));
+        self::assertTrue($prerequisiteCreationTimestamps->max() < $topicCreationTimestamps->min());
+
+        $activeTopicActivationTimestamps = collect();
+        foreach ($topics as $topic) {
+            $createdAt = $this->timestamp($topic->created_at);
+            if ($topic->status === TopicStatus::Active->value) {
+                self::assertNotNull($topic->activated_at);
+                $activatedAt = $this->timestamp($topic->activated_at);
+                self::assertTrue($createdAt < $activatedAt);
+                self::assertSame($activatedAt, $this->timestamp($topic->updated_at));
+                $activeTopicActivationTimestamps->push($activatedAt);
+            } else {
+                self::assertNull($topic->activated_at);
+                self::assertSame($createdAt, $this->timestamp($topic->updated_at));
+            }
+        }
+
+        $contentCreationTimestamps = collect([
+            ...$materials->pluck('created_at'),
+            ...$files->pluck('created_at'),
+        ])->map(fn (mixed $value): int => $this->timestamp($value));
+        self::assertTrue($activeTopicActivationTimestamps->max() < $contentCreationTimestamps->min());
+
+        $archivedGroup = $groups->firstWhere('id', '05000000-0000-4000-a000-000000000103');
+        self::assertNotNull($archivedGroup);
+        self::assertNotNull($archivedGroup->archived_at);
+        $groupArchivedAt = $this->timestamp($archivedGroup->archived_at);
+        self::assertSame(CarbonImmutable::parse('2020-05-04 12:00:00+00')->getTimestamp(), $groupArchivedAt);
+        self::assertTrue($contentCreationTimestamps->max() < $groupArchivedAt);
+
+        foreach ($groups as $group) {
+            $expectedUpdatedAt = $group->archived_at ?? $group->created_at;
+            self::assertSame($this->timestamp($expectedUpdatedAt), $this->timestamp($group->updated_at));
+        }
+        foreach ([...$teacherMemberships, ...$studentMemberships] as $membership) {
+            self::assertSame($this->timestamp($membership->started_at), $this->timestamp($membership->created_at));
+            $expectedUpdatedAt = $membership->ended_at ?? $membership->started_at;
+            self::assertSame($this->timestamp($expectedUpdatedAt), $this->timestamp($membership->updated_at));
+            if ($membership->ended_at !== null) {
+                self::assertTrue($this->timestamp($membership->started_at) < $this->timestamp($membership->ended_at));
+            }
+        }
+        foreach ([$institutions, $settings, $users, $materials, $files] as $unchangedRows) {
+            foreach ($unchangedRows as $row) {
+                self::assertSame($this->timestamp($row->created_at), $this->timestamp($row->updated_at));
+            }
+        }
+
+        $historicalTimestamps = [];
+        $appendTimestamps = static function (iterable $rows, array $columns) use (&$historicalTimestamps): void {
+            foreach ($rows as $row) {
+                foreach ($columns as $column) {
+                    if ($row->{$column} !== null) {
+                        $historicalTimestamps[] = $row->{$column};
+                    }
+                }
+            }
+        };
+        $appendTimestamps($institutions, ['created_at', 'updated_at']);
+        $appendTimestamps($settings, ['created_at', 'updated_at']);
+        $appendTimestamps($users, ['created_at', 'updated_at']);
+        $appendTimestamps($groups, ['created_at', 'updated_at', 'archived_at']);
+        $appendTimestamps($teacherMemberships, ['started_at', 'ended_at', 'created_at', 'updated_at']);
+        $appendTimestamps($studentMemberships, ['started_at', 'ended_at', 'created_at', 'updated_at']);
+        $appendTimestamps($topics, ['created_at', 'updated_at', 'activated_at']);
+        $appendTimestamps($materials, ['created_at', 'updated_at']);
+        $appendTimestamps($files, ['created_at', 'updated_at']);
+        foreach ($historicalTimestamps as $timestamp) {
+            self::assertTrue($this->timestamp($timestamp) < $executionStartedAt->getTimestamp());
+        }
+    }
+
+    private function timestamp(mixed $value): int
+    {
+        return CarbonImmutable::parse((string) $value)->getTimestamp();
     }
 
     private function logicalSnapshot(): string

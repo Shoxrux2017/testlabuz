@@ -860,7 +860,12 @@ Future<void> _verifyStudentTransfer(
     final record = h.sink.records.last;
     expect(record.operation, operation);
     expect(record.fileId, operation == 'open' ? fileId : isNull);
-    expect(record.filename, fixture.originalName);
+    expect(
+      record.filename,
+      operation == 'save'
+          ? fixture.originalName
+          : '$fileId.${fixture.extension}',
+    );
     expect(record.extension, fixture.extension);
     expect(record.mimeType, fixture.mimeType);
     expect(record.sizeBytes, fixture.sizeBytes);
@@ -1175,10 +1180,11 @@ Future<void> _verifyTeacherTransfer(
     timeout: const Duration(minutes: 2),
   );
   final record = h.sink.records.last;
+  final expectedExtension = expectedFile['extension']! as String;
   expect(record.operation, 'open');
   expect(record.fileId, fileId);
-  expect(record.filename, expectedFile['original_name']);
-  expect(record.extension, expectedFile['extension']);
+  expect(record.filename, '$fileId.$expectedExtension');
+  expect(record.extension, expectedExtension);
   expect(record.mimeType, expectedFile['mime_type']);
   expect(record.sizeBytes, expectedFile['size_bytes']);
   expect(stage5Sha256(await File(record.path).readAsBytes()), record.sha256);
