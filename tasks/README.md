@@ -792,7 +792,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
-| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-FE-001 — Teacher Learning Workspace, Assigned Groups and Topic List` readiness/planning |
+| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-INT-001 — Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification` |
 
 Current Stage 5 progress:
 
@@ -809,9 +809,13 @@ Current Stage 5 progress:
   merge `3ec963c682b14c08cd4b8a8eee606756bd6fa8de`.
 - Stage 5 Backend Phase 2: PASS — audited `origin/main`
   `999f477f6a281f2266ad4abbded8b0732b5d789c`; P1=0, P2=0, P3=0.
-- Frontend implementation block: Not started.
-- Next permitted action: read-only preparation and Implementation Readiness
-  for `S05-FE-001`.
+- `S05-FE-001…004`: Accepted / Delivered.
+- Stage 5 Frontend Phase 2: PASS — audited `origin/main`
+  `0746d75d0b0ff2f629155f92f370b9ee7f1af818`; P1=0, P2=0, P3=0.
+- `S05-INT-001`: Approved / Not started.
+- Next permitted action: implement the approved `S05-INT-001` integration assets
+  with focused Codex verification, then Project Owner real-stack E2E and required
+  manual smoke.
 
 ---
 
