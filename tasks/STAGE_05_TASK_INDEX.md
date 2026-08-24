@@ -11,7 +11,7 @@
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
 | Implementation started | `Yes — S05-BE-001…005 and S05-FE-001…004 Accepted / Delivered` |
 | Backend checkpoint | `PASS — audited origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c` |
-| Frontend checkpoint | `Not started` |
+| Frontend checkpoint | `PASS — audited origin/main @ 0746d75d0b0ff2f629155f92f370b9ee7f1af818` |
 | Integration gate | `Not started` |
 | Stage closed | `No` |
 
@@ -442,7 +442,7 @@ For the current task, ChatGPT must confirm before approval:
 | `S05-FE-002` Teacher Topic authoring and lifecycle | `S05-FE-003` implementation | `S05-FE-002 Accepted / Delivered — PR #118, merge cfa6b9cb1981ea5c3e5416cf6e343319718044fb` |
 | `S05-FE-003` Teacher Learning Material management | `S05-FE-004` implementation | `S05-FE-003 Accepted / Delivered — PR #120, merge 5679b63ea3964bbefd71b82950be6593021e724c` |
 | frontend task block complete | Frontend Phase 2 | `S05-FE-001…004 Accepted / Delivered` |
-| Frontend Phase 2 `PASS` | `S05-INT-001` | frontend block review + audited `origin/main` |
+| Frontend Phase 2 `PASS` | `S05-INT-001` | `PASS — tasks/frontend/stage-05/S05-FE-PHASE-2-frontend-block-review.md; audited origin/main @ 0746d75d0b0ff2f629155f92f370b9ee7f1af818` |
 | Integration `PASS` + manual smoke `PASS` | Stage Closure Review | accepted integration evidence |
 | Stage Closure `PASS` | Stage 6 planning | `tasks/STAGE_05_CLOSURE_REVIEW.md` |
 
@@ -592,36 +592,37 @@ tasks/frontend/stage-05/S05-FE-PHASE-2-frontend-block-review.md
 
 | Field | Value |
 |---|---|
-| Audited `origin/main` | `To be recorded at checkpoint` |
-| Review date | `Not started` |
+| Audited `origin/main` | `0746d75d0b0ff2f629155f92f370b9ee7f1af818` |
+| Review date | `2026-08-24` |
 | Verification executor | `Project Owner` |
-| Verdict | `Not started` |
-| Findings | `N/A` |
+| Verdict | `PASS` |
+| Findings | `P1=0, P2=0, P3=0` |
 
 Required checkpoint evidence:
 
-- [ ] complete Stage 5 frontend block reviewed read-only;
-- [ ] full frontend test suite passes;
-- [ ] Flutter static analysis passes;
-- [ ] Flutter format check passes;
-- [ ] required Windows debug build passes;
-- [ ] required Android debug build passes;
-- [ ] `git diff --check` passes;
-- [ ] Teacher/Student feature-layer boundaries are coherent;
-- [ ] DTO parsing and API/error integration match backend contracts;
-- [ ] auth/session/role/router boundaries remain correct;
-- [ ] stale async completion safety is preserved;
-- [ ] list/detail/mutation cache invalidation and reconciliation are correct;
-- [ ] loading/error/empty/success/mutation states are complete;
-- [ ] backend remains authoritative for Group scope, Topic lifecycle, upload
+- [x] complete Stage 5 frontend block reviewed read-only;
+- [x] full frontend test suite passes;
+- [x] Flutter static analysis passes;
+- [x] Flutter format check passes;
+- [x] required Windows debug build passes;
+- [x] required Android debug build passes;
+- [x] `git diff --check` passes;
+- [x] Teacher/Student feature-layer boundaries are coherent;
+- [x] DTO parsing and API/error integration match backend contracts;
+- [x] auth/session/role/router boundaries remain correct;
+- [x] stale async completion safety is preserved;
+- [x] list/detail/mutation cache invalidation and reconciliation are correct;
+- [x] loading/error/empty/success/mutation states are complete;
+- [x] backend remains authoritative for Group scope, Topic lifecycle, upload
       limits, and file authorization;
-- [ ] Teacher desktop vs mobile feature boundary matches roadmap scope;
-- [ ] Student desktop/mobile Topic/material path is usable;
-- [ ] file selection/upload/download/open behavior is safe on required targets;
-- [ ] accessibility/focus/keyboard/responsiveness is reviewed where required;
-- [ ] Stage 1–4 entry/navigation behavior has no blocking regression;
-- [ ] `P1 = 0`;
-- [ ] `P2 = 0`.
+- [x] Teacher desktop vs mobile feature boundary matches roadmap scope;
+- [x] Student desktop/mobile Topic/material path is usable;
+- [x] file selection/upload/download/open behavior is safe on required targets;
+- [x] accessibility/focus/keyboard/responsiveness is reviewed where required;
+- [x] Stage 1–4 entry/navigation behavior has no blocking regression;
+- [x] `P1 = 0`;
+- [x] `P2 = 0`.
+- [x] `P3 = 0`.
 
 If the checkpoint is `NOT ACCEPTED`, use focused fix contracts and minimum
 sufficient reruns according to Workflow v3 evidence-validity rules.
@@ -831,7 +832,7 @@ from Stage 4.
 | Flutter timezone/file select/save/open package and shared platform strategy | `S05-FE-002`, `S05-FE-003`, `S05-FE-004` | Approved: `timezone ^0.11.1` with shared `core/time`; `file_picker ^12.0.0` + `open_file ^4.0.0` with shared protected `core/files` boundary; FE-004 adds no new package | `Resolved — frontend contracts approved` |
 | Private file handling can create DB/storage inconsistency on partial failure | `S05-BE-003`, Backend Phase 2 | Upload/replace/remove failure semantics and transaction-aware cleanup implemented and reviewed | `Resolved — Backend Phase 2 PASS` |
 | Direct IDs/cross-tenant file access could leak existence/content | `S05-BE-005`, Backend Phase 2, Integration | Tenant-first connected-resource resolution, privacy-safe denial and protected streaming implemented; integration remains later confirmation | `Resolved for backend — Backend Phase 2 PASS` |
-| Mobile file behavior may differ from Windows | `S05-FE-003`, `S05-FE-004`, Frontend Phase 2 | verify required Windows + Android paths; do not assume desktop-only behavior | `Open — implementation pending` |
+| Mobile file behavior may differ from Windows | `S05-FE-003`, `S05-FE-004`, Frontend Phase 2 | required Windows + Android paths verified; desktop-only assumptions rejected | `Resolved — Frontend Phase 2 PASS` |
 
 Stop affected work when:
 
@@ -928,165 +929,52 @@ closure bookkeeping delivered to origin/main
 | `2026-08-23` | `S05-FE-002` Accepted / Delivered — PR #118, merge `cfa6b9cb1981ea5c3e5416cf6e343319718044fb` | Teacher Topic create/detail/edit/lifecycle, Institution-timezone handling, routing and mutation reconciliation implemented and focused-verified; independent review findings were fixed and re-reviewed with final P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 | `2026-08-23` | `S05-FE-003` Accepted / Delivered — PR #120, merge `5679b63ea3964bbefd71b82950be6593021e724c` | Teacher Learning Material management, protected file transfer, Save/Open, binary API-error handling and lifecycle coordination implemented and focused-verified; independent review findings were fixed and re-reviewed with final P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 | `2026-08-23` | `S05-FE-004` Accepted / Delivered — PR #122, merge `d5d5a4fcc400e45e75ec58605f74eca3f1b4f18d` | Student Topics workspace/detail, protected Learning Material Open/Save, desktop/mobile routing, Institution-time display and Student authorization-safe reconciliation implemented and focused-verified; independent review PASS with P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
+| `2026-08-24` | Stage 5 Frontend Phase 2 `PASS` — audited `origin/main` @ `0746d75d0b0ff2f629155f92f370b9ee7f1af818` | Complete frontend read-only review; initial shared-router P2 fixed by PR #124; final full suite 1198 PASS, analyze/format/Windows/Android/diff hygiene PASS; final P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 ---
 
 ## 19. Next Permitted Action
 
-Stage 5 backend implementation block is complete:
-
-```text
-S05-BE-001 = Accepted / Delivered
-S05-BE-002 = Accepted / Delivered
-S05-BE-003 = Accepted / Delivered
-S05-BE-004 = Accepted / Delivered
-S05-BE-005 = Accepted / Delivered
-Backend Phase 2 = PASS
-```
-
-Stage 5 frontend implementation block is also complete:
-
-```text
-S05-FE-001 = Accepted / Delivered
-S05-FE-002 = Accepted / Delivered
-S05-FE-003 = Accepted / Delivered
-S05-FE-004 = Accepted / Delivered
-```
-
-`S05-FE-004` delivery evidence:
-
-```text
-PR #122
-implementation head: fa19764a1843075769032e0ef46101dfb793919c
-merge: d5d5a4fcc400e45e75ec58605f74eca3f1b4f18d
-acceptance review: PASS — P1=0, P2=0, P3=0
-```
-
-The current authoritative implementation state after `S05-FE-004` delivery is:
-
-```text
-origin/main @ d5d5a4fcc400e45e75ec58605f74eca3f1b4f18d
-```
-
-The next permitted action is delivery of this docs-only `S05-FE-004`
-bookkeeping update to `origin/main`.
-
-No additional frontend implementation task may start before this bookkeeping
-delivery is confirmed.
-
-After the bookkeeping update is merged and current `origin/main` is re-checked,
-the next mandatory Stage 5 gate is:
-
-```text
-Frontend Phase 2 Read-Only Review
-```
-
-Frontend Phase 2 covers the complete delivered Stage 5 frontend block:
-
-```text
-S05-FE-001
-S05-FE-002
-S05-FE-003
-S05-FE-004
-```
-
-The review must evaluate the complete frontend implementation as one integrated
-block rather than re-running per-task acceptance reviews.
-
-Frontend Phase 2 must review at minimum:
-
-1. frontend architecture and feature/layer boundaries;
-2. Teacher and Student routing and direct deep-link behavior;
-3. authentication bootstrap and role/device entry behavior;
-4. Teacher and Student session ownership and stale async publication safety;
-5. API request/response integration and strict DTO parsing;
-6. Teacher Topic list/create/detail/edit/lifecycle cross-task interactions;
-7. Teacher Learning Material list/mutation/download interactions;
-8. Student Topic list/detail/material interactions;
-9. protected file-transfer reuse through the shared `core/files` boundary;
-10. Institution-time conversion through the shared `core/time` boundary;
-11. Teacher/Student role isolation and absence of client-side authorization
-    assumptions;
-12. privacy-safe Topic/Material `404` behavior;
-13. lifecycle/material mutation coordination;
-14. desktop and mobile/Android behavior;
-15. router regression risk for existing Platform Owner, Institution Admin,
-    Teacher, Student, and Parent flows;
-16. dependency and native-plugin integration;
-17. cross-task state/reconciliation behavior;
-18. absence of Stage 6+ scope leakage;
-19. final frontend diff/scope consistency against the approved Stage 5 boundary.
-
-Frontend Phase 2 must run the full frontend verification required by
-Workflow v3, including:
-
-```text
-full frontend test suite
-static analysis
-format verification
-required frontend build(s)
-git diff --check
-```
-
-Because Stage 5 includes Student Android/mobile protected file behavior,
-Frontend Phase 2 must include the required Android build verification.
-
-Any Phase 2 finding must be classified as:
-
-```text
-P1
-P2
-P3
-```
-
-If findings exist:
-
-```text
-Frontend Phase 2 = NOT PASS
-→ fix findings
-→ run proportional focused verification for the fixes
-→ repeat the affected Phase 2 review/verification
-```
-
-Frontend Phase 2 reaches PASS only when:
-
-```text
-P1 = 0
-P2 = 0
-P3 = 0
-full required frontend verification = PASS
-```
-
-Integration remains blocked until all of the following are true:
+Stage 5 backend and frontend implementation blocks are complete:
 
 ```text
 S05-BE-001…005 = Accepted / Delivered
 Backend Phase 2 = PASS
+
 S05-FE-001…004 = Accepted / Delivered
 Frontend Phase 2 = PASS
 ```
 
-Only after Frontend Phase 2 PASS may Stage 5 proceed to:
+Frontend Phase 2 evidence:
 
 ```text
-S05-INT-001 — Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification
+review:
+tasks/frontend/stage-05/S05-FE-PHASE-2-frontend-block-review.md
+
+audited origin/main:
+0746d75d0b0ff2f629155f92f370b9ee7f1af818
+
+final verdict:
+PASS — P1=0, P2=0, P3=0
 ```
 
-Stage Closure Review remains blocked until Integration passes and all required
-real-stack, security/tenant-isolation, file-access, persistence/restart, and
-Project Owner manual-smoke evidence is complete.
+The immediate permitted action is delivery of this Frontend Phase 2
+checkpoint bookkeeping to `origin/main`.
 
-Therefore the immediate sequence is:
+Integration must not start until that docs-only delivery is confirmed.
+
+After the checkpoint bookkeeping is merged and current `origin/main` is
+re-checked, the next mandatory Stage 5 gate is:
 
 ```text
-deliver S05-FE-004 bookkeeping to origin/main
-→ Frontend Phase 2 Read-Only Review
-→ resolve any Phase 2 findings
-→ Frontend Phase 2 PASS
-→ S05-INT-001
-→ Stage 5 Closure Review
+S05-INT-001 — Stage 5 Topics and Protected Learning Materials
+Real-Stack E2E Verification
 ```
 
-Do not start Integration before Frontend Phase 2 PASS.
+Fresh Backend/Frontend Phase 2 PASS evidence must be reused. Do not rerun broad
+backend/frontend suites or standalone builds merely because Integration begins.
+
+Stage Closure Review remains blocked until Integration and required Project Owner
+manual-smoke evidence pass.
 
 ---
 
