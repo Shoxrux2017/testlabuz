@@ -692,8 +692,8 @@ ChatGPT determines validity and minimum sufficient rerun scope using Workflow v3
 
 | Later change | Evidence considered | Still valid? | Required rerun / reason |
 |---|---|---|---|
-| Stage 5 frontend implementation and checkpoint work after Backend Phase 2 audited `origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c`, through current bookkeeping baseline `df6d920311305271ab091f0fbd02abd7e05d9cad` | Backend Phase 2 | `Yes` | `None` — subsequent changes were frontend, frontend tooling, tests, and bookkeeping; no backend production/API/schema/migration/authorization/tenant/storage surface changed |
-| Frontend Phase 2 bookkeeping delivery after audited `origin/main @ 0746d75d0b0ff2f629155f92f370b9ee7f1af818`, through `df6d920311305271ab091f0fbd02abd7e05d9cad` | Frontend Phase 2 | `Yes` | `None` — only Stage 5 task-index and Frontend Phase 2 review bookkeeping changed after the audited frontend baseline |
+| Stage 5 frontend implementation and checkpoint work after Backend Phase 2 audited `origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c`, plus the Integration-readiness docs/bookkeeping delivery prepared from `df6d920311305271ab091f0fbd02abd7e05d9cad` | Backend Phase 2 | `Yes` | `None` — subsequent changes did not modify backend production/API/schema/migration/authorization/tenant/storage behavior |
+| Frontend Phase 2 bookkeeping after audited `origin/main @ 0746d75d0b0ff2f629155f92f370b9ee7f1af818`, plus the Integration-readiness docs/bookkeeping delivery prepared from `df6d920311305271ab091f0fbd02abd7e05d9cad` | Frontend Phase 2 | `Yes` | `None` — no frontend production, dependency, platform, or build-system behavior changed after the audited frontend baseline |
 
 Default Stage 5 expectations:
 
