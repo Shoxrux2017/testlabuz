@@ -274,7 +274,21 @@ frontend/integration_test/stage5_runtime_guard.ps1
 frontend/integration_test/verify_stage5_runtime_guard.ps1
 ```
 
-The guard runs before every seed, login, mutation, oracle, or protected request.
+A successful guard establishes the approved runtime identity for the current
+uninterrupted Stage 5 app-container epoch.
+
+The Windows runner and each manual-smoke preparation flow must pass the full
+guard before seeding or starting Flutter. Individual logins, mutations, oracle
+queries, and protected requests do not rerun the PowerShell guard while that
+guarded runtime epoch remains unchanged.
+
+The full guard must run again after any app-container stop/start/recreate or any
+change to the selected API target, port binding, mount, environment, database,
+network, or private-storage runtime identity. The post-restart persistence
+process may start only after that new guard PASS.
+
+The Stage 5 seeder additionally performs its own fail-closed
+environment/database/private-storage checks defined below.
 
 It must fail closed unless it proves all of the following.
 
@@ -329,12 +343,21 @@ config('filesystems.disks.public.root') =
 The private and public roots must be different. The selected private disk must
 not have public visibility.
 
-The live PHP transport must accept the Stage 5 boundary:
+The live PHP transport must prove:
 
 ```text
-upload_max_filesize >= 26,214,401 bytes
-post_max_size > 26,214,401 bytes
+file_uploads = On
+upload_max_filesize >= 33,554,432 bytes
+post_max_size >= 41,943,040 bytes
 ```
+These values correspond to at least 32 MiB upload headroom and 40 MiB
+multipart POST headroom.
+
+They do not change the authoritative Learning Material application maximum:
+
+26,214,400 bytes
+
+or a lower Institution-configured limit.
 
 The current repository runtime normally resolves to `32M` / `40M`; those values
 are transport headroom and do not change the 25 MiB application limit.
@@ -391,7 +414,7 @@ At minimum reject:
 - wrong/missing/stopped PostgreSQL container;
 - wrong PostgreSQL image or Docker network;
 - wrong private disk, driver, root, or public visibility;
-- insufficient PHP upload/post headroom;
+- disabled PHP file uploads or insufficient PHP upload/post headroom;
 - unbound, wildcard-bound, wrong-port, duplicate, or inactive port binding;
 - failed private write/read/hash/delete probe;
 - wrong `/auth/me` status/envelope.
@@ -940,12 +963,15 @@ The runner invokes each in a separate Flutter process with `--plain-name`.
 
 The oracle must verify:
 
-- UI-created Topic exact ownership, exact metadata, captured route UUID, status,
-  and timestamps;
+- exactly one UI-created Topic matches the reserved Institution/Teacher/Group
+  ownership and exact metadata tuple, with canonical DB UUID, authoritative
+  status, and lifecycle timestamps;
 - required metadata remains unchanged through lifecycle;
 - material ordering and title update;
 - accepted File canonical original name, MIME, extension, byte size, checksum;
-- no storage disk/key/path/checksum leaks through public API projections;
+- persisted private storage metadata and checksum remain available internally
+  for DB/blob oracle assertions but are never written to the sanitized host
+  oracle;
 - replacement preserves the same `learning_materials.id`;
 - replacement preserves the same `files.id`;
 - replacement changes current original name/MIME/extension/size/checksum/storage
@@ -963,6 +989,20 @@ The oracle must verify:
   lifecycle timestamps;
 - public storage contains no owned Stage 5 blob;
 - remaining current private blobs exist and match persisted checksum.
+
+Public-contract assertions remain owned by the Dart E2E, not by
+`stage5_oracle.ps1`.
+
+The Dart E2E must independently prove:
+
+- the canonical Topic UUID captured from the real UI route resolves to the
+  expected authoritative Topic;
+- public Topic/Material/File API projections and rendered UI do not expose
+  `storage_disk`, `storage_key`, private filesystem paths, or
+  `checksum_sha256`.
+
+The independent oracle must not call those product endpoints to manufacture or
+confirm these expectations.
 
 ### 7.5 Frozen Unrelated State
 
@@ -1567,6 +1607,26 @@ testlabuz-stage5-e2e-private-files
 Do not reseed between mutation and persistence processes.
 
 ### 10.3 Persistence Requirements
+
+The fresh persistence process is itself a positive production Flutter flow; it
+must not degrade into an API/oracle-only persistence check.
+
+Through the newly started production `TestLabUzApp`, it must at minimum:
+
+1. start with cleared production auth storage;
+2. login normally as the target Student through the real login UI;
+3. open the persisted archived dynamic Topic through the real Student UI;
+4. perform a new protected transfer of the replacement PDF through the
+   production transfer/Dio path and verify the test-native sink receives the
+   replacement bytes/checksum;
+5. logout normally;
+6. login normally as the target Teacher through the real login UI;
+7. inspect the persisted archived dynamic Topic and the final historical
+   Archived Group C Topic state through production Teacher UI.
+
+Direct probes and the independent oracle may supplement these checks only for
+security and persistence postconditions; they must not replace this fresh
+Flutter product flow.
 
 After app-container restart and fresh Flutter process:
 
