@@ -508,6 +508,13 @@ Future<String> _createDynamicTopic(_Stage5Harness h) async {
   await h.waitFor(find.text('E2E S05 Group A'));
   expect(find.text('E2E S05 Group B'), findsNothing);
   expect(find.text('E2E S05 Archived Group C'), findsNothing);
+  final createButton = find.byKey(const Key('teacherCreateTopicButton'));
+  await h.pumpUntil(() {
+    if (createButton.evaluate().isEmpty) {
+      return false;
+    }
+    return h.tester.widget<FilledButton>(createButton).onPressed != null;
+  }, reason: 'Expected Create Topic action to become enabled.');
   await h.tapKey('teacherCreateTopicButton');
   await h.waitForRoute(AppRoutePaths.teacherTopicCreate);
   await h.tapKey('teacherTopicChooseGroupButton');
