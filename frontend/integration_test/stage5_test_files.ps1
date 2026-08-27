@@ -42,15 +42,16 @@ function New-Stage5PdfFixture {
         Write-Stage5Bytes -Path $Path -Bytes $bytes
         return
     }
-    if ($ExactSize.Value -lt $bytes.Length) { throw 'The requested Stage 5 PDF size is too small.' }
+    $exactSizeBytes = [int64] $ExactSize
+    if ($exactSizeBytes -lt $bytes.Length) { throw 'The requested Stage 5 PDF size is too small.' }
     $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
     try {
         $stream.Write($bytes, 0, $bytes.Length)
-        $stream.SetLength($ExactSize.Value)
+        $stream.SetLength($exactSizeBytes)
         $stream.Flush($true)
     }
     finally { $stream.Dispose() }
-    if ((Get-Item -LiteralPath $Path).Length -ne $ExactSize.Value) { throw 'The Stage 5 sized PDF length is invalid.' }
+    if ((Get-Item -LiteralPath $Path).Length -ne $exactSizeBytes) { throw 'The Stage 5 sized PDF length is invalid.' }
 }
 
 function New-Stage5OoxmlFixture {
