@@ -18,7 +18,7 @@ class TeacherLearningMaterialReplaceRequest extends FormRequest
     /** @return array<string, mixed> */
     public function validationData(): array
     {
-        return array_merge($this->request->all(), $this->files->all());
+        return array_merge($this->request->all(), $this->allFiles());
     }
 
     /** @return array<string, list<mixed>> */
