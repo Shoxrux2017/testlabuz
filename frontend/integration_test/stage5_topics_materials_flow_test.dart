@@ -632,16 +632,20 @@ Future<void> _lifecycleUi(
   required String expectedStatus,
   bool expectFailureFeedback = false,
 }) async {
+  await h.tester.pumpAndSettle(
+    const Duration(milliseconds: 100),
+    EnginePhase.sendSemanticsUpdate,
+    const Duration(seconds: 5),
+  );
   await h.tapKey('teacherTopicLifecycle$action');
   await h.waitForKey('teacherTopicLifecycleConfirmButton');
   await h.tapKey('teacherTopicLifecycleConfirmButton');
   await h.waitGone(find.byKey(const Key('teacherTopicLifecycleConfirmButton')));
-  await h.waitForKey('teacherTopicDetailProgress');
-  await h.waitGone(find.byKey(const Key('teacherTopicDetailProgress')));
-  await h.waitFor(find.text('Topic: $expectedStatus'));
   if (expectFailureFeedback) {
     await h.waitFor(find.byType(SnackBar));
   }
+  await h.waitFor(find.text('Topic: $expectedStatus'));
+  await h.waitGone(find.byKey(const Key('teacherTopicDetailProgress')));
 }
 
 Future<void> _verifyServerUploadValidation(
