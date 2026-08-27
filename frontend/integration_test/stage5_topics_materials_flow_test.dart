@@ -332,6 +332,14 @@ Future<void> _runMutationAndSecurityFlow(_Stage5Harness h) async {
     'resource_not_found',
   );
 
+  await h.tapKey('studentTopicUnavailableBackButton');
+  await h.waitForRoute(AppRoutePaths.student);
+  await h.waitForKey('studentLearningWorkspace');
+  await h.tester.pumpAndSettle(
+    const Duration(milliseconds: 100),
+    EnginePhase.sendSemanticsUpdate,
+    const Duration(seconds: 5),
+  );
   await h.logout();
   await h.login(
     'target_teacher',
