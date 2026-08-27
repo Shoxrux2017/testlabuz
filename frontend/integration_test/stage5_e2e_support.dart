@@ -15,6 +15,17 @@ final _uuidPattern = RegExp(
 );
 final _shaPattern = RegExp(r'^[a-f0-9]{64}$');
 
+Future<bool> _isSystemTempDirectory(Directory directory) async {
+  try {
+    return await FileSystemEntity.identical(
+      directory.absolute.path,
+      Directory.systemTemp.absolute.path,
+    );
+  } on FileSystemException {
+    return false;
+  }
+}
+
 class Stage5Fixture {
   const Stage5Fixture({
     required this.key,
@@ -56,8 +67,7 @@ class Stage5FixtureManifest {
   static Future<Stage5FixtureManifest> load(String manifestPath) async {
     final manifestFile = File(manifestPath);
     final resolvedPath = manifestFile.absolute.path;
-    final tempRoot = Directory.systemTemp.absolute.path;
-    if (!resolvedPath.startsWith('$tempRoot${Platform.pathSeparator}') ||
+    if (!await _isSystemTempDirectory(manifestFile.parent.parent) ||
         !resolvedPath.endsWith(
           '${Platform.pathSeparator}fixture-manifest.json',
         )) {
@@ -192,9 +202,7 @@ class Stage5Oracle {
   static Future<Stage5Oracle> load(String path, {required bool dynamic}) async {
     final file = File(path);
     final resolved = file.absolute.path;
-    if (!resolved.startsWith(
-          '${Directory.systemTemp.absolute.path}${Platform.pathSeparator}',
-        ) ||
+    if (!await _isSystemTempDirectory(file.parent) ||
         !RegExp(
           r'testlabuz-stage5-oracle-[a-f0-9]{32}\.json$',
         ).hasMatch(resolved)) {
@@ -348,9 +356,7 @@ class Stage5LocalFileAdapter implements LocalFilePlatformAdapter {
     bool requireEmpty = true,
   }) async {
     final root = Directory(path).absolute;
-    if (!root.path.startsWith(
-          '${Directory.systemTemp.absolute.path}${Platform.pathSeparator}',
-        ) ||
+    if (!await _isSystemTempDirectory(root.parent) ||
         !RegExp(r'testlabuz-stage5-sink-[a-f0-9]{32}$').hasMatch(root.path)) {
       throw StateError('The Stage 5 file sink root is unsafe.');
     }
