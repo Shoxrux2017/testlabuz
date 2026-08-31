@@ -148,6 +148,7 @@ class _Stage5Harness {
     await tapKey('signInButton');
     await waitForRoute(workspaceRoute);
     await waitForKey(key);
+    await settleRouteTransition();
     _uiLoggedIn = true;
   }
 
@@ -157,8 +158,12 @@ class _Stage5Harness {
       final route = _currentRoute(tester);
       if (AppRoutePaths.isTeacherSegment(route)) {
         await go(AppRoutePaths.teacher);
+        await waitForKey('teacherLearningWorkspace');
+        await settleRouteTransition();
       } else if (AppRoutePaths.isStudentSegment(route)) {
         await go(AppRoutePaths.student);
+        await waitForKey('studentLearningWorkspace');
+        await settleRouteTransition();
       } else {
         throw StateError('The Stage 5 UI session has no logout surface.');
       }
@@ -166,6 +171,7 @@ class _Stage5Harness {
     await tapKey('entryLogoutButton');
     await waitForRoute(AppRoutePaths.login);
     await waitForKey('loginField');
+    await settleRouteTransition();
     _uiLoggedIn = false;
   }
 
@@ -209,6 +215,14 @@ class _Stage5Harness {
     GoRouter.of(_routerContext(tester)).go(route);
     await tester.pump();
     await waitForRoute(route);
+  }
+
+  Future<void> settleRouteTransition() async {
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 5),
+    );
   }
 
   Future<void> waitForKey(
@@ -542,6 +556,7 @@ Future<String> _createDynamicTopic(_Stage5Harness h) async {
   expect(topicId, isNotNull);
   expect(RegExp(_uuidPattern).hasMatch(topicId!), isTrue);
   await h.waitForKey('teacherTopicDetailScreen');
+  await h.settleRouteTransition();
   await h.waitFor(find.text('Topic: Draft'));
   return topicId;
 }
