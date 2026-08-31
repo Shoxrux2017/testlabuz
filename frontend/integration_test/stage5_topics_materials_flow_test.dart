@@ -943,6 +943,11 @@ Future<void> _openStudentTopic(
 ) async {
   await h.waitGone(find.byKey(const Key('studentTopicInitialLoading')));
   await h.waitFor(find.byKey(ValueKey('studentTopicCard$topicId')));
+  await h.tester.pumpAndSettle(
+    const Duration(milliseconds: 100),
+    EnginePhase.sendSemanticsUpdate,
+    const Duration(seconds: 5),
+  );
   await h.tap(find.byKey(ValueKey('studentTopicCard$topicId')));
   await h.waitForRoute(AppRoutePaths.studentTopicDetailLocation(topicId));
   await h.waitForKey('studentTopicDetailScreen');
