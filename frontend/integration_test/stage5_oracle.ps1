@@ -323,7 +323,7 @@ function Add-Stage5DynamicOracleBlock {
     $json = $oracle | ConvertTo-Json -Depth 8
     $replacement = Join-Path (Split-Path -Parent $path) ('testlabuz-stage5-oracle-replacement-' + [guid]::NewGuid().ToString('N') + '.json')
     [IO.File]::WriteAllText($replacement, $json, [Text.UTF8Encoding]::new($false))
-    try { [IO.File]::Replace($replacement, $path, $null) } catch {
+    try { [IO.File]::Replace($replacement, $path, [NullString]::Value) } catch {
         if (Test-Path -LiteralPath $replacement) { Remove-Item -LiteralPath $replacement -Force }
         throw 'The Stage 5 host oracle atomic replacement failed.'
     }
