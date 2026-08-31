@@ -94,6 +94,51 @@ void main() {
       }
     });
 
+    test(
+      'Cache-Control accepts the exact private and no-store directive set',
+      () {
+        for (final cacheControl in [
+          'private, no-store',
+          'no-store, private',
+          ' Private , NO-STORE ',
+        ]) {
+          expect(
+            () => parseTrustedProtectedDownload(
+              statusCode: 200,
+              headers: _headers(cacheControl: cacheControl),
+              data: [1],
+            ),
+            returnsNormally,
+            reason: cacheControl,
+          );
+        }
+      },
+    );
+
+    test(
+      'Cache-Control rejects incomplete, additional, and duplicate sets',
+      () {
+        for (final cacheControl in [
+          'private',
+          'no-store',
+          'public, no-store',
+          'private, no-store, public',
+          'private, private, no-store',
+          'private="field", no-store',
+        ]) {
+          expect(
+            () => parseTrustedProtectedDownload(
+              statusCode: 200,
+              headers: _headers(cacheControl: cacheControl),
+              data: [1],
+            ),
+            throwsFormatException,
+            reason: cacheControl,
+          );
+        }
+      },
+    );
+
     test('empty and oversized successful binary bodies are rejected', () {
       expect(
         () => parseTrustedProtectedDownload(

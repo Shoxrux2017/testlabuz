@@ -95,8 +95,7 @@ TrustedDownloadedFile parseTrustedProtectedDownload({
       'Protected download Content-Disposition is invalid.',
     );
   }
-  if (_singleHeader(headers, 'cache-control')?.toLowerCase().trim() !=
-          'private, no-store' ||
+  if (!_isValidProtectedCacheControl(_singleHeader(headers, 'cache-control')) ||
       _singleHeader(headers, 'x-content-type-options')?.toLowerCase().trim() !=
           'nosniff') {
     throw const FormatException(
@@ -115,6 +114,23 @@ TrustedDownloadedFile parseTrustedProtectedDownload({
     mimeType: fileType.mimeType,
     extension: fileType.extension,
   );
+}
+
+bool _isValidProtectedCacheControl(String? value) {
+  if (value == null) {
+    return false;
+  }
+  final directives = value
+      .split(',')
+      .map((directive) => directive.trim().toLowerCase())
+      .toList();
+  if (directives.length != 2 ||
+      directives.any((directive) => directive.isEmpty)) {
+    return false;
+  }
+  final uniqueDirectives = directives.toSet();
+  return uniqueDirectives.length == 2 &&
+      uniqueDirectives.containsAll(const {'private', 'no-store'});
 }
 
 String parseProtectedDownloadFilename(
