@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'institution_id',
@@ -63,6 +64,16 @@ class Topic extends Model
     public function learningMaterials(): HasMany
     {
         return $this->hasMany(LearningMaterial::class);
+    }
+
+    public function assessments(): HasMany
+    {
+        return $this->hasMany(Assessment::class);
+    }
+
+    public function resultPair(): HasOne
+    {
+        return $this->hasOne(TopicResultPair::class);
     }
 
     public function scopeVisibleToTeacher(Builder $query, User $teacher): Builder
