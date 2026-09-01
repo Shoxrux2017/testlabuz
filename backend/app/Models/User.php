@@ -93,4 +93,29 @@ class User extends Authenticatable
     {
         return $this->hasMany(LearningMaterial::class, 'teacher_id');
     }
+
+    public function authoredAssessments(): HasMany
+    {
+        return $this->hasMany(Assessment::class, 'teacher_id');
+    }
+
+    public function assessmentAssignments(): HasMany
+    {
+        return $this->hasMany(AssessmentStudent::class, 'student_id');
+    }
+
+    public function assessmentAssignmentsCreated(): HasMany
+    {
+        return $this->hasMany(AssessmentStudent::class, 'assigned_by_user_id');
+    }
+
+    public function assessmentAttempts(): HasMany
+    {
+        return $this->hasMany(AssessmentAttempt::class, 'student_id');
+    }
+
+    public function designatedTopicResultPairs(): HasMany
+    {
+        return $this->hasMany(TopicResultPair::class, 'designated_by_user_id');
+    }
 }

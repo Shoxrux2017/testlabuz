@@ -66,6 +66,31 @@ class Institution extends Model
         return $this->hasMany(LearningMaterial::class);
     }
 
+    public function assessments(): HasMany
+    {
+        return $this->hasMany(Assessment::class);
+    }
+
+    public function homeworkAssignments(): HasMany
+    {
+        return $this->hasMany(HomeworkAssignment::class);
+    }
+
+    public function assessmentStudents(): HasMany
+    {
+        return $this->hasMany(AssessmentStudent::class);
+    }
+
+    public function assessmentAttempts(): HasMany
+    {
+        return $this->hasMany(AssessmentAttempt::class);
+    }
+
+    public function topicResultPairs(): HasMany
+    {
+        return $this->hasMany(TopicResultPair::class);
+    }
+
     public function setting(): HasOne
     {
         return $this->hasOne(InstitutionSetting::class);
