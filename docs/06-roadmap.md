@@ -463,7 +463,7 @@ The ten previously open MVP decisions are now approved and must be treated as fi
     - Exactly **one whole-group Homework and one whole-group Blitz** are designated as the official result-bearing pair for the MVP Topic result; selected-Student tasks are practice-only.
     - Only that pair contributes to the final Topic score and understanding category.
     - The designated pair must belong to the same Topic.
-    - When the first official task becomes active, the current Topic-group cohort is snapshotted for both official tasks; the pair/cohort must not be replaced after Student attempt activity begins.
+    - The official Homework may be designated before the official Blitz exists. The first activated official task establishes the persisted Topic-group cohort, and the later official task reuses it. Student activity locks the already-designated task/cohort; attaching the previously absent Blitz later completes the pair rather than replacing it.
     - One Student + one Topic produces one final Topic result.
 
 These decisions are no longer implementation choices. Any later change must follow the roadmap change-control process.
@@ -1193,9 +1193,11 @@ A Topic may contain multiple Homework assignments, but exactly **one whole-group
 
 Rules:
 
-- The designated Homework must belong to the same Topic as the designated Blitz.
+- The designated Homework belongs to the Topic; the later designated Blitz must belong to that same Topic.
 - Only the designated Homework contributes its official score to the Topic result.
 - Once Student attempts begin on the designated Homework, the designation must not be replaced in a way that changes the meaning of existing work.
+
+Stage 6 implements the Homework side of the Topic result pair. The official Homework may be designated before the official Blitz exists. The Topic result-pair persistence therefore permits a null Blitz reference until Stage 8. No placeholder Blitz is created.
 
 ## Required Tests
 
@@ -1373,6 +1375,8 @@ The blitz task provides the controlled in-class result used to verify whether ho
 - Timeout auto-finalization contract available
 - Fixed 1 normal Blitz attempt rule available
 - Student-specific extra-attempt exception contract available
+
+Stage 8 completes the existing Topic result-pair row by filling the official Blitz reference and reusing the official cohort established by the first activated official task.
 
 ## Included Scope
 

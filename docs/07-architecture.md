@@ -969,7 +969,11 @@ Topic owns/coordinates:
 - Exactly one designated result-bearing Blitz relationship
 - Topic result context
 
-The designated pair is Topic-level for the MVP. Both official tasks must use `assignment_mode = group`; selected-Student assessments are practice-only and are ineligible for official designation. The pair uses one common official Topic cohort. Normally, when the first designated task becomes active, the backend snapshots the current eligible Topic-group Students and creates/reuses that same recipient snapshot for both official assessments. If a whole-group candidate is already active when it is designated and no Student Attempt has begun, pair designation treats that candidate's existing recipient snapshot as the official cohort and copies/validates the same cohort for the paired task. If existing candidate recipient snapshots conflict, designation is rejected until a safe consistent pair can be selected. Later Group membership changes do not mutate the cohort. Once Student attempt activity begins, the pair and cohort are locked.
+`topic_result_pairs` is the Topic-level identity of the eventual official Homework–Blitz pair. The aggregate may be persisted in a staged state with the official Homework present and the Blitz reference absent. This allows Stage 6 Homework authoring to establish official Homework/cohort identity without creating a fake Blitz. Stage 8 fills the same aggregate with the official Blitz.
+
+Both eventual official tasks must use `assignment_mode = group`; selected-Student assessments are practice-only and are ineligible for official designation. The first activated official whole-group task establishes the common persisted cohort. If an already-active eligible whole-group Homework is designated before any Student Attempt, its existing recipient snapshot becomes that cohort. A later official task must reuse that exact cohort, and a conflicting recipient snapshot is rejected rather than silently rewritten. Later Group membership changes do not mutate the cohort.
+
+The pair lock prevents replacement of already meaningful official work/cohort. It does not prohibit the one-time completion of an absent Blitz side that satisfies the locked Topic/cohort contract. Completion must not clear the lock, replace the official Homework, or change the locked cohort.
 
 Avoid storing the whole topic workflow in one large serialized JSON field.
 
@@ -2579,7 +2583,7 @@ Architecture:
 - Exactly one whole-group Homework and exactly one whole-group Blitz are designated as the official result-bearing pair; selected-Student tasks are practice-only.
 - The designated pair is used for the Topic result.
 - The designated Homework and Blitz must belong to the same Topic.
-- The official cohort is snapshotted on first official-task activation, reused for both tasks, and the pair/cohort must not be replaced after Student attempt activity begins.
+- The official Homework may be designated before the official Blitz exists. First official-task activation establishes the persisted cohort, and the later official task reuses it. Student activity locks the already-designated task/cohort; one-time completion of the absent Blitz side is not replacement.
 - One Student + one Topic produces one final Topic result in the MVP.
 
 Architecture:

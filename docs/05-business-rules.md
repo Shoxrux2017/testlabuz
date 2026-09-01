@@ -415,16 +415,16 @@ A topic must have, at minimum:
 The lesson date may be optional.
 
 **BR-TOP-004 — Topic components and official assessment pair**  
-A topic may contain multiple learning materials, multiple Homework assignments, multiple Blitz tasks, and multiple questions inside those tasks. For the MVP final Topic result, exactly one Homework and exactly one Blitz must be designated as the official result-bearing pair. **Both official tasks must use whole-group assignment.** A Homework or Blitz assigned only to selected Students is supplementary/practice work and cannot become result-bearing. Supplementary tasks may target the whole group or selected Students but must not affect the final Topic result or understanding category.
+A topic may contain multiple learning materials, multiple Homework assignments, multiple Blitz tasks, and multiple questions inside those tasks. For the MVP final Topic result, exactly one Homework and exactly one Blitz must be designated as the official result-bearing pair. **Both official tasks must use whole-group assignment.** A Homework or Blitz assigned only to selected Students is supplementary/practice work and cannot become result-bearing. Supplementary tasks may target the whole group or selected Students but must not affect the final Topic result or understanding category. The two official relationships do not need to be created at the same time. The Topic may first have only its official Homework designated; the official Blitz relationship is added later to the same Topic result-pair record.
 
 **BR-TOP-004A — Official Topic cohort snapshot**  
-The official result-bearing pair uses one common Student cohort. When the first task in the designated pair becomes active, the system snapshots the current eligible Students of the Topic group and uses that same cohort for both official tasks. Later Group membership changes must not silently add or remove Students from that Topic's official cohort.
+The official result-bearing pair uses one common Student cohort. The first activated official whole-group task establishes the common official Student cohort from its persisted recipient snapshot. If the official Homework is the first task, Stage 6 stores that cohort without fabricating a Blitz or Blitz recipient rows. When the official Blitz is later designated or activated, it must use exactly the same cohort. Later Group membership changes do not rewrite the official cohort.
 
 **BR-TOP-005 — Same-topic comparison**  
 The homework and Blitz scores used for one final result must belong to the same topic and Student and must come from the topic’s designated official assessment pair.
 
 **BR-TOP-005A — Official pair becomes immutable after activity**  
-The Teacher may change the designated official Homework or Blitz only before any Student begins an attempt in either result-bearing task. Once Student attempt activity begins, the official pair must not be replaced in a way that changes which tasks determine the topic result.
+Before Student activity, the Teacher may replace an official task when the applicable eligibility rules allow it. Student attempt activity locks the already-designated official task/cohort meaning. A previously absent second official task may still be attached later when it satisfies the same Topic and cohort rules; this is completion of the pair, not replacement of locked work.
 
 ### Topic Statuses
 
@@ -1772,7 +1772,7 @@ The previously open MVP decisions are now approved and are mandatory:
 7. **Result release** — Student mode is either automatic or manual Teacher release. Parent mode is with Student release, manual Teacher release, or hidden. A Parent must never receive the result before the Student.
 8. **Upload limits** — Platform maximum is 25 MB per learning-material file and 15 MB per Student answer file. Institutions may configure lower, never higher, limits.
 9. **Timezone** — Authoritative instants are stored as UTC. Each institution uses one configurable IANA timezone for educational date/time entry and display; device time does not control validity, and timezone changes do not alter historical absolute instants.
-10. **Result-bearing tasks** — A Topic may contain multiple Homework and Blitz tasks, but exactly one whole-group Homework + one whole-group Blitz form the official result-bearing pair. Selected-Student tasks are practice-only. The official Student cohort is snapshotted when the first official task becomes active, reused for both tasks, and locked with the pair after Student attempt activity begins.
+10. **Result-bearing tasks** — A Topic may contain multiple Homework and Blitz tasks, but exactly one whole-group Homework + one whole-group Blitz form the eventual official result-bearing pair. Selected-Student tasks are practice-only. The first activated official task establishes the persisted official cohort, and the later task reuses it. Student activity locks the already-designated task/cohort; attaching a previously absent official Blitz completes the pair and is not replacement.
 
 These decisions are no longer implementation choices. Backend, frontend, database, API contracts, tests, and Codex tasks must implement them consistently.
 

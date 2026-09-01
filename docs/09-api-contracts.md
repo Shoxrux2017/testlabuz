@@ -2883,7 +2883,9 @@ POST /api/v1/teacher/homework/{homework}/activate
 - Validates complete Question configuration.
 - Recalculates `total_possible_points` and rejects activation with `409 assessment_has_no_scoreable_points` when the total is `0`.
 - For ordinary/practice Homework, resolves/snapshots eligible recipients normally.
-- If this Homework belongs to the official result pair and is the first official task being activated, snapshots the current eligible Topic-group cohort and creates the same recipient set for both official assessments. If the official cohort already exists, reuses it.
+- If the designated official Homework activates while `blitz_assessment_id` is null, creates its normal eligible whole-group recipient snapshot and uses that persisted snapshot to establish the official Topic cohort and set `cohort_snapshotted_at`. It does not create a fake Blitz or Blitz recipient rows.
+- If `cohort_snapshotted_at` is already non-null, either later official task must use exactly that established persisted cohort.
+- If both official tasks exist, `cohort_snapshotted_at` is null, and both tasks are still pre-activation, the first official task to activate—Homework or Blitz—establishes one common cohort from its authoritative first-activation recipient set. Stage 8 activation integration persists or reuses that exact cohort for both official assessments. It must not recalculate the cohort from later/current Group membership, and incompatible existing recipient snapshots are rejected rather than silently rewritten.
 - Sets lifecycle active.
 
 ---
@@ -2894,7 +2896,11 @@ POST /api/v1/teacher/homework/{homework}/activate
 POST /api/v1/teacher/homework/{homework}/close
 ```
 
-### Behavior
+### Stage 6 Close Boundary
+
+The final MVP contract still requires automatic finalization of `in_progress` Attempts when Homework is closed. Until Stage 7 exposes public Homework Attempt execution and saved-answer persistence, Stage 6 must not fabricate answer finalization. If a structural `in_progress` Attempt exists in Stage 6 test/fixture state, Homework close returns `409 business_conflict`. Stage 7 replaces this temporary safety guard with the approved atomic auto-finalization behavior before public Attempt start is enabled.
+
+### Stage 7+ Behavior
 
 In one authoritative operation the backend:
 
@@ -3825,7 +3831,9 @@ The Teacher-configured duration already exists on the Blitz. The Institution Adm
 
 - If `blitz_timer_start_mode` is null, return `409 institution_settings_incomplete`.
 - Recalculate current Question points and return `409 assessment_has_no_scoreable_points` when `total_possible_points = 0`.
-- If the Blitz belongs to the official pair, it must have `assignment_mode = group`. First official-task activation snapshots the Topic-group cohort for both official tasks; later activation reuses the same cohort.
+- If the Blitz belongs to the official pair, it must have `assignment_mode = group`.
+- If `cohort_snapshotted_at` is already non-null, the Blitz recipient snapshot must use exactly that established persisted cohort.
+- If both official tasks exist, `cohort_snapshotted_at` is null, and both tasks are still pre-activation, Blitz may itself be the first official task to activate. Its authoritative activation recipient set then establishes the common cohort, and Stage 8 activation integration persists or reuses that exact cohort for both official assessments. Later/current Group membership must not redefine it, and incompatible existing recipient snapshots are rejected rather than silently rewritten.
 - `timer_start_mode_snapshot` is copied from the institution setting at activation.
 - **Synchronized:** `synchronized_ends_at = activated_at + duration_seconds`.
 - **Individual:** each Student receives an attempt-specific deadline when that Student starts.
@@ -4665,24 +4673,7 @@ A Topic may contain multiple Homework and Blitz tasks, but exactly one **whole-g
 GET /api/v1/teacher/topics/{topic}/result-pair
 ```
 
-### Success
-
-```json
-{
-  "data": {
-    "id": "pair-uuid",
-    "topic_id": "topic-uuid",
-    "homework_assessment_id": "homework-uuid",
-    "blitz_assessment_id": "blitz-uuid",
-    "designated_at": "2026-08-07T12:00:00Z",
-    "cohort_snapshotted_at": null,
-    "locked": false,
-    "locked_at": null
-  }
-}
-```
-
-If no pair is configured yet, return exactly:
+### No Designation Yet
 
 ```json
 {
@@ -4690,31 +4681,54 @@ If no pair is configured yet, return exactly:
 }
 ```
 
-## 25.2 Set or Replace Topic Result Pair — Teacher
+### Existing Stage 6 Pair
 
-```text
+```json
+{
+  "data": {
+    "id": "pair-uuid",
+    "topic_id": "topic-uuid",
+    "homework_assessment_id": "homework-uuid",
+    "blitz_assessment_id": null,
+    "cohort_snapshotted_at": null,
+    "locked_at": null,
+    "designated_at": "2026-09-01T09:00:00Z",
+    "created_at": "2026-09-01T09:00:00Z",
+    "updated_at": "2026-09-01T09:00:00Z"
+  }
+}
+```
+
+`blitz_assessment_id` remains nullable in result-pair read resources until Stage 8 completes the pair.
+
+## 25.2 Set or Replace Official Homework Side — Teacher (Stage 6)
+
+```http
 PUT /api/v1/teacher/topics/{topic}/result-pair
+Content-Type: application/json
 ```
 
 ### Request
 
 ```json
 {
-  "homework_assessment_id": "homework-uuid",
-  "blitz_assessment_id": "blitz-uuid"
+  "homework_assessment_id": "homework-uuid"
 }
 ```
 
 ### Backend Validation
 
-- Teacher is authorized for the Topic/Group.
-- Homework belongs to the same Topic/institution and has type `homework`.
-- Blitz belongs to the same Topic/institution and has type `blitz`.
-- Both assessments have `assignment_mode = group`; otherwise return `409 official_task_requires_group_assignment`.
-- Exactly one pair exists per Topic after success.
-- When the first official task activates, the current eligible Topic-group cohort is snapshotted into both official assessments. If a whole-group candidate is already active at designation time and has no Student Attempts, its existing recipient snapshot becomes the official cohort and Laravel copies/validates that exact Student set for the paired assessment. If two existing candidate snapshots differ, return `409 official_cohort_mismatch` instead of silently rewriting recipients. If an official cohort already exists, any safe pair replacement before lock must reuse that same cohort.
-- Replacement is allowed only while safe.
-- Once the first Student Attempt begins on either designated result-bearing task, the pair is locked and changing it is rejected.
+- The Teacher is authorized for the same Topic/Group.
+- The Homework candidate belongs to the same Topic/institution and has type `homework`.
+- The candidate has `assignment_mode = group`; a selected-Student Homework returns `409 official_task_requires_group_assignment`.
+- The candidate is an eligible draft or active Homework.
+- A candidate with existing Student activity cannot newly become official.
+- If an eligible active candidate is designated before any Student Attempt, its existing persisted whole-group recipient snapshot establishes the official cohort.
+- Exactly one result-pair row exists per Topic after success.
+- Before lock, replacement is allowed only when the backend eligibility rules permit it.
+- Once official Homework Student activity locks the designation/cohort, replacing the Homework returns `409 result_pair_locked`.
+- A same-target PUT is idempotent.
+- Stage 6 does not require or accept a Teacher-supplied `blitz_assessment_id`.
 
 ### Conflict
 
@@ -4723,6 +4737,8 @@ PUT /api/v1/teacher/topics/{topic}/result-pair
 ```
 
 A designated result-bearing task must not be replaced after Student attempts have begun in a way that changes the meaning of existing work.
+
+Stage 8 extends and completes this Topic-level contract by filling the previously null official Blitz side. It does not replace the locked Homework side.
 
 ## 25.3 Topic Results List — Teacher
 
@@ -5899,7 +5915,7 @@ Institution may configure lower limits.
 
 ## DEC-10 — Result-Bearing Task Pair
 
-A Topic may contain multiple Homework and Blitz tasks, but exactly one whole-group Homework + one whole-group Blitz are designated as the official result-bearing pair; selected-Student tasks are practice-only and both official tasks share one snapshotted Topic cohort.
+A Topic may contain multiple Homework and Blitz tasks, but exactly one whole-group Homework + one whole-group Blitz form the eventual official result-bearing pair; selected-Student tasks are practice-only and both official tasks share one snapshotted Topic cohort. The Stage 6 PUT designates only the Homework side and persists a null Blitz reference; Stage 8 completes the same row with the official Blitz.
 
 Teacher API:
 

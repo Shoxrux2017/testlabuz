@@ -1608,7 +1608,7 @@ assignment_mode = group
 
 the system snapshots eligible current Group Students when the task becomes active/available according to its lifecycle.
 
-For the **official Topic result-bearing pair**, both assessments must have `assignment_mode = 'group'`. When the first assessment in the pair becomes active, Laravel snapshots the current eligible Topic-group Students and inserts the same Student set into `assessment_students` for **both** official assessments in one transaction. Those paired recipient rows are the persisted official cohort; later Group membership changes do not alter them. A `selected_students` assessment is ineligible for official designation.
+For the official Topic result-bearing relationship, each eventual official assessment must use `assignment_mode = 'group'`. The first activated official assessment establishes the common official cohort from its persisted `assessment_students` snapshot. If only the official Homework exists, no Blitz Assessment or Blitz recipient rows are fabricated. When the official Blitz is added later, its recipient snapshot must use exactly the established cohort. A `selected_students` assessment is ineligible for official designation.
 
 ### Columns
 
@@ -2287,7 +2287,7 @@ Application/domain validation enforces this transactionally.
 
 Purpose:
 
-Stores the one designated result-bearing Homework + Blitz pair for a Topic.
+Stores the Topic-level official result-bearing pair. The row is created when the official Homework is designated and is completed later when the official Blitz is available.
 
 A Topic may contain multiple Homework and Blitz tasks, but the MVP uses exactly one designated **whole-group Homework** and exactly one designated **whole-group Blitz** to calculate Student Topic results. Selected-Student assessments are practice-only and cannot be designated.
 
@@ -2299,11 +2299,11 @@ A Topic may contain multiple Homework and Blitz tasks, but the MVP uses exactly 
 | `institution_id` | uuid | no | |
 | `topic_id` | uuid | no | Exactly one pair per Topic |
 | `homework_assessment_id` | uuid | no | Must be Homework in same Topic |
-| `blitz_assessment_id` | uuid | no | Must be Blitz in same Topic |
+| `blitz_assessment_id` | uuid | yes | Nullable until the official Blitz is designated; when present it must be a Blitz in the same Topic |
 | `designated_by_user_id` | uuid | no | Authorized Teacher |
 | `designated_at` | timestamptz | no | |
-| `cohort_snapshotted_at` | timestamptz | yes | Set when first official assessment activates and paired recipients are created |
-| `locked_at` | timestamptz | yes | Set when first relevant Student Attempt begins |
+| `cohort_snapshotted_at` | timestamptz | yes | Nullable until the official cohort is established from the first activated official whole-group task; may be set while `blitz_assessment_id` is still null |
+| `locked_at` | timestamptz | yes | May be set by the first relevant official Student Attempt even while `blitz_assessment_id` is null |
 | `created_at` | timestamptz | no | |
 | `updated_at` | timestamptz | no | |
 
@@ -2320,19 +2320,29 @@ A result-bearing Assessment should not be reused as the official task for multip
 Application/domain validation must require:
 
 ```text
-homework_assessment.type = 'homework'
-blitz_assessment.type = 'blitz'
-homework_assessment.topic_id = topic_id
-blitz_assessment.topic_id = topic_id
-all institution_id values match
-assessment.assignment_mode = 'group' for both official assessments
+homework_assessment_id:
+  required
+  same institution/topic
+  assessment.type = 'homework'
+  assignment_mode = 'group'
+
+blitz_assessment_id:
+  nullable
+  when non-null:
+    same institution/topic
+    assessment.type = 'blitz'
+    assignment_mode = 'group'
+    != homework_assessment_id
+
+locked_at IS NOT NULL
+  => cohort_snapshotted_at IS NOT NULL
 ```
 
 ### Cohort and Lock Rule
 
-The Teacher must designate only whole-group assessments. On first activation of either designated assessment, the backend snapshots the current eligible Topic-group Students into `assessment_students` for both official assessments and sets `cohort_snapshotted_at`. If a whole-group candidate is already active when the pair is designated and has no Student Attempts, its existing `assessment_students` snapshot becomes the official cohort; Laravel must copy/validate the same Student set on the paired assessment and set `cohort_snapshotted_at` during designation. If both candidates already have recipient snapshots and the sets differ, designation is rejected rather than silently rewriting recipients. Once snapshotted, later Group membership changes do not rewrite the official cohort. Before `locked_at`, an authorized Teacher may change the pair only if the replacement whole-group assessments are made to use the same already-snapshotted cohort and no existing Student work is reinterpreted.
+The Teacher must designate only whole-group assessments. The first activated official whole-group task establishes the common cohort from its persisted `assessment_students` snapshot and sets `cohort_snapshotted_at`. If an already-active eligible whole-group Homework is designated before any Student Attempt, its existing persisted Group recipient snapshot becomes the official cohort. If only that official Homework exists, the backend does not create a Blitz Assessment or Blitz recipient rows. When the official Blitz is later designated or activated, its recipient snapshot must use exactly the established cohort; a conflicting existing snapshot is rejected rather than silently rewritten. Once snapshotted, later Group membership changes do not rewrite the official cohort. Before `locked_at`, an authorized Teacher may replace the official Homework only when the backend eligibility rules allow it and no existing Student work is reinterpreted.
 
-When the first Student Attempt begins on either designated result-bearing task, `locked_at` is set and the pair/cohort cannot be replaced or mutated.
+When the first relevant official Student Attempt begins, `locked_at` is set and the already-designated official task/cohort cannot be replaced or mutated. A valid staged row may have `homework_assessment_id`, `cohort_snapshotted_at`, and `locked_at` set while `blitz_assessment_id` remains null. Stage 8 may fill the null Blitz reference when the official-Blitz and cohort rules pass; this completes the pair and must not clear `locked_at`, replace the official Homework, or change the locked cohort.
 
 ---
 
@@ -3044,7 +3054,7 @@ topic_result_pairs.topic_id
 topic_result_pairs.homework_assessment_id
 → assessments.id
 
-topic_result_pairs.blitz_assessment_id
+topic_result_pairs.blitz_assessment_id (nullable)
 → assessments.id
 
 topic_result_pairs.designated_by_user_id
@@ -3512,7 +3522,7 @@ The MVP includes:
 topic_result_pairs
 ```
 
-One row designates exactly one whole-group Homework and one whole-group Blitz for each Topic. On first official-task activation, identical `assessment_students` cohorts are snapshotted for both tasks. Selected-Student tasks are practice-only. The pair/cohort is locked once relevant Student attempts begin.
+At most one row exists for each Topic. It first designates the whole-group official Homework and may keep a null Blitz reference until the whole-group official Blitz is added later. The first activated official task establishes the persisted `assessment_students` cohort, and the later official task must reuse it. Selected-Student tasks are practice-only. Relevant Student activity locks the existing official work/cohort but does not prevent one-time completion of the absent Blitz side.
 
 `topic_results(topic_id, student_id)` is uniquely constrained.
 
@@ -3522,7 +3532,7 @@ One row designates exactly one whole-group Homework and one whole-group Blitz fo
 
 - Administrator-created accounts persist `must_change_password = true` until authenticated password change clears it.
 - Institution lifecycle idempotency and HTTP idempotency-key semantics are API/application concerns; no duplicate educational domain rows may be created.
-- The official pair recipient cohort is persisted through identical `assessment_students` rows on both official assessments, created together on first official-task activation.
+- The first activated official whole-group task establishes the persisted official cohort; no missing official task or recipient rows are fabricated, and the later official task must use the same Student set.
 - `finalization_reason` distinguishes `student_submit`, `timeout_auto_submit`, `task_closed_auto_finalize`, and `homework_deadline_auto_submit`.
 - No schema supports Teacher-selected official Homework attempt; highest-score ties deterministically use the lowest attempt number.
 
