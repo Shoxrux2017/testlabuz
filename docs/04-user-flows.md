@@ -2495,6 +2495,19 @@ In **TestLabUz**, homework is not used alone as the final proof of understanding
 
 In the MVP version, homework assignments should stay practical and focused. The goal is to let teachers create structured tasks, let students complete them, record homework results, and prepare the system for comparison with the blitz task result.
 
+### Official Homework and Staged Result-Pair Flow
+
+1. The Teacher creates Homework.
+2. The Teacher configures assignment, deadline, and Questions.
+3. The Teacher may designate an eligible whole-group Homework as official.
+4. The official Blitz does not need to exist yet.
+5. If the official Homework activates first, its persisted recipient snapshot establishes the official cohort.
+6. Student Homework Attempt execution begins only in Stage 7.
+7. Once official Homework Student activity begins, the Homework designation/cohort cannot be meaning-changing replaced.
+8. Stage 8 later designates and fills the official Blitz in the existing pair and reuses the same cohort. This completes the pair; it does not replace the locked Homework side.
+
+The final Topic comparison still uses exactly one official whole-group Homework and one official whole-group Blitz.
+
 ### Main Homework Assignment Flow
 
 The Homework Assignment Flow explains how Homework is created, assigned, attempted, submitted, checked, scored, and connected to the Topic result.
@@ -4144,7 +4157,7 @@ Authorized Teacher actions include:
 - Create/manage own Topic content.
 - Upload materials within effective limits.
 - Create Homework and Blitz tasks.
-- Designate one official Homework and one official Blitz before attempts begin.
+- Designate each official task before its own Student attempts begin; the official Homework may be designated before the official Blitz exists.
 - Set Homework deadline and whole-Blitz duration.
 - Activate Blitz.
 - Grant one Student-specific additional Blitz attempt for a valid reason.
@@ -4857,10 +4870,10 @@ The MVP Topic flow includes:
 2. Add basic Topic information.
 3. Upload supported materials.
 4. Allow multiple Homework tasks.
-5. Designate exactly one official Homework before attempts begin.
+5. Designate exactly one official Homework before its Student attempts begin; the official Blitz may still be absent.
 6. Allow multiple Blitz tasks.
-7. Designate exactly one official Blitz before attempts begin.
-8. Preserve the designated pair once Student attempts begin.
+7. Designate exactly one official Blitz before its Student attempts begin and attach it to the existing Topic result pair.
+8. Preserve the official Homework/cohort once Homework Student activity locks them; attaching the previously absent official Blitz later completes the pair and is not a replacement.
 9. Record official Homework/Blitz scores.
 10. Calculate one final Topic result per Student.
 11. Assign category.
@@ -5627,7 +5640,7 @@ The following flow rules are mandatory in every affected role flow:
 
 - **Institution setup:** creation initializes `Asia/Tashkent` and platform-max upload limits; threshold, category ranges, Blitz timer mode, Student release mode, and Parent visibility mode remain unconfigured until Institution Admin setup. A missing setting blocks only its dependent operation.
 - **First login:** every administrator-created Institution Admin/Teacher/Student/Parent logs in with the initial password, is routed to Change Password, supplies the current initial password plus the new password/confirmation, and cannot use normal endpoints until the change succeeds.
-- **Official Topic assessment:** only whole-group Homework/Blitz may become official. The first official task activation snapshots the current group cohort and the second official task reuses it; later Group membership changes do not alter that Topic cohort.
+- **Official Topic assessment:** only whole-group Homework/Blitz may become official. The official Homework may be designated before the official Blitz exists. The first official task activation persists the current group cohort, and the later official task reuses it; later Group membership changes do not alter that Topic cohort. Student activity locks the already-designated task/cohort, while attaching the previously absent official Blitz completes rather than replaces the pair.
 - **Multiple-choice:** Student sees `max_selections`; choosing above that limit is blocked by Flutter and rejected by Laravel. Score = correct selections / total correct options; empty answer = zero.
 - **Short Written automatic checking:** both accepted and Student text follow the same deterministic normalization pipeline; no fuzzy or AI interpretation occurs.
 - **Activation:** server recalculates total points and blocks activation when total possible points is zero.

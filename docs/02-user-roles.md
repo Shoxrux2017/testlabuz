@@ -174,7 +174,7 @@ must be designated as the official result-bearing pair.
 
 Only this official pair is used for the Homework–Blitz comparison, final Topic score, and understanding category. Both official tasks must use whole-group assignment. Practice tasks may use whole-group or selected-Student assignment, but selected-Student tasks cannot become result-bearing.
 
-When the first official task becomes active, TestLabUz snapshots the current eligible Students in the Topic group and reuses the same cohort for the second official task. The designated pair and cohort must not be replaced after Student attempt activity begins.
+The official pair may be assembled progressively. The Teacher may designate the whole-group official Homework before the official Blitz exists. The Topic-level result-pair row keeps the Homework side while the Blitz side remains empty until the Blitz stage. When the first official task becomes active, its persisted whole-group recipient snapshot establishes the common official cohort. The later official task must reuse that cohort. Once Student attempt activity locks the official Homework/cohort, the Homework side cannot be replaced; the later addition of the previously missing official Blitz completes the same pair and is not a replacement.
 
 ### Learning materials
 
@@ -572,7 +572,7 @@ The Teacher can manage only assigned groups, Topics, tasks, submissions, and res
 The Teacher can:
 
 - Create and edit allowed learning content
-- Designate the official Homework/Blitz pair before attempts begin
+- Designate each official task before its own attempts begin; the official Homework may be designated before the official Blitz exists
 - Set Homework deadlines
 - Set Blitz duration
 - Activate Blitz tasks
