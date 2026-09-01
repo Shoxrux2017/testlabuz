@@ -7,8 +7,11 @@
 | Task ID | `S06-DOC-001` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Documentation / contract alignment` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
+| Delivery | `Delivered — PR #141` |
+| Delivered merge | `a90c9e9697e5e2b7eda332ec9497bd524f008776` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Depends on | Approved Stage 6 decomposition and contracts |
 | Blocks | `S06-BE-001` implementation |
 | Production code changes | `Forbidden` |
@@ -658,23 +661,23 @@ Review every hit in `docs/02,04–09`.
 
 # 15. Acceptance Criteria
 
-- [ ] `docs/02-user-roles.md` permits staged official-pair construction.
-- [ ] `docs/04-user-flows.md` makes Homework-first then Blitz-later flow explicit.
-- [ ] `docs/05-business-rules.md` preserves final pair rules while allowing staged construction.
-- [ ] `docs/06-roadmap.md` explicitly places Homework-side pair construction in Stage 6 and Blitz completion in Stage 8.
-- [ ] `docs/07-architecture.md` defines staged Topic result-pair aggregate.
-- [ ] `docs/08-database.md` makes `topic_result_pairs.blitz_assessment_id` nullable.
-- [ ] `docs/08-database.md` allows `locked_at != null` while Blitz is null.
-- [ ] `docs/08-database.md` does not require fake Blitz recipient rows when Homework activates first.
-- [ ] `docs/09-api-contracts.md` Stage 6 PUT accepts only `homework_assessment_id`.
-- [ ] `docs/09-api-contracts.md` GET resource permits `blitz_assessment_id: null`.
-- [ ] `docs/09-api-contracts.md` activation does not create non-existent Blitz state.
-- [ ] `docs/09-api-contracts.md` records the temporary Stage 6 in-progress-close safety boundary without deleting the final Stage 7+ auto-finalization rule.
-- [ ] `docs/01`/`03` are reviewed and changed only if explicitly contradictory.
-- [ ] No unrelated business rule changes.
-- [ ] No production code/test/schema/migration file changes.
-- [ ] `git diff --check` passes.
-- [ ] final cross-document search finds no active contradictory staged-pair rule.
+- [x] `docs/02-user-roles.md` permits staged official-pair construction.
+- [x] `docs/04-user-flows.md` makes Homework-first then Blitz-later flow explicit.
+- [x] `docs/05-business-rules.md` preserves final pair rules while allowing staged construction.
+- [x] `docs/06-roadmap.md` explicitly places Homework-side pair construction in Stage 6 and Blitz completion in Stage 8.
+- [x] `docs/07-architecture.md` defines staged Topic result-pair aggregate.
+- [x] `docs/08-database.md` makes `topic_result_pairs.blitz_assessment_id` nullable.
+- [x] `docs/08-database.md` allows `locked_at != null` while Blitz is null.
+- [x] `docs/08-database.md` does not require fake Blitz recipient rows when Homework activates first.
+- [x] `docs/09-api-contracts.md` Stage 6 PUT accepts only `homework_assessment_id`.
+- [x] `docs/09-api-contracts.md` GET resource permits `blitz_assessment_id: null`.
+- [x] `docs/09-api-contracts.md` activation does not create non-existent Blitz state.
+- [x] `docs/09-api-contracts.md` records the temporary Stage 6 in-progress-close safety boundary without deleting the final Stage 7+ auto-finalization rule.
+- [x] `docs/01`/`03` are reviewed and changed only if explicitly contradictory.
+- [x] No unrelated business rule changes.
+- [x] No production code/test/schema/migration file changes.
+- [x] `git diff --check` passes.
+- [x] final cross-document search finds no active contradictory staged-pair rule.
 
 ---
 
@@ -728,6 +731,22 @@ No backend/frontend tests, suites, builds, Pint, Flutter analyze, or E2E are req
 ---
 
 # 18. Delivery
+
+Delivered evidence:
+
+- PR #141 delivered the documentation alignment.
+- Delivered merge: `a90c9e9697e5e2b7eda332ec9497bd524f008776`.
+- Focused documentation searches: PASS.
+- `git diff --check`: PASS.
+- Independent review: PASS — P1=0, P2=0, P3=0.
+- `docs/03-features.md` was changed because the audit found an explicit contradiction;
+  `docs/01-business-overview.md` was audited and remained unchanged.
+- Post-merge local/main synchronization: PASS — local `main` matched
+  `origin/main`, ahead/behind was 0/0, and the worktree was clean.
+- `S06-DOC-001`: Accepted / Delivered.
+
+The planning and delivery instructions below are retained as historical task
+evidence.
 
 Suggested:
 

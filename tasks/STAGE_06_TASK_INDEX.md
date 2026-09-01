@@ -5,19 +5,19 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 6 — Homework Assignment Management` |
-| Stage status | `Planning complete — implementation not started` |
+| Stage status | `In Progress — implementation not started` |
 | Verification model | `Workflow v3 — Lean Verification` |
-| Decomposition status | `Approved` |
+| Decomposition status | `Approved / Delivered` |
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
-| Documentation alignment | `S06-DOC-001 Approved / Not delivered` |
+| Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
 | Backend implementation | `Not started` |
 | Backend checkpoint | `Approved — Pending execution` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `Approved — Pending execution` |
 | Integration gate | `Approved — Pending execution` |
 | Stage Closure Review | `Approved — Pending execution` |
-| Next permitted implementation gate | `S06-BE-001` only after planning/documentation package delivery and final Git re-check |
+| Next permitted implementation gate | `S06-BE-001` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -516,10 +516,10 @@ because this is pair completion, not Homework replacement.
 
 ## 11. Mandatory Planning Documentation Alignment Gate
 
-At the Stage 6 planning baseline, the locked documentation still contains an
-older result-pair sequencing assumption.
+At the Stage 6 planning baseline, the locked documentation contained an older
+result-pair sequencing assumption.
 
-In particular, `docs/08-database.md` currently describes:
+In particular, `docs/08-database.md` described:
 
 ```text
 topic_result_pairs.blitz_assessment_id
@@ -527,13 +527,14 @@ topic_result_pairs.blitz_assessment_id
 
 as non-nullable.
 
-That conflicts with the approved Stage 6 sequencing above.
+That conflicted with the approved Stage 6 sequencing above.
 
-Before `S06-BE-001` implementation begins, ChatGPT must re-check and synchronize
-the affected product/technical documentation so GitHub does not intentionally
-retain contradictory authoritative contracts.
+`S06-DOC-001` resolved the contradiction and synchronized the affected
+product/technical documentation for Stage 6 implementation. The alignment was
+delivered through PR #141 and merge
+`a90c9e9697e5e2b7eda332ec9497bd524f008776`.
 
-At minimum re-check:
+The delivered alignment re-checked:
 
 ```text
 docs/02-user-roles.md
@@ -577,11 +578,11 @@ Before `S06-BE-001` implementation:
 - [x] Integration contract is prepared.
 - [x] Closure contract is prepared.
 - [x] All Stage 6 implementation task contracts pass planning Readiness Gate.
-- [ ] Stage 6 planning/task package is delivered to `origin/main`.
-- [ ] Required Stage 6 documentation alignment from Section 11 is delivered.
-- [ ] Project Owner confirms clean synchronized local `main`.
-- [ ] ChatGPT re-checks current `origin/main` after planning delivery.
-- [ ] ChatGPT confirms `S06-BE-001` is still the next permitted implementation task.
+- [x] Stage 6 planning/task package is delivered to `origin/main`.
+- [x] Required Stage 6 documentation alignment from Section 11 is delivered.
+- [x] Project Owner confirms clean synchronized local `main`.
+- [x] ChatGPT re-checks current `origin/main` after delivery.
+- [x] ChatGPT confirms `S06-BE-001` is still the next permitted implementation task.
 
 If any unchecked required entry condition remains, production implementation
 must not begin.
@@ -594,7 +595,7 @@ Implementation proceeds in exact dependency order.
 
 | Order | Task ID | Area | Short outcome | Depends on | Contract status | Delivery status | Contract file |
 |---:|---|---|---|---|---|---|---|
-| 0 | `S06-DOC-001` | Documentation | Stage 6 Homework & staged result-pair contract alignment | Stage 6 decomposition approved | `Approved` | `Not delivered` | `tasks/S06-DOC-001-stage-06-contract-alignment.md` |
+| 0 | `S06-DOC-001` | Documentation | Stage 6 Homework & staged result-pair contract alignment | Stage 6 decomposition approved | `Accepted` | `Delivered` | `tasks/S06-DOC-001-stage-06-contract-alignment.md` |
 | 1 | `S06-BE-001` | Backend | Assessment & Homework Persistence Foundation | Stage 5 closed + Stage 6 docs alignment | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-001-assessment-homework-persistence-foundation.md` |
 | 2 | `S06-BE-002` | Backend | Typed Question Persistence & Domain Contracts | `S06-BE-001 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-002-typed-question-persistence-domain-contracts.md` |
 | 3 | `S06-BE-003` | Backend | Teacher Homework Authoring & Recipient Discovery API | `S06-BE-001` + `S06-BE-002` Accepted / Delivered | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-003-teacher-homework-authoring-recipient-discovery-api.md` |
@@ -968,7 +969,7 @@ P3 = 0
 | Stage 5 closure | Stage 6 planning | `PASS` |
 | Stage 6 decomposition approved | Stage 6 task-contract preparation | `PASS` |
 | All Stage 6 task/checkpoint/integration/closure contracts prepared | planning package delivery | `PASS` |
-| `S06-DOC-001 Accepted / Delivered` + planning package delivered | `S06-BE-001` implementation | `Pending` |
+| `S06-DOC-001 Accepted / Delivered` + planning package delivered | `S06-BE-001` implementation | `PASS — unlocked` |
 | `S06-BE-001 Accepted / Delivered` | `S06-BE-002` | `Pending` |
 | `S06-BE-002 Accepted / Delivered` | `S06-BE-003` | `Pending` |
 | `S06-BE-003 Accepted / Delivered` | `S06-BE-004` | `Pending` |
@@ -1259,18 +1260,25 @@ STAGE_06_CLOSURE_REVIEW.md
 STAGE_06_TASK_INDEX.md
 ```
 
-All are planning artifacts until delivered to GitHub.
+The Stage 6 planning package was delivered through PR #140 and merge
+`dc4d78c3a8d2072ae44710e433956572c1d011ce`. `S06-DOC-001` was delivered
+through PR #141 and merge `a90c9e9697e5e2b7eda332ec9497bd524f008776`.
+The remaining implementation, checkpoint, integration, and closure contracts
+are delivered planning contracts, but their executions remain pending.
 
 ---
 
 ## 31. Current Planning Status
 
-At the time this index is created:
+Current Stage 6 state:
 
 ```text
-Stage 6 decomposition: Approved
+Stage 6 decomposition: Approved / Delivered
 
-S06-DOC-001: Approved / Not delivered
+Stage 6 planning package:
+Delivered — PR #140, merge dc4d78c3a8d2072ae44710e433956572c1d011ce
+
+S06-DOC-001: Accepted / Delivered — PR #141
 
 S06-BE-001: Approved / Not delivered
 S06-BE-002: Approved / Not delivered
@@ -1280,7 +1288,7 @@ S06-BE-005: Approved / Not delivered
 S06-BE-006: Approved / Not delivered
 
 Backend Phase 2:
-Approved — Pending execution
+Pending
 
 S06-FE-001: Approved / Not delivered
 S06-FE-002: Approved / Not delivered
@@ -1297,21 +1305,24 @@ Stage 6 Closure Review:
 Approved — Pending execution
 
 Stage 6:
-Planning complete — implementation not started
+In Progress — production implementation not started
+
+Next permitted gate:
+S06-BE-001
 ```
 
 ---
 
 ## 32. Next Permitted Action
 
-Before any Codex production implementation:
+Current sequence before any Codex production implementation:
 
-1. deliver the Stage 6 planning package to GitHub;
-2. implement and deliver `S06-DOC-001` so the staged result-pair documentation is synchronized;
-3. re-check `origin/main`;
-4. confirm local Git safety;
+1. Stage 6 planning package delivered;
+2. `S06-DOC-001` accepted and delivered;
+3. GitHub `main` and local `main` synchronized;
+4. after this bookkeeping delivery, ChatGPT re-checks the new current `main`;
 5. freeze the implementation baseline;
-6. start only:
+6. execute only:
 
 ```text
 S06-BE-001 — Assessment & Homework Persistence Foundation
