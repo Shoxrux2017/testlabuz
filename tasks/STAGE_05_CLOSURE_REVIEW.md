@@ -354,31 +354,39 @@ Project Owner verified:
 
 ```text
 WINDOWS NATIVE SMOKE: PASS
-Android
 ```
+
+### Android
 
 Project Owner verified:
 
-Student login;
-assigned active Topic visible;
-Topic/material opens correctly;
-protected Save succeeds;
-external Open succeeds.
+1. Student login;
+2. assigned active Topic visible;
+3. Topic/material opens correctly;
+4. protected Save succeeds;
+5. external Open succeeds.
+
+```text
 ANDROID NATIVE SMOKE: PASS
+```
 
 Final cleanup:
 
+```text
 adb reverse --list:
 empty
 
 git status --short:
 empty
+```
 
 Manual smoke result:
 
+```text
 PASS
 Confirmed by: Project Owner
 Date: 2026-08-31
+```
 
 ---
 
