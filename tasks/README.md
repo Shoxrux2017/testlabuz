@@ -792,7 +792,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 2 — Multi-Institution Platform Management | `Closed` | Historical |
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
-| Stage 5 — Topics and Learning Materials | `In Progress` | `S05-INT-001 — Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification` |
+| Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
 
 Current Stage 5 progress:
 
@@ -812,10 +812,16 @@ Current Stage 5 progress:
 - `S05-FE-001…004`: Accepted / Delivered.
 - Stage 5 Frontend Phase 2: PASS — audited `origin/main`
   `0746d75d0b0ff2f629155f92f370b9ee7f1af818`; P1=0, P2=0, P3=0.
-- `S05-INT-001`: Approved / Not started.
-- Next permitted action: implement the approved `S05-INT-001` integration assets
-  with focused Codex verification, then Project Owner real-stack E2E and required
-  manual smoke.
+- `S05-INT-001`: Accepted / Delivered / PASS.
+- Initial Integration assets: PR #128; focused fixes/corrections: PR #129–#138.
+- Final accepted Stage 5 `origin/main`:
+  `2057df6b9b44db8fa6ca3bc7bcd245c61926cc70`.
+- Final automated real-stack verification: PASS.
+- Project Owner Windows native smoke: PASS.
+- Project Owner Android native smoke: PASS.
+- Stage 5 Closure Review: PASS — STAGE CLOSED.
+- Next permitted action: Stage 6 — Homework Assignment Management planning and
+  decomposition.
 
 ---
 

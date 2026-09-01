@@ -7,16 +7,22 @@
 | Task ID | `S05-INT-001` |
 | Stage | `Stage 5 — Topics and Learning Materials` |
 | Area | `Integration / real-stack E2E` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Depends on | Stage 5 Backend Phase 2 `PASS`; Stage 5 Frontend Phase 2 `PASS` |
 | Planning / readiness baseline | `origin/main = df6d920311305271ab091f0fbd02abd7e05d9cad` |
-| Implementation baseline | Exact current `origin/main` SHA supplied by ChatGPT in the Codex execution handoff after this Integration-readiness bookkeeping is merged; no task-file edit is required solely to stamp that SHA |
+| Implementation baseline | `origin/main = a288dc0625d3d368626a2b4977c98d43b114356d` |
 | Verification model | `Project Workflow v3 — Lean Verification` |
 | Codex ownership | Integration assets + focused implementation verification only |
 | Real-stack execution | `Project Owner` |
 | Native Windows/Android smoke | `Project Owner` |
 | Routine Git/GitHub delivery | `Project Owner` |
-| Blocks | Stage 5 Closure Review |
+| Blocks | `None — Stage 5 Closure Review PASS` |
+| Delivery | `Delivered — initial integration assets PR #128; focused fixes PR #129–#138` |
+| Final accepted `origin/main` | `2057df6b9b44db8fa6ca3bc7bcd245c61926cc70` |
+| Automated real-stack verification | `PASS` |
+| Project Owner Windows native smoke | `PASS` |
+| Project Owner Android native smoke | `PASS` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 
 This file is the complete task-specific implementation contract. Do not create a
 second `CODEX-PROMPT` file.
@@ -2178,3 +2184,72 @@ Accepted
 
 unless those steps were explicitly assigned to and actually executed by the
 reporting actor.
+
+---
+
+## Final Acceptance Evidence
+
+Final accepted Stage 5 production/integration baseline:
+
+```text
+origin/main =
+2057df6b9b44db8fa6ca3bc7bcd245c61926cc70
+```
+
+Initial `S05-INT-001` integration assets were delivered in PR #128.
+Focused Integration corrections and production fixes were subsequently delivered
+through PR #129–#138.
+
+Final automated real-stack verification completed successfully, including:
+
+```text
+Stage5PersistenceDatabaseStoragePostconditions: PASS
+Stage5PersistenceAndFrozenPostconditions: PASS
+Stage5MandatoryCleanup: PASS
+```
+
+The final run therefore completed the required mutation/security workflow,
+backend restart, fresh-process persistence workflow, PostgreSQL/private-storage
+postconditions, frozen unrelated-state verification, and mandatory cleanup.
+
+Project Owner native smoke:
+
+```text
+Windows native smoke: PASS
+Android native smoke: PASS
+```
+
+Windows smoke verified Teacher native material upload/Open/Save and Student
+protected Save/Open.
+
+Android smoke verified Student access to the seeded active Topic and protected
+material Save/Open through the native Android path.
+
+Final cleanup verification:
+
+```text
+adb reverse --list:
+empty
+
+git status --short:
+empty
+```
+
+The two production findings discovered during Integration were resolved before
+the final PASS:
+
+- PR #132 — Laravel `UploadedFile` multipart boundary for material Upload/Replace;
+- PR #135 — semantic protected `Cache-Control` directive parsing.
+
+All other PR #129–#131, #133–#134 and #136–#138 changes were focused
+integration-harness/runtime-oracle corrections.
+
+No unresolved Integration finding remains.
+
+```text
+P1 = 0
+P2 = 0
+P3 = 0
+
+FINAL RESULT: ACCEPTED / DELIVERED / PASS
+```

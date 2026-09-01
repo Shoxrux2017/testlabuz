@@ -5,15 +5,19 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 5 — Topics and Learning Materials` |
-| Stage status | `In Progress` |
+| Stage status | `Closed` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition approved on | `2026-08-22` |
 | Planning baseline `origin/main` | `de9a8fee099a2947f6687ee9e6b219e612c93bff` |
 | Implementation started | `Yes — S05-BE-001…005 and S05-FE-001…004 Accepted / Delivered` |
 | Backend checkpoint | `PASS — audited origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c` |
 | Frontend checkpoint | `PASS — audited origin/main @ 0746d75d0b0ff2f629155f92f370b9ee7f1af818` |
-| Integration gate | `Not started` |
-| Stage closed | `No` |
+| Integration gate | `PASS — S05-INT-001 Accepted / Delivered` |
+| Stage closed | `Yes` |
+| Final accepted Stage 5 `origin/main` | `2057df6b9b44db8fa6ca3bc7bcd245c61926cc70` |
+| Project Owner Windows native smoke | `PASS` |
+| Project Owner Android native smoke | `PASS` |
+| Stage Closure Review | `PASS — STAGE CLOSED` |
 
 This index is the authoritative implementation map for Stage 5 after this
 planning package is delivered to `origin/main`.
@@ -22,22 +26,21 @@ The `Approved` state records that a detailed implementation contract has passed
 the Implementation Readiness Gate and has been approved by the Project Owner.
 `Approved` does not mean implemented, accepted, or delivered.
 
-The Stage 5 backend and frontend implementation blocks are complete:
+Stage 5 implementation, checkpoints, integration, manual smoke, and closure
+review are complete:
 
 - `S05-BE-001…005` = `Accepted / Delivered`;
 - Backend Phase 2 = `PASS`;
 - `S05-FE-001…004` = `Accepted / Delivered`;
-- Frontend Phase 2 = `PASS`.
+- Frontend Phase 2 = `PASS`;
+- `S05-INT-001` = `Accepted / Delivered / PASS`;
+- Project Owner Windows native smoke = `PASS`;
+- Project Owner Android native smoke = `PASS`;
+- Stage 5 Closure Review = `PASS — STAGE CLOSED`.
 
-The next permitted Stage gate is:
-
-```text
-S05-INT-001 — Stage 5 Topics and Protected Learning Materials
-Real-Stack E2E Verification
-```
-
-`S05-INT-001` is `Approved`, but Integration execution has not started.
-
+After closure bookkeeping is delivered to `origin/main` and the repository is
+resynchronized and clean, the next permitted gate is Stage 6 planning and
+decomposition.
 
 This index organizes approved work but does not create or change product
 behavior.
@@ -200,7 +203,7 @@ Implementation proceeds one task at a time in dependency order.
 | 7 | `S05-FE-002` | Frontend | Teacher Topic Create, Detail, Edit and Lifecycle | `S05-FE-001` | `Accepted` | `Delivered` | `tasks/frontend/stage-05/S05-FE-002-teacher-topic-create-detail-edit-lifecycle.md` |
 | 8 | `S05-FE-003` | Frontend | Teacher Learning Material Management | `S05-FE-002` | `Accepted` | `Delivered` | `tasks/frontend/stage-05/S05-FE-003-teacher-learning-material-management.md` |
 | 9 | `S05-FE-004` | Frontend | Student Topics and Learning Materials | `S05-FE-003` | `Accepted` | `Delivered` | `tasks/frontend/stage-05/S05-FE-004-student-topics-learning-materials.md` |
-| 10 | `S05-INT-001` | Integration | Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Approved` | `Not started` | `tasks/integration/stage-05/S05-INT-001-stage-05-topics-protected-learning-materials-e2e-verification.md` |
+| 10 | `S05-INT-001` | Integration | Stage 5 Topics and Protected Learning Materials Real-Stack E2E Verification | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Accepted` | `Delivered` | `tasks/integration/stage-05/S05-INT-001-stage-05-topics-protected-learning-materials-e2e-verification.md` |
 
 No per-task Phase 2 review exists for Stage 5+.
 
@@ -641,10 +644,14 @@ tasks/integration/stage-05/S05-INT-001-stage-05-topics-protected-learning-materi
 
 | Field | Value |
 |---|---|
-| Audited `origin/main` | `To be recorded at integration` |
+| Final accepted `origin/main` | `2057df6b9b44db8fa6ca3bc7bcd245c61926cc70` |
 | Automated execution owner | `Project Owner` |
 | Manual smoke owner | `Project Owner` |
-| Verdict | `Not started` |
+| Verdict | `PASS — S05-INT-001 Accepted / Delivered` |
+| Automated real-stack E2E | `PASS` |
+| Windows native smoke | `PASS` |
+| Android native smoke | `PASS` |
+| Integration delivery | `PR #128; focused fixes PR #129–#138` |
 
 Fresh Backend/Frontend Phase 2 PASS evidence is reused. Do not rerun broad
 backend/frontend suites or standalone builds merely because integration begins.
@@ -692,8 +699,10 @@ ChatGPT determines validity and minimum sufficient rerun scope using Workflow v3
 
 | Later change | Evidence considered | Still valid? | Required rerun / reason |
 |---|---|---|---|
-| Stage 5 frontend implementation and checkpoint work after Backend Phase 2 audited `origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c`, plus the Integration-readiness docs/bookkeeping delivery prepared from `df6d920311305271ab091f0fbd02abd7e05d9cad` | Backend Phase 2 | `Yes` | `None` — subsequent changes did not modify backend production/API/schema/migration/authorization/tenant/storage behavior |
-| Frontend Phase 2 bookkeeping after audited `origin/main @ 0746d75d0b0ff2f629155f92f370b9ee7f1af818`, plus the Integration-readiness docs/bookkeeping delivery prepared from `df6d920311305271ab091f0fbd02abd7e05d9cad` | Frontend Phase 2 | `Yes` | `None` — no frontend production, dependency, platform, or build-system behavior changed after the audited frontend baseline |
+| Frontend implementation/checkpoint work and Integration-readiness bookkeeping after Backend Phase 2 audited `origin/main @ 999f477f6a281f2266ad4abbded8b0732b5d789c`, before later Integration findings | Backend Phase 2 | `Yes` | `None for this interval` — those changes did not modify backend production/API/schema/migration/authorization/tenant/storage behavior; later PR #132 is evaluated separately below |
+| Frontend Phase 2 bookkeeping and Integration-readiness bookkeeping after audited `origin/main @ 0746d75d0b0ff2f629155f92f370b9ee7f1af818`, before later Integration findings | Frontend Phase 2 | `Yes` | `None for this interval` — no frontend production, dependency, platform, or build-system behavior changed during these bookkeeping-only changes; later PR #135 is evaluated separately below |
+| PR #132 — narrow backend multipart `UploadedFile` boundary fix after Backend Phase 2 | Backend Phase 2 | `Yes` | `No broad rerun` — focused Upload/Replace regressions, Pint and diff checks passed; the final complete real-stack run exercised real multipart upload/replace and persistence successfully |
+| PR #135 — narrow frontend protected `Cache-Control` parser fix after Frontend Phase 2 | Frontend Phase 2 | `Yes` | `No broad rerun` — focused protected-transfer tests, analyze, format and diff checks passed; the final real-stack run plus Windows/Android native Save/Open exercised the corrected protected-download path successfully |
 
 Default Stage 5 expectations:
 
@@ -715,17 +724,17 @@ Do not rerun by habit, and do not preserve materially invalidated evidence.
 
 | Stage 5 criterion | Implementing task(s) | Verification owner/gate | Status |
 |---|---|---|---|
-| Teacher can view the Groups currently available for Topic authoring | `S05-BE-002`, `S05-FE-001` | Backend Phase 2 + Frontend Phase 2 + Integration | `Checkpoint PASS; Integration pending` |
-| Teacher can create a Topic only for an authorized assigned Group with approved metadata | `S05-BE-002`, `S05-FE-002` | Focused tests + Backend/Frontend Phase 2 + Integration | `Checkpoint PASS; Integration pending` |
+| Teacher can view the Groups currently available for Topic authoring | `S05-BE-002`, `S05-FE-001` | Backend Phase 2 + Frontend Phase 2 + Integration | `PASS` |
+| Teacher can create a Topic only for an authorized assigned Group with approved metadata | `S05-BE-002`, `S05-FE-002` | Focused tests + Backend/Frontend Phase 2 + Integration | `PASS` |
 | Teacher can view and edit own eligible Topic without changing protected ownership fields | `S05-BE-002`, `S05-FE-002` | Backend/Frontend Phase 2 | `PASS` |
-| Topic lifecycle supports draft/active/closed/archived behavior without destructive history loss | `S05-BE-004`, `S05-FE-002` | Backend/Frontend Phase 2 + Integration | `Checkpoint PASS; Integration pending` |
-| Teacher can upload, view, replace, update, remove, open, and download protected Learning Materials | `S05-BE-003`, `S05-FE-003` | Backend/Frontend Phase 2 + Integration | `Checkpoint PASS; Integration pending` |
-| Learning Material formats and platform/Institution size limits are enforced server-side | `S05-BE-003`, `S05-FE-003` | Backend Phase 2 + Integration | `Backend PASS; Integration pending` |
-| Student cannot see draft or unrelated/cross-Institution Topics | `S05-BE-005`, `S05-FE-004` | Backend Phase 2 + Integration | `Backend PASS; Integration pending` |
-| Assigned Student can view eligible active Topic instructions and materials on required devices | `S05-BE-005`, `S05-FE-004` | Frontend Phase 2 + Integration + manual smoke | `Frontend PASS; Integration/manual smoke pending` |
-| Direct File UUID/path knowledge never bypasses learning-resource authorization | `S05-BE-005`, `S05-INT-001` | Backend Phase 2 + Integration | `Backend PASS; Integration pending` |
-| Closed/archived Topic/material history is preserved and inappropriate new mutations are blocked | `S05-BE-004`, `S05-BE-005`, `S05-FE-002`, `S05-FE-004` | Both checkpoints + Integration | `Checkpoint PASS; Integration pending` |
-| Final Stage outcome: Teacher can create an active Topic with protected study materials accessible only to eligible Students | `S05-BE-001…005`, `S05-FE-001…004`, `S05-INT-001` | Stage Closure Review | `Integration and Stage Closure pending` |
+| Topic lifecycle supports draft/active/closed/archived behavior without destructive history loss | `S05-BE-004`, `S05-FE-002` | Backend/Frontend Phase 2 + Integration | `PASS` |
+| Teacher can upload, view, replace, update, remove, open, and download protected Learning Materials | `S05-BE-003`, `S05-FE-003` | Backend/Frontend Phase 2 + Integration | `PASS` |
+| Learning Material formats and platform/Institution size limits are enforced server-side | `S05-BE-003`, `S05-FE-003` | Backend Phase 2 + Integration | `PASS` |
+| Student cannot see draft or unrelated/cross-Institution Topics | `S05-BE-005`, `S05-FE-004` | Backend Phase 2 + Integration | `PASS` |
+| Assigned Student can view eligible active Topic instructions and materials on required devices | `S05-BE-005`, `S05-FE-004` | Frontend Phase 2 + Integration + manual smoke | `PASS` |
+| Direct File UUID/path knowledge never bypasses learning-resource authorization | `S05-BE-005`, `S05-INT-001` | Backend Phase 2 + Integration | `PASS` |
+| Closed/archived Topic/material history is preserved and inappropriate new mutations are blocked | `S05-BE-004`, `S05-BE-005`, `S05-FE-002`, `S05-FE-004` | Both checkpoints + Integration | `PASS` |
+| Final Stage outcome: Teacher can create an active Topic with protected study materials accessible only to eligible Students | `S05-BE-001…005`, `S05-FE-001…004`, `S05-INT-001` | Stage Closure Review | `PASS` |
 
 A roadmap criterion with no implementation owner or verification owner is a
 decomposition defect.
@@ -819,8 +828,8 @@ from Stage 4.
 | Exact storage replacement/cleanup transaction strategy is implementation-sensitive | `S05-BE-003` | Transaction-aware compensation plus after-commit/after-rollback cleanup implemented and independently reviewed | `Resolved — S05-BE-003 / Backend Phase 2 PASS` |
 | Flutter timezone/file select/save/open package and shared platform strategy | `S05-FE-002`, `S05-FE-003`, `S05-FE-004` | Approved: `timezone ^0.11.1` with shared `core/time`; `file_picker ^12.0.0` + `open_file ^4.0.0` with shared protected `core/files` boundary; FE-004 adds no new package | `Resolved — Frontend Phase 2 PASS` |
 | Private file handling can create DB/storage inconsistency on partial failure | `S05-BE-003`, Backend Phase 2 | Upload/replace/remove failure semantics and transaction-aware cleanup implemented and reviewed | `Resolved — Backend Phase 2 PASS` |
-| Direct IDs/cross-tenant file access could leak existence/content | `S05-BE-005`, Backend Phase 2, Integration | Tenant-first connected-resource resolution, privacy-safe denial and protected streaming implemented; integration remains later confirmation | `Resolved for backend — Backend Phase 2 PASS` |
-| Mobile file behavior may differ from Windows | `S05-FE-003`, `S05-FE-004`, Frontend Phase 2 | required Windows + Android paths verified; desktop-only assumptions rejected | `Resolved — Frontend Phase 2 PASS` |
+| Direct IDs/cross-tenant file access could leak existence/content | `S05-BE-005`, Backend Phase 2, Integration | Tenant-first connected-resource resolution, privacy-safe denial and protected streaming implemented; final Integration verified unrelated, cross-Institution, ended-membership, wrong-role, and direct foreign File/Topic UUID denial | `Resolved — Integration PASS` |
+| Mobile file behavior may differ from Windows | `S05-FE-003`, `S05-FE-004`, Frontend Phase 2, Integration | Windows and Android protected material Save/Open paths were verified, including Project Owner native smoke | `Resolved — Integration PASS` |
 
 Stop affected work when:
 
@@ -867,7 +876,7 @@ Stop affected work when:
 
 ### Closure
 
-Planned review file:
+Review file:
 
 ```text
 tasks/STAGE_05_CLOSURE_REVIEW.md
@@ -919,12 +928,17 @@ closure bookkeeping delivered to origin/main
 | `2026-08-23` | `S05-FE-004` Accepted / Delivered — PR #122, merge `d5d5a4fcc400e45e75ec58605f74eca3f1b4f18d` | Student Topics workspace/detail, protected Learning Material Open/Save, desktop/mobile routing, Institution-time display and Student authorization-safe reconciliation implemented and focused-verified; independent review PASS with P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 | `2026-08-24` | Stage 5 Frontend Phase 2 `PASS` — audited `origin/main` @ `0746d75d0b0ff2f629155f92f370b9ee7f1af818` | Complete frontend read-only review; initial shared-router P2 fixed by PR #124; final full suite 1198 PASS, analyze/format/Windows/Android/diff hygiene PASS; final P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 | `2026-08-24` | `S05-INT-001` detailed Integration contract prepared and `Approved` at `origin/main @ df6d920311305271ab091f0fbd02abd7e05d9cad` baseline | Integration scope, dedicated real-stack runtime, private-storage isolation, deterministic fixtures, Windows automated E2E seams, security/tenant matrix, persistence/restart oracle, manual Windows/Android smoke, focused Codex verification, and production-finding boundary resolved; Integration execution remains `Not started` | `Project Owner / ChatGPT review` |
+| `2026-08-24…2026-08-31` | `S05-INT-001` integration assets and focused corrections delivered through PR #128–#138 | Complete deterministic real-stack harness, resolve integration-only execution/oracle issues, and fix two narrow production findings discovered by real-stack verification | `Project Owner / ChatGPT review` |
+| `2026-08-31` | `S05-INT-001` Accepted / Delivered / PASS — final accepted `origin/main @ 2057df6b9b44db8fa6ca3bc7bcd245c61926cc70` | Final automated real-stack mutation/restart/persistence verification PASS; Windows native smoke PASS; Android native smoke PASS; no unresolved P1/P2/P3 | `Project Owner / ChatGPT review` |
+| `2026-08-31` | Stage 5 Closure Review `PASS — STAGE CLOSED` | All Stage 5 tasks/checkpoints/integration/manual smoke complete; roadmap acceptance criterion and Definition of Done satisfied; final findings P1=0, P2=0, P3=0 | `Project Owner / ChatGPT review` |
 
 ---
 
 ## 19. Next Permitted Action
 
-Stage 5 backend and frontend implementation blocks are complete:
+Stage 5 is closed.
+
+Final accepted Stage 5 state:
 
 ```text
 S05-BE-001…005 = Accepted / Delivered
@@ -932,40 +946,32 @@ Backend Phase 2 = PASS
 
 S05-FE-001…004 = Accepted / Delivered
 Frontend Phase 2 = PASS
+
+S05-INT-001 = Accepted / Delivered / PASS
+
+Project Owner Windows native smoke = PASS
+Project Owner Android native smoke = PASS
+
+Stage 5 Closure Review = PASS
+P1 = 0
+P2 = 0
+P3 = 0
 ```
 
-The approved Integration task is:
+After this closure bookkeeping is delivered to `origin/main`, local `main` is
+resynchronized, ahead/behind is `0/0`, and the working tree is clean, the next
+permitted gate is:
 
 ```text
-S05-INT-001 — Stage 5 Topics and Protected Learning Materials
-Real-Stack E2E Verification
+Stage 6 — Homework Assignment Management
+planning and decomposition
 ```
 
-Current Integration state:
+Stage 6 implementation must not begin until its own current-`main` read-only
+analysis, decomposition approval, and Implementation Readiness Gates pass.
 
-```text
-S05-INT-001 = Approved / Not started
-```
-
-The immediate permitted action is implementation of the approved `S05-INT-001`
-integration assets by Codex with only the focused verification defined by the
-task contract.
-
-After those integration assets are delivered, the Project Owner executes the
-real-stack Windows E2E runner and the required Windows and Android manual smoke
-defined by `S05-INT-001`.
-
-Fresh Backend/Frontend Phase 2 PASS evidence remains valid and must be reused.
-Do not rerun broad backend/frontend suites or standalone builds merely because
-Integration begins.
-
-If Integration exposes a production defect, record an `INTEGRATION FINDING` and
-prepare a separate focused production-fix contract. Do not repair production
-behavior inside the Integration task.
-
-Stage Closure Review remains blocked until `S05-INT-001` is Accepted / Delivered,
-all required real-stack and manual-smoke evidence passes, and no unresolved
-P1/P2 finding remains.
+No additional Stage 5 backend/frontend suite, build, or broad E2E rerun is
+required solely for closure-bookkeeping delivery.
 
 # Final Stage 5 Planning Principle
 
