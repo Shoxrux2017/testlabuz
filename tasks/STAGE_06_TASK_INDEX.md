@@ -5,19 +5,19 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 6 — Homework Assignment Management` |
-| Stage status | `In Progress — implementation not started` |
+| Stage status | `In Progress — backend implementation in progress` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition status | `Approved / Delivered` |
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
 | Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
-| Backend implementation | `Not started` |
+| Backend implementation | `In Progress — S06-BE-001 Accepted / Delivered` |
 | Backend checkpoint | `Approved — Pending execution` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `Approved — Pending execution` |
 | Integration gate | `Approved — Pending execution` |
 | Stage Closure Review | `Approved — Pending execution` |
-| Next permitted implementation gate | `S06-BE-001` |
+| Next permitted implementation gate | `S06-BE-002 — Typed Question Persistence & Domain Contracts` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -596,7 +596,7 @@ Implementation proceeds in exact dependency order.
 | Order | Task ID | Area | Short outcome | Depends on | Contract status | Delivery status | Contract file |
 |---:|---|---|---|---|---|---|---|
 | 0 | `S06-DOC-001` | Documentation | Stage 6 Homework & staged result-pair contract alignment | Stage 6 decomposition approved | `Accepted` | `Delivered` | `tasks/S06-DOC-001-stage-06-contract-alignment.md` |
-| 1 | `S06-BE-001` | Backend | Assessment & Homework Persistence Foundation | Stage 5 closed + Stage 6 docs alignment | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-001-assessment-homework-persistence-foundation.md` |
+| 1 | `S06-BE-001` | Backend | Assessment & Homework Persistence Foundation | Stage 5 closed + Stage 6 docs alignment | `Accepted` | `Delivered — PR #143, merge ab9c826b626891d119d5c8f674dff212ebe7a806` | `tasks/backend/stage-06/S06-BE-001-assessment-homework-persistence-foundation.md` |
 | 2 | `S06-BE-002` | Backend | Typed Question Persistence & Domain Contracts | `S06-BE-001 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-002-typed-question-persistence-domain-contracts.md` |
 | 3 | `S06-BE-003` | Backend | Teacher Homework Authoring & Recipient Discovery API | `S06-BE-001` + `S06-BE-002` Accepted / Delivered | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-003-teacher-homework-authoring-recipient-discovery-api.md` |
 | 4 | `S06-BE-004` | Backend | Teacher Question Mutation & Editing Integrity | `S06-BE-001…003 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-004-teacher-question-mutation-editing-integrity.md` |
@@ -969,8 +969,8 @@ P3 = 0
 | Stage 5 closure | Stage 6 planning | `PASS` |
 | Stage 6 decomposition approved | Stage 6 task-contract preparation | `PASS` |
 | All Stage 6 task/checkpoint/integration/closure contracts prepared | planning package delivery | `PASS` |
-| `S06-DOC-001 Accepted / Delivered` + planning package delivered | `S06-BE-001` implementation | `PASS — unlocked` |
-| `S06-BE-001 Accepted / Delivered` | `S06-BE-002` | `Pending` |
+| `S06-DOC-001 Accepted / Delivered` + planning package delivered | `S06-BE-001` implementation | `PASS — completed` |
+| `S06-BE-001 Accepted / Delivered` | `S06-BE-002` | `PASS — unlocked` |
 | `S06-BE-002 Accepted / Delivered` | `S06-BE-003` | `Pending` |
 | `S06-BE-003 Accepted / Delivered` | `S06-BE-004` | `Pending` |
 | `S06-BE-004 Accepted / Delivered` | `S06-BE-005` | `Pending` |
@@ -1280,7 +1280,8 @@ Delivered — PR #140, merge dc4d78c3a8d2072ae44710e433956572c1d011ce
 
 S06-DOC-001: Accepted / Delivered — PR #141
 
-S06-BE-001: Approved / Not delivered
+S06-BE-001: Accepted / Delivered — PR #143,
+merge ab9c826b626891d119d5c8f674dff212ebe7a806
 S06-BE-002: Approved / Not delivered
 S06-BE-003: Approved / Not delivered
 S06-BE-004: Approved / Not delivered
@@ -1305,27 +1306,30 @@ Stage 6 Closure Review:
 Approved — Pending execution
 
 Stage 6:
-In Progress — production implementation not started
+In Progress — backend implementation in progress
 
 Next permitted gate:
-S06-BE-001
+S06-BE-002 — Typed Question Persistence & Domain Contracts
 ```
 
 ---
 
 ## 32. Next Permitted Action
 
-Current sequence before any Codex production implementation:
+Current implementation sequence:
 
 1. Stage 6 planning package delivered;
 2. `S06-DOC-001` accepted and delivered;
-3. GitHub `main` and local `main` synchronized;
-4. after this bookkeeping delivery, ChatGPT re-checks the new current `main`;
-5. freeze the implementation baseline;
-6. execute only:
+3. `S06-BE-001` accepted and delivered — PR #143, merge
+   `ab9c826b626891d119d5c8f674dff212ebe7a806`;
+4. this bookkeeping is delivered to `origin/main`;
+5. Project Owner synchronizes local `main`; ChatGPT re-checks the new current
+   `origin/main`;
+6. ChatGPT freezes the `S06-BE-002` implementation baseline;
+7. only then execute:
 
 ```text
-S06-BE-001 — Assessment & Homework Persistence Foundation
+S06-BE-002 — Typed Question Persistence & Domain Contracts
 ```
 
 Do not start:
