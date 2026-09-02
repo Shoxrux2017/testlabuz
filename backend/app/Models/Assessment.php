@@ -71,6 +71,11 @@ class Assessment extends Model
         return $this->hasMany(AssessmentAttempt::class);
     }
 
+    public function questions(): HasMany
+    {
+        return $this->hasMany(Question::class);
+    }
+
     public function resultPairAsHomework(): HasOne
     {
         return $this->hasOne(TopicResultPair::class, 'homework_assessment_id');
