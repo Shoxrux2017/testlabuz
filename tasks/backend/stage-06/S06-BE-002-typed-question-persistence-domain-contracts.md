@@ -7,7 +7,7 @@
 | Task ID | `S06-BE-002` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Backend` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Implementation type | `Laravel/PostgreSQL typed Question persistence + reusable authoring-domain validation` |
 | Depends on | `S06-BE-001 — Assessment and Homework Persistence Foundation` |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
@@ -15,6 +15,9 @@
 | Implementation Readiness Gate | `PASS` |
 | Verification | `Codex — focused task verification only` |
 | Delivery execution | `Project Owner` |
+| Delivery | `Delivered — PR #145` |
+| Delivered merge | `b85fc01604d7326104988d1cd3ffd3117c2eece5` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Block checkpoint | Stage 6 Backend Phase 2 after `S06-BE-001…006` are `Accepted / Delivered` |
 
 Do not start implementation until:
@@ -1866,38 +1869,51 @@ Do not modify routes, controllers, Requests, Resources, Actions, seeders, docs, 
 
 The implementation is complete only when all are true.
 
-- [ ] `questions` exists with exact nine-type/checking/common structural contract.
-- [ ] No generic authoritative JSON/JSONB Question configuration column exists.
-- [ ] All seven normalized child configuration tables exist with required same-Institution FKs.
-- [ ] All new foreign keys are restrictive and prevent cross-Institution attachment.
-- [ ] Question/child text structural rows reject blank-only values where specified.
-- [ ] Required position/uniqueness checks and indexes exist.
-- [ ] Fill Blank keys enforce the exact machine-key grammar.
-- [ ] Matching rows structurally prevent duplicate same-side position and duplicate same-side `match_key`.
-- [ ] `QuestionType`, `QuestionCheckingMode`, and `QuestionMatchingSide` expose exact machine values.
-- [ ] Existing `FileExtension` is reused; no duplicate extension enum is introduced.
-- [ ] Fixed `QuestionAuthoringLimits` contain exactly the approved limits in this task.
-- [ ] `QuestionPositionSetValidator` enforces maximum count and canonical contiguous 1-based positions.
-- [ ] `QuestionConfigurationValidator` is pure, query-free, deterministic, and rejects unknown keys.
-- [ ] Single Choice requires >=2 options and exactly one correct.
-- [ ] Multiple Choice requires >=2 options and >=1 correct; `max_selections` is not persisted.
-- [ ] True/False requires automatic mode and Boolean correct value.
-- [ ] Automatic Short Written requires accepted answers; manual Short Written has empty configuration.
-- [ ] Open Written is manual with no answer-key config.
-- [ ] File Based is manual with exactly fixed PDF/DOCX/PPT/PPTX capability and no per-Question size configuration.
-- [ ] Matching requires valid pair definitions and server-generated persistent `match_key` semantics are encoded for later Actions.
-- [ ] Ordering requires at least two items and contiguous correct positions.
-- [ ] Fill-in-the-Blank requires configured blanks, accepted answers, unique keys, and exact one-to-one prompt placeholder coverage.
-- [ ] Type/checking-mode matrix is exact.
-- [ ] Models contain casts/relationships only, no workflow/scoring/authorization.
-- [ ] `Assessment` changes only by adding `questions`.
-- [ ] Factories create structurally valid same-Institution records.
-- [ ] No Teacher/Student HTTP API, Question mutation Action, scoring/checking, Student answers, Blitz runtime, frontend, docs, seeders, dependency changes, or unrelated refactor enters scope.
-- [ ] New focused persistence/domain tests pass.
-- [ ] S06-BE-001 focused persistence regression passes.
-- [ ] Pint passes.
-- [ ] `git diff --check` passes.
-- [ ] Final focused diff review finds no P1/P2 security, tenant, data-integrity, architecture, or scope issue.
+- [x] `questions` exists with exact nine-type/checking/common structural contract.
+- [x] No generic authoritative JSON/JSONB Question configuration column exists.
+- [x] All seven normalized child configuration tables exist with required same-Institution FKs.
+- [x] All new foreign keys are restrictive and prevent cross-Institution attachment.
+- [x] Question/child text structural rows reject blank-only values where specified.
+- [x] Required position/uniqueness checks and indexes exist.
+- [x] Fill Blank keys enforce the exact machine-key grammar.
+- [x] Matching rows structurally prevent duplicate same-side position and duplicate same-side `match_key`.
+- [x] `QuestionType`, `QuestionCheckingMode`, and `QuestionMatchingSide` expose exact machine values.
+- [x] Existing `FileExtension` is reused; no duplicate extension enum is introduced.
+- [x] Fixed `QuestionAuthoringLimits` contain exactly the approved limits in this task.
+- [x] `QuestionPositionSetValidator` enforces maximum count and canonical contiguous 1-based positions.
+- [x] `QuestionConfigurationValidator` is pure, query-free, deterministic, and rejects unknown keys.
+- [x] Single Choice requires >=2 options and exactly one correct.
+- [x] Multiple Choice requires >=2 options and >=1 correct; `max_selections` is not persisted.
+- [x] True/False requires automatic mode and Boolean correct value.
+- [x] Automatic Short Written requires accepted answers; manual Short Written has empty configuration.
+- [x] Open Written is manual with no answer-key config.
+- [x] File Based is manual with exactly fixed PDF/DOCX/PPT/PPTX capability and no per-Question size configuration.
+- [x] Matching requires valid pair definitions and server-generated persistent `match_key` semantics are encoded for later Actions.
+- [x] Ordering requires at least two items and contiguous correct positions.
+- [x] Fill-in-the-Blank requires configured blanks, accepted answers, unique keys, and exact one-to-one prompt placeholder coverage.
+- [x] Type/checking-mode matrix is exact.
+- [x] Models contain casts/relationships only, no workflow/scoring/authorization.
+- [x] `Assessment` changes only by adding `questions`.
+- [x] Factories create structurally valid same-Institution records.
+- [x] No Teacher/Student HTTP API, Question mutation Action, scoring/checking, Student answers, Blitz runtime, frontend, docs, seeders, dependency changes, or unrelated refactor enters scope.
+- [x] New focused persistence/domain tests pass.
+- [x] S06-BE-001 focused persistence regression passes.
+- [x] Pint passes.
+- [x] `git diff --check` passes.
+- [x] Final focused diff review finds no P1/P2 security, tenant, data-integrity, architecture, or scope issue.
+
+## 39.1 Accepted Delivery Evidence
+
+- PR #145; merge `b85fc01604d7326104988d1cd3ffd3117c2eece5`.
+- Final independent review: PASS — P1=0, P2=0, P3=0.
+- PostgreSQL Question persistence: 13 tests, 502 assertions — PASS.
+- Question domain tests: 12 tests, 92 assertions — PASS.
+- S06-BE-001 focused regression: 17 tests, 605 assertions — PASS.
+- Pint: PASS.
+- `git diff --check`: PASS.
+- Delivery scope: exactly 30 task-owned backend files.
+- Delivery state: local `main == origin/main`, ahead/behind `0/0`, clean worktree.
+- The final implementation excludes the redundant Matching `(question_id, side)` ordinary index identified and fixed during independent review.
 
 ---
 

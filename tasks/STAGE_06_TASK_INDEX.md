@@ -11,13 +11,13 @@
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
 | Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
-| Backend implementation | `In Progress — S06-BE-001 Accepted / Delivered` |
+| Backend implementation | `In Progress — S06-BE-001 and S06-BE-002 Accepted / Delivered` |
 | Backend checkpoint | `Approved — Pending execution` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `Approved — Pending execution` |
 | Integration gate | `Approved — Pending execution` |
 | Stage Closure Review | `Approved — Pending execution` |
-| Next permitted implementation gate | `S06-BE-002 — Typed Question Persistence & Domain Contracts` |
+| Next permitted implementation gate | `S06-BE-003 — Teacher Homework Authoring & Recipient Discovery API` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -597,7 +597,7 @@ Implementation proceeds in exact dependency order.
 |---:|---|---|---|---|---|---|---|
 | 0 | `S06-DOC-001` | Documentation | Stage 6 Homework & staged result-pair contract alignment | Stage 6 decomposition approved | `Accepted` | `Delivered` | `tasks/S06-DOC-001-stage-06-contract-alignment.md` |
 | 1 | `S06-BE-001` | Backend | Assessment & Homework Persistence Foundation | Stage 5 closed + Stage 6 docs alignment | `Accepted` | `Delivered — PR #143, merge ab9c826b626891d119d5c8f674dff212ebe7a806` | `tasks/backend/stage-06/S06-BE-001-assessment-homework-persistence-foundation.md` |
-| 2 | `S06-BE-002` | Backend | Typed Question Persistence & Domain Contracts | `S06-BE-001 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-002-typed-question-persistence-domain-contracts.md` |
+| 2 | `S06-BE-002` | Backend | Typed Question Persistence & Domain Contracts | `S06-BE-001 Accepted / Delivered` | `Accepted` | `Delivered — PR #145, merge b85fc01604d7326104988d1cd3ffd3117c2eece5` | `tasks/backend/stage-06/S06-BE-002-typed-question-persistence-domain-contracts.md` |
 | 3 | `S06-BE-003` | Backend | Teacher Homework Authoring & Recipient Discovery API | `S06-BE-001` + `S06-BE-002` Accepted / Delivered | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-003-teacher-homework-authoring-recipient-discovery-api.md` |
 | 4 | `S06-BE-004` | Backend | Teacher Question Mutation & Editing Integrity | `S06-BE-001…003 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-004-teacher-question-mutation-editing-integrity.md` |
 | 5 | `S06-BE-005` | Backend | Homework Lifecycle, Recipient Snapshot & Topic Integration | `S06-BE-001…004 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-005-homework-lifecycle-recipient-snapshot-topic-integration.md` |
@@ -971,7 +971,7 @@ P3 = 0
 | All Stage 6 task/checkpoint/integration/closure contracts prepared | planning package delivery | `PASS` |
 | `S06-DOC-001 Accepted / Delivered` + planning package delivered | `S06-BE-001` implementation | `PASS — completed` |
 | `S06-BE-001 Accepted / Delivered` | `S06-BE-002` | `PASS — unlocked` |
-| `S06-BE-002 Accepted / Delivered` | `S06-BE-003` | `Pending` |
+| `S06-BE-002 Accepted / Delivered` | `S06-BE-003` | `PASS — unlocked` |
 | `S06-BE-003 Accepted / Delivered` | `S06-BE-004` | `Pending` |
 | `S06-BE-004 Accepted / Delivered` | `S06-BE-005` | `Pending` |
 | `S06-BE-005 Accepted / Delivered` | `S06-BE-006` | `Pending` |
@@ -1282,7 +1282,8 @@ S06-DOC-001: Accepted / Delivered — PR #141
 
 S06-BE-001: Accepted / Delivered — PR #143,
 merge ab9c826b626891d119d5c8f674dff212ebe7a806
-S06-BE-002: Approved / Not delivered
+S06-BE-002: Accepted / Delivered — PR #145,
+merge b85fc01604d7326104988d1cd3ffd3117c2eece5
 S06-BE-003: Approved / Not delivered
 S06-BE-004: Approved / Not delivered
 S06-BE-005: Approved / Not delivered
@@ -1309,7 +1310,7 @@ Stage 6:
 In Progress — backend implementation in progress
 
 Next permitted gate:
-S06-BE-002 — Typed Question Persistence & Domain Contracts
+S06-BE-003 — Teacher Homework Authoring & Recipient Discovery API
 ```
 
 ---
@@ -1318,18 +1319,18 @@ S06-BE-002 — Typed Question Persistence & Domain Contracts
 
 Current implementation sequence:
 
-1. Stage 6 planning package delivered;
-2. `S06-DOC-001` accepted and delivered;
-3. `S06-BE-001` accepted and delivered — PR #143, merge
-   `ab9c826b626891d119d5c8f674dff212ebe7a806`;
-4. this bookkeeping is delivered to `origin/main`;
-5. Project Owner synchronizes local `main`; ChatGPT re-checks the new current
-   `origin/main`;
-6. ChatGPT freezes the `S06-BE-002` implementation baseline;
-7. only then execute:
+1. `S06-BE-002` accepted and delivered — PR #145, merge
+   `b85fc01604d7326104988d1cd3ffd3117c2eece5`.
+2. This bookkeeping must be delivered to `origin/main`.
+3. Project Owner synchronizes local `main`.
+4. ChatGPT re-checks the new current `origin/main`.
+5. ChatGPT re-checks the `S06-BE-003` contract against the delivered
+   `S06-BE-001`/`S06-BE-002` implementation and freezes the new `S06-BE-003`
+   implementation baseline.
+6. Only then execute:
 
 ```text
-S06-BE-002 — Typed Question Persistence & Domain Contracts
+S06-BE-003 — Teacher Homework Authoring & Recipient Discovery API
 ```
 
 Do not start:
