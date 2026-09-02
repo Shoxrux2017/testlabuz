@@ -14,6 +14,10 @@ final class ApiErrorResponse
 
     private const CODE_BUSINESS_CONFLICT = 'business_conflict';
 
+    private const CODE_TASK_ARCHIVED = 'task_archived';
+
+    private const CODE_TASK_CLOSED = 'task_closed';
+
     private const CODE_CURRENT_PASSWORD_INVALID = 'current_password_invalid';
 
     private const CODE_INSTITUTION_INACTIVE = 'institution_inactive';
@@ -215,6 +219,45 @@ final class ApiErrorResponse
         return self::json(
             'The topic is not editable.',
             self::CODE_TOPIC_NOT_EDITABLE,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function taskClosed(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The task is closed.',
+            self::CODE_TASK_CLOSED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function taskArchived(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The task is archived.',
+            self::CODE_TASK_ARCHIVED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function businessConflict(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The requested change conflicts with current task activity.',
+            self::CODE_BUSINESS_CONFLICT,
             Response::HTTP_CONFLICT,
         );
     }

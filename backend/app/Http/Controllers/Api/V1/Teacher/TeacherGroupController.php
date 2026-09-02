@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api\V1\Teacher;
 
 use App\Actions\Teacher\ListTeacherGroups;
+use App\Actions\Teacher\ListTeacherGroupStudents;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teacher\TeacherGroupIndexRequest;
+use App\Http\Requests\Teacher\TeacherGroupStudentIndexRequest;
 use App\Http\Resources\Teacher\TeacherGroupCollection;
+use App\Http\Resources\Teacher\TeacherGroupStudentCollection;
 use App\Models\User;
 
 class TeacherGroupController extends Controller
@@ -22,6 +25,23 @@ class TeacherGroupController extends Controller
             search: $request->search(),
             sort: $request->sort(),
             direction: $request->direction(),
+            page: $request->page(),
+            perPage: $request->perPage(),
+        ));
+    }
+
+    public function students(
+        TeacherGroupStudentIndexRequest $request,
+        string $group,
+        ListTeacherGroupStudents $listTeacherGroupStudents,
+    ): TeacherGroupStudentCollection {
+        /** @var User $teacher */
+        $teacher = $request->user();
+
+        return new TeacherGroupStudentCollection($listTeacherGroupStudents(
+            teacher: $teacher,
+            groupId: $group,
+            search: $request->search(),
             page: $request->page(),
             perPage: $request->perPage(),
         ));
