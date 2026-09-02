@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
 use App\Http\Controllers\Api\V1\Student\StudentTopicController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherHomeworkController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
 use App\Support\Auth\LoginRateLimitKey;
@@ -95,8 +96,11 @@ Route::prefix('teacher')
     ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::Teacher->value])
     ->group(function (): void {
         Route::get('groups', TeacherGroupController::class);
+        Route::get('groups/{group}/students', [TeacherGroupController::class, 'students']);
         Route::get('topics', [TeacherTopicController::class, 'index']);
         Route::post('topics', [TeacherTopicController::class, 'store']);
+        Route::get('topics/{topic}/homework', [TeacherHomeworkController::class, 'index']);
+        Route::post('topics/{topic}/homework', [TeacherHomeworkController::class, 'store']);
         Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
         Route::patch('topics/{topic}', [TeacherTopicController::class, 'update']);
         Route::post('topics/{topic}/activate', [TeacherTopicController::class, 'activate']);
@@ -107,6 +111,8 @@ Route::prefix('teacher')
         Route::post('materials/{material}/replace', [TeacherLearningMaterialController::class, 'replace']);
         Route::patch('materials/{material}', [TeacherLearningMaterialController::class, 'update']);
         Route::delete('materials/{material}', [TeacherLearningMaterialController::class, 'destroy']);
+        Route::get('homework/{homework}', [TeacherHomeworkController::class, 'show']);
+        Route::patch('homework/{homework}', [TeacherHomeworkController::class, 'update']);
     });
 
 Route::prefix('student')

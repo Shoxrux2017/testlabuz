@@ -5,7 +5,7 @@ namespace App\Support\Teacher;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 
-final class InstitutionLessonAt
+final class InstitutionHomeworkDeadlineAt
 {
     public function __construct(private readonly InstitutionEducationalDateTime $dateTime) {}
 
@@ -16,6 +16,11 @@ final class InstitutionLessonAt
 
     public function parse(User $teacher, string $value): CarbonImmutable
     {
-        return $this->dateTime->parse($teacher, $value, 'lesson_at');
+        return $this->dateTime->parse($teacher, $value, 'deadline_at');
+    }
+
+    public function timezone(User $teacher): string
+    {
+        return $this->dateTime->timezone($teacher);
     }
 }
