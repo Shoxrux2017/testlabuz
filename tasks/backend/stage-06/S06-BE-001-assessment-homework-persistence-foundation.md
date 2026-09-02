@@ -7,7 +7,7 @@
 | Task ID | `S06-BE-001` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Backend` |
-| Status | `Approved` |
+| Status | `Accepted` |
 | Implementation type | `Laravel/PostgreSQL persistence foundation` |
 | Depends on | `Stage 5 CLOSED`; Stage 6 decomposition approved |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
@@ -15,6 +15,9 @@
 | Implementation Readiness Gate | `PASS` |
 | Verification | `Codex — focused task verification only` |
 | Delivery execution | `Project Owner` |
+| Delivery | `Delivered — PR #143` |
+| Delivered merge | `ab9c826b626891d119d5c8f674dff212ebe7a806` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Block checkpoint | Stage 6 Backend Phase 2 after `S06-BE-001…006` are `Accepted / Delivered` |
 
 Start only when this task remains `Approved`, Stage 5 remains explicitly closed, the current implementation baseline has been re-checked by ChatGPT, and Git preflight is safe.
@@ -1289,29 +1292,29 @@ Do not modify routes, controllers, Actions, Requests, Resources, docs, task file
 
 The task is implementation-complete only when all are true.
 
-- [ ] `assessments` exists with the exact common metadata, tenant ownership, enum/numeric checks, support keys, FKs, and indexes required above.
-- [ ] `homework_assignments` exists with no configurable attempt-limit field and with the exact lifecycle/deadline structure.
-- [ ] Homework lifecycle DB checks accept valid `draft`, `active`, `closed`, `draft→archived`, and `closed→archived` historical shapes and reject invalid shapes.
-- [ ] `assessment_students` stores one unique persisted recipient per Student/Assessment and enforces same-Institution FKs.
-- [ ] `assessment_attempts` provides the exact structural machine values/columns required above without exposing attempt execution behavior.
-- [ ] Attempt number structural bound rejects `0` and `4+`; there is no mutable Homework attempt-limit setting/column.
-- [ ] `topic_result_pairs` requires Homework but permits `blitz_assessment_id = null`.
-- [ ] No placeholder/fake Blitz record is required for a Stage 6 partial pair.
-- [ ] `topic_result_pairs` rejects cross-Institution and cross-Topic Assessment references.
-- [ ] Only one result-pair row can exist per Topic.
-- [ ] A locked pair requires an existing cohort snapshot, while a locked row may still have `blitz_assessment_id = null`.
-- [ ] All new FK deletes are restrictive and historical child rows prevent destructive parent deletion.
-- [ ] All required enums exist with exact machine values.
-- [ ] All five Eloquent models use correct casts, writable attributes, key behavior, and relationships without workflow logic.
-- [ ] Existing `Topic`, `Institution`, and `User` behavior is unchanged except for the required inverse relationships.
-- [ ] Factories produce deterministic valid same-Institution graphs and valid lifecycle states.
-- [ ] Cross-Institution persistence attempts are rejected by the database.
-- [ ] No Question tables/API, Student attempt API, scoring, deadline runtime, lifecycle Actions, official designation API, frontend, dependencies, seeders, docs, or unrelated refactor enters scope.
-- [ ] The three new focused persistence test files pass.
-- [ ] Directly affected Stage 5 persistence/settings regressions pass.
-- [ ] Pint passes.
-- [ ] `git diff --check` passes.
-- [ ] Focused final diff review finds no P1/P2 security, tenant, data-integrity, or scope problem.
+- [x] `assessments` exists with the exact common metadata, tenant ownership, enum/numeric checks, support keys, FKs, and indexes required above.
+- [x] `homework_assignments` exists with no configurable attempt-limit field and with the exact lifecycle/deadline structure.
+- [x] Homework lifecycle DB checks accept valid `draft`, `active`, `closed`, `draft→archived`, and `closed→archived` historical shapes and reject invalid shapes.
+- [x] `assessment_students` stores one unique persisted recipient per Student/Assessment and enforces same-Institution FKs.
+- [x] `assessment_attempts` provides the exact structural machine values/columns required above without exposing attempt execution behavior.
+- [x] Attempt number structural bound rejects `0` and `4+`; there is no mutable Homework attempt-limit setting/column.
+- [x] `topic_result_pairs` requires Homework but permits `blitz_assessment_id = null`.
+- [x] No placeholder/fake Blitz record is required for a Stage 6 partial pair.
+- [x] `topic_result_pairs` rejects cross-Institution and cross-Topic Assessment references.
+- [x] Only one result-pair row can exist per Topic.
+- [x] A locked pair requires an existing cohort snapshot, while a locked row may still have `blitz_assessment_id = null`.
+- [x] All new FK deletes are restrictive and historical child rows prevent destructive parent deletion.
+- [x] All required enums exist with exact machine values.
+- [x] All five Eloquent models use correct casts, writable attributes, key behavior, and relationships without workflow logic.
+- [x] Existing `Topic`, `Institution`, and `User` behavior is unchanged except for the required inverse relationships.
+- [x] Factories produce deterministic valid same-Institution graphs and valid lifecycle states.
+- [x] Cross-Institution persistence attempts are rejected by the database.
+- [x] No Question tables/API, Student attempt API, scoring, deadline runtime, lifecycle Actions, official designation API, frontend, dependencies, seeders, docs, or unrelated refactor enters scope.
+- [x] The three new focused persistence test files pass.
+- [x] Directly affected Stage 5 persistence/settings regressions pass.
+- [x] Pint passes.
+- [x] `git diff --check` passes.
+- [x] Focused final diff review finds no P1/P2 security, tenant, data-integrity, or scope problem.
 
 ---
 
@@ -1470,6 +1473,19 @@ Codex must not:
 Codex stops after implementation, focused verification, `git diff --check`, and focused scope/diff self-review and reports the Git state for Project Owner handoff.
 
 Task acceptance occurs only after approved delivery completes, the accepted result is present on `origin/main`, local `main == origin/main`, ahead/behind is `0/0`, and the worktree is clean.
+
+## 23.1 Accepted Delivery Evidence
+
+- Delivery: Delivered — PR #143.
+- Delivered merge: `ab9c826b626891d119d5c8f674dff212ebe7a806`.
+- Acceptance review: PASS — P1=0, P2=0, P3=0.
+- Required focused Assessment/Homework persistence tests: PASS — 17 tests, 605 assertions.
+- Stage 5 Topic/Learning Material persistence regression: PASS — 17 tests, 409 assertions.
+- Institution assessment-settings regression: PASS — 13 tests, 1,920 assertions.
+- Pint: PASS — 355 files.
+- `git diff --check`: PASS.
+- Delivery scope: 23 task-owned backend files.
+- Accepted baseline state: local `main == origin/main`, ahead/behind `0/0`, worktree clean.
 
 ---
 
