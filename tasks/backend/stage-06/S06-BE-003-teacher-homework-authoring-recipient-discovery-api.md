@@ -7,7 +7,10 @@
 | Task ID | `S06-BE-003` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Backend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #147` |
+| Delivered merge | `503f5702b7db536610b2772f2940f32028f8f4af` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Implementation type | `Laravel Teacher API + transactional Homework authoring` |
 | Depends on | `S06-BE-001`, `S06-BE-002` — both `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
@@ -1132,35 +1135,35 @@ Do not modify docs, frontend, seeders, dependencies, bookkeeping, or unrelated c
 
 # 27. Acceptance Criteria
 
-- [ ] Teacher roster returns only current active eligible Students of an authorized active Group.
-- [ ] Foreign/inactive/unassigned Groups and former/inactive Students cannot be exposed.
-- [ ] Topic Homework list is tenant/Teacher/Topic scoped, paginated, searchable/filterable/sortable, deterministic, and N+1 safe.
-- [ ] Teacher can create draft Homework under own draft/active Topic.
-- [ ] Closed/archived Topic blocks create.
-- [ ] Strict payload rejects protected ownership/lifecycle/attempt/total fields.
-- [ ] Group draft requires empty `student_ids` and creates no recipient rows.
-- [ ] Selected draft requires current eligible Students and persists direct recipient rows.
-- [ ] Cross-Tenant/ineligible selected IDs cannot expand scope.
-- [ ] Deadline validates Institution timezone/offset and persists UTC; past draft deadline is allowed.
-- [ ] Nested create supports all nine S06-BE-002 Question types and zero Questions.
-- [ ] Invalid nested config rolls back the entire Homework create.
-- [ ] Matching generates server `match_key`.
-- [ ] Total points are server-derived with exact scale-6 math.
-- [ ] Full resource returns fixed attempt policy `3` / `highest_valid_completed`.
-- [ ] Teacher Question resource reconstructs canonical config without child-row IDs.
-- [ ] PATCH does not accept Question edits.
-- [ ] Draft PATCH supports metadata/assignment/deadline changes.
-- [ ] Active/no-Attempt PATCH safely supports pre-activity recipient/deadline/instruction changes.
-- [ ] Any Attempt locks fairness-relevant active fields but title/description remain safe metadata.
-- [ ] Closed/archived Homework is read-only.
-- [ ] Closed/archived Topic blocks Homework mutation.
-- [ ] No-op PATCH preserves timestamps and unchanged recipient rows.
-- [ ] Concurrent membership loss and concurrent first Attempt are handled safely.
-- [ ] Stage 5 lesson-at behavior remains unchanged after parser refactor.
-- [ ] No lifecycle endpoints, Student Attempt APIs, scoring, official designation, Blitz, frontend, docs, seeders, dependencies, or unrelated refactor enters scope.
-- [ ] Focused tests pass.
-- [ ] Pint passes.
-- [ ] `git diff --check` passes.
+- [x] Teacher roster returns only current active eligible Students of an authorized active Group.
+- [x] Foreign/inactive/unassigned Groups and former/inactive Students cannot be exposed.
+- [x] Topic Homework list is tenant/Teacher/Topic scoped, paginated, searchable/filterable/sortable, deterministic, and N+1 safe.
+- [x] Teacher can create draft Homework under own draft/active Topic.
+- [x] Closed/archived Topic blocks create.
+- [x] Strict payload rejects protected ownership/lifecycle/attempt/total fields.
+- [x] Group draft requires empty `student_ids` and creates no recipient rows.
+- [x] Selected draft requires current eligible Students and persists direct recipient rows.
+- [x] Cross-Tenant/ineligible selected IDs cannot expand scope.
+- [x] Deadline validates Institution timezone/offset and persists UTC; past draft deadline is allowed.
+- [x] Nested create supports all nine S06-BE-002 Question types and zero Questions.
+- [x] Invalid nested config rolls back the entire Homework create.
+- [x] Matching generates server `match_key`.
+- [x] Total points are server-derived with exact scale-6 math.
+- [x] Full resource returns fixed attempt policy `3` / `highest_valid_completed`.
+- [x] Teacher Question resource reconstructs canonical config without child-row IDs.
+- [x] PATCH does not accept Question edits.
+- [x] Draft PATCH supports metadata/assignment/deadline changes.
+- [x] Active/no-Attempt PATCH safely supports pre-activity recipient/deadline/instruction changes.
+- [x] Any Attempt locks fairness-relevant active fields but title/description remain safe metadata.
+- [x] Closed/archived Homework is read-only.
+- [x] Closed/archived Topic blocks Homework mutation.
+- [x] No-op PATCH preserves timestamps and unchanged recipient rows.
+- [x] Concurrent membership loss and concurrent first Attempt are handled safely.
+- [x] Stage 5 lesson-at behavior remains unchanged after parser refactor.
+- [x] No lifecycle endpoints, Student Attempt APIs, scoring, official designation, Blitz, frontend, docs, seeders, dependencies, or unrelated refactor enters scope.
+- [x] Focused tests pass.
+- [x] Pint passes.
+- [x] `git diff --check` passes.
 
 ---
 
@@ -1288,6 +1291,14 @@ PR base: main
 Codex must not commit, push, open/merge PR, modify this task, or update bookkeeping.
 
 Task acceptance occurs only after approved delivery is on `origin/main`, local `main == origin/main`, ahead/behind `0/0`, and worktree clean.
+
+## 29.1 Accepted Delivery Evidence
+
+- Delivered through PR #147; merge `503f5702b7db536610b2772f2940f32028f8f4af`.
+- Independent final review: `PASS — P1=0, P2=0, P3=0`.
+- Focused verification: 75 tests passed with 1,785 assertions; Pint PASS; `git diff --check` PASS.
+- Delivery scope: exactly 38 backend files.
+- Acceptance preflight: local `main == origin/main`, ahead/behind `0/0`, worktree clean.
 
 ---
 
