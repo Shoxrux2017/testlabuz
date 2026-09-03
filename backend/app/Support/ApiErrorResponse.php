@@ -14,11 +14,17 @@ final class ApiErrorResponse
 
     private const CODE_ASSESSMENT_HAS_NO_SCOREABLE_POINTS = 'assessment_has_no_scoreable_points';
 
+    private const CODE_ASSESSMENT_NOT_ASSIGNED = 'assessment_not_assigned';
+
     private const CODE_BUSINESS_CONFLICT = 'business_conflict';
+
+    private const CODE_DEADLINE_PASSED = 'deadline_passed';
 
     private const CODE_TASK_ARCHIVED = 'task_archived';
 
     private const CODE_TASK_CLOSED = 'task_closed';
+
+    private const CODE_TASK_NOT_ACTIVE = 'task_not_active';
 
     private const CODE_CURRENT_PASSWORD_INVALID = 'current_password_invalid';
 
@@ -45,6 +51,8 @@ final class ApiErrorResponse
     private const CODE_SERVER_ERROR = 'server_error';
 
     private const CODE_TOPIC_NOT_EDITABLE = 'topic_not_editable';
+
+    private const CODE_TOPIC_HAS_OPEN_ASSESSMENTS = 'topic_has_open_assessments';
 
     private const CODE_UNSUPPORTED_FILE_TYPE = 'unsupported_file_type';
 
@@ -253,6 +261,19 @@ final class ApiErrorResponse
         );
     }
 
+    public static function taskNotActive(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The task is not active.',
+            self::CODE_TASK_NOT_ACTIVE,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
     public static function businessConflict(Request $request): ?JsonResponse
     {
         if (! self::isApiRequest($request)) {
@@ -261,6 +282,19 @@ final class ApiErrorResponse
 
         return self::json(
             'The requested change conflicts with current task activity.',
+            self::CODE_BUSINESS_CONFLICT,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function homeworkHasInProgressAttempt(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'Homework cannot be closed while student work is still in progress.',
             self::CODE_BUSINESS_CONFLICT,
             Response::HTTP_CONFLICT,
         );
@@ -288,6 +322,45 @@ final class ApiErrorResponse
         return self::json(
             'The assessment must contain at least one scoreable point.',
             self::CODE_ASSESSMENT_HAS_NO_SCOREABLE_POINTS,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function deadlinePassed(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The homework deadline has passed.',
+            self::CODE_DEADLINE_PASSED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function assessmentNotAssigned(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The assessment is not assigned to any eligible students.',
+            self::CODE_ASSESSMENT_NOT_ASSIGNED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function topicHasOpenAssessments(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The topic has open homework that must be resolved before closing or archiving it.',
+            self::CODE_TOPIC_HAS_OPEN_ASSESSMENTS,
             Response::HTTP_CONFLICT,
         );
     }

@@ -4,12 +4,15 @@ namespace Tests\Feature\Teacher;
 
 use App\Actions\Teacher\ActivateTeacherTopic;
 use App\Enums\FileCategory;
+use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
 use App\Enums\UserRole;
 use App\Http\Resources\Teacher\TeacherTopicResource;
+use App\Models\Assessment;
 use App\Models\File;
 use App\Models\Group;
 use App\Models\GroupTeacherMembership;
+use App\Models\HomeworkAssignment;
 use App\Models\Institution;
 use App\Models\LearningMaterial;
 use App\Models\Topic;
@@ -389,6 +392,51 @@ class TeacherTopicLifecycleApiTest extends TestCase
         $this->assertDatabaseCount('files', 1);
     }
 
+    public function test_close_and_archive_lock_and_reject_open_homework_without_cascading_children(): void
+    {
+        [$institution, $teacher, , $group] = $this->context();
+
+        $resolvedTopic = $this->topic($institution, $group, $teacher, TopicStatus::Active);
+        $closed = $this->homework($institution, $teacher, $resolvedTopic, HomeworkStatus::Closed);
+        $archived = $this->homework($institution, $teacher, $resolvedTopic, HomeworkStatus::Archived);
+        $this->requestAs($teacher, $this->lifecycleUri($resolvedTopic, 'close'))
+            ->assertOk()->assertJsonPath('data.status', 'closed');
+        $this->requestAs($teacher, $this->lifecycleUri($resolvedTopic, 'archive'))
+            ->assertOk()->assertJsonPath('data.status', 'archived');
+        $this->assertSame(HomeworkStatus::Closed, $closed->fresh()?->status);
+        $this->assertSame(HomeworkStatus::Archived, $archived->fresh()?->status);
+
+        foreach ([HomeworkStatus::Draft, HomeworkStatus::Active] as $status) {
+            $topic = $this->topic($institution, $group, $teacher, TopicStatus::Active);
+            $homework = $this->homework($institution, $teacher, $topic, $status);
+            $this->assertOpenHomeworkConflict($this->requestAs($teacher, $this->lifecycleUri($topic, 'close')));
+            $this->assertSame(TopicStatus::Active, $topic->fresh()?->status);
+            $this->assertSame($status, $homework->fresh()?->status);
+        }
+
+        $draftTopic = $this->topic($institution, $group, $teacher);
+        $draftHomework = $this->homework($institution, $teacher, $draftTopic, HomeworkStatus::Draft);
+        $this->assertOpenHomeworkConflict($this->requestAs($teacher, $this->lifecycleUri($draftTopic, 'archive')));
+        $this->assertSame(TopicStatus::Draft, $draftTopic->fresh()?->status);
+        $this->assertSame(HomeworkStatus::Draft, $draftHomework->fresh()?->status);
+
+        $closedTopic = $this->topic($institution, $group, $teacher, TopicStatus::Closed);
+        $defensiveOpenHomework = $this->homework($institution, $teacher, $closedTopic, HomeworkStatus::Active);
+        $this->assertOpenHomeworkConflict($this->requestAs($teacher, $this->lifecycleUri($closedTopic, 'archive')));
+        $this->assertSame(TopicStatus::Closed, $closedTopic->fresh()?->status);
+        $this->assertSame(HomeworkStatus::Active, $defensiveOpenHomework->fresh()?->status);
+
+        $closedNoOpTopic = $this->topic($institution, $group, $teacher, TopicStatus::Closed);
+        $closedNoOpChild = $this->homework($institution, $teacher, $closedNoOpTopic, HomeworkStatus::Draft);
+        $this->requestAs($teacher, $this->lifecycleUri($closedNoOpTopic, 'close'))->assertOk();
+        $this->assertSame(HomeworkStatus::Draft, $closedNoOpChild->fresh()?->status);
+
+        $archivedNoOpTopic = $this->topic($institution, $group, $teacher, TopicStatus::Archived);
+        $archivedNoOpChild = $this->homework($institution, $teacher, $archivedNoOpTopic, HomeworkStatus::Draft);
+        $this->requestAs($teacher, $this->lifecycleUri($archivedNoOpTopic, 'archive'))->assertOk();
+        $this->assertSame(HomeworkStatus::Draft, $archivedNoOpChild->fresh()?->status);
+    }
+
     public function test_lifecycle_resource_serialization_issues_no_hidden_queries(): void
     {
         [$institution, $teacher, , $group] = $this->context();
@@ -506,6 +554,30 @@ class TeacherTopicLifecycleApiTest extends TestCase
         return self::URI.'/'.$topic->id.'/'.$operation;
     }
 
+    private function homework(
+        Institution $institution,
+        User $teacher,
+        Topic $topic,
+        HomeworkStatus $status,
+    ): HomeworkAssignment {
+        $assessment = Assessment::factory()->homework()->create([
+            'institution_id' => $institution->id,
+            'topic_id' => $topic->id,
+            'teacher_id' => $teacher->id,
+        ]);
+        $factory = match ($status) {
+            HomeworkStatus::Draft => HomeworkAssignment::factory()->draft(),
+            HomeworkStatus::Active => HomeworkAssignment::factory()->active(),
+            HomeworkStatus::Closed => HomeworkAssignment::factory()->closed(),
+            HomeworkStatus::Archived => HomeworkAssignment::factory()->archivedFromDraft(),
+        };
+
+        return $factory->create([
+            'institution_id' => $institution->id,
+            'assessment_id' => $assessment->id,
+        ]);
+    }
+
     /** @param array<string, mixed> $query */
     private function requestAs(
         User $actor,
@@ -531,6 +603,15 @@ class TeacherTopicLifecycleApiTest extends TestCase
         $this->assertSame([
             'message' => 'The topic is not editable.',
             'code' => 'topic_not_editable',
+            'errors' => [],
+        ], $response->assertConflict()->json());
+    }
+
+    private function assertOpenHomeworkConflict(TestResponse $response): void
+    {
+        $this->assertSame([
+            'message' => 'The topic has open homework that must be resolved before closing or archiving it.',
+            'code' => 'topic_has_open_assessments',
             'errors' => [],
         ], $response->assertConflict()->json());
     }

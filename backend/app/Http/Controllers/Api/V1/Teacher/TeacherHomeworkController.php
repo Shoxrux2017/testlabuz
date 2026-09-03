@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Teacher;
 
+use App\Actions\Teacher\ActivateTeacherHomework;
+use App\Actions\Teacher\ArchiveTeacherHomework;
+use App\Actions\Teacher\CloseTeacherHomework;
 use App\Actions\Teacher\CreateTeacherHomework;
 use App\Actions\Teacher\ListTeacherHomework;
 use App\Actions\Teacher\ShowTeacherHomework;
@@ -9,6 +12,7 @@ use App\Actions\Teacher\UpdateTeacherHomework;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teacher\TeacherHomeworkCreateRequest;
 use App\Http\Requests\Teacher\TeacherHomeworkIndexRequest;
+use App\Http\Requests\Teacher\TeacherHomeworkLifecycleRequest;
 use App\Http\Requests\Teacher\TeacherHomeworkShowRequest;
 use App\Http\Requests\Teacher\TeacherHomeworkUpdateRequest;
 use App\Http\Resources\Teacher\TeacherHomeworkCollection;
@@ -77,6 +81,51 @@ class TeacherHomeworkController extends Controller
 
         return (new TeacherHomeworkResource($updatedHomework))
             ->additional(['message' => 'Homework updated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function activate(
+        TeacherHomeworkLifecycleRequest $request,
+        string $homework,
+        ActivateTeacherHomework $activateTeacherHomework,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $activatedHomework = $activateTeacherHomework($teacher, $homework);
+
+        return (new TeacherHomeworkResource($activatedHomework))
+            ->additional(['message' => 'Homework activated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function close(
+        TeacherHomeworkLifecycleRequest $request,
+        string $homework,
+        CloseTeacherHomework $closeTeacherHomework,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $closedHomework = $closeTeacherHomework($teacher, $homework);
+
+        return (new TeacherHomeworkResource($closedHomework))
+            ->additional(['message' => 'Homework closed successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function archive(
+        TeacherHomeworkLifecycleRequest $request,
+        string $homework,
+        ArchiveTeacherHomework $archiveTeacherHomework,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $archivedHomework = $archiveTeacherHomework($teacher, $homework);
+
+        return (new TeacherHomeworkResource($archivedHomework))
+            ->additional(['message' => 'Homework archived successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
     }

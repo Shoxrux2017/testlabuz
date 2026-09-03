@@ -7,11 +7,15 @@ use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Topic;
 use App\Models\User;
 use App\Support\Teacher\TeacherTopicLifecycleAccess;
+use App\Support\Teacher\TeacherTopicOpenHomeworkGuard;
 use Illuminate\Support\Facades\DB;
 
 class CloseTeacherTopic
 {
-    public function __construct(private readonly TeacherTopicLifecycleAccess $access) {}
+    public function __construct(
+        private readonly TeacherTopicLifecycleAccess $access,
+        private readonly TeacherTopicOpenHomeworkGuard $openHomeworkGuard,
+    ) {}
 
     public function __invoke(User $teacher, string $topicId): Topic
     {
@@ -27,6 +31,8 @@ class CloseTeacherTopic
             if ($topic->status !== TopicStatus::Active) {
                 throw new TopicNotEditableException;
             }
+
+            $this->openHomeworkGuard->lockAndEnsureResolved($teacher, $topic);
 
             $transitionedAt = now();
             $topic->status = TopicStatus::Closed;
