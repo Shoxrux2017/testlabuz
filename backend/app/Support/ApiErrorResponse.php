@@ -12,6 +12,8 @@ final class ApiErrorResponse
 {
     private const CODE_AUTHENTICATION_REQUIRED = 'authentication_required';
 
+    private const CODE_ASSESSMENT_HAS_NO_SCOREABLE_POINTS = 'assessment_has_no_scoreable_points';
+
     private const CODE_BUSINESS_CONFLICT = 'business_conflict';
 
     private const CODE_TASK_ARCHIVED = 'task_archived';
@@ -35,6 +37,8 @@ final class ApiErrorResponse
     private const CODE_FILE_UPLOAD_FAILED = 'file_upload_failed';
 
     private const CODE_RATE_LIMITED = 'rate_limited';
+
+    private const CODE_RESULT_PAIR_LOCKED = 'result_pair_locked';
 
     private const CODE_RESOURCE_NOT_FOUND = 'resource_not_found';
 
@@ -258,6 +262,32 @@ final class ApiErrorResponse
         return self::json(
             'The requested change conflicts with current task activity.',
             self::CODE_BUSINESS_CONFLICT,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function resultPairLocked(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The official result pair is locked.',
+            self::CODE_RESULT_PAIR_LOCKED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function assessmentHasNoScoreablePoints(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The assessment must contain at least one scoreable point.',
+            self::CODE_ASSESSMENT_HAS_NO_SCOREABLE_POINTS,
             Response::HTTP_CONFLICT,
         );
     }
