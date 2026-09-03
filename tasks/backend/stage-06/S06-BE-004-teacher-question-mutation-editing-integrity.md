@@ -7,7 +7,10 @@
 | Task ID | `S06-BE-004` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Backend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #149` |
+| Delivered merge | `1f366e8b4b98f1f40a115ca02c64bb7709901156` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Implementation type | `Laravel Teacher Question mutation API + transactional editing-integrity enforcement` |
 | Depends on | `S06-BE-001`, `S06-BE-002`, `S06-BE-003` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
@@ -1251,36 +1254,36 @@ Do not modify docs, frontend, seeders, dependencies, task files, or unrelated co
 
 # 27. Acceptance Criteria
 
-- [ ] All four exact Teacher Question routes exist.
-- [ ] Stage 6 Question mutation accepts only authorized Homework Assessments; non-Homework is privacy-safe 404.
-- [ ] Direct Question UUIDs cannot escape Teacher/Institution/Topic/Group scope.
-- [ ] Add accepts exactly the approved common Question fields and typed configuration.
-- [ ] Add supports positions `1..N+1`, safely shifts existing Questions, and leaves exact contiguous positions.
-- [ ] Add enforces max Questions.
-- [ ] PATCH cannot directly edit `position`; reorder is the sole order endpoint.
-- [ ] PATCH type/checking-mode change requires full `configuration`.
-- [ ] Typed configuration replacement removes obsolete typed rows and persists exactly the new valid configuration.
-- [ ] Matching semantic no-op ignores request correlation keys and does not regenerate server keys.
-- [ ] Delete removes typed rows + Question only before activity and compacts remaining positions.
-- [ ] Draft may end with zero Questions/zero total.
-- [ ] Active Homework can never be mutated into zero Questions or zero total.
-- [ ] Reorder requires the exact complete current Question set and writes canonical `1..N`.
-- [ ] Position writes do not violate unique constraints transiently.
-- [ ] Add/update/delete recalculate exact server total with `AssessmentPointMath`.
-- [ ] Reorder leaves total unchanged.
-- [ ] Any Attempt blocks every Question add/update/delete/reorder.
-- [ ] Locked official pair blocks Question mutation.
-- [ ] Closed/archived Topic or Homework blocks mutation with exact required conflict.
-- [ ] Question mutation and future first Attempt serialize through Assessment row lock.
-- [ ] Semantic Question changes touch Assessment `updated_at`; no-op does not.
-- [ ] `homework_assignments.updated_at` is not changed solely by Question mutation.
-- [ ] PATCH/reorder no-op performs zero configuration/position/aggregate write churn.
-- [ ] Every successful mutation returns complete authoritative Teacher Homework resource.
-- [ ] No Student Attempt/checking/scoring/lifecycle/result-pair mutation/Blitz/frontend/docs/seed/dependency work enters scope.
-- [ ] Focused tests pass.
-- [ ] Pint passes.
-- [ ] `git diff --check` passes.
-- [ ] Final focused diff review finds no blocking tenant/security/data-integrity/concurrency/scope problem.
+- [x] All four exact Teacher Question routes exist.
+- [x] Stage 6 Question mutation accepts only authorized Homework Assessments; non-Homework is privacy-safe 404.
+- [x] Direct Question UUIDs cannot escape Teacher/Institution/Topic/Group scope.
+- [x] Add accepts exactly the approved common Question fields and typed configuration.
+- [x] Add supports positions `1..N+1`, safely shifts existing Questions, and leaves exact contiguous positions.
+- [x] Add enforces max Questions.
+- [x] PATCH cannot directly edit `position`; reorder is the sole order endpoint.
+- [x] PATCH type/checking-mode change requires full `configuration`.
+- [x] Typed configuration replacement removes obsolete typed rows and persists exactly the new valid configuration.
+- [x] Matching semantic no-op ignores request correlation keys and does not regenerate server keys.
+- [x] Delete removes typed rows + Question only before activity and compacts remaining positions.
+- [x] Draft may end with zero Questions/zero total.
+- [x] Active Homework can never be mutated into zero Questions or zero total.
+- [x] Reorder requires the exact complete current Question set and writes canonical `1..N`.
+- [x] Position writes do not violate unique constraints transiently.
+- [x] Add/update/delete recalculate exact server total with `AssessmentPointMath`.
+- [x] Reorder leaves total unchanged.
+- [x] Any Attempt blocks every Question add/update/delete/reorder.
+- [x] Locked official pair blocks Question mutation.
+- [x] Closed/archived Topic or Homework blocks mutation with exact required conflict.
+- [x] Question mutation and future first Attempt serialize through Assessment row lock.
+- [x] Semantic Question changes touch Assessment `updated_at`; no-op does not.
+- [x] `homework_assignments.updated_at` is not changed solely by Question mutation.
+- [x] PATCH/reorder no-op performs zero configuration/position/aggregate write churn.
+- [x] Every successful mutation returns complete authoritative Teacher Homework resource.
+- [x] No Student Attempt/checking/scoring/lifecycle/result-pair mutation/Blitz/frontend/docs/seed/dependency work enters scope.
+- [x] Focused tests pass.
+- [x] Pint passes.
+- [x] `git diff --check` passes.
+- [x] Final focused diff review finds no blocking tenant/security/data-integrity/concurrency/scope problem.
 
 ---
 
@@ -1515,6 +1518,16 @@ Codex must not:
 Codex stops after implementation, focused verification, `git diff --check`, and focused scope/diff review.
 
 Task acceptance occurs only after approved delivery is present on `origin/main`, local `main == origin/main`, ahead/behind `0/0`, and worktree clean.
+
+## 30.1 Acceptance and Delivery Evidence
+
+- Delivery: PR #149, merge `1f366e8b4b98f1f40a115ca02c64bb7709901156`.
+- Final independent review: `PASS — P1=0, P2=0, P3=0`.
+- Focused verification: 67 tests passed, 880 assertions.
+- Pint: PASS.
+- `git diff --check`: PASS.
+- Delivery scope: exactly 24 backend files.
+- Final synchronization: local `main == origin/main`, ahead/behind `0/0`, worktree clean.
 
 ---
 
