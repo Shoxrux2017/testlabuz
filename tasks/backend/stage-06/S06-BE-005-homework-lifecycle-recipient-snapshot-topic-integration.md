@@ -7,7 +7,10 @@
 | Task ID | `S06-BE-005` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Backend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #151` |
+| Delivered merge | `2bf1b94328f81810566af9bb0e9c739267e1352a` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Implementation type | `Laravel Homework lifecycle + recipient snapshot + Topic lifecycle integration` |
 | Depends on | `S06-BE-001…004` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
@@ -1447,40 +1450,50 @@ Do not modify migrations, Question schema, frontend, docs, seeders, dependencies
 
 # 35. Acceptance Criteria
 
-- [ ] Exact activate/close/archive Teacher Homework routes exist.
-- [ ] Lifecycle request accepts only no body or `{}` and rejects query/body data.
-- [ ] Homework direct IDs are privacy-safe and tenant/Teacher/current-membership scoped.
-- [ ] State machine is exactly `draft->active`, `draft->archived`, `active->closed`, `closed->archived`.
-- [ ] Activate/close/archive same-target operations are idempotent with zero timestamp/write churn.
-- [ ] Activation requires active Topic and active Group.
-- [ ] Activation revalidates complete persisted Question configuration.
-- [ ] Activation recalculates total exactly from locked Questions.
-- [ ] Zero Questions/zero total cannot activate.
-- [ ] Optional deadline must be strictly future relative to authoritative server time at activation.
-- [ ] Group activation snapshots exactly current active eligible Group Students.
-- [ ] Group activation requires at least one recipient.
-- [ ] Selected activation requires at least one persisted direct recipient and revalidates the exact selected set.
-- [ ] Selected Student becoming ineligible blocks activation rather than being silently dropped.
-- [ ] Activation creates no Attempts and no official result pair.
-- [ ] Successful activation writes lifecycle + aggregate timestamps once and atomically.
-- [ ] Close draft is rejected; close closed is idempotent; close archived is rejected.
-- [ ] Stage 6 close blocks when an `in_progress` Attempt exists and never fabricates incomplete finalization.
-- [ ] Completed/finalized historical Attempt rows remain intact through close.
-- [ ] Archive supports draft/closed only and preserves historical data.
-- [ ] Active archive is rejected rather than implicitly closing.
-- [ ] Topic close is blocked by any child Homework in draft/active.
-- [ ] Topic archive is blocked by any child Homework in draft/active.
-- [ ] Topic lifecycle never cascades Homework state.
-- [ ] New `409 topic_has_open_assessments` contract is deterministic and non-sensitive.
-- [ ] Topic close/archive versus Homework activation is transactionally race-safe.
-- [ ] Recipient snapshot is race-safe against membership changes.
-- [ ] Lifecycle semantic transitions touch Assessment + HomeworkAssignment `updated_at`; no-op/blocked operations do not.
-- [ ] Existing Stage 5 Topic lifecycle behavior remains unchanged when no Stage 6 open Homework exists.
-- [ ] No Student Attempt API, answer persistence, scoring, official designation, Blitz, frontend, docs, seed, dependency, or unrelated work enters scope.
-- [ ] Focused tests pass.
-- [ ] Pint passes.
-- [ ] `git diff --check` passes.
-- [ ] Final focused diff review finds no blocking tenant/security/lifecycle/concurrency/data-integrity issue.
+- [x] Exact activate/close/archive Teacher Homework routes exist.
+- [x] Lifecycle request accepts only no body or `{}` and rejects query/body data.
+- [x] Homework direct IDs are privacy-safe and tenant/Teacher/current-membership scoped.
+- [x] State machine is exactly `draft->active`, `draft->archived`, `active->closed`, `closed->archived`.
+- [x] Activate/close/archive same-target operations are idempotent with zero timestamp/write churn.
+- [x] Activation requires active Topic and active Group.
+- [x] Activation revalidates complete persisted Question configuration.
+- [x] Activation recalculates total exactly from locked Questions.
+- [x] Zero Questions/zero total cannot activate.
+- [x] Optional deadline must be strictly future relative to authoritative server time at activation.
+- [x] Group activation snapshots exactly current active eligible Group Students.
+- [x] Group activation requires at least one recipient.
+- [x] Selected activation requires at least one persisted direct recipient and revalidates the exact selected set.
+- [x] Selected Student becoming ineligible blocks activation rather than being silently dropped.
+- [x] Activation creates no Attempts and no official result pair.
+- [x] Successful activation writes lifecycle + aggregate timestamps once and atomically.
+- [x] Close draft is rejected; close closed is idempotent; close archived is rejected.
+- [x] Stage 6 close blocks when an `in_progress` Attempt exists and never fabricates incomplete finalization.
+- [x] Completed/finalized historical Attempt rows remain intact through close.
+- [x] Archive supports draft/closed only and preserves historical data.
+- [x] Active archive is rejected rather than implicitly closing.
+- [x] Topic close is blocked by any child Homework in draft/active.
+- [x] Topic archive is blocked by any child Homework in draft/active.
+- [x] Topic lifecycle never cascades Homework state.
+- [x] New `409 topic_has_open_assessments` contract is deterministic and non-sensitive.
+- [x] Topic close/archive versus Homework activation is transactionally race-safe.
+- [x] Recipient snapshot is race-safe against membership changes.
+- [x] Lifecycle semantic transitions touch Assessment + HomeworkAssignment `updated_at`; no-op/blocked operations do not.
+- [x] Existing Stage 5 Topic lifecycle behavior remains unchanged when no Stage 6 open Homework exists.
+- [x] No Student Attempt API, answer persistence, scoring, official designation, Blitz, frontend, docs, seed, dependency, or unrelated work enters scope.
+- [x] Focused tests pass.
+- [x] Pint passes.
+- [x] `git diff --check` passes.
+- [x] Final focused diff review finds no blocking tenant/security/lifecycle/concurrency/data-integrity issue.
+
+## 35.1 Delivery Evidence
+
+- Delivered in PR #151; merge `2bf1b94328f81810566af9bb0e9c739267e1352a`.
+- Final independent review: `PASS — P1=0, P2=0, P3=0`.
+- Focused verification: 89 tests / 1,538 assertions.
+- Pint: PASS.
+- `git diff --check`: PASS.
+- Delivery scope: exactly 26 backend files.
+- Delivery baseline: local `main` matched `origin/main`, ahead/behind `0/0`, with a clean worktree.
 
 ---
 
