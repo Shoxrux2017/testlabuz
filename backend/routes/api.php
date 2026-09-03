@@ -114,6 +114,9 @@ Route::prefix('teacher')
         Route::delete('materials/{material}', [TeacherLearningMaterialController::class, 'destroy']);
         Route::get('homework/{homework}', [TeacherHomeworkController::class, 'show']);
         Route::patch('homework/{homework}', [TeacherHomeworkController::class, 'update']);
+        Route::post('homework/{homework}/activate', [TeacherHomeworkController::class, 'activate']);
+        Route::post('homework/{homework}/close', [TeacherHomeworkController::class, 'close']);
+        Route::post('homework/{homework}/archive', [TeacherHomeworkController::class, 'archive']);
         Route::post('assessments/{assessment}/questions', [TeacherQuestionController::class, 'store']);
         Route::post('assessments/{assessment}/questions/reorder', [TeacherQuestionController::class, 'reorder']);
         Route::patch('questions/{question}', [TeacherQuestionController::class, 'update']);
