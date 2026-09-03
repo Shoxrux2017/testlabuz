@@ -12,7 +12,9 @@ use App\Exceptions\Files\UnsupportedFileTypeException;
 use App\Exceptions\Institution\GroupArchivedException;
 use App\Exceptions\Institution\InactiveGroupMemberException;
 use App\Exceptions\Institution\InactiveParentStudentRelationshipUserException;
+use App\Exceptions\Teacher\AssessmentHasNoScoreablePointsException;
 use App\Exceptions\Teacher\BusinessConflictException;
+use App\Exceptions\Teacher\ResultPairLockedException;
 use App\Exceptions\Teacher\TaskArchivedException;
 use App\Exceptions\Teacher\TaskClosedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
@@ -72,6 +74,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (TaskClosedException $e, Request $request) => ApiErrorResponse::taskClosed($request));
         $exceptions->render(fn (TaskArchivedException $e, Request $request) => ApiErrorResponse::taskArchived($request));
         $exceptions->render(fn (BusinessConflictException $e, Request $request) => ApiErrorResponse::businessConflict($request));
+        $exceptions->render(fn (ResultPairLockedException $e, Request $request) => ApiErrorResponse::resultPairLocked($request));
+        $exceptions->render(fn (AssessmentHasNoScoreablePointsException $e, Request $request) => ApiErrorResponse::assessmentHasNoScoreablePoints($request));
         $exceptions->render(fn (UnsupportedFileTypeException $e, Request $request) => ApiErrorResponse::unsupportedFileType($request));
         $exceptions->render(fn (FileTooLargeException $e, Request $request) => ApiErrorResponse::fileTooLarge($e->maxSizeBytes, $request));
         $exceptions->render(fn (FileUploadFailedException $e, Request $request) => ApiErrorResponse::fileUploadFailed($request));

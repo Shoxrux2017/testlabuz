@@ -9,6 +9,7 @@ use App\Models\GroupTeacherMembership;
 use App\Models\HomeworkAssignment;
 use App\Models\Topic;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -60,27 +61,27 @@ final class TeacherHomeworkAccess
             throw new NotFoundHttpException;
         }
 
-        $assessment = Assessment::query()
-            ->select([
-                'id',
-                'institution_id',
-                'topic_id',
-                'teacher_id',
-                'type',
-                'title',
-                'description',
-                'student_instructions',
-                'assignment_mode',
-                'total_possible_points',
-                'created_at',
-                'updated_at',
-            ])
-            ->where('institution_id', $teacher->institution_id)
-            ->where('teacher_id', $teacher->id)
-            ->where('type', AssessmentType::Homework->value)
+        $assessment = $this->visibleHomeworkQuery($teacher)
             ->whereKey($homeworkId)
-            ->whereHas('topic', fn ($query) => $query->visibleToTeacher($teacher))
-            ->with('topic:id,institution_id,group_id,teacher_id,status')
+            ->first();
+
+        if (! $assessment instanceof Assessment) {
+            throw new NotFoundHttpException;
+        }
+
+        return $assessment;
+    }
+
+    public function resolveHomeworkForQuestion(User $teacher, string $questionId): Assessment
+    {
+        if (! Str::isUuid($questionId)) {
+            throw new NotFoundHttpException;
+        }
+
+        $assessment = $this->visibleHomeworkQuery($teacher)
+            ->whereHas('questions', fn ($query) => $query
+                ->where('questions.institution_id', $teacher->institution_id)
+                ->whereKey($questionId))
             ->first();
 
         if (! $assessment instanceof Assessment) {
@@ -157,5 +158,29 @@ final class TeacherHomeworkAccess
         }
 
         return $membership;
+    }
+
+    private function visibleHomeworkQuery(User $teacher): Builder
+    {
+        return Assessment::query()
+            ->select([
+                'id',
+                'institution_id',
+                'topic_id',
+                'teacher_id',
+                'type',
+                'title',
+                'description',
+                'student_instructions',
+                'assignment_mode',
+                'total_possible_points',
+                'created_at',
+                'updated_at',
+            ])
+            ->where('institution_id', $teacher->institution_id)
+            ->where('teacher_id', $teacher->id)
+            ->where('type', AssessmentType::Homework->value)
+            ->whereHas('topic', fn ($query) => $query->visibleToTeacher($teacher))
+            ->with('topic:id,institution_id,group_id,teacher_id,status');
     }
 }

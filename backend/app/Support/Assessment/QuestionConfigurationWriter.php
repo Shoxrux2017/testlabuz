@@ -68,6 +68,91 @@ final class QuestionConfigurationWriter
         return $question;
     }
 
+    public function lockAndLoadConfiguration(Question $question): void
+    {
+        $choiceOptions = $question->choiceOptions()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+        $trueFalseAnswer = $question->trueFalseAnswer()->lockForUpdate()->first();
+        $shortAnswers = $question->shortAcceptedAnswers()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+        $matchingItems = $question->matchingItems()->orderBy('position')->orderBy('side')->orderBy('id')->lockForUpdate()->get();
+        $orderingItems = $question->orderingItems()->orderBy('correct_position')->orderBy('id')->lockForUpdate()->get();
+        $fillBlanks = $question->fillBlanks()->orderBy('position')->orderBy('id')->lockForUpdate()->get();
+        $fillBlankAnswers = QuestionFillBlankAcceptedAnswer::query()
+            ->where('institution_id', $question->institution_id)
+            ->whereIn('blank_id', $fillBlanks->pluck('id'))
+            ->orderBy('blank_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($fillBlanks as $fillBlank) {
+            $fillBlank->setRelation(
+                'acceptedAnswers',
+                $fillBlankAnswers->where('blank_id', $fillBlank->id)->values(),
+            );
+        }
+
+        $question->setRelations([
+            'choiceOptions' => $choiceOptions,
+            'trueFalseAnswer' => $trueFalseAnswer,
+            'shortAcceptedAnswers' => $shortAnswers,
+            'matchingItems' => $matchingItems,
+            'orderingItems' => $orderingItems,
+            'fillBlanks' => $fillBlanks,
+        ]);
+    }
+
+    /** @param array<string, mixed> $configuration */
+    public function replaceConfiguration(
+        Question $question,
+        QuestionType $type,
+        QuestionCheckingMode $checkingMode,
+        string $prompt,
+        array $configuration,
+    ): void {
+        $this->configurationValidator->validate($type, $checkingMode, $prompt, $configuration);
+        $this->deleteConfiguration($question);
+        $this->writeConfiguration($question, $type, $checkingMode, $configuration);
+        $question->unsetRelations();
+    }
+
+    public function deleteConfiguration(Question $question): void
+    {
+        $blankIds = QuestionFillBlank::query()
+            ->where('institution_id', $question->institution_id)
+            ->where('question_id', $question->id)
+            ->pluck('id');
+
+        QuestionFillBlankAcceptedAnswer::query()
+            ->where('institution_id', $question->institution_id)
+            ->whereIn('blank_id', $blankIds)
+            ->delete();
+        QuestionFillBlank::query()
+            ->where('institution_id', $question->institution_id)
+            ->where('question_id', $question->id)
+            ->delete();
+        QuestionOrderingItem::query()
+            ->where('institution_id', $question->institution_id)
+            ->where('question_id', $question->id)
+            ->delete();
+        QuestionMatchingItem::query()
+            ->where('institution_id', $question->institution_id)
+            ->where('question_id', $question->id)
+            ->delete();
+        QuestionShortAcceptedAnswer::query()
+            ->where('institution_id', $question->institution_id)
+            ->where('question_id', $question->id)
+            ->delete();
+        QuestionTrueFalseAnswer::query()
+            ->where('institution_id', $question->institution_id)
+            ->where('question_id', $question->id)
+            ->delete();
+        QuestionChoiceOption::query()
+            ->where('institution_id', $question->institution_id)
+            ->where('question_id', $question->id)
+            ->delete();
+    }
+
     /** @param array<string, mixed> $configuration */
     private function writeConfiguration(
         Question $question,

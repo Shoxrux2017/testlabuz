@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Student\StudentTopicController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherHomeworkController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherQuestionController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
 use App\Support\Auth\LoginRateLimitKey;
 use Illuminate\Support\Facades\Route;
@@ -113,6 +114,10 @@ Route::prefix('teacher')
         Route::delete('materials/{material}', [TeacherLearningMaterialController::class, 'destroy']);
         Route::get('homework/{homework}', [TeacherHomeworkController::class, 'show']);
         Route::patch('homework/{homework}', [TeacherHomeworkController::class, 'update']);
+        Route::post('assessments/{assessment}/questions', [TeacherQuestionController::class, 'store']);
+        Route::post('assessments/{assessment}/questions/reorder', [TeacherQuestionController::class, 'reorder']);
+        Route::patch('questions/{question}', [TeacherQuestionController::class, 'update']);
+        Route::delete('questions/{question}', [TeacherQuestionController::class, 'destroy']);
     });
 
 Route::prefix('student')
