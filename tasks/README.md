@@ -793,7 +793,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
 | Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
-| Stage 6 — Homework Assignment Management | `In Progress` | `S06-BE-005` |
+| Stage 6 — Homework Assignment Management | `In Progress` | `S06-BE-006` |
 
 Current Stage 5 progress:
 
@@ -841,10 +841,13 @@ Current Stage 6 progress:
   merge `503f5702b7db536610b2772f2940f32028f8f4af`.
 - `S06-BE-004`: Accepted / Delivered — PR #149,
   merge `1f366e8b4b98f1f40a115ca02c64bb7709901156`.
+- `S06-BE-005`: Accepted / Delivered — PR #151,
+  merge `2bf1b94328f81810566af9bb0e9c739267e1352a`.
 - Stage 6 backend implementation: In Progress.
-- Backend Phase 2, frontend, integration, and closure remain pending.
+- Backend Phase 2 remains pending and is not yet unlocked.
+- Frontend, integration, and closure remain pending.
 - Next permitted gate:
-  `S06-BE-005 — Homework Lifecycle, Recipient Snapshot & Topic Integration`.
+  `S06-BE-006 — Official Homework Designation & Staged Result Pair`.
 
 ---
 

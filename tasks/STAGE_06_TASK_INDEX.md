@@ -11,13 +11,13 @@
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
 | Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
-| Backend implementation | `In Progress — S06-BE-001, S06-BE-002, S06-BE-003, and S06-BE-004 Accepted / Delivered` |
+| Backend implementation | `In Progress — S06-BE-001, S06-BE-002, S06-BE-003, S06-BE-004, and S06-BE-005 Accepted / Delivered` |
 | Backend checkpoint | `Approved — Pending execution` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `Approved — Pending execution` |
 | Integration gate | `Approved — Pending execution` |
 | Stage Closure Review | `Approved — Pending execution` |
-| Next permitted implementation gate | `S06-BE-005 — Homework Lifecycle, Recipient Snapshot & Topic Integration` |
+| Next permitted implementation gate | `S06-BE-006 — Official Homework Designation & Staged Result Pair` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -974,7 +974,7 @@ P3 = 0
 | `S06-BE-002 Accepted / Delivered` | `S06-BE-003` | `PASS — unlocked` |
 | `S06-BE-003 Accepted / Delivered` | `S06-BE-004` | `PASS — unlocked` |
 | `S06-BE-004 Accepted / Delivered` | `S06-BE-005` | `PASS — unlocked` |
-| `S06-BE-005 Accepted / Delivered` | `S06-BE-006` | `Pending` |
+| `S06-BE-005 Accepted / Delivered` | `S06-BE-006` | `PASS — unlocked` |
 | `S06-BE-006 Accepted / Delivered` | Backend Phase 2 | `Pending` |
 | Backend Phase 2 `PASS` | `S06-FE-001` | `Pending` |
 | `S06-FE-001 Accepted / Delivered` | `S06-FE-002` | `Pending` |
@@ -1288,11 +1288,15 @@ S06-BE-003: Accepted / Delivered — PR #147,
 merge 503f5702b7db536610b2772f2940f32028f8f4af
 S06-BE-004: Accepted / Delivered — PR #149,
 merge 1f366e8b4b98f1f40a115ca02c64bb7709901156
-S06-BE-005: Approved / Not delivered
+S06-BE-005: Accepted / Delivered — PR #151,
+merge 2bf1b94328f81810566af9bb0e9c739267e1352a
 S06-BE-006: Approved / Not delivered
 
 Backend Phase 2:
 Pending
+
+Dependency gate:
+S06-BE-005 Accepted / Delivered -> S06-BE-006 = PASS — unlocked
 
 S06-FE-001: Approved / Not delivered
 S06-FE-002: Approved / Not delivered
@@ -1312,7 +1316,7 @@ Stage 6:
 In Progress — backend implementation in progress
 
 Next permitted gate:
-S06-BE-005 — Homework Lifecycle, Recipient Snapshot & Topic Integration
+S06-BE-006 — Official Homework Designation & Staged Result Pair
 ```
 
 ---
@@ -1321,22 +1325,26 @@ S06-BE-005 — Homework Lifecycle, Recipient Snapshot & Topic Integration
 
 Current implementation sequence:
 
-1. `S06-BE-004` delivered.
+1. `S06-BE-005` delivered.
 2. This bookkeeping must be delivered to `origin/main`.
 3. Project Owner synchronizes local `main`.
 4. ChatGPT re-checks the new current `origin/main`.
-5. ChatGPT re-checks the `S06-BE-005` contract against the delivered
-   `S06-BE-001`…`S06-BE-004` implementation and freezes the new `S06-BE-005`
+5. ChatGPT re-checks the `S06-BE-006` contract against the delivered
+   `S06-BE-001`…`S06-BE-005` implementation and freezes the new `S06-BE-006`
    implementation baseline.
 6. Only then execute:
 
 ```text
-S06-BE-005 — Homework Lifecycle, Recipient Snapshot & Topic Integration
+S06-BE-006 — Official Homework Designation & Staged Result Pair
 ```
+
+7. Backend Phase 2 becomes eligible only after `S06-BE-006` is independently
+   reviewed, `Accepted / Delivered`, and its bookkeeping is delivered.
 
 Do not start:
 
-- `S06-BE-006` or any later task before `S06-BE-005` is accepted and delivered;
+- Backend Phase 2 before `S06-BE-006` is independently reviewed,
+  `Accepted / Delivered`, and its bookkeeping is delivered;
 - multiple backend tasks in parallel;
 - frontend before Backend Phase 2;
 - Integration before both Phase 2 checkpoints;
