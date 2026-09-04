@@ -17,6 +17,7 @@ use App\Exceptions\Teacher\AssessmentNotAssignedException;
 use App\Exceptions\Teacher\BusinessConflictException;
 use App\Exceptions\Teacher\DeadlinePassedException;
 use App\Exceptions\Teacher\HomeworkHasInProgressAttemptException;
+use App\Exceptions\Teacher\OfficialTaskRequiresGroupAssignmentException;
 use App\Exceptions\Teacher\ResultPairLockedException;
 use App\Exceptions\Teacher\TaskArchivedException;
 use App\Exceptions\Teacher\TaskClosedException;
@@ -84,6 +85,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (TopicHasOpenAssessmentsException $e, Request $request) => ApiErrorResponse::topicHasOpenAssessments($request));
         $exceptions->render(fn (HomeworkHasInProgressAttemptException $e, Request $request) => ApiErrorResponse::homeworkHasInProgressAttempt($request));
         $exceptions->render(fn (BusinessConflictException $e, Request $request) => ApiErrorResponse::businessConflict($request));
+        $exceptions->render(fn (OfficialTaskRequiresGroupAssignmentException $e, Request $request) => ApiErrorResponse::officialTaskRequiresGroupAssignment($request));
         $exceptions->render(fn (ResultPairLockedException $e, Request $request) => ApiErrorResponse::resultPairLocked($request));
         $exceptions->render(fn (AssessmentHasNoScoreablePointsException $e, Request $request) => ApiErrorResponse::assessmentHasNoScoreablePoints($request));
         $exceptions->render(fn (UnsupportedFileTypeException $e, Request $request) => ApiErrorResponse::unsupportedFileType($request));

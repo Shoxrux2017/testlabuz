@@ -470,7 +470,7 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
         }
     }
 
-    public function test_lifecycle_actions_lock_but_never_mutate_an_existing_result_pair(): void
+    public function test_designated_activation_snapshots_the_pair_and_later_lifecycle_preserves_it(): void
     {
         [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
         $this->eligibleStudent($institution, $admin, $group);
@@ -482,16 +482,18 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
             'homework_assessment_id' => $assessment->id,
             'designated_by_user_id' => $teacher->id,
             'designated_at' => now()->subMinutes(3),
-            'cohort_snapshotted_at' => now()->subMinutes(2),
-            'locked_at' => now()->subMinute(),
         ]);
-        $before = $pair->fresh()?->getAttributes();
 
         $this->lifecycle($teacher, $assessment, 'activate')->assertOk();
+        $pair->refresh();
+        $this->assertNotNull($pair->cohort_snapshotted_at);
+        $this->assertNull($pair->locked_at);
+        $afterActivation = $pair->getAttributes();
+
         $this->lifecycle($teacher, $assessment, 'close')->assertOk();
         $this->lifecycle($teacher, $assessment, 'archive')->assertOk();
 
-        $this->assertSame($before, $pair->fresh()?->getAttributes());
+        $this->assertSame($afterActivation, $pair->fresh()?->getAttributes());
         $this->assertDatabaseCount('topic_result_pairs', 1);
     }
 

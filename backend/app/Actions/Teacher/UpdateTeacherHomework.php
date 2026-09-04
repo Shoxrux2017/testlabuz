@@ -7,15 +7,17 @@ use App\Enums\AssessmentAssignmentSource;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
 use App\Exceptions\Teacher\BusinessConflictException;
+use App\Exceptions\Teacher\OfficialTaskRequiresGroupAssignmentException;
 use App\Exceptions\Teacher\TaskArchivedException;
 use App\Exceptions\Teacher\TaskClosedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\HomeworkAssignment;
+use App\Models\TopicResultPair;
 use App\Models\User;
 use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
-use App\Support\Teacher\TeacherHomeworkAccess;
+use App\Support\Teacher\TeacherHomeworkLifecycleAccess;
 use App\Support\Teacher\TeacherHomeworkRecipients;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +33,7 @@ final class UpdateTeacherHomework
     ];
 
     public function __construct(
-        private readonly TeacherHomeworkAccess $access,
+        private readonly TeacherHomeworkLifecycleAccess $access,
         private readonly TeacherHomeworkRecipients $recipients,
         private readonly InstitutionHomeworkDeadlineAt $deadlineAt,
         private readonly ShowTeacherHomework $showTeacherHomework,
@@ -51,6 +53,7 @@ final class UpdateTeacherHomework
             ] = $this->access->lockHomework($teacher, $preliminaryAssessment);
 
             $this->ensureEditable($homework, $topic->status);
+            $pair = $this->access->lockResultPair($teacher, $topic, $assessment);
 
             $hasAttempts = AssessmentAttempt::query()
                 ->where('institution_id', $teacher->institution_id)
@@ -82,7 +85,6 @@ final class UpdateTeacherHomework
                 $resulting[$field] = $value;
             }
 
-            $this->validateAssignmentState($resulting['assignment_mode'], $resulting['student_ids']);
             $changes = $this->semanticChanges($assessment, $homework, $currentStudentIds, $resulting);
 
             if ($changes === []) {
@@ -95,7 +97,22 @@ final class UpdateTeacherHomework
                 throw new BusinessConflictException;
             }
 
-            if (! $hasAttempts) {
+            if ($pair instanceof TopicResultPair
+                && $pair->homework_assessment_id === $assessment->id
+                && isset($changes['assignment_mode'])
+                && $assessment->assignment_mode === AssessmentAssignmentMode::Group
+                && $resulting['assignment_mode'] === AssessmentAssignmentMode::SelectedStudents->value) {
+                throw new OfficialTaskRequiresGroupAssignmentException;
+            }
+
+            $this->validateAssignmentState($resulting['assignment_mode'], $resulting['student_ids']);
+
+            $hasEstablishedOfficialCohort = $pair instanceof TopicResultPair
+                && $pair->homework_assessment_id === $assessment->id
+                && $pair->cohort_snapshotted_at !== null
+                && $assessment->assignment_mode === AssessmentAssignmentMode::Group;
+
+            if (! $hasAttempts && ! $hasEstablishedOfficialCohort) {
                 $mode = AssessmentAssignmentMode::from($resulting['assignment_mode']);
 
                 if ($mode === AssessmentAssignmentMode::SelectedStudents) {

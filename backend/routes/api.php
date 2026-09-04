@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\V1\Teacher\TeacherHomeworkController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherQuestionController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherTopicResultPairController;
 use App\Support\Auth\LoginRateLimitKey;
 use Illuminate\Support\Facades\Route;
 
@@ -102,6 +103,8 @@ Route::prefix('teacher')
         Route::post('topics', [TeacherTopicController::class, 'store']);
         Route::get('topics/{topic}/homework', [TeacherHomeworkController::class, 'index']);
         Route::post('topics/{topic}/homework', [TeacherHomeworkController::class, 'store']);
+        Route::get('topics/{topic}/result-pair', [TeacherTopicResultPairController::class, 'show']);
+        Route::put('topics/{topic}/result-pair', [TeacherTopicResultPairController::class, 'update']);
         Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
         Route::patch('topics/{topic}', [TeacherTopicController::class, 'update']);
         Route::post('topics/{topic}/activate', [TeacherTopicController::class, 'activate']);
