@@ -19,6 +19,7 @@ use App\Models\TopicResultPair;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Tests\Feature\Teacher\Concerns\BuildsTeacherHomeworkContext;
@@ -91,6 +92,63 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
         $this->assertSame($student->id, $recipient->student_id);
         $this->assertDatabaseCount('assessment_attempts', 0);
         $this->assertDatabaseCount('topic_result_pairs', 0);
+    }
+
+    public function test_activation_bulk_locks_typed_configuration_with_a_constant_query_bound(): void
+    {
+        [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
+        $this->eligibleStudent($institution, $admin, $group);
+        $assessment = $this->persistedHomework(
+            $institution,
+            $teacher,
+            $topic,
+            assessmentAttributes: ['total_possible_points' => '1.000000'],
+        );
+
+        foreach (range(1, 100) as $position) {
+            $this->scoreableQuestion($assessment, position: $position);
+        }
+
+        $this->assertSame(100, Question::query()->where('assessment_id', $assessment->id)->count());
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        try {
+            $response = $this->lifecycle($teacher, $assessment, 'activate');
+            $activationQueries = DB::getQueryLog();
+        } finally {
+            DB::disableQueryLog();
+        }
+
+        $typedConfigurationTables = [
+            'question_choice_options',
+            'question_true_false_answers',
+            'question_short_accepted_answers',
+            'question_matching_items',
+            'question_ordering_items',
+            'question_fill_blanks',
+            'question_fill_blank_accepted_answers',
+        ];
+        $typedLockQueryCounts = collect($typedConfigurationTables)->mapWithKeys(function (string $table) use ($activationQueries): array {
+            $count = collect($activationQueries)->filter(function (array $query) use ($table): bool {
+                $sql = strtolower((string) $query['query']);
+
+                return str_contains($sql, 'from "'.$table.'"')
+                    && str_contains($sql, 'for update');
+            })->count();
+
+            return [$table => $count];
+        });
+
+        $response->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.total_possible_points', 100);
+        $this->assertSame(HomeworkStatus::Active, $assessment->homeworkAssignment()->firstOrFail()->status);
+        $this->assertSame('100.000000', $assessment->fresh()?->total_possible_points);
+        $this->assertDatabaseCount('assessment_attempts', 0);
+        $this->assertSame(array_fill_keys($typedConfigurationTables, 1), $typedLockQueryCounts->all());
+        $this->assertLessThanOrEqual(7, $typedLockQueryCounts->sum());
     }
 
     public function test_active_activate_is_a_no_op_before_parent_deadline_question_and_recipient_validation(): void
