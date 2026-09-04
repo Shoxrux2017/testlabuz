@@ -64,6 +64,8 @@ final class HomeworkActivationValidator
             throw new BusinessConflictException;
         }
 
+        $this->configurationWriter->lockAndLoadConfigurations($questions);
+
         $points = [];
 
         foreach ($questions as $question) {
@@ -101,8 +103,6 @@ final class HomeworkActivationValidator
             || (! is_int($rawPoints) && ! is_float($rawPoints) && ! is_string($rawPoints))) {
             throw new BusinessConflictException;
         }
-
-        $this->configurationWriter->lockAndLoadConfiguration($question);
 
         try {
             $this->configurationReader->assertNoIncompatibleTypedRows($question, $type, $checkingMode);
