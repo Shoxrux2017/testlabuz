@@ -7,7 +7,10 @@
 | Task ID | `S06-BE-006` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Backend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #153` |
+| Delivered merge | `c45e834784a303e74a41535a39293fbaefb6afc9` |
+| Acceptance review | `PASS — P1=0, P2=0, P3=0` |
 | Implementation type | `Laravel official Homework designation + staged Topic result-pair API` |
 | Depends on | `S06-BE-001…005` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
@@ -1347,38 +1350,48 @@ Do not modify frontend, docs, seeders, dependencies, task files, or unrelated co
 
 # 36. Acceptance Criteria
 
-- [ ] GET `/teacher/topics/{topic}/result-pair` returns `data:null` when no designation exists.
-- [ ] GET returns the exact Stage 6/future-compatible result-pair resource when present.
-- [ ] PUT accepts exactly one Stage 6 writable field: `homework_assessment_id`.
-- [ ] Stage 6 PUT does not require/accept `blitz_assessment_id`.
-- [ ] Candidate resolution is same-Topic/same-Institution/current-Teacher scoped and privacy-safe.
-- [ ] Selected-Student Homework cannot be official.
-- [ ] New/replacement candidate must be draft or active.
-- [ ] A Homework with any existing Attempt cannot newly become official.
-- [ ] Initial designation creates exactly one partial pair with null Blitz.
-- [ ] Draft candidate leaves official cohort unsnapshotted.
-- [ ] Active candidate adopts its existing persisted Group recipient snapshot without resnapshotting current membership.
-- [ ] Designated draft activation atomically sets `cohort_snapshotted_at`.
-- [ ] Official cohort identity is the designated Homework persisted recipient Student set.
-- [ ] Pair replacement is allowed only before lock/activity and while Blitz slot is null.
-- [ ] Replacement to draft clears cohort snapshot; replacement to active adopts candidate snapshot.
-- [ ] Pair replacement never deletes old Homework recipient/history rows.
-- [ ] Locked/activity-bearing pair replacement returns `result_pair_locked`.
-- [ ] Same-target PUT is idempotent even after later close/archive/lock, with zero timestamp churn.
-- [ ] Official Homework PATCH cannot change assignment mode to selected.
-- [ ] Designated draft Homework cannot archive until designation is replaced.
-- [ ] Designated closed Homework may archive historically and pair remains.
-- [ ] Question editing remains allowed pre-attempt according to S06-BE-004; designation alone does not freeze Questions.
-- [ ] No fake Blitz or second pair row exists.
-- [ ] Future Stage 7 first official Homework Attempt lock contract is encoded/testable without implementing the public Attempt API.
-- [ ] Future Stage 8 may fill nullable Blitz even after Homework-side pair lock; no code in this task structurally prevents that null-to-valid completion.
-- [ ] Concurrent initial/replacement designation remains one-row consistent.
-- [ ] Designation/activation concurrency preserves one authoritative cohort.
-- [ ] No scoring/result/Blitz/frontend/docs/seed/dependency work enters scope.
-- [ ] Focused tests pass.
-- [ ] Pint passes.
-- [ ] `git diff --check` passes.
-- [ ] Final focused diff review finds no blocking tenant/security/history/concurrency/staged-pair issue.
+- [x] GET `/teacher/topics/{topic}/result-pair` returns `data:null` when no designation exists.
+- [x] GET returns the exact Stage 6/future-compatible result-pair resource when present.
+- [x] PUT accepts exactly one Stage 6 writable field: `homework_assessment_id`.
+- [x] Stage 6 PUT does not require/accept `blitz_assessment_id`.
+- [x] Candidate resolution is same-Topic/same-Institution/current-Teacher scoped and privacy-safe.
+- [x] Selected-Student Homework cannot be official.
+- [x] New/replacement candidate must be draft or active.
+- [x] A Homework with any existing Attempt cannot newly become official.
+- [x] Initial designation creates exactly one partial pair with null Blitz.
+- [x] Draft candidate leaves official cohort unsnapshotted.
+- [x] Active candidate adopts its existing persisted Group recipient snapshot without resnapshotting current membership.
+- [x] Designated draft activation atomically sets `cohort_snapshotted_at`.
+- [x] Official cohort identity is the designated Homework persisted recipient Student set.
+- [x] Pair replacement is allowed only before lock/activity and while Blitz slot is null.
+- [x] Replacement to draft clears cohort snapshot; replacement to active adopts candidate snapshot.
+- [x] Pair replacement never deletes old Homework recipient/history rows.
+- [x] Locked/activity-bearing pair replacement returns `result_pair_locked`.
+- [x] Same-target PUT is idempotent even after later close/archive/lock, with zero timestamp churn.
+- [x] Official Homework PATCH cannot change assignment mode to selected.
+- [x] Designated draft Homework cannot archive until designation is replaced.
+- [x] Designated closed Homework may archive historically and pair remains.
+- [x] Question editing remains allowed pre-attempt according to S06-BE-004; designation alone does not freeze Questions.
+- [x] No fake Blitz or second pair row exists.
+- [x] Future Stage 7 first official Homework Attempt lock contract is encoded/testable without implementing the public Attempt API.
+- [x] Future Stage 8 may fill nullable Blitz even after Homework-side pair lock; no code in this task structurally prevents that null-to-valid completion.
+- [x] Concurrent initial/replacement designation remains one-row consistent.
+- [x] Designation/activation concurrency preserves one authoritative cohort.
+- [x] No scoring/result/Blitz/frontend/docs/seed/dependency work enters scope.
+- [x] Focused tests pass.
+- [x] Pint passes.
+- [x] `git diff --check` passes.
+- [x] Final focused diff review finds no blocking tenant/security/history/concurrency/staged-pair issue.
+
+## 36.1 Delivery Evidence
+
+- Delivery: PR #153, merge `c45e834784a303e74a41535a39293fbaefb6afc9`.
+- Independent review: PASS — P1=0, P2=0, P3=0.
+- Focused verification: 79 tests / 957 assertions.
+- Pint: 466 files PASS.
+- `git diff --check`: PASS.
+- Delivery scope: exactly 22 backend files.
+- Post-delivery Git state: local `main == origin/main`, ahead/behind `0/0`, worktree clean.
 
 ---
 

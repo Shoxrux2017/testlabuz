@@ -793,7 +793,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
 | Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
-| Stage 6 — Homework Assignment Management | `In Progress` | `S06-BE-006` |
+| Stage 6 — Homework Assignment Management | `In Progress` | `S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review` |
 
 Current Stage 5 progress:
 
@@ -843,11 +843,18 @@ Current Stage 6 progress:
   merge `1f366e8b4b98f1f40a115ca02c64bb7709901156`.
 - `S06-BE-005`: Accepted / Delivered — PR #151,
   merge `2bf1b94328f81810566af9bb0e9c739267e1352a`.
-- Stage 6 backend implementation: In Progress.
-- Backend Phase 2 remains pending and is not yet unlocked.
-- Frontend, integration, and closure remain pending.
+- `S06-BE-006`: Accepted / Delivered — PR #153,
+  merge `c45e834784a303e74a41535a39293fbaefb6afc9`.
+- Stage 6 backend implementation: Complete — `S06-BE-001…006` Accepted / Delivered.
+- Backend Phase 2: Approved — Pending execution; dependency gate PASS — unlocked.
+- Frontend implementation: Not started — blocked on Backend Phase 2 `PASS`.
+- Frontend Phase 2, integration, and closure remain pending.
+- Before Backend Phase 2 execution, this bookkeeping must be delivered to
+  `origin/main`, Project Owner must synchronize local `main`, and ChatGPT must
+  re-check the new `origin/main` and freeze the Backend Phase 2 audited
+  implementation baseline/current production head.
 - Next permitted gate:
-  `S06-BE-006 — Official Homework Designation & Staged Result Pair`.
+  `S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review`.
 
 ---
 

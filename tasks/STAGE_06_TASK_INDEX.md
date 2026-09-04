@@ -5,19 +5,19 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 6 — Homework Assignment Management` |
-| Stage status | `In Progress — backend implementation in progress` |
+| Stage status | `In Progress — Backend Phase 2 pending` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition status | `Approved / Delivered` |
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
 | Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
-| Backend implementation | `In Progress — S06-BE-001, S06-BE-002, S06-BE-003, S06-BE-004, and S06-BE-005 Accepted / Delivered` |
+| Backend implementation | `Complete — S06-BE-001…006 Accepted / Delivered; Backend Phase 2 pending` |
 | Backend checkpoint | `Approved — Pending execution` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `Approved — Pending execution` |
 | Integration gate | `Approved — Pending execution` |
 | Stage Closure Review | `Approved — Pending execution` |
-| Next permitted implementation gate | `S06-BE-006 — Official Homework Designation & Staged Result Pair` |
+| Next permitted implementation gate | `S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -600,8 +600,8 @@ Implementation proceeds in exact dependency order.
 | 2 | `S06-BE-002` | Backend | Typed Question Persistence & Domain Contracts | `S06-BE-001 Accepted / Delivered` | `Accepted` | `Delivered — PR #145, merge b85fc01604d7326104988d1cd3ffd3117c2eece5` | `tasks/backend/stage-06/S06-BE-002-typed-question-persistence-domain-contracts.md` |
 | 3 | `S06-BE-003` | Backend | Teacher Homework Authoring & Recipient Discovery API | `S06-BE-001` + `S06-BE-002` Accepted / Delivered | `Accepted` | `Delivered — PR #147, merge 503f5702b7db536610b2772f2940f32028f8f4af` | `tasks/backend/stage-06/S06-BE-003-teacher-homework-authoring-recipient-discovery-api.md` |
 | 4 | `S06-BE-004` | Backend | Teacher Question Mutation & Editing Integrity | `S06-BE-001…003 Accepted / Delivered` | `Accepted` | `Delivered — PR #149, merge 1f366e8b4b98f1f40a115ca02c64bb7709901156` | `tasks/backend/stage-06/S06-BE-004-teacher-question-mutation-editing-integrity.md` |
-| 5 | `S06-BE-005` | Backend | Homework Lifecycle, Recipient Snapshot & Topic Integration | `S06-BE-001…004 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-005-homework-lifecycle-recipient-snapshot-topic-integration.md` |
-| 6 | `S06-BE-006` | Backend | Official Homework Designation & Staged Result Pair | `S06-BE-001…005 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/backend/stage-06/S06-BE-006-official-homework-designation-staged-result-pair.md` |
+| 5 | `S06-BE-005` | Backend | Homework Lifecycle, Recipient Snapshot & Topic Integration | `S06-BE-001…004 Accepted / Delivered` | `Accepted` | `Delivered — PR #151, merge 2bf1b94328f81810566af9bb0e9c739267e1352a` | `tasks/backend/stage-06/S06-BE-005-homework-lifecycle-recipient-snapshot-topic-integration.md` |
+| 6 | `S06-BE-006` | Backend | Official Homework Designation & Staged Result Pair | `S06-BE-001…005 Accepted / Delivered` | `Accepted` | `Delivered — PR #153, merge c45e834784a303e74a41535a39293fbaefb6afc9` | `tasks/backend/stage-06/S06-BE-006-official-homework-designation-staged-result-pair.md` |
 | 7 | `S06-FE-001` | Frontend | Homework Client Domain, Read Surfaces & Routing | Backend Phase 2 `PASS` | `Approved` | `Not delivered` | `tasks/frontend/stage-06/S06-FE-001-homework-client-domain-read-surfaces-routing.md` |
 | 8 | `S06-FE-002` | Frontend | Homework Draft Builder: Metadata, Assignment & Deadline | `S06-FE-001 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/frontend/stage-06/S06-FE-002-homework-draft-builder-metadata-assignment-deadline.md` |
 | 9 | `S06-FE-003` | Frontend | Nine-Type Question Builder | `S06-FE-001` + `S06-FE-002 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/frontend/stage-06/S06-FE-003-nine-type-question-builder.md` |
@@ -975,7 +975,7 @@ P3 = 0
 | `S06-BE-003 Accepted / Delivered` | `S06-BE-004` | `PASS — unlocked` |
 | `S06-BE-004 Accepted / Delivered` | `S06-BE-005` | `PASS — unlocked` |
 | `S06-BE-005 Accepted / Delivered` | `S06-BE-006` | `PASS — unlocked` |
-| `S06-BE-006 Accepted / Delivered` | Backend Phase 2 | `Pending` |
+| `S06-BE-006 Accepted / Delivered` | `S06-BE-PHASE-2` | `PASS — unlocked` |
 | Backend Phase 2 `PASS` | `S06-FE-001` | `Pending` |
 | `S06-FE-001 Accepted / Delivered` | `S06-FE-002` | `Pending` |
 | `S06-FE-002 Accepted / Delivered` | `S06-FE-003` | `Pending` |
@@ -1290,13 +1290,14 @@ S06-BE-004: Accepted / Delivered — PR #149,
 merge 1f366e8b4b98f1f40a115ca02c64bb7709901156
 S06-BE-005: Accepted / Delivered — PR #151,
 merge 2bf1b94328f81810566af9bb0e9c739267e1352a
-S06-BE-006: Approved / Not delivered
+S06-BE-006: Accepted / Delivered — PR #153,
+merge c45e834784a303e74a41535a39293fbaefb6afc9
 
 Backend Phase 2:
-Pending
+Approved — Pending execution
 
 Dependency gate:
-S06-BE-005 Accepted / Delivered -> S06-BE-006 = PASS — unlocked
+S06-BE-006 Accepted / Delivered -> S06-BE-PHASE-2 = PASS — unlocked
 
 S06-FE-001: Approved / Not delivered
 S06-FE-002: Approved / Not delivered
@@ -1313,10 +1314,10 @@ Stage 6 Closure Review:
 Approved — Pending execution
 
 Stage 6:
-In Progress — backend implementation in progress
+In Progress — backend implementation complete; Backend Phase 2 pending
 
 Next permitted gate:
-S06-BE-006 — Official Homework Designation & Staged Result Pair
+S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review
 ```
 
 ---
@@ -1325,28 +1326,28 @@ S06-BE-006 — Official Homework Designation & Staged Result Pair
 
 Current implementation sequence:
 
-1. `S06-BE-005` delivered.
+1. `S06-BE-006` delivered.
 2. This bookkeeping must be delivered to `origin/main`.
 3. Project Owner synchronizes local `main`.
 4. ChatGPT re-checks the new current `origin/main`.
-5. ChatGPT re-checks the `S06-BE-006` contract against the delivered
-   `S06-BE-001`…`S06-BE-005` implementation and freezes the new `S06-BE-006`
-   implementation baseline.
-6. Only then execute:
+5. ChatGPT freezes the Backend Phase 2 audited implementation baseline/current
+   production head.
+6. Execute the read-only review and full backend regression suite:
 
 ```text
-S06-BE-006 — Official Homework Designation & Staged Result Pair
+S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review
 ```
 
-7. Backend Phase 2 becomes eligible only after `S06-BE-006` is independently
-   reviewed, `Accepted / Delivered`, and its bookkeeping is delivered.
+7. Fix any Backend Phase 2 findings before proceeding.
+8. Only Backend Phase 2 `PASS` may unlock `S06-FE-001`.
 
 Do not start:
 
-- Backend Phase 2 before `S06-BE-006` is independently reviewed,
-  `Accepted / Delivered`, and its bookkeeping is delivered;
+- Backend Phase 2 before this bookkeeping is delivered, local `main` is
+  synchronized, and ChatGPT freezes the audited implementation baseline/current
+  production head;
 - multiple backend tasks in parallel;
-- frontend before Backend Phase 2;
+- frontend before Backend Phase 2 `PASS`;
 - Integration before both Phase 2 checkpoints;
 - Stage 7 before Stage 6 closure.
 
