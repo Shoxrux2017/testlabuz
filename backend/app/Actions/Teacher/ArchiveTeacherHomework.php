@@ -37,7 +37,13 @@ final class ArchiveTeacherHomework
                 throw new BusinessConflictException;
             }
 
-            $this->access->lockResultPair($teacher, $topic, $assessment);
+            $pair = $this->access->lockResultPair($teacher, $topic, $assessment);
+
+            if ($homework->status === HomeworkStatus::Draft
+                && $pair?->homework_assessment_id === $assessment->id) {
+                throw new BusinessConflictException;
+            }
+
             $attempts = $this->access->lockAttempts($teacher, $assessment);
 
             if (($homework->status === HomeworkStatus::Draft && $attempts->isNotEmpty())

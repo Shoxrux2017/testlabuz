@@ -32,6 +32,8 @@ final class ApiErrorResponse
 
     private const CODE_INVALID_CREDENTIALS = 'invalid_credentials';
 
+    private const CODE_OFFICIAL_TASK_REQUIRES_GROUP_ASSIGNMENT = 'official_task_requires_group_assignment';
+
     private const CODE_PASSWORD_CHANGE_REQUIRED = 'password_change_required';
 
     private const CODE_FORBIDDEN = 'forbidden';
@@ -309,6 +311,19 @@ final class ApiErrorResponse
         return self::json(
             'The official result pair is locked.',
             self::CODE_RESULT_PAIR_LOCKED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function officialTaskRequiresGroupAssignment(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The official task requires whole-group assignment.',
+            self::CODE_OFFICIAL_TASK_REQUIRES_GROUP_ASSIGNMENT,
             Response::HTTP_CONFLICT,
         );
     }

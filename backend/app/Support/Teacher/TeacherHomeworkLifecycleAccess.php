@@ -27,9 +27,9 @@ final class TeacherHomeworkLifecycleAccess
         return $this->homeworkAccess->lockHomework($teacher, $preliminaryAssessment);
     }
 
-    public function lockResultPair(User $teacher, Topic $topic, Assessment $assessment): void
+    public function lockResultPair(User $teacher, Topic $topic, Assessment $assessment): ?TopicResultPair
     {
-        TopicResultPair::query()
+        return TopicResultPair::query()
             ->where('institution_id', $teacher->institution_id)
             ->where('topic_id', $topic->id)
             ->where(function ($query) use ($assessment): void {
@@ -37,9 +37,8 @@ final class TeacherHomeworkLifecycleAccess
                     ->where('homework_assessment_id', $assessment->id)
                     ->orWhere('blitz_assessment_id', $assessment->id);
             })
-            ->orderBy('id')
             ->lockForUpdate()
-            ->get(['id']);
+            ->first();
     }
 
     /** @return Collection<int, Question> */

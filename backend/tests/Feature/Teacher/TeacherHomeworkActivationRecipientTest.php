@@ -26,6 +26,7 @@ class TeacherHomeworkActivationRecipientTest extends TestCase
 
     public function test_group_activation_snapshots_exact_current_active_group_students(): void
     {
+        CarbonImmutable::setTestNow('2026-09-03 12:00:00 UTC');
         [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
         $eligibleA = $this->eligibleStudent($institution, $admin, $group);
         $eligibleB = $this->eligibleStudent($institution, $admin, $group);
