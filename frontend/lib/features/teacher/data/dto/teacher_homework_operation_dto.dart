@@ -1,5 +1,6 @@
 import 'teacher_dto_parse.dart';
 import 'teacher_homework_dto.dart';
+import '../../domain/teacher_homework_lifecycle.dart';
 
 class TeacherHomeworkMutationDto {
   const TeacherHomeworkMutationDto({required this.homework});
@@ -31,6 +32,10 @@ class TeacherHomeworkMutationDto {
   static const deleteQuestionSuccessMessage = 'Question deleted successfully.';
   static const reorderQuestionsSuccessMessage =
       'Questions reordered successfully.';
+
+  static String lifecycleSuccessMessage(TeacherHomeworkLifecycleAction action) {
+    return action.successMessage;
+  }
 
   final TeacherHomeworkDto homework;
 }

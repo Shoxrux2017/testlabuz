@@ -1,4 +1,5 @@
 import 'teacher_homework.dart';
+import 'teacher_homework_lifecycle.dart';
 import 'teacher_homework_list.dart';
 import 'teacher_homework_list_query.dart';
 import 'teacher_homework_mutation.dart';
@@ -20,6 +21,11 @@ abstract interface class TeacherHomeworkRepository {
   Future<TeacherHomework> updateHomework(
     String homeworkId,
     TeacherHomeworkEditRequest request,
+  );
+
+  Future<TeacherHomework> performLifecycleAction(
+    String homeworkId,
+    TeacherHomeworkLifecycleAction action,
   );
 
   Future<TeacherHomework> addQuestion(

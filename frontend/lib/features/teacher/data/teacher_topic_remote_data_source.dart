@@ -108,6 +108,7 @@ class TeacherTopicRemoteDataSource {
       expectedStatus: 200,
       expectedMessage: TeacherTopicMutationDto.lifecycleSuccessMessage(action),
       operation: _MutationOperation.lifecycle,
+      lifecycleAction: action,
     );
   }
 
@@ -116,6 +117,7 @@ class TeacherTopicRemoteDataSource {
     required int expectedStatus,
     required String expectedMessage,
     required _MutationOperation operation,
+    TeacherTopicLifecycleAction? lifecycleAction,
   }) async {
     try {
       final response = await send();
@@ -133,7 +135,11 @@ class TeacherTopicRemoteDataSource {
     } on TeacherTopicMutationOutcomeUnknownException {
       rethrow;
     } on DioException catch (exception) {
-      if (_isExactDefiniteMutationFailure(exception.response, operation)) {
+      if (_isExactDefiniteMutationFailure(
+        exception.response,
+        operation,
+        lifecycleAction: lifecycleAction,
+      )) {
         throw ApiRequestException(failureMapper.map(exception));
       }
       throw const TeacherTopicMutationOutcomeUnknownException();
@@ -162,8 +168,9 @@ enum _MutationOperation { create, update, lifecycle }
 
 bool _isExactDefiniteMutationFailure(
   Response<Object?>? response,
-  _MutationOperation operation,
-) {
+  _MutationOperation operation, {
+  TeacherTopicLifecycleAction? lifecycleAction,
+}) {
   final status = response?.statusCode;
   final envelope = _readExactErrorEnvelope(response?.data);
   if (status == null || envelope == null) {
@@ -179,7 +186,11 @@ bool _isExactDefiniteMutationFailure(
           code == ApiErrorCodes.institutionInactive,
     404 => code == ApiErrorCodes.resourceNotFound,
     409 when operation != _MutationOperation.create =>
-      code == ApiErrorCodes.topicNotEditable,
+      code == ApiErrorCodes.topicNotEditable ||
+          (operation == _MutationOperation.lifecycle &&
+              (lifecycleAction == TeacherTopicLifecycleAction.close ||
+                  lifecycleAction == TeacherTopicLifecycleAction.archive) &&
+              code == ApiErrorCodes.topicHasOpenAssessments),
     422 when operation != _MutationOperation.lifecycle =>
       code == ApiErrorCodes.validationFailed,
     429 => code == ApiErrorCodes.rateLimited,

@@ -11,6 +11,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_homework_d
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_target.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework_lifecycle.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_mutation.dart';
@@ -368,6 +369,14 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     detailRequests.add(homeworkId);
     return onFetchHomework?.call(homeworkId) ??
         Future.value(_homework(homeworkId: homeworkId));
+  }
+
+  @override
+  Future<TeacherHomework> performLifecycleAction(
+    String homeworkId,
+    TeacherHomeworkLifecycleAction action,
+  ) {
+    throw UnimplementedError('Mutations are not used by detail tests.');
   }
 
   @override

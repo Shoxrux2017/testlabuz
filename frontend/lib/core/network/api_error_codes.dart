@@ -12,8 +12,12 @@ abstract final class ApiErrorCodes {
   static const currentPasswordInvalid = 'current_password_invalid';
   static const rateLimited = 'rate_limited';
   static const topicNotEditable = 'topic_not_editable';
+  static const topicHasOpenAssessments = 'topic_has_open_assessments';
+  static const taskNotActive = 'task_not_active';
   static const taskClosed = 'task_closed';
   static const taskArchived = 'task_archived';
+  static const assessmentNotAssigned = 'assessment_not_assigned';
+  static const deadlinePassed = 'deadline_passed';
   static const resultPairLocked = 'result_pair_locked';
   static const assessmentHasNoScoreablePoints =
       'assessment_has_no_scoreable_points';

@@ -559,6 +559,49 @@ void main() {
   });
 
   testWidgets(
+    'open Homework conflict keeps Homework visible and gives safe guidance',
+    (tester) async {
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (id) async =>
+            teacherTopic(id: id, status: TeacherTopicStatus.active),
+        onLifecycle: (_, _) async => throw teacherServerFailure(
+          ApiErrorCodes.topicHasOpenAssessments,
+          statusCode: 409,
+        ),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicDetailLocation(_topicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('teacherTopicLifecycleclose')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('teacherTopicLifecycleConfirmButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(topics.lifecycleRequests, hasLength(1));
+      expect(topics.fetchIds, hasLength(2));
+      expect(
+        find.text(
+          "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.",
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('teacherHomeworkSection')), findsOneWidget);
+      expect(
+        find.byKey(const Key('teacherTopicLifecycleCheckCurrentButton')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'stale lifecycle confirmation dispatches no POST after session replacement',
     (tester) async {
       final auth = FakeTeacherAuthSessionController.authenticated(

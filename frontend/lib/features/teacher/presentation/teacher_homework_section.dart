@@ -8,6 +8,8 @@ import '../application/teacher_topic_detail_controller.dart';
 import '../application/teacher_topic_detail_state.dart';
 import '../application/teacher_homework_list_controller.dart';
 import '../application/teacher_homework_list_state.dart';
+import '../application/teacher_topic_result_pair_controller.dart';
+import '../application/teacher_topic_result_pair_state.dart';
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_homework_list.dart';
 import '../domain/teacher_homework_list_query.dart';
@@ -45,6 +47,10 @@ class _TeacherHomeworkSectionState
     final listProvider = teacherHomeworkListControllerProvider(widget.topicId);
     final state = ref.watch(listProvider);
     final controller = ref.read(listProvider.notifier);
+    final pairProvider = teacherTopicResultPairControllerProvider(
+      widget.topicId,
+    );
+    final pairState = ref.watch(pairProvider);
     final topicProvider = teacherTopicDetailControllerProvider(widget.topicId);
     final topicDetail = ref.watch(topicProvider);
     final topic = topicDetail.status == TeacherTopicDetailStatus.data
@@ -104,6 +110,29 @@ class _TeacherHomeworkSectionState
                 ),
               ],
             ),
+            if (pairState.isRequestInFlight) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(
+                key: Key('teacherHomeworkOfficialStatusLoading'),
+                semanticsLabel: 'Loading official Homework status',
+              ),
+            ] else if (pairState.status ==
+                TeacherTopicResultPairStatus.error) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('Official Homework status unavailable.'),
+                  ),
+                  TextButton.icon(
+                    key: const Key('teacherHomeworkOfficialStatusRetry'),
+                    onPressed: ref.read(pairProvider.notifier).retry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -194,6 +223,9 @@ class _TeacherHomeworkSectionState
             _HomeworkListBody(
               topicId: widget.topicId,
               state: state,
+              officialHomeworkId: pairState.hasConfirmedData
+                  ? pairState.pair?.homeworkAssessmentId
+                  : null,
               onRetry: controller.retry,
               onPrevious: controller.previousPage,
               onNext: controller.nextPage,
@@ -250,6 +282,7 @@ class _HomeworkListBody extends StatelessWidget {
   const _HomeworkListBody({
     required this.topicId,
     required this.state,
+    required this.officialHomeworkId,
     required this.onRetry,
     required this.onPrevious,
     required this.onNext,
@@ -257,6 +290,7 @@ class _HomeworkListBody extends StatelessWidget {
 
   final String topicId;
   final TeacherHomeworkListState state;
+  final String? officialHomeworkId;
   final VoidCallback onRetry;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
@@ -307,7 +341,13 @@ class _HomeworkListBody extends StatelessWidget {
         else
           for (var index = 0; index < result.items.length; index++) ...[
             if (index > 0) const SizedBox(height: 8),
-            _HomeworkRow(topicId: topicId, homework: result.items[index]),
+            _HomeworkRow(
+              topicId: topicId,
+              homework: result.items[index],
+              isOfficial:
+                  officialHomeworkId?.toLowerCase() ==
+                  result.items[index].id.toLowerCase(),
+            ),
           ],
         const SizedBox(height: 14),
         _HomeworkPagination(
@@ -323,10 +363,15 @@ class _HomeworkListBody extends StatelessWidget {
 }
 
 class _HomeworkRow extends StatelessWidget {
-  const _HomeworkRow({required this.topicId, required this.homework});
+  const _HomeworkRow({
+    required this.topicId,
+    required this.homework,
+    required this.isOfficial,
+  });
 
   final String topicId;
   final TeacherHomeworkSummary homework;
+  final bool isOfficial;
 
   @override
   Widget build(BuildContext context) {
@@ -363,6 +408,11 @@ class _HomeworkRow extends StatelessWidget {
                         teacherHomeworkAssignmentLabel(homework.assignmentMode),
                       ),
                     ),
+                    if (isOfficial)
+                      Chip(
+                        key: ValueKey('teacherHomeworkOfficial${homework.id}'),
+                        label: const Text('Official'),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),

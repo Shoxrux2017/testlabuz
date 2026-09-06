@@ -7,13 +7,20 @@ import '../../../app/router/app_route_paths.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/teacher_homework_detail_controller.dart';
 import '../application/teacher_homework_detail_state.dart';
+import '../application/teacher_homework_lifecycle_controller.dart';
+import '../application/teacher_homework_lifecycle_state.dart';
+import '../application/teacher_homework_route_mutation_activity.dart';
 import '../application/teacher_homework_route_target.dart';
+import '../application/teacher_official_homework_controller.dart';
+import '../application/teacher_official_homework_state.dart';
 import '../domain/teacher_homework.dart';
 import 'teacher_homework_formatters.dart';
+import 'teacher_homework_lifecycle_controls.dart';
+import 'teacher_official_homework_section.dart';
 import 'teacher_question_read_view.dart';
 import 'teacher_topic_formatters.dart';
 
-class TeacherHomeworkDetailScreen extends ConsumerWidget {
+class TeacherHomeworkDetailScreen extends ConsumerStatefulWidget {
   const TeacherHomeworkDetailScreen({
     required this.topicId,
     required this.homeworkId,
@@ -24,119 +31,280 @@ class TeacherHomeworkDetailScreen extends ConsumerWidget {
   final String homeworkId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final target = TeacherHomeworkRouteTarget(
-      topicId: topicId,
-      homeworkId: homeworkId,
+  ConsumerState<TeacherHomeworkDetailScreen> createState() =>
+      _TeacherHomeworkDetailScreenState();
+}
+
+class _TeacherHomeworkDetailScreenState
+    extends ConsumerState<TeacherHomeworkDetailScreen> {
+  late TeacherHomeworkRouteTarget _target;
+  late TeacherHomeworkLifecycleController _lifecycleController;
+  late TeacherOfficialHomeworkController _officialController;
+  late TeacherHomeworkRouteMutationActivityController
+  _routeMutationActivityController;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindTarget();
+  }
+
+  @override
+  void didUpdateWidget(covariant TeacherHomeworkDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.topicId.toLowerCase() == widget.topicId.toLowerCase() &&
+        oldWidget.homeworkId.toLowerCase() == widget.homeworkId.toLowerCase()) {
+      return;
+    }
+    final oldLifecycleController = _lifecycleController;
+    final oldOfficialController = _officialController;
+    final oldActivityController = _routeMutationActivityController;
+    oldLifecycleController.invalidateRouteCompletions();
+    oldOfficialController.invalidateRouteCompletions();
+    _bindTarget();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldLifecycleController.leaveRoute();
+      oldOfficialController.leaveRoute();
+      oldActivityController.endRoute();
+    });
+  }
+
+  void _bindTarget() {
+    _target = TeacherHomeworkRouteTarget(
+      topicId: widget.topicId,
+      homeworkId: widget.homeworkId,
     );
-    final detailProvider = teacherHomeworkDetailControllerProvider(target);
+    _lifecycleController = ref.read(
+      teacherHomeworkLifecycleControllerProvider(_target).notifier,
+    );
+    _officialController = ref.read(
+      teacherOfficialHomeworkControllerProvider(_target).notifier,
+    );
+    _routeMutationActivityController = ref.read(
+      teacherHomeworkRouteMutationActivityProvider(_target).notifier,
+    );
+  }
+
+  bool _isCurrentTarget(TeacherHomeworkRouteTarget target) {
+    return mounted && _target == target;
+  }
+
+  @override
+  void dispose() {
+    final lifecycleController = _lifecycleController;
+    final officialController = _officialController;
+    final activityController = _routeMutationActivityController;
+    lifecycleController.invalidateRouteCompletions();
+    officialController.invalidateRouteCompletions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      lifecycleController.leaveRoute();
+      officialController.leaveRoute();
+      activityController.endRoute();
+    });
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailProvider = teacherHomeworkDetailControllerProvider(_target);
     final detail = ref.watch(detailProvider);
     final surface = ref.watch(appDeviceSurfaceProvider);
+    final activity = surface == AppDeviceSurface.desktop
+        ? ref.watch(teacherHomeworkRouteMutationActivityProvider(_target))
+        : const TeacherHomeworkRouteMutationActivityState();
+    final lifecycleProvider = teacherHomeworkLifecycleControllerProvider(
+      _target,
+    );
+    final officialProvider = teacherOfficialHomeworkControllerProvider(_target);
+
+    if (surface == AppDeviceSurface.desktop) {
+      ref.listen<TeacherHomeworkLifecycleState>(lifecycleProvider, (
+        previous,
+        next,
+      ) {
+        if (next.status != TeacherHomeworkLifecycleStatus.confirmedSuccess ||
+            next.feedback == null ||
+            (previous?.status == next.status &&
+                previous?.feedback == next.feedback) ||
+            !context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next.feedback!)));
+        ref.read(lifecycleProvider.notifier).consumeFeedback();
+      });
+      ref.listen<TeacherOfficialHomeworkState>(officialProvider, (
+        previous,
+        next,
+      ) {
+        if (next.status != TeacherOfficialHomeworkStatus.confirmedSuccess ||
+            next.feedback == null ||
+            (previous?.status == next.status &&
+                previous?.feedback == next.feedback) ||
+            !context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next.feedback!)));
+        ref.read(officialProvider.notifier).consumeFeedback();
+      });
+    }
 
     void backToTopic() {
       if (context.canPop()) {
         context.pop();
         return;
       }
-      context.go(AppRoutePaths.teacherTopicDetailLocation(topicId));
+      context.go(AppRoutePaths.teacherTopicDetailLocation(_target.topicId));
     }
 
     final hasConfirmedHomework = detail.homework != null;
     final homework = detail.status == TeacherHomeworkDetailStatus.data
         ? detail.homework
         : null;
-    final canEdit =
+    final showAuthoring =
         surface == AppDeviceSurface.desktop &&
         homework != null &&
         (homework.status == TeacherHomeworkStatus.draft ||
             homework.status == TeacherHomeworkStatus.active);
 
-    return Scaffold(
-      key: const Key('teacherHomeworkDetailScreen'),
-      appBar: AppBar(
-        title: const Text('Homework Detail'),
-        leading: IconButton(
-          key: const Key('teacherHomeworkBackButton'),
-          tooltip: 'Back to Topic',
-          onPressed: backToTopic,
-          icon: const Icon(Icons.arrow_back),
+    return PopScope(
+      canPop: !activity.isActive,
+      child: Scaffold(
+        key: const Key('teacherHomeworkDetailScreen'),
+        appBar: AppBar(
+          title: const Text('Homework Detail'),
+          leading: IconButton(
+            key: const Key('teacherHomeworkBackButton'),
+            tooltip: 'Back to Topic',
+            onPressed: activity.isActive ? null : backToTopic,
+            icon: const Icon(Icons.arrow_back),
+          ),
+          actions: [
+            if (showAuthoring)
+              TextButton.icon(
+                key: const Key('teacherHomeworkManageQuestionsButton'),
+                onPressed: activity.isActive
+                    ? null
+                    : () => context.go(
+                        AppRoutePaths.teacherHomeworkQuestionsLocation(
+                          _target.topicId,
+                          _target.homeworkId,
+                        ),
+                      ),
+                icon: const Icon(Icons.quiz_outlined),
+                label: const Text('Manage Questions'),
+              ),
+            if (showAuthoring)
+              TextButton.icon(
+                key: const Key('teacherHomeworkEditButton'),
+                onPressed: activity.isActive
+                    ? null
+                    : () => context.go(
+                        AppRoutePaths.teacherHomeworkEditLocation(
+                          _target.topicId,
+                          _target.homeworkId,
+                        ),
+                      ),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit'),
+              ),
+            if (hasConfirmedHomework)
+              IconButton(
+                key: const Key('teacherHomeworkDetailRefreshButton'),
+                tooltip: 'Refresh Homework',
+                onPressed:
+                    activity.isActive ||
+                        detail.status == TeacherHomeworkDetailStatus.refreshing
+                    ? null
+                    : detail.status == TeacherHomeworkDetailStatus.error
+                    ? ref.read(detailProvider.notifier).retry
+                    : ref.read(detailProvider.notifier).refresh,
+                icon: const Icon(Icons.refresh),
+              ),
+          ],
         ),
-        actions: [
-          if (canEdit)
-            TextButton.icon(
-              key: const Key('teacherHomeworkManageQuestionsButton'),
-              onPressed: () => context.go(
-                AppRoutePaths.teacherHomeworkQuestionsLocation(
-                  topicId,
-                  homeworkId,
-                ),
+        body: SafeArea(
+          child: switch (detail.status) {
+            TeacherHomeworkDetailStatus.initial ||
+            TeacherHomeworkDetailStatus.loading => const Center(
+              child: CircularProgressIndicator(
+                key: Key('teacherHomeworkDetailLoading'),
+                semanticsLabel: 'Loading Homework detail',
               ),
-              icon: const Icon(Icons.quiz_outlined),
-              label: const Text('Manage Questions'),
             ),
-          if (canEdit)
-            TextButton.icon(
-              key: const Key('teacherHomeworkEditButton'),
-              onPressed: () => context.go(
-                AppRoutePaths.teacherHomeworkEditLocation(topicId, homeworkId),
-              ),
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit'),
+            TeacherHomeworkDetailStatus.notFound => _HomeworkUnavailable(
+              onBack: backToTopic,
             ),
-          if (hasConfirmedHomework)
-            IconButton(
-              key: const Key('teacherHomeworkDetailRefreshButton'),
-              tooltip: 'Refresh Homework',
-              onPressed: detail.status == TeacherHomeworkDetailStatus.refreshing
-                  ? null
-                  : detail.status == TeacherHomeworkDetailStatus.error
-                  ? ref.read(detailProvider.notifier).retry
-                  : ref.read(detailProvider.notifier).refresh,
-              icon: const Icon(Icons.refresh),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: switch (detail.status) {
-          TeacherHomeworkDetailStatus.initial ||
-          TeacherHomeworkDetailStatus.loading => const Center(
-            child: CircularProgressIndicator(
-              key: Key('teacherHomeworkDetailLoading'),
-              semanticsLabel: 'Loading Homework detail',
-            ),
-          ),
-          TeacherHomeworkDetailStatus.notFound => _HomeworkUnavailable(
-            onBack: backToTopic,
-          ),
-          TeacherHomeworkDetailStatus.error =>
-            detail.homework == null
-                ? _HomeworkDetailError(
-                    failure: detail.failure,
-                    onRetry: ref.read(detailProvider.notifier).retry,
-                    onBack: backToTopic,
-                  )
-                : _HomeworkDetailContent(
-                    homework: detail.homework!,
-                    refreshing: false,
-                    stale: detail.isStale,
-                    onRetry: ref.read(detailProvider.notifier).retry,
-                  ),
-          TeacherHomeworkDetailStatus.data ||
-          TeacherHomeworkDetailStatus.refreshing =>
-            detail.homework == null
-                ? _HomeworkDetailError(
-                    failure: detail.failure,
-                    onRetry: ref.read(detailProvider.notifier).retry,
-                    onBack: backToTopic,
-                  )
-                : _HomeworkDetailContent(
-                    homework: detail.homework!,
-                    refreshing:
-                        detail.status == TeacherHomeworkDetailStatus.refreshing,
-                    stale: detail.isStale,
-                    onRetry: ref.read(detailProvider.notifier).retry,
-                  ),
-        },
+            TeacherHomeworkDetailStatus.error =>
+              detail.homework == null
+                  ? _HomeworkDetailError(
+                      failure: detail.failure,
+                      onRetry: ref.read(detailProvider.notifier).retry,
+                      onBack: backToTopic,
+                    )
+                  : _HomeworkDetailContent(
+                      target: _target,
+                      homework: detail.homework!,
+                      surface: surface,
+                      mutationsAvailable: false,
+                      refreshing: false,
+                      stale: detail.isStale,
+                      isCurrentTarget: _isCurrentTarget,
+                      onRetry: ref.read(detailProvider.notifier).retry,
+                      onEditHomework: () => context.go(
+                        AppRoutePaths.teacherHomeworkEditLocation(
+                          _target.topicId,
+                          _target.homeworkId,
+                        ),
+                      ),
+                      onManageQuestions: () => context.go(
+                        AppRoutePaths.teacherHomeworkQuestionsLocation(
+                          _target.topicId,
+                          _target.homeworkId,
+                        ),
+                      ),
+                      onBackToTopic: backToTopic,
+                    ),
+            TeacherHomeworkDetailStatus.data ||
+            TeacherHomeworkDetailStatus.refreshing =>
+              detail.homework == null
+                  ? _HomeworkDetailError(
+                      failure: detail.failure,
+                      onRetry: ref.read(detailProvider.notifier).retry,
+                      onBack: backToTopic,
+                    )
+                  : _HomeworkDetailContent(
+                      target: _target,
+                      homework: detail.homework!,
+                      surface: surface,
+                      mutationsAvailable:
+                          detail.status == TeacherHomeworkDetailStatus.data &&
+                          !detail.isStale,
+                      refreshing:
+                          detail.status ==
+                          TeacherHomeworkDetailStatus.refreshing,
+                      stale: detail.isStale,
+                      isCurrentTarget: _isCurrentTarget,
+                      onRetry: ref.read(detailProvider.notifier).retry,
+                      onEditHomework: () => context.go(
+                        AppRoutePaths.teacherHomeworkEditLocation(
+                          _target.topicId,
+                          _target.homeworkId,
+                        ),
+                      ),
+                      onManageQuestions: () => context.go(
+                        AppRoutePaths.teacherHomeworkQuestionsLocation(
+                          _target.topicId,
+                          _target.homeworkId,
+                        ),
+                      ),
+                      onBackToTopic: backToTopic,
+                    ),
+          },
+        ),
       ),
     );
   }
@@ -144,16 +312,30 @@ class TeacherHomeworkDetailScreen extends ConsumerWidget {
 
 class _HomeworkDetailContent extends StatelessWidget {
   const _HomeworkDetailContent({
+    required this.target,
     required this.homework,
+    required this.surface,
+    required this.mutationsAvailable,
     required this.refreshing,
     required this.stale,
+    required this.isCurrentTarget,
     required this.onRetry,
+    required this.onEditHomework,
+    required this.onManageQuestions,
+    required this.onBackToTopic,
   });
 
+  final TeacherHomeworkRouteTarget target;
   final TeacherHomework homework;
+  final AppDeviceSurface surface;
+  final bool mutationsAvailable;
   final bool refreshing;
   final bool stale;
+  final bool Function(TeacherHomeworkRouteTarget target) isCurrentTarget;
   final VoidCallback onRetry;
+  final VoidCallback onEditHomework;
+  final VoidCallback onManageQuestions;
+  final VoidCallback onBackToTopic;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +411,21 @@ class _HomeworkDetailContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              TeacherHomeworkLifecycleControls(
+                key: ValueKey(
+                  'teacherHomeworkLifecycleControls${target.topicId}${target.homeworkId}',
+                ),
+                target: target,
+                homework: homework,
+                surface: surface,
+                mutationsAvailable: mutationsAvailable,
+                isCurrentTarget: isCurrentTarget,
+                onEditHomework: onEditHomework,
+                onManageQuestions: onManageQuestions,
+                onBackToTopic: onBackToTopic,
+              ),
+              if (surface == AppDeviceSurface.desktop)
+                const SizedBox(height: 12),
               _HomeworkDetailCard(
                 title: 'Summary',
                 rows: [
@@ -251,6 +448,17 @@ class _HomeworkDetailContent extends StatelessWidget {
                   ),
                   ('Institution timezone', homework.institutionTimezone),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TeacherOfficialHomeworkSection(
+                key: ValueKey(
+                  'teacherOfficialHomeworkSection${target.topicId}${target.homeworkId}',
+                ),
+                target: target,
+                homework: homework,
+                surface: surface,
+                mutationsAvailable: mutationsAvailable,
+                isCurrentTarget: isCurrentTarget,
               ),
               const SizedBox(height: 12),
               _HomeworkDetailCard(

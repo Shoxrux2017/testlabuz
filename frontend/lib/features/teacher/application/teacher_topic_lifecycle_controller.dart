@@ -90,6 +90,12 @@ class TeacherTopicLifecycleController
         return;
       }
       if (exception.failure.statusCode == 409 &&
+          exception.failure.serverCode ==
+              ApiErrorCodes.topicHasOpenAssessments &&
+          (action == TeacherTopicLifecycleAction.close ||
+              action == TeacherTopicLifecycleAction.archive)) {
+        await _refreshAfterOpenAssessmentsConflict(generation, key, action);
+      } else if (exception.failure.statusCode == 409 &&
           exception.failure.serverCode == ApiErrorCodes.topicNotEditable) {
         _pendingTopicNotEditable = true;
         await _reconcile(
@@ -105,6 +111,51 @@ class TeacherTopicLifecycleController
     } catch (_) {
       await _reconcile(generation, key, action);
     }
+  }
+
+  Future<void> _refreshAfterOpenAssessmentsConflict(
+    int generation,
+    TeacherSessionKey key,
+    TeacherTopicLifecycleAction action,
+  ) async {
+    if (!_canPublish(generation, key, action)) {
+      return;
+    }
+    state = TeacherTopicLifecycleState(
+      status: TeacherTopicLifecycleStatus.reconciling,
+      action: action,
+    );
+    try {
+      final current = await ref
+          .read(teacherTopicRepositoryProvider)
+          .fetchTopic(topicId);
+      if (!_canPublish(generation, key, action)) {
+        return;
+      }
+      ref
+          .read(teacherTopicDetailControllerProvider(topicId).notifier)
+          .acceptAuthoritativeTopic(current);
+    } on ApiRequestException catch (exception) {
+      if (!_canPublish(generation, key, action) ||
+          _clearForSessionFailure(exception.failure)) {
+        return;
+      }
+    } catch (_) {
+      if (!_canPublish(generation, key, action)) {
+        return;
+      }
+    }
+
+    if (!_canPublish(generation, key, action)) {
+      return;
+    }
+    _activeAction = null;
+    _pendingTopicNotEditable = false;
+    state = TeacherTopicLifecycleState(
+      status: TeacherTopicLifecycleStatus.definiteFailure,
+      action: action,
+      feedback: _topicHasOpenAssessmentsFeedback,
+    );
   }
 
   Future<void> checkCurrentTopic() async {
@@ -318,3 +369,6 @@ String _notAvailableMessage(TeacherTopicLifecycleAction action) {
 
   return 'This action is not available in the current server state.';
 }
+
+const _topicHasOpenAssessmentsFeedback =
+    "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.";

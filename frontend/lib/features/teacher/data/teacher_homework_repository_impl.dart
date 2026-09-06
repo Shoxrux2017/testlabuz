@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../domain/teacher_homework.dart';
+import '../domain/teacher_homework_lifecycle.dart';
 import '../domain/teacher_homework_list.dart';
 import '../domain/teacher_homework_list_query.dart';
 import '../domain/teacher_homework_mutation.dart';
@@ -71,6 +72,23 @@ class TeacherHomeworkRepositoryImpl implements TeacherHomeworkRepository {
           message: 'Teacher Homework detail ID does not match the request.',
         ),
       );
+    }
+    return homework;
+  }
+
+  @override
+  Future<TeacherHomework> performLifecycleAction(
+    String homeworkId,
+    TeacherHomeworkLifecycleAction action,
+  ) async {
+    final dto = await remoteDataSource.performLifecycleAction(
+      homeworkId,
+      action,
+    );
+    final homework = dto.homework.toDomain();
+    if (homework.id.toLowerCase() != homeworkId.toLowerCase() ||
+        homework.status != action.expectedStatus) {
+      throw const TeacherHomeworkMutationOutcomeUnknownException();
     }
     return homework;
   }

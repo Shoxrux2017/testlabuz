@@ -7,15 +7,22 @@ import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair_repository.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_homework_section.dart';
 
 import 'teacher_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
+const _homeworkId = '50000000-0000-0000-0000-000000000001';
+const _otherHomeworkId = '50000000-0000-0000-0000-000000000002';
+const _pairId = '90000000-0000-0000-0000-000000000001';
+const _blitzId = 'a0000000-0000-0000-0000-000000000001';
 
 void main() {
   testWidgets('Homework section keeps loading and empty states local', (
@@ -275,12 +282,119 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'pair loading and error Retry stay independent from the Homework list',
+    (tester) async {
+      final firstRead = Completer<TeacherTopicResultPair?>();
+      var pairFetches = 0;
+      final pairs = _FakeResultPairRepository(
+        onFetch: (_) {
+          pairFetches += 1;
+          if (pairFetches == 1) {
+            return firstRead.future;
+          }
+          return Future.value(_resultPair());
+        },
+      );
+      final repository = FakeTeacherHomeworkRepository(
+        onFetchList: (_, query) async => teacherHomeworkList(
+          items: [teacherHomeworkSummary()],
+          page: query.page,
+          perPage: query.perPage,
+          total: 1,
+        ),
+      );
+
+      await _pumpSection(tester, repository, pairs: pairs);
+      await tester.pump();
+
+      expect(find.text('Equation practice'), findsOneWidget);
+      expect(
+        find.byKey(const Key('teacherHomeworkOfficialStatusLoading')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(Key('teacherHomeworkOfficial$_homeworkId')),
+        findsNothing,
+      );
+
+      firstRead.completeError(teacherLocalFailure(ApiFailureKind.connection));
+      await tester.pumpAndSettle();
+      expect(find.text('Equation practice'), findsOneWidget);
+      expect(
+        find.text('Official Homework status unavailable.'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('teacherHomeworkOfficialStatusRetry')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Raw local failure'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const Key('teacherHomeworkOfficialStatusRetry')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(pairFetches, 2);
+      expect(find.text('Equation practice'), findsOneWidget);
+      expect(
+        find.byKey(Key('teacherHomeworkOfficial$_homeworkId')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('official list badge is authoritative on desktop and mobile', (
+    tester,
+  ) async {
+    for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
+      final repository = FakeTeacherHomeworkRepository(
+        onFetchList: (_, query) async => teacherHomeworkList(
+          items: [
+            teacherHomeworkSummary(),
+            teacherHomeworkSummary(
+              id: _otherHomeworkId,
+              title: 'Other practice',
+            ),
+          ],
+          page: query.page,
+          perPage: query.perPage,
+          total: 2,
+        ),
+      );
+      await _pumpSection(
+        tester,
+        repository,
+        surface: surface,
+        pairs: _FakeResultPairRepository(onFetch: (_) async => _resultPair()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(Key('teacherHomeworkOfficial$_homeworkId')),
+        findsOneWidget,
+        reason: surface.name,
+      );
+      expect(
+        find.byKey(Key('teacherHomeworkOfficial$_otherHomeworkId')),
+        findsNothing,
+      );
+      expect(find.text('Official'), findsOneWidget);
+      expect(find.textContaining(_pairId), findsNothing);
+      expect(find.textContaining(_homeworkId), findsNothing);
+      expect(find.textContaining(_blitzId), findsNothing);
+      expect(find.textContaining('Blitz'), findsNothing);
+    }
+  });
 }
 
 Future<void> _pumpSection(
   WidgetTester tester,
   FakeTeacherHomeworkRepository repository, {
   FakeTeacherTopicRepository? topics,
+  _FakeResultPairRepository? pairs,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
 }) async {
   await tester.pumpWidget(
@@ -297,6 +411,9 @@ Future<void> _pumpSection(
         teacherTopicRepositoryProvider.overrideWithValue(
           topics ?? FakeTeacherTopicRepository(),
         ),
+        teacherTopicResultPairRepositoryProvider.overrideWithValue(
+          pairs ?? _FakeResultPairRepository(),
+        ),
       ],
       child: const MaterialApp(
         home: Scaffold(
@@ -310,6 +427,41 @@ Future<void> _pumpSection(
   );
   await tester.pump();
   await tester.pump();
+}
+
+TeacherTopicResultPair _resultPair() {
+  return TeacherTopicResultPair(
+    id: _pairId,
+    topicId: _topicId,
+    homeworkAssessmentId: _homeworkId,
+    blitzAssessmentId: _blitzId,
+    cohortSnapshottedAt: DateTime.utc(2026, 9, 3, 10),
+    lockedAt: null,
+    designatedAt: DateTime.utc(2026, 9, 3, 10),
+    createdAt: DateTime.utc(2026, 9, 3, 10),
+    updatedAt: DateTime.utc(2026, 9, 3, 10),
+  );
+}
+
+class _FakeResultPairRepository implements TeacherTopicResultPairRepository {
+  _FakeResultPairRepository({this.onFetch});
+
+  final Future<TeacherTopicResultPair?> Function(String topicId)? onFetch;
+  final fetchRequests = <String>[];
+
+  @override
+  Future<TeacherTopicResultPair?> fetchResultPair(String topicId) {
+    fetchRequests.add(topicId);
+    return onFetch?.call(topicId) ?? Future.value(null);
+  }
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialHomework(
+    String topicId,
+    String homeworkId,
+  ) {
+    throw StateError('Official designation is not used by this widget test.');
+  }
 }
 
 Future<void> _selectDropdownOption<T>(

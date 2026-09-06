@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
@@ -196,6 +197,68 @@ void main() {
     });
 
     test(
+      'only close and archive map exact open Homework conflict as definite',
+      () async {
+        for (final action in [
+          TeacherTopicLifecycleAction.close,
+          TeacherTopicLifecycleAction.archive,
+        ]) {
+          final adapter = _RecordingAdapter(
+            (_) => _jsonResponse(409, {
+              'message': 'Topic has open assessments.',
+              'code': ApiErrorCodes.topicHasOpenAssessments,
+              'errors': <String, Object?>{},
+              'request_id': 'req-1',
+            }),
+          );
+          final source = TeacherTopicRemoteDataSource(
+            dio: _dio(adapter),
+            failureMapper: const DioFailureMapper(),
+          );
+
+          await expectLater(
+            source.performLifecycleAction(_canonicalTopicId, action),
+            throwsA(
+              isA<ApiRequestException>().having(
+                (error) => error.failure.serverCode,
+                'serverCode',
+                ApiErrorCodes.topicHasOpenAssessments,
+              ),
+            ),
+          );
+          expect(adapter.requests, hasLength(1));
+        }
+
+        for (final conflict in [
+          (
+            TeacherTopicLifecycleAction.activate,
+            ApiErrorCodes.topicHasOpenAssessments,
+          ),
+          (TeacherTopicLifecycleAction.close, ApiErrorCodes.businessConflict),
+        ]) {
+          final adapter = _RecordingAdapter(
+            (_) => _jsonResponse(409, {
+              'message': 'Unknown Topic conflict.',
+              'code': conflict.$2,
+              'errors': <String, Object?>{},
+              'request_id': 'req-1',
+            }),
+          );
+          final source = TeacherTopicRemoteDataSource(
+            dio: _dio(adapter),
+            failureMapper: const DioFailureMapper(),
+          );
+
+          await expectLater(
+            source.performLifecycleAction(_canonicalTopicId, conflict.$1),
+            throwsA(isA<TeacherTopicMutationOutcomeUnknownException>()),
+          );
+          expect(adapter.requests, hasLength(1));
+        }
+      },
+    );
+
+    test(
       'malformed success and transport ambiguity remain outcome unknown',
       () async {
         for (final handler in <FutureOr<ResponseBody> Function(RequestOptions)>[
@@ -359,6 +422,8 @@ void main() {
     );
   });
 }
+
+const _canonicalTopicId = '10000000-0000-0000-0000-000000000001';
 
 Dio _dio(_RecordingAdapter adapter) {
   final dio = Dio(
