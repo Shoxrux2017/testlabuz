@@ -14,8 +14,9 @@ import '../application/teacher_material_mutation_activity.dart';
 import '../application/teacher_session_key.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_mutation.dart';
-import 'teacher_topic_formatters.dart';
+import 'teacher_homework_section.dart';
 import 'teacher_learning_material_section.dart';
+import 'teacher_topic_formatters.dart';
 
 class TeacherTopicDetailScreen extends ConsumerWidget {
   const TeacherTopicDetailScreen({required this.topicId, super.key});
@@ -296,6 +297,8 @@ class _TopicDetailContent extends StatelessWidget {
                   lifecycleBusy: lifecycle.isBusy,
                 ),
               ],
+              const SizedBox(height: 12),
+              TeacherHomeworkSection(topicId: topic.id),
             ],
           ),
         ),

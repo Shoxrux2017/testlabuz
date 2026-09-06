@@ -29,6 +29,7 @@ import '../../features/student/application/student_session_key.dart';
 import '../../features/student/presentation/student_learning_workspace_screen.dart';
 import '../../features/student/presentation/student_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_learning_workspace_screen.dart';
+import '../../features/teacher/presentation/teacher_homework_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
@@ -293,6 +294,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   authoring: true,
                 ),
               ),
+              GoRoute(
+                name: AppRouteNames.teacherHomeworkDetail,
+                path:
+                    '${AppRoutePaths.teacherHomeworkSegment}/'
+                    ':${AppRoutePaths.teacherHomeworkIdParameter}',
+                builder: (context, state) => _buildTeacherDestination(
+                  TeacherHomeworkDetailScreen(
+                    topicId:
+                        state.pathParameters[AppRoutePaths
+                            .teacherTopicIdParameter] ??
+                        '',
+                    homeworkId:
+                        state.pathParameters[AppRoutePaths
+                            .teacherHomeworkIdParameter] ??
+                        '',
+                  ),
+                ),
+              ),
             ],
           ),
         ],
@@ -401,6 +420,9 @@ String _safeInitialLocation(String requestedLocation) {
     if (AppRoutePaths.isInstitutionAdminSegment(withoutFinalSlash)) {
       return AppRoutePaths.institutionAdmin;
     }
+    if (AppRoutePaths.isTeacherSegment(withoutFinalSlash)) {
+      return AppRoutePaths.teacher;
+    }
   }
 
   return requestedLocation;
@@ -495,7 +517,8 @@ String? _authRedirect(
       return null;
     }
     if (surface == AppDeviceSurface.mobile) {
-      if (AppRoutePaths.isTeacherTopicDetailPath(location)) {
+      if (AppRoutePaths.isTeacherTopicDetailPath(location) ||
+          AppRoutePaths.isTeacherHomeworkDetailPath(location)) {
         return null;
       }
       if (AppRoutePaths.isTeacherTopicEditPath(location)) {
@@ -561,6 +584,9 @@ bool _keepsLocationDuringBootstrap(
       AppRoutePaths.isPlatformOwnerSegment(location) ||
       AppRoutePaths.isInstitutionAdminApprovedLocation(location) ||
       (AppRoutePaths.isTeacherTopicDetailPath(location) &&
+          (surface == AppDeviceSurface.desktop ||
+              surface == AppDeviceSurface.mobile)) ||
+      (AppRoutePaths.isTeacherHomeworkDetailPath(location) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       (AppRoutePaths.isStudentTopicDetailPath(location) &&
