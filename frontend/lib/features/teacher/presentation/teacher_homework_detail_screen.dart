@@ -64,6 +64,18 @@ class TeacherHomeworkDetailScreen extends ConsumerWidget {
         actions: [
           if (canEdit)
             TextButton.icon(
+              key: const Key('teacherHomeworkManageQuestionsButton'),
+              onPressed: () => context.go(
+                AppRoutePaths.teacherHomeworkQuestionsLocation(
+                  topicId,
+                  homeworkId,
+                ),
+              ),
+              icon: const Icon(Icons.quiz_outlined),
+              label: const Text('Manage Questions'),
+            ),
+          if (canEdit)
+            TextButton.icon(
               key: const Key('teacherHomeworkEditButton'),
               onPressed: () => context.go(
                 AppRoutePaths.teacherHomeworkEditLocation(topicId, homeworkId),

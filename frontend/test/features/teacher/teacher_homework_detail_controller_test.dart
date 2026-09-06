@@ -15,6 +15,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list.d
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_repository.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
 
 import 'teacher_test_support.dart';
 
@@ -336,6 +337,14 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   final detailRequests = <String>[];
 
   @override
+  Future<TeacherHomework> addQuestion(
+    String homeworkId,
+    TeacherQuestionCreateRequest request,
+  ) {
+    throw UnimplementedError('Mutations are not used by detail tests.');
+  }
+
+  @override
   Future<TeacherHomework> createHomework(
     String topicId,
     TeacherHomeworkCreateRequest request,
@@ -362,9 +371,30 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   }
 
   @override
+  Future<TeacherHomework> deleteQuestion(String questionId) {
+    throw UnimplementedError('Mutations are not used by detail tests.');
+  }
+
+  @override
+  Future<TeacherHomework> reorderQuestions(
+    String homeworkId,
+    TeacherQuestionReorderRequest request,
+  ) {
+    throw UnimplementedError('Mutations are not used by detail tests.');
+  }
+
+  @override
   Future<TeacherHomework> updateHomework(
     String homeworkId,
     TeacherHomeworkEditRequest request,
+  ) {
+    throw UnimplementedError('Mutations are not used by detail tests.');
+  }
+
+  @override
+  Future<TeacherHomework> updateQuestion(
+    String questionId,
+    TeacherQuestionEditRequest request,
   ) {
     throw UnimplementedError('Mutations are not used by detail tests.');
   }

@@ -28,6 +28,7 @@ abstract final class AppRouteNames {
   static const teacherHomeworkCreate = 'teacher-homework-create';
   static const teacherHomeworkDetail = 'teacher-homework-detail';
   static const teacherHomeworkEdit = 'teacher-homework-edit';
+  static const teacherHomeworkQuestions = 'teacher-homework-questions';
   static const student = 'student';
   static const studentTopicDetail = 'student-topic-detail';
   static const parent = 'parent';
@@ -89,6 +90,7 @@ abstract final class AppRoutePaths {
   static const teacherHomeworkSegment = 'homework';
   static const teacherHomeworkCreateSegment = 'new';
   static const teacherHomeworkEditSegment = 'edit';
+  static const teacherHomeworkQuestionsSegment = 'questions';
   static const teacherHomeworkIdParameter = 'homeworkId';
   static const teacherTopicCreate =
       '$teacher/$teacherTopicsSegment/$teacherTopicCreateSegment';
@@ -104,6 +106,8 @@ abstract final class AppRoutePaths {
       ':$teacherHomeworkIdParameter';
   static const teacherHomeworkEdit =
       '$teacherHomeworkDetail/$teacherHomeworkEditSegment';
+  static const teacherHomeworkQuestions =
+      '$teacherHomeworkDetail/$teacherHomeworkQuestionsSegment';
   static const student = '/student';
   static const studentTopicsSegment = 'topics';
   static const studentTopicIdParameter = 'topicId';
@@ -362,6 +366,20 @@ abstract final class AppRoutePaths {
         segments[3] == teacherHomeworkEditSegment;
   }
 
+  static bool isTeacherHomeworkQuestionsPath(String path) {
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 4 &&
+        _teacherTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == teacherHomeworkSegment &&
+        _teacherHomeworkIdPattern.hasMatch(segments[2]) &&
+        segments[3] == teacherHomeworkQuestionsSegment;
+  }
+
   static bool isTeacherApprovedLocation(String path) {
     return path == teacher ||
         isTeacherTopicCreatePath(path) ||
@@ -369,7 +387,8 @@ abstract final class AppRoutePaths {
         isTeacherTopicEditPath(path) ||
         isTeacherHomeworkCreatePath(path) ||
         isTeacherHomeworkDetailPath(path) ||
-        isTeacherHomeworkEditPath(path);
+        isTeacherHomeworkEditPath(path) ||
+        isTeacherHomeworkQuestionsPath(path);
   }
 
   static String? teacherTopicIdFromPath(String path) {
@@ -400,12 +419,18 @@ abstract final class AppRoutePaths {
         segments[1] == teacherHomeworkSegment &&
         _teacherHomeworkIdPattern.hasMatch(segments[2]) &&
         segments[3] == teacherHomeworkEditSegment;
+    final isHomeworkQuestions =
+        segments.length == 4 &&
+        segments[1] == teacherHomeworkSegment &&
+        _teacherHomeworkIdPattern.hasMatch(segments[2]) &&
+        segments[3] == teacherHomeworkQuestionsSegment;
 
     return isDetail ||
             isEdit ||
             isHomeworkCreate ||
             isHomeworkDetail ||
-            isHomeworkEdit
+            isHomeworkEdit ||
+            isHomeworkQuestions
         ? segments.first
         : null;
   }
@@ -420,7 +445,9 @@ abstract final class AppRoutePaths {
     final isDetail = segments.length == 3;
     final isEdit =
         segments.length == 4 && segments[3] == teacherHomeworkEditSegment;
-    if ((!isDetail && !isEdit) ||
+    final isQuestions =
+        segments.length == 4 && segments[3] == teacherHomeworkQuestionsSegment;
+    if ((!isDetail && !isEdit && !isQuestions) ||
         !_teacherTopicIdPattern.hasMatch(segments[0]) ||
         segments[1] != teacherHomeworkSegment ||
         !_teacherHomeworkIdPattern.hasMatch(segments[2])) {
@@ -470,6 +497,14 @@ abstract final class AppRoutePaths {
   static String teacherHomeworkEditLocation(String topicId, String homeworkId) {
     return '${teacherHomeworkDetailLocation(topicId, homeworkId)}/'
         '$teacherHomeworkEditSegment';
+  }
+
+  static String teacherHomeworkQuestionsLocation(
+    String topicId,
+    String homeworkId,
+  ) {
+    return '${teacherHomeworkDetailLocation(topicId, homeworkId)}/'
+        '$teacherHomeworkQuestionsSegment';
   }
 
   static bool isStudentSegment(String path) {
