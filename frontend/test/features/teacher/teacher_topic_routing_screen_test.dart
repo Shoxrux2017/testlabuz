@@ -13,6 +13,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_state.da
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_create_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_edit_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
@@ -22,6 +23,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_topic_mutation.
 import 'teacher_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
+const _homeworkId = '50000000-0000-0000-0000-000000000001';
 
 void main() {
   testWidgets('Teacher route helpers reject invalid child locations', (
@@ -38,6 +40,12 @@ void main() {
     expect(
       AppRoutePaths.isTeacherTopicEditPath('/teacher/topics/$_topicId/edit'),
       isTrue,
+    );
+    expect(
+      AppRoutePaths.isTeacherTopicDetailPath(
+        '/teacher/topics/$_topicId/homework/$_homeworkId',
+      ),
+      isFalse,
     );
     expect(
       AppRoutePaths.isTeacherTopicDetailPath('/teacher/topics/new'),
@@ -76,6 +84,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('teacherTopicDetailScreen')), findsOneWidget);
+      expect(find.byKey(const Key('teacherHomeworkSection')), findsOneWidget);
       expect(find.text('Linear equations'), findsOneWidget);
       expect(find.text('2026-08-25 13:00'), findsOneWidget);
       expect(find.text('Asia/Tashkent'), findsOneWidget);
@@ -119,6 +128,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('teacherTopicDetailScreen')), findsOneWidget);
+    expect(find.byKey(const Key('teacherHomeworkSection')), findsOneWidget);
     expect(find.byKey(const Key('teacherTopicEditScreen')), findsNothing);
     expect(find.text('Edit'), findsNothing);
     expect(find.text('Activate'), findsNothing);
@@ -805,6 +815,9 @@ Future<void> _pumpApp(
         ),
         teacherLearningMaterialRepositoryProvider.overrideWithValue(
           materials ?? FakeTeacherLearningMaterialRepository(),
+        ),
+        teacherHomeworkRepositoryProvider.overrideWithValue(
+          FakeTeacherHomeworkRepository(),
         ),
       ],
       child: const TestLabUzApp(),
