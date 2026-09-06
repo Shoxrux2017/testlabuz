@@ -10,24 +10,27 @@
 | Status | `Approved` |
 | Implementation type | `Flutter Teacher read-side Homework foundation` |
 | Depends on | `S06-BE-001…006 Accepted / Delivered` **and** Stage 6 Backend Phase 2 `PASS` |
-| Planning/readiness baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
-| Backend contract source | Approved Stage 6 backend contracts `S06-BE-003` and `S06-BE-006`; final implementation must be re-checked after Backend Phase 2 |
-| Implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex execution |
+| Planning baseline (historical) | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
+| Backend Phase 2 | `PASS` |
+| Backend contract source | Approved Stage 6 backend contracts `S06-BE-003` and `S06-BE-006`, reconciled with the delivered backend after Backend Phase 2 `PASS` |
+| Implementation baseline | `origin/main @ 22c70a7871d629d906599a13225e9b513f4619f0` |
 | Flutter toolchain | FVM-pinned Flutter `3.44.7` unless current `origin/main` deliberately changes the pin before implementation |
-| Implementation Readiness Gate | `PASS — planning contract`; runtime entry remains gated by Backend Phase 2 |
+| Runtime Implementation Readiness | `PASS` |
 | Verification | `Codex — focused frontend verification only` |
 | Delivery execution | `Project Owner` |
 | Frontend block checkpoint | Stage 6 Frontend Phase 2 after `S06-FE-001…004` are `Accepted / Delivered` |
 
-This contract may be prepared before the backend block is implemented, but Codex must **not** start frontend implementation until:
+This contract was prepared before the backend block was implemented. Runtime
+reconciliation confirms:
 
 ```text
 S06-BE-001…006 = Accepted / Delivered
 Stage 6 Backend Phase 2 = PASS
-current origin/main is re-checked
-final backend Homework endpoints/resources are re-inspected
-this contract still matches the delivered backend
-clean synchronized local main
+implementation baseline = origin/main @ 22c70a7871d629d906599a13225e9b513f4619f0
+current origin/main was re-checked as clean and synchronized
+final backend Homework endpoints/resources were re-inspected
+this contract matches the delivered backend
+runtime Implementation Readiness = PASS
 ```
 
 If final Backend Phase 2 produces a public API change that materially conflicts with this contract, stop and return `BLOCKED`; ChatGPT must reconcile the frontend contract before implementation.
@@ -420,11 +423,23 @@ Flutter must not expose an editable attempt count.
 
 Required DTO invariants:
 
-- no duplicates;
-- for `assignment_mode = group`, list must be empty;
-- for `selected_students`, list may be non-empty according to server state.
+- IDs are unique case-insensitively/canonically;
+- assignment mode and Student IDs satisfy exactly:
+
+```text
+assignment_mode = group
+-> student_ids must be exactly []
+
+assignment_mode = selected_students
+-> student_ids must contain at least one canonical UUID
+```
+
+A malformed success payload that violates this invariant maps to
+`ApiFailureKind.invalidResponse`.
 
 Presentation in this task does **not** display raw Student UUIDs.
+
+The roster endpoint must not be used to reconstruct historical recipient names.
 
 Use:
 
@@ -848,6 +863,8 @@ Reuse the current strict Teacher list-envelope parser only if it supports the ex
 
 Do not duplicate pagination parsing merely for naming.
 
+A malformed success envelope maps to `ApiFailureKind.invalidResponse`.
+
 ---
 
 # 22. Eligible Group Student Read Domain
@@ -868,27 +885,64 @@ TeacherGroupStudentList
 TeacherGroupStudentListQuery
 ```
 
-Query defaults:
+Exact query contract:
 
 ```text
-search = null
-page = 1
-perPage = 50
+search:
+  nullable string
+  trim before transport
+  empty after trim -> null
+  max 100 characters
+
+page:
+  minimum 1
+  default 1
+
+perPage:
+  minimum 1
+  default 50
+  maximum 100
 ```
 
-Maximum client value:
+`search` values longer than 100 characters are rejected locally and are not
+sent as a valid query.
 
-```text
-100
-```
-
-The repository/data-source implements this read in S06-FE-001, but no roster UI/controller is required yet.
+The repository/data-source implements this read in S06-FE-001. No roster
+UI/controller is added in S06-FE-001.
 
 S06-FE-002 will consume this boundary for the selected-Student picker.
 
 DTO must reject success rows with extra/missing keys.
 
 Do not add email/phone fields to the client model.
+
+Strict collection envelope:
+
+```json
+{
+  "data": [],
+  "meta": {
+    "pagination": {
+      "page": 1,
+      "per_page": 50,
+      "total": 0,
+      "last_page": 1
+    }
+  }
+}
+```
+
+Each row accepts exactly:
+
+```text
+id
+full_name
+login_name
+```
+
+Reuse the existing strict Teacher list-envelope parser where compatible.
+
+A malformed success envelope maps to `ApiFailureKind.invalidResponse`.
 
 ---
 
@@ -1119,7 +1173,26 @@ No query/body.
 
 Require 200.
 
-Strict parse full resource.
+Require the exact transport envelope:
+
+```json
+{
+  "data": {
+    "...": "exact full Teacher Homework resource"
+  }
+}
+```
+
+Top-level keys must be exactly:
+
+```text
+data
+```
+
+No missing or unknown top-level keys are accepted. Strict parse the full
+Teacher Homework resource inside `data`.
+
+A malformed success envelope maps to `ApiFailureKind.invalidResponse`.
 
 ## 24.3 Read failure mapping
 
@@ -1165,15 +1238,22 @@ page
 per_page
 ```
 
-Optional:
+Send only when non-null:
 
 ```text
 search
 ```
 
+The data source sends no body. `search` is trimmed before transport; an empty
+value after trimming becomes `null` and is omitted.
+
 Require 200.
 
-Strict parse exact paginated rows.
+Strict parse the exact collection envelope and exact `id`, `full_name`, and
+`login_name` row keys from Section 22. A malformed success envelope maps to
+`ApiFailureKind.invalidResponse`.
+
+Reuse the existing strict Teacher list-envelope parser where compatible.
 
 Use the same read failure mapping as Homework/Topic reads.
 
@@ -2284,11 +2364,14 @@ Keep fake behavior explicit and deterministic.
 - [ ] `TeacherHomeworkStatus`, assignment mode, Question type/checking enums use exact API machine values.
 - [ ] Homework summary/full domain models are typed and do not expose raw JSON.
 - [ ] Full Homework attempt policy strictly requires server fixed value `3` and `highest_valid_completed`.
+- [ ] Full Homework rejects `selected_students` with empty `student_ids`, rejects `group` with non-empty `student_ids`, and enforces canonical case-insensitive Student ID uniqueness.
 - [ ] All nine Question types have typed read configuration.
 - [ ] DTO parsing rejects unknown/missing keys, bad UUIDs, malformed UTC timestamps, invalid lifecycle shape, invalid type/checking/config combinations, duplicate/gapped Question positions, and malformed Fill Blank placeholders.
 - [ ] Numeric points/totals require finite non-negative JSON numbers.
-- [ ] Homework list DTO uses strict standard pagination.
-- [ ] Group Student roster model exposes only `id/fullName/loginName`.
+- [ ] Homework list DTO uses the exact strict collection envelope and standard pagination.
+- [ ] Homework detail accepts exactly the top-level `data` envelope and rejects missing/unknown top-level keys.
+- [ ] Group Student roster model exposes only `id/fullName/loginName` and uses the exact strict collection envelope.
+- [ ] Group Student query trims search, converts empty-after-trim to `null`, rejects search longer than 100 characters locally, and enforces page/per-page defaults and limits.
 - [ ] Homework data source uses exact GET paths/query/status rules and configured Dio.
 - [ ] Group Student data source uses exact Teacher roster endpoint, not Institution Admin endpoint.
 - [ ] Read failures use existing `DioFailureMapper`/`ApiRequestException`.
@@ -2359,12 +2442,24 @@ Required coverage:
 - lifecycle inconsistency;
 - duplicate Student ID;
 - group with non-empty Student IDs rejection;
+- selected students with empty Student IDs rejection;
 - duplicate Question ID;
 - gapped/out-of-order Question positions;
 - wrong checking mode;
 - malformed typed config;
 - Fill Blank placeholder mismatch;
-- malformed list envelope.
+- malformed Homework list envelope;
+- Homework detail top-level envelope accepts exactly `data` and rejects
+  missing/unknown top-level keys.
+
+### Group Student DTO/query
+
+- exact `id`, `full_name`, and `login_name` row keys;
+- exact collection-envelope and pagination strictness;
+- search trim and empty-after-trim to `null` behavior;
+- search longer than 100 characters is rejected locally and is not sent as a
+  valid query;
+- page/per-page minimums, defaults, and maximum.
 
 ### Data source
 
