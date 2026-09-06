@@ -25,6 +25,8 @@ class TeacherTopicEditScreen extends ConsumerStatefulWidget {
 
 class _TeacherTopicEditScreenState
     extends ConsumerState<TeacherTopicEditScreen> {
+  late final String _topicId;
+  late final TeacherTopicEditController _routeController;
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _subjectController;
@@ -40,17 +42,20 @@ class _TeacherTopicEditScreenState
   @override
   void initState() {
     super.initState();
+    _topicId = widget.topicId;
+    _routeController = ref.read(
+      teacherTopicEditControllerProvider(_topicId).notifier,
+    );
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
     _subjectController = TextEditingController();
     _instructionsController = TextEditingController();
-    ref
-        .read(teacherTopicEditControllerProvider(widget.topicId).notifier)
-        .enterRoute();
+    _routeController.enterRoute();
   }
 
   @override
   void dispose() {
+    _routeController.leaveRoute();
     _titleController.dispose();
     _descriptionController.dispose();
     _subjectController.dispose();
@@ -65,9 +70,8 @@ class _TeacherTopicEditScreenState
 
   @override
   Widget build(BuildContext context) {
-    final provider = teacherTopicEditControllerProvider(widget.topicId);
+    final provider = teacherTopicEditControllerProvider(_topicId);
     final state = ref.watch(provider);
-    final controller = ref.read(provider.notifier);
     if (state.form != null) {
       _syncControllers(state.form!);
     }
@@ -101,9 +105,9 @@ class _TeacherTopicEditScreenState
               : state.status == TeacherTopicEditStatus.initialLoadError
               ? _TeacherTopicEditInitialLoadError(
                   failure: state.initialLoadFailure!,
-                  onRetry: controller.retryInitialLoad,
+                  onRetry: _routeController.retryInitialLoad,
                   onBack: () {
-                    controller.leaveRoute();
+                    _routeController.leaveRoute();
                     context.go(AppRoutePaths.teacher);
                   },
                 )
@@ -165,17 +169,18 @@ class _TeacherTopicEditScreenState
                                 ),
                                 lessonAt: state.form!.lessonAt,
                                 errorFor: state.errorFor,
-                                onTitleChanged: controller.updateTitle,
+                                onTitleChanged: _routeController.updateTitle,
                                 onDescriptionChanged:
-                                    controller.updateDescription,
-                                onSubjectChanged: controller.updateSubject,
+                                    _routeController.updateDescription,
+                                onSubjectChanged:
+                                    _routeController.updateSubject,
                                 onInstructionsChanged:
-                                    controller.updateStudentInstructions,
+                                    _routeController.updateStudentInstructions,
                                 onChooseLessonAt: state.canEdit
                                     ? _chooseLessonAt
                                     : null,
                                 onClearLessonAt: () =>
-                                    controller.updateLessonAt(null),
+                                    _routeController.updateLessonAt(null),
                               ),
                             const SizedBox(height: 24),
                             Wrap(
@@ -189,7 +194,8 @@ class _TeacherTopicEditScreenState
                                     key: const Key(
                                       'teacherTopicEditCheckCurrentButton',
                                     ),
-                                    onPressed: controller.checkCurrentTopic,
+                                    onPressed:
+                                        _routeController.checkCurrentTopic,
                                     child: const Text('Check current Topic'),
                                   ),
                                 if (state.isReviewOnly)
@@ -215,7 +221,7 @@ class _TeacherTopicEditScreenState
                                       'teacherTopicEditSaveButton',
                                     ),
                                     onPressed: state.canSave
-                                        ? controller.submit
+                                        ? _routeController.submit
                                         : null,
                                     icon: state.isBusy
                                         ? const SizedBox.square(
@@ -276,10 +282,8 @@ class _TeacherTopicEditScreenState
   }
 
   void _reviewTopic() {
-    ref
-        .read(teacherTopicEditControllerProvider(widget.topicId).notifier)
-        .leaveRoute();
-    context.go(AppRoutePaths.teacherTopicDetailLocation(widget.topicId));
+    _routeController.leaveRoute();
+    context.go(AppRoutePaths.teacherTopicDetailLocation(_topicId));
   }
 
   Future<void> _chooseLessonAt() async {
@@ -293,7 +297,7 @@ class _TeacherTopicEditScreenState
       return;
     }
     final current = ref
-        .read(teacherTopicEditControllerProvider(widget.topicId))
+        .read(teacherTopicEditControllerProvider(_topicId))
         .form!
         .lessonAt;
     InstitutionWallClock initial;
@@ -324,17 +328,15 @@ class _TeacherTopicEditScreenState
     if (time == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;
     }
-    ref
-        .read(teacherTopicEditControllerProvider(widget.topicId).notifier)
-        .updateLessonAt(
-          InstitutionWallClock(
-            year: date.year,
-            month: date.month,
-            day: date.day,
-            hour: time.hour,
-            minute: time.minute,
-          ),
-        );
+    _routeController.updateLessonAt(
+      InstitutionWallClock(
+        year: date.year,
+        month: date.month,
+        day: date.day,
+        hour: time.hour,
+        minute: time.minute,
+      ),
+    );
   }
 
   void _showTimezoneUnavailable() {
@@ -364,9 +366,7 @@ class _TeacherTopicEditScreenState
       _handledSuccess = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
-            ref
-                    .read(teacherTopicEditControllerProvider(widget.topicId))
-                    .status !=
+            ref.read(teacherTopicEditControllerProvider(_topicId)).status !=
                 TeacherTopicEditStatus.confirmedSuccess) {
           return;
         }

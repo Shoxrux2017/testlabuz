@@ -276,27 +276,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: AppRouteNames.teacherTopicDetail,
             path:
                 '${AppRoutePaths.teacherTopicsSegment}/:${AppRoutePaths.teacherTopicIdParameter}',
-            builder: (context, state) => _buildTeacherDestination(
-              TeacherTopicDetailScreen(
-                topicId:
-                    state.pathParameters[AppRoutePaths
-                        .teacherTopicIdParameter] ??
-                    '',
-              ),
-            ),
+            builder: (context, state) {
+              final topicId =
+                  state.pathParameters[AppRoutePaths.teacherTopicIdParameter] ??
+                  '';
+              return _buildTeacherDestination(
+                TeacherTopicDetailScreen(
+                  key: ValueKey<String>(
+                    '${AppRouteNames.teacherTopicDetail}:'
+                    '${topicId.toLowerCase()}',
+                  ),
+                  topicId: topicId,
+                ),
+              );
+            },
             routes: [
               GoRoute(
                 name: AppRouteNames.teacherTopicEdit,
                 path: AppRoutePaths.teacherTopicEditSegment,
-                builder: (context, state) => _buildTeacherDestination(
-                  TeacherTopicEditScreen(
-                    topicId:
-                        state.pathParameters[AppRoutePaths
-                            .teacherTopicIdParameter] ??
-                        '',
-                  ),
-                  authoring: true,
-                ),
+                builder: (context, state) {
+                  final topicId =
+                      state.pathParameters[AppRoutePaths
+                          .teacherTopicIdParameter] ??
+                      '';
+                  return _buildTeacherDestination(
+                    TeacherTopicEditScreen(
+                      key: ValueKey<String>(
+                        '${AppRouteNames.teacherTopicEdit}:'
+                        '${topicId.toLowerCase()}',
+                      ),
+                      topicId: topicId,
+                    ),
+                    authoring: true,
+                  );
+                },
               ),
               GoRoute(
                 name: AppRouteNames.teacherHomeworkCreate,
