@@ -168,60 +168,115 @@ void main() {
     );
   });
 
-  testWidgets('delete confirmation and server lock remain safe', (
-    tester,
-  ) async {
-    final question = teacherHomeworkQuestions().first;
-    final current = teacherHomework(questions: [question]);
-    final repository = FakeTeacherHomeworkRepository(
-      onFetch: (_) async => current,
-      onDeleteQuestion: (_) async => throw teacherServerFailure(
-        ApiErrorCodes.businessConflict,
-        statusCode: 409,
-      ),
-    );
-    await _pumpBuilder(tester, repository: repository);
-    await tester.pumpAndSettle();
+  for (final lockCode in [
+    ApiErrorCodes.businessConflict,
+    ApiErrorCodes.resultPairLocked,
+  ]) {
+    testWidgets(
+      '$lockCode remains sticky after Refresh and blocks every mutation',
+      (tester) async {
+        final questions = teacherHomeworkQuestions().take(2).toList();
+        final current = teacherHomework(questions: questions);
+        var fetchCount = 0;
+        final repository = FakeTeacherHomeworkRepository(
+          onFetch: (_) async {
+            fetchCount += 1;
+            return current;
+          },
+          onDeleteQuestion: (_) async =>
+              throw teacherServerFailure(lockCode, statusCode: 409),
+        );
+        await _pumpBuilder(tester, repository: repository);
+        await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(ValueKey('teacherQuestionDelete${question.id}')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Delete Question 1?'), findsOneWidget);
-    expect(
-      find.text('This removes the Question and its answer configuration.'),
-      findsOneWidget,
-    );
-    await tester.tap(
-      find.byKey(const Key('teacherQuestionDeleteCancelButton')),
-    );
-    await tester.pumpAndSettle();
-    expect(repository.deleteQuestionIds, isEmpty);
+        final firstQuestionId = questions.first.id;
+        await tester.tap(
+          find.byKey(ValueKey('teacherQuestionDelete$firstQuestionId')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Delete Question 1?'), findsOneWidget);
+        expect(
+          find.text('This removes the Question and its answer configuration.'),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const Key('teacherQuestionDeleteCancelButton')),
+        );
+        await tester.pumpAndSettle();
+        expect(repository.deleteQuestionIds, isEmpty);
 
-    await tester.tap(
-      find.byKey(ValueKey('teacherQuestionDelete${question.id}')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const Key('teacherQuestionDeleteConfirmButton')),
-    );
-    await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(ValueKey('teacherQuestionDelete$firstQuestionId')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const Key('teacherQuestionDeleteConfirmButton')),
+        );
+        await tester.pumpAndSettle();
 
-    expect(repository.deleteQuestionIds, [question.id]);
-    expect(
-      find.byKey(const Key('teacherQuestionBuilderLockedBanner')),
-      findsOneWidget,
+        expect(fetchCount, 2, reason: lockCode);
+        expect(repository.deleteQuestionIds, [firstQuestionId]);
+        expect(
+          find.byKey(const Key('teacherQuestionBuilderLockedBanner')),
+          findsOneWidget,
+        );
+
+        final refresh = find.byKey(
+          const Key('teacherQuestionBuilderRefreshButton'),
+        );
+        await tester.ensureVisible(refresh);
+        await tester.tap(refresh);
+        await tester.pumpAndSettle();
+
+        expect(fetchCount, 3, reason: lockCode);
+        expect(
+          find.byKey(const Key('teacherQuestionBuilderLockedBanner')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Question editing is locked'), findsWidgets);
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.byKey(const Key('teacherQuestionBuilderAddButton')),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<TextButton>(
+                find.byKey(ValueKey('teacherQuestionEdit$firstQuestionId')),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<TextButton>(
+                find.byKey(ValueKey('teacherQuestionDelete$firstQuestionId')),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<IconButton>(
+                find.byKey(ValueKey('teacherQuestionMoveDown$firstQuestionId')),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          find.byKey(const Key('teacherQuestionBuilderSaveOrderButton')),
+          findsNothing,
+        );
+        expect(repository.addQuestionRequests, isEmpty);
+        expect(repository.updateQuestionRequests, isEmpty);
+        expect(repository.deleteQuestionIds, [firstQuestionId]);
+        expect(repository.reorderQuestionRequests, isEmpty);
+      },
     );
-    expect(find.textContaining('Question editing is locked'), findsWidgets);
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const Key('teacherQuestionBuilderAddButton')),
-          )
-          .onPressed,
-      isNull,
-    );
-  });
+  }
 
   testWidgets('maximum count and closed Homework are review-safe', (
     tester,

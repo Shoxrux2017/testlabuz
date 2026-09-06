@@ -27,6 +27,8 @@ class TeacherHomeworkCreateScreen extends ConsumerStatefulWidget {
 
 class _TeacherHomeworkCreateScreenState
     extends ConsumerState<TeacherHomeworkCreateScreen> {
+  late final String _topicId;
+  late final TeacherHomeworkCreateController _routeController;
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _instructionsController;
@@ -42,16 +44,19 @@ class _TeacherHomeworkCreateScreenState
   @override
   void initState() {
     super.initState();
+    _topicId = widget.topicId;
+    _routeController = ref.read(
+      teacherHomeworkCreateControllerProvider(_topicId).notifier,
+    );
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
     _instructionsController = TextEditingController();
-    ref
-        .read(teacherHomeworkCreateControllerProvider(widget.topicId).notifier)
-        .enterRoute();
+    _routeController.enterRoute();
   }
 
   @override
   void dispose() {
+    _routeController.leaveRoute();
     _titleController.dispose();
     _descriptionController.dispose();
     _instructionsController.dispose();
@@ -66,9 +71,8 @@ class _TeacherHomeworkCreateScreenState
 
   @override
   Widget build(BuildContext context) {
-    final provider = teacherHomeworkCreateControllerProvider(widget.topicId);
+    final provider = teacherHomeworkCreateControllerProvider(_topicId);
     final state = ref.watch(provider);
-    final controller = ref.read(provider.notifier);
     final sessionKey = TeacherSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -99,7 +103,7 @@ class _TeacherHomeworkCreateScreenState
         body: SafeArea(
           child: _buildBody(
             state,
-            controller,
+            _routeController,
             sessionKey?.institutionTimezone ?? 'Unavailable',
           ),
         ),
@@ -128,9 +132,7 @@ class _TeacherHomeworkCreateScreenState
       TeacherHomeworkCreateStatus.outcomeUnknown => _UnknownCreateOutcome(
         onReviewHomework: () {
           if (controller.reviewHomework()) {
-            context.go(
-              AppRoutePaths.teacherTopicDetailLocation(widget.topicId),
-            );
+            context.go(AppRoutePaths.teacherTopicDetailLocation(_topicId));
           }
         },
       ),
@@ -166,10 +168,7 @@ class _TeacherHomeworkCreateScreenState
   }
 
   Future<void> _chooseStudents() async {
-    final controller = ref.read(
-      teacherHomeworkCreateControllerProvider(widget.topicId).notifier,
-    );
-    final launch = controller.beginStudentPicker();
+    final launch = _routeController.beginStudentPicker();
     if (launch == null) {
       return;
     }
@@ -178,9 +177,9 @@ class _TeacherHomeworkCreateScreenState
       target: launch.target,
     );
     if (selection != null && mounted) {
-      controller.applyStudentSelection(selection, launch.owner);
+      _routeController.applyStudentSelection(selection, launch.owner);
     } else if (mounted) {
-      controller.cancelStudentPicker(launch.owner);
+      _routeController.cancelStudentPicker(launch.owner);
     }
   }
 
@@ -195,7 +194,7 @@ class _TeacherHomeworkCreateScreenState
       return;
     }
     final current = ref
-        .read(teacherHomeworkCreateControllerProvider(widget.topicId))
+        .read(teacherHomeworkCreateControllerProvider(_topicId))
         .form
         .deadlineWallClock;
     InstitutionWallClock initial;
@@ -226,17 +225,15 @@ class _TeacherHomeworkCreateScreenState
     if (time == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;
     }
-    ref
-        .read(teacherHomeworkCreateControllerProvider(widget.topicId).notifier)
-        .updateDeadlineAt(
-          InstitutionWallClock(
-            year: date.year,
-            month: date.month,
-            day: date.day,
-            hour: time.hour,
-            minute: time.minute,
-          ),
-        );
+    _routeController.updateDeadlineAt(
+      InstitutionWallClock(
+        year: date.year,
+        month: date.month,
+        day: date.day,
+        hour: time.hour,
+        minute: time.minute,
+      ),
+    );
   }
 
   Future<void> _leaveWithGuard(TeacherHomeworkCreateState state) async {
@@ -274,10 +271,8 @@ class _TeacherHomeworkCreateScreenState
   }
 
   void _backToTopic() {
-    ref
-        .read(teacherHomeworkCreateControllerProvider(widget.topicId).notifier)
-        .leaveRoute();
-    context.go(AppRoutePaths.teacherTopicDetailLocation(widget.topicId));
+    _routeController.leaveRoute();
+    context.go(AppRoutePaths.teacherTopicDetailLocation(_topicId));
   }
 
   void _handleEffects(TeacherHomeworkCreateState state) {
@@ -299,9 +294,7 @@ class _TeacherHomeworkCreateScreenState
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             ref
-                    .read(
-                      teacherHomeworkCreateControllerProvider(widget.topicId),
-                    )
+                    .read(teacherHomeworkCreateControllerProvider(_topicId))
                     .confirmedHomeworkId !=
                 homeworkId) {
           return;
@@ -311,16 +304,9 @@ class _TeacherHomeworkCreateScreenState
           ..showSnackBar(
             const SnackBar(content: Text('Homework created successfully.')),
           );
-        ref
-            .read(
-              teacherHomeworkCreateControllerProvider(widget.topicId).notifier,
-            )
-            .leaveRoute();
+        _routeController.leaveRoute();
         context.go(
-          AppRoutePaths.teacherHomeworkDetailLocation(
-            widget.topicId,
-            homeworkId,
-          ),
+          AppRoutePaths.teacherHomeworkDetailLocation(_topicId, homeworkId),
         );
       });
     }

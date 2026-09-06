@@ -327,13 +327,8 @@ class _Harness {
 }
 
 class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
-  _FakeTeacherHomeworkRepository({this.onFetchList, this.onFetchHomework});
+  _FakeTeacherHomeworkRepository({this.onFetchHomework});
 
-  Future<TeacherHomeworkList> Function(
-    String topicId,
-    TeacherHomeworkListQuery query,
-  )?
-  onFetchList;
   Future<TeacherHomework> Function(String homeworkId)? onFetchHomework;
   final detailRequests = <String>[];
 
@@ -358,9 +353,6 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     String topicId,
     TeacherHomeworkListQuery query,
   ) {
-    if (onFetchList case final handler?) {
-      return handler(topicId, query);
-    }
     throw UnimplementedError('List reads are not used by detail tests.');
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,16 +8,27 @@ import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_router.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_homework_create_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_homework_edit_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_target.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_group_student_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
+import 'package:testlabuz_client/features/teacher/presentation/teacher_homework_create_screen.dart';
+import 'package:testlabuz_client/features/teacher/presentation/teacher_homework_edit_screen.dart';
+import 'package:testlabuz_client/features/teacher/presentation/teacher_question_builder_screen.dart';
 
 import 'teacher_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
+const _topicBId = '10000000-0000-0000-0000-000000000002';
 const _homeworkId = '50000000-0000-0000-0000-000000000001';
+const _homeworkBId = '50000000-0000-0000-0000-000000000002';
+const _studentId = '60000000-0000-0000-0000-000000000001';
 
 void main() {
   test('Homework route helpers accept only the canonical nested path', () {
@@ -155,6 +168,382 @@ void main() {
     expect(find.byKey(const Key('teacherHomeworkDetailScreen')), findsNothing);
     expect(homework.fetchIds, [_homeworkId]);
   });
+
+  testWidgets(
+    'Create Topic A to B replaces State and rejects pending A success',
+    (tester) async {
+      final pendingCreate = Completer<TeacherHomework>();
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async => teacherTopic(
+          id: topicId,
+          title: topicId == _topicId ? 'Topic A' : 'Topic B',
+        ),
+      );
+      final homework = FakeTeacherHomeworkRepository(
+        onFetch: (homeworkId) async => teacherHomework(
+          id: homeworkId,
+          topicId: _topicBId,
+          title: 'Created for Topic B',
+        ),
+        onCreate: (topicId, _) {
+          if (topicId == _topicId) {
+            return pendingCreate.future;
+          }
+          return Future.value(
+            teacherHomework(
+              id: _homeworkBId,
+              topicId: topicId,
+              title: 'Created for Topic B',
+            ),
+          );
+        },
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherHomeworkCreateLocation(_topicId),
+        topics: topics,
+        homework: homework,
+      );
+      await tester.pumpAndSettle();
+
+      final oldScreenState = tester.state(
+        find.byType(TeacherHomeworkCreateScreen),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherHomeworkCreateScreen)),
+      );
+      final oldProvider = teacherHomeworkCreateControllerProvider(_topicId);
+      final oldSubscription = container.listen(oldProvider, (_, _) {});
+      addTearDown(oldSubscription.close);
+      final oldController = container.read(oldProvider.notifier);
+      oldController
+        ..updateTitle('Pending Topic A Homework')
+        ..updateStudentInstructions('Pending Topic A instructions');
+      await tester.pump();
+      final oldSubmit = find.byKey(
+        const Key('teacherHomeworkCreateSubmitButton'),
+      );
+      await tester.ensureVisible(oldSubmit);
+      await tester.tap(oldSubmit);
+      await tester.pump();
+      expect(homework.createRequests.map((entry) => entry.topicId), [_topicId]);
+
+      final router = container.read(appRouterProvider);
+      router.go(AppRoutePaths.teacherHomeworkCreateLocation(_topicBId));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state(find.byType(TeacherHomeworkCreateScreen)),
+        isNot(same(oldScreenState)),
+      );
+      expect(find.text('Topic title: Topic B'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const Key('teacherHomeworkTitleField')),
+            )
+            .controller!
+            .text,
+        isEmpty,
+      );
+      await oldController.submit();
+      expect(homework.createRequests.map((entry) => entry.topicId), [_topicId]);
+
+      pendingCreate.complete(
+        teacherHomework(
+          id: _homeworkId,
+          topicId: _topicId,
+          title: 'Late Topic A success',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(oldSubscription.read().confirmedHomeworkId, isNull);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherHomeworkCreateLocation(_topicBId),
+      );
+      expect(find.text('Topic title: Topic B'), findsOneWidget);
+
+      final newProvider = teacherHomeworkCreateControllerProvider(_topicBId);
+      final newController = container.read(newProvider.notifier);
+      newController
+        ..updateTitle('Owned Topic B Homework')
+        ..updateStudentInstructions('Owned Topic B instructions');
+      await tester.pump();
+      expect(container.read(newProvider).form.title, 'Owned Topic B Homework');
+
+      final newSubmit = find.byKey(
+        const Key('teacherHomeworkCreateSubmitButton'),
+      );
+      await tester.ensureVisible(newSubmit);
+      await tester.tap(newSubmit);
+      await tester.pumpAndSettle();
+
+      expect(homework.createRequests.map((entry) => entry.topicId), [
+        _topicId,
+        _topicBId,
+      ]);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherHomeworkDetailLocation(_topicBId, _homeworkBId),
+      );
+    },
+  );
+
+  testWidgets(
+    'Edit Homework A to B replaces State and rejects the open A picker result',
+    (tester) async {
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async => teacherTopic(
+          id: topicId,
+          title: topicId == _topicId ? 'Topic A' : 'Topic B',
+          group: teacherGroup(
+            id: topicId == _topicId
+                ? '00000000-0000-0000-0000-000000000001'
+                : '00000000-0000-0000-0000-000000000002',
+          ),
+        ),
+      );
+      final homework = FakeTeacherHomeworkRepository(
+        onFetch: (homeworkId) async => teacherHomework(
+          id: homeworkId,
+          topicId: homeworkId == _homeworkId ? _topicId : _topicBId,
+          title: homeworkId == _homeworkId ? 'Homework A' : 'Homework B',
+        ),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherHomeworkEditLocation(
+          _topicId,
+          _homeworkId,
+        ),
+        topics: topics,
+        homework: homework,
+        groupStudents: FakeTeacherGroupStudentRepository(),
+      );
+      await tester.pumpAndSettle();
+
+      final oldScreenState = tester.state(
+        find.byType(TeacherHomeworkEditScreen),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherHomeworkEditScreen)),
+      );
+      final oldTarget = TeacherHomeworkRouteTarget(
+        topicId: _topicId,
+        homeworkId: _homeworkId,
+      );
+      final oldProvider = teacherHomeworkEditControllerProvider(oldTarget);
+      final oldSubscription = container.listen(oldProvider, (_, _) {});
+      addTearDown(oldSubscription.close);
+
+      await tester.ensureVisible(find.text('Selected students'));
+      await tester.tap(find.text('Selected students'));
+      await tester.pump();
+      final chooseStudents = find.byKey(
+        const Key('teacherHomeworkChooseStudentsButton'),
+      );
+      await tester.ensureVisible(chooseStudents);
+      await tester.tap(chooseStudents);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherHomeworkStudentPickerDialog')),
+        findsOneWidget,
+      );
+
+      final router = container.read(appRouterProvider);
+      router.go(
+        AppRoutePaths.teacherHomeworkEditLocation(_topicBId, _homeworkBId),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        tester.state(find.byType(TeacherHomeworkEditScreen)),
+        isNot(same(oldScreenState)),
+      );
+      final stalePicker = find.byKey(
+        const Key('teacherHomeworkStudentPickerDialog'),
+      );
+      expect(stalePicker, findsOneWidget);
+      Navigator.of(tester.element(stalePicker)).pop(const {_studentId});
+      await tester.pumpAndSettle();
+
+      expect(find.text('Homework B'), findsOneWidget);
+      expect(oldSubscription.read().form?.selectedStudentIds, isEmpty);
+      final newTarget = TeacherHomeworkRouteTarget(
+        topicId: _topicBId,
+        homeworkId: _homeworkBId,
+      );
+      final newProvider = teacherHomeworkEditControllerProvider(newTarget);
+      expect(container.read(newProvider).form?.selectedStudentIds, isEmpty);
+      container.read(newProvider.notifier).updateTitle('Owned Homework B edit');
+      await tester.pump();
+      expect(container.read(newProvider).form?.title, 'Owned Homework B edit');
+      expect(homework.updateRequests, isEmpty);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherHomeworkEditLocation(_topicBId, _homeworkBId),
+      );
+    },
+  );
+
+  testWidgets(
+    'Question Builder A to B replaces State and closes the stale A editor',
+    (tester) async {
+      final homework = FakeTeacherHomeworkRepository(
+        onFetch: (homeworkId) async => teacherHomework(
+          id: homeworkId,
+          topicId: homeworkId == _homeworkId ? _topicId : _topicBId,
+          title: homeworkId == _homeworkId
+              ? 'Builder Homework A'
+              : 'Builder Homework B',
+        ),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherHomeworkQuestionsLocation(
+          _topicId,
+          _homeworkId,
+        ),
+        homework: homework,
+      );
+      await tester.pumpAndSettle();
+
+      final oldScreenState = tester.state(
+        find.byType(TeacherQuestionBuilderScreen),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherQuestionBuilderScreen)),
+      );
+      final addQuestion = find.byKey(
+        const Key('teacherQuestionBuilderAddButton'),
+      );
+      await tester.ensureVisible(addQuestion);
+      await tester.tap(addQuestion);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('teacherQuestionPromptField')),
+        'Unsaved Question for Homework A',
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const Key('teacherQuestionEditorDialog')),
+        findsOneWidget,
+      );
+
+      final router = container.read(appRouterProvider);
+      router.go(
+        AppRoutePaths.teacherHomeworkQuestionsLocation(_topicBId, _homeworkBId),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state(find.byType(TeacherQuestionBuilderScreen)),
+        isNot(same(oldScreenState)),
+      );
+      expect(find.text('Builder Homework B'), findsOneWidget);
+      expect(find.text('Builder Homework A'), findsNothing);
+      expect(
+        find.byKey(const Key('teacherQuestionEditorDialog')),
+        findsNothing,
+      );
+      expect(homework.addQuestionRequests, isEmpty);
+
+      final newAddQuestion = find.byKey(
+        const Key('teacherQuestionBuilderAddButton'),
+      );
+      await tester.ensureVisible(newAddQuestion);
+      await tester.tap(newAddQuestion);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherQuestionEditorDialog')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const Key('teacherQuestionEditorCancelButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(homework.addQuestionRequests, isEmpty);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherHomeworkQuestionsLocation(_topicBId, _homeworkBId),
+      );
+    },
+  );
+
+  testWidgets(
+    'case-only UUID spelling preserves canonical authoring State ownership',
+    (tester) async {
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async => teacherTopic(id: topicId),
+      );
+      final homework = FakeTeacherHomeworkRepository(
+        onFetch: (homeworkId) async =>
+            teacherHomework(id: homeworkId, topicId: _topicId),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherHomeworkCreateLocation(_topicId),
+        topics: topics,
+        homework: homework,
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherHomeworkCreateScreen)),
+      );
+      final router = container.read(appRouterProvider);
+      final createState = tester.state(
+        find.byType(TeacherHomeworkCreateScreen),
+      );
+      router.go(
+        AppRoutePaths.teacherHomeworkCreateLocation(_topicId.toUpperCase()),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.state(find.byType(TeacherHomeworkCreateScreen)),
+        same(createState),
+      );
+
+      router.go(
+        AppRoutePaths.teacherHomeworkEditLocation(_topicId, _homeworkId),
+      );
+      await tester.pumpAndSettle();
+      final editState = tester.state(find.byType(TeacherHomeworkEditScreen));
+      router.go(
+        AppRoutePaths.teacherHomeworkEditLocation(
+          _topicId.toUpperCase(),
+          _homeworkId.toUpperCase(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.state(find.byType(TeacherHomeworkEditScreen)),
+        same(editState),
+      );
+
+      router.go(
+        AppRoutePaths.teacherHomeworkQuestionsLocation(_topicId, _homeworkId),
+      );
+      await tester.pumpAndSettle();
+      final builderState = tester.state(
+        find.byType(TeacherQuestionBuilderScreen),
+      );
+      router.go(
+        AppRoutePaths.teacherHomeworkQuestionsLocation(
+          _topicId.toUpperCase(),
+          _homeworkId.toUpperCase(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.state(find.byType(TeacherQuestionBuilderScreen)),
+        same(builderState),
+      );
+    },
+  );
 
   testWidgets('mobile authoring deep links redirect to exact read routes', (
     tester,
@@ -509,6 +898,8 @@ Future<void> _pumpApp(
   WidgetTester tester, {
   required String location,
   FakeTeacherHomeworkRepository? homework,
+  FakeTeacherTopicRepository? topics,
+  FakeTeacherGroupStudentRepository? groupStudents,
   FakeTeacherAuthSessionController? auth,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
 }) async {
@@ -532,13 +923,16 @@ Future<void> _pumpApp(
           FakeTeacherTopicListRepository(),
         ),
         teacherTopicRepositoryProvider.overrideWithValue(
-          FakeTeacherTopicRepository(),
+          topics ?? FakeTeacherTopicRepository(),
         ),
         teacherLearningMaterialRepositoryProvider.overrideWithValue(
           FakeTeacherLearningMaterialRepository(),
         ),
         teacherHomeworkRepositoryProvider.overrideWithValue(
           homework ?? FakeTeacherHomeworkRepository(),
+        ),
+        teacherGroupStudentRepositoryProvider.overrideWithValue(
+          groupStudents ?? FakeTeacherGroupStudentRepository(),
         ),
       ],
       child: const TestLabUzApp(),

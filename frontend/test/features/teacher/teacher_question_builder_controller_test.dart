@@ -378,15 +378,15 @@ void main() {
     });
 
     test(
-      'business and result-pair conflicts set serverLocked after GET',
+      'business and result-pair locks survive refresh and block mutations',
       () async {
         for (final code in [
           ApiErrorCodes.businessConflict,
           ApiErrorCodes.resultPairLocked,
         ]) {
-          final question = teacherHomeworkQuestions().first;
+          final questions = teacherHomeworkQuestions().take(2).toList();
           var fetchCount = 0;
-          final current = teacherHomework(questions: [question]);
+          final current = teacherHomework(questions: questions);
           final repository = FakeTeacherHomeworkRepository(
             onFetch: (_) async {
               fetchCount += 1;
@@ -399,7 +399,7 @@ void main() {
           final subscription = await harness.listenAndEnterRoute();
 
           await harness.controller.deleteQuestion(
-            question.id,
+            questions.first.id,
             ownerGeneration: harness.ownerGeneration!,
           );
           await flushTeacherControllers();
@@ -411,6 +411,28 @@ void main() {
             contains('locked by the current server state'),
             reason: code,
           );
+
+          harness.controller.refresh(ownerGeneration: harness.ownerGeneration!);
+          await flushTeacherControllers();
+
+          expect(fetchCount, 3, reason: code);
+          expect(subscription.read().serverLocked, isTrue, reason: code);
+
+          harness.controller.moveQuestionDown(
+            questions.first.id,
+            ownerGeneration: harness.ownerGeneration!,
+          );
+          await harness.controller.saveOrder(
+            ownerGeneration: harness.ownerGeneration!,
+          );
+          await harness.controller.deleteQuestion(
+            questions.last.id,
+            ownerGeneration: harness.ownerGeneration!,
+          );
+
+          expect(subscription.read().draftOrderIds, _ids(questions));
+          expect(repository.deleteQuestionIds, [questions.first.id]);
+          expect(repository.reorderQuestionRequests, isEmpty);
         }
       },
     );
