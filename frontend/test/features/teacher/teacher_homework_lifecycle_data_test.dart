@@ -55,20 +55,11 @@ void main() {
       }
     });
 
-    test('maps only exact documented lifecycle failures as definite', () async {
+    test('maps exact shared lifecycle failures as definite', () async {
       final cases = <(int, String)>[
         (401, ApiErrorCodes.authenticationRequired),
         (403, ApiErrorCodes.forbidden),
         (404, ApiErrorCodes.resourceNotFound),
-        (409, ApiErrorCodes.topicNotEditable),
-        (409, ApiErrorCodes.taskNotActive),
-        (409, ApiErrorCodes.taskClosed),
-        (409, ApiErrorCodes.taskArchived),
-        (409, ApiErrorCodes.businessConflict),
-        (409, ApiErrorCodes.resultPairLocked),
-        (409, ApiErrorCodes.assessmentHasNoScoreablePoints),
-        (409, ApiErrorCodes.assessmentNotAssigned),
-        (409, ApiErrorCodes.deadlinePassed),
         (422, ApiErrorCodes.validationFailed),
         (429, ApiErrorCodes.rateLimited),
       ];
@@ -100,6 +91,112 @@ void main() {
         expect(adapter.requests, hasLength(1));
       }
     });
+
+    test(
+      'maps every documented action-specific lifecycle conflict as definite',
+      () async {
+        final cases = <(TeacherHomeworkLifecycleAction, String)>[
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.topicNotEditable,
+          ),
+          (TeacherHomeworkLifecycleAction.activate, ApiErrorCodes.taskClosed),
+          (TeacherHomeworkLifecycleAction.activate, ApiErrorCodes.taskArchived),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.businessConflict,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.resultPairLocked,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.assessmentHasNoScoreablePoints,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.assessmentNotAssigned,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.deadlinePassed,
+          ),
+          (TeacherHomeworkLifecycleAction.close, ApiErrorCodes.taskNotActive),
+          (TeacherHomeworkLifecycleAction.close, ApiErrorCodes.taskArchived),
+          (
+            TeacherHomeworkLifecycleAction.close,
+            ApiErrorCodes.topicNotEditable,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.close,
+            ApiErrorCodes.businessConflict,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.archive,
+            ApiErrorCodes.businessConflict,
+          ),
+        ];
+
+        for (final entry in cases) {
+          final adapter = _RecordingAdapter(
+            (_) => _jsonResponse(409, _errorEnvelope(entry.$2)),
+          );
+
+          await expectLater(
+            _source(adapter).performLifecycleAction(_homeworkId, entry.$1),
+            throwsA(
+              isA<ApiRequestException>()
+                  .having(
+                    (error) => error.failure.statusCode,
+                    'statusCode',
+                    409,
+                  )
+                  .having(
+                    (error) => error.failure.serverCode,
+                    'serverCode',
+                    entry.$2,
+                  ),
+            ),
+          );
+          expect(adapter.requests, hasLength(1));
+        }
+      },
+    );
+
+    test(
+      'treats cross-action and future lifecycle conflicts as unknown',
+      () async {
+        final cases = <(TeacherHomeworkLifecycleAction, String)>[
+          (TeacherHomeworkLifecycleAction.close, ApiErrorCodes.deadlinePassed),
+          (
+            TeacherHomeworkLifecycleAction.close,
+            ApiErrorCodes.resultPairLocked,
+          ),
+          (TeacherHomeworkLifecycleAction.archive, ApiErrorCodes.taskClosed),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.taskNotActive,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            'future_lifecycle_conflict',
+          ),
+        ];
+
+        for (final entry in cases) {
+          final adapter = _RecordingAdapter(
+            (_) => _jsonResponse(409, _errorEnvelope(entry.$2)),
+          );
+
+          await expectLater(
+            _source(adapter).performLifecycleAction(_homeworkId, entry.$1),
+            throwsA(isA<TeacherHomeworkMutationOutcomeUnknownException>()),
+          );
+          expect(adapter.requests, hasLength(1));
+        }
+      },
+    );
 
     test(
       'treats every ambiguous response or transport result as unknown',

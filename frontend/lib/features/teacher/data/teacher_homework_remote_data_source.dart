@@ -150,6 +150,7 @@ class TeacherHomeworkRemoteDataSource {
         action,
       ),
       operation: _TeacherHomeworkMutationOperation.lifecycle,
+      lifecycleAction: action,
     );
   }
 
@@ -245,6 +246,7 @@ class TeacherHomeworkRemoteDataSource {
     required int expectedStatus,
     required String expectedMessage,
     required _TeacherHomeworkMutationOperation operation,
+    TeacherHomeworkLifecycleAction? lifecycleAction,
   }) async {
     try {
       final response = await send();
@@ -262,7 +264,11 @@ class TeacherHomeworkRemoteDataSource {
     } on TeacherHomeworkMutationOutcomeUnknownException {
       rethrow;
     } on DioException catch (exception) {
-      if (_isExactHomeworkMutationFailure(exception.response, operation)) {
+      if (_isExactHomeworkMutationFailure(
+        exception.response,
+        operation,
+        lifecycleAction: lifecycleAction,
+      )) {
         throw ApiRequestException(failureMapper.map(exception));
       }
       throw const TeacherHomeworkMutationOutcomeUnknownException();
@@ -322,8 +328,9 @@ enum _TeacherHomeworkMutationOperation { create, update, lifecycle }
 
 bool _isExactHomeworkMutationFailure(
   Response<Object?>? response,
-  _TeacherHomeworkMutationOperation operation,
-) {
+  _TeacherHomeworkMutationOperation operation, {
+  TeacherHomeworkLifecycleAction? lifecycleAction,
+}) {
   final status = response?.statusCode;
   final envelope = _readExactHomeworkErrorEnvelope(response?.data);
   if (status == null || envelope == null) {
@@ -342,7 +349,7 @@ bool _isExactHomeworkMutationFailure(
     409 when operation == _TeacherHomeworkMutationOperation.create =>
       code == ApiErrorCodes.topicNotEditable,
     409 when operation == _TeacherHomeworkMutationOperation.lifecycle =>
-      _isDocumentedLifecycleConflict(code),
+      _isDocumentedLifecycleConflict(code, lifecycleAction),
     409 =>
       code == ApiErrorCodes.topicNotEditable ||
           code == ApiErrorCodes.taskClosed ||
@@ -357,16 +364,29 @@ bool _isExactHomeworkMutationFailure(
   return recognized && (status == 422 || envelope.errors.isEmpty);
 }
 
-bool _isDocumentedLifecycleConflict(String code) {
-  return code == ApiErrorCodes.topicNotEditable ||
+bool _isDocumentedLifecycleConflict(
+  String code,
+  TeacherHomeworkLifecycleAction? action,
+) {
+  return switch (action) {
+    TeacherHomeworkLifecycleAction.activate =>
+      code == ApiErrorCodes.topicNotEditable ||
+          code == ApiErrorCodes.taskClosed ||
+          code == ApiErrorCodes.taskArchived ||
+          code == ApiErrorCodes.businessConflict ||
+          code == ApiErrorCodes.resultPairLocked ||
+          code == ApiErrorCodes.assessmentHasNoScoreablePoints ||
+          code == ApiErrorCodes.assessmentNotAssigned ||
+          code == ApiErrorCodes.deadlinePassed,
+    TeacherHomeworkLifecycleAction.close =>
       code == ApiErrorCodes.taskNotActive ||
-      code == ApiErrorCodes.taskClosed ||
-      code == ApiErrorCodes.taskArchived ||
-      code == ApiErrorCodes.businessConflict ||
-      code == ApiErrorCodes.resultPairLocked ||
-      code == ApiErrorCodes.assessmentHasNoScoreablePoints ||
-      code == ApiErrorCodes.assessmentNotAssigned ||
-      code == ApiErrorCodes.deadlinePassed;
+          code == ApiErrorCodes.taskArchived ||
+          code == ApiErrorCodes.topicNotEditable ||
+          code == ApiErrorCodes.businessConflict,
+    TeacherHomeworkLifecycleAction.archive =>
+      code == ApiErrorCodes.businessConflict,
+    null => false,
+  };
 }
 
 bool _isExactQuestionMutationFailure(
