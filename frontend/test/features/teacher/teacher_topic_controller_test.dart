@@ -30,6 +30,8 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_topic_mutation.
 import 'teacher_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
+const _openHomeworkFeedback =
+    "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.";
 
 void main() {
   group('TeacherTopicGroupPickerController', () {
@@ -836,6 +838,191 @@ void main() {
           TeacherTopicLifecycleStatus.notAvailable,
         );
         expect(repository.fetchIds, hasLength(2));
+      },
+    );
+
+    test(
+      'open Homework conflict refreshes each target but remains definite',
+      () async {
+        for (final action in [
+          TeacherTopicLifecycleAction.close,
+          TeacherTopicLifecycleAction.archive,
+        ]) {
+          final initialStatus = action == TeacherTopicLifecycleAction.close
+              ? TeacherTopicStatus.active
+              : TeacherTopicStatus.closed;
+          var fetches = 0;
+          final repository = FakeTeacherTopicRepository(
+            onFetch: (id) async {
+              fetches += 1;
+              return teacherTopic(
+                id: id,
+                status: fetches == 1 ? initialStatus : action.expectedStatus,
+              );
+            },
+            onLifecycle: (_, _) async => throw teacherServerFailure(
+              ApiErrorCodes.topicHasOpenAssessments,
+              statusCode: 409,
+            ),
+          );
+          final harness = _Harness(topics: repository);
+          final detailProvider = teacherTopicDetailControllerProvider(_topicId);
+          final detailSubscription = harness.container.listen(
+            detailProvider,
+            (_, _) {},
+            fireImmediately: true,
+          );
+          await flushTeacherControllers();
+          final lifecycleProvider = teacherTopicLifecycleControllerProvider(
+            _topicId,
+          );
+          final lifecycleSubscription = harness.container.listen(
+            lifecycleProvider,
+            (_, _) {},
+            fireImmediately: true,
+          );
+
+          await harness.container
+              .read(lifecycleProvider.notifier)
+              .perform(action);
+
+          expect(repository.lifecycleRequests, hasLength(1));
+          expect(repository.fetchIds, hasLength(2));
+          expect(
+            lifecycleSubscription.read().status,
+            TeacherTopicLifecycleStatus.definiteFailure,
+          );
+          expect(lifecycleSubscription.read().feedback, _openHomeworkFeedback);
+          expect(lifecycleSubscription.read().canCheckCurrent, isFalse);
+          expect(
+            detailSubscription.read().topic!.status,
+            action.expectedStatus,
+          );
+        }
+      },
+    );
+
+    test(
+      'failed open Homework refresh preserves the definite non-commit',
+      () async {
+        var fetches = 0;
+        final repository = FakeTeacherTopicRepository(
+          onFetch: (id) async {
+            fetches += 1;
+            if (fetches == 2) {
+              throw teacherLocalFailure(ApiFailureKind.connection);
+            }
+            return teacherTopic(id: id, status: TeacherTopicStatus.active);
+          },
+          onLifecycle: (_, _) async => throw teacherServerFailure(
+            ApiErrorCodes.topicHasOpenAssessments,
+            statusCode: 409,
+          ),
+        );
+        final harness = _Harness(topics: repository);
+        final detailProvider = teacherTopicDetailControllerProvider(_topicId);
+        final detailSubscription = harness.container.listen(
+          detailProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+        await flushTeacherControllers();
+        final lifecycleProvider = teacherTopicLifecycleControllerProvider(
+          _topicId,
+        );
+        final lifecycleSubscription = harness.container.listen(
+          lifecycleProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+        final controller = harness.container.read(lifecycleProvider.notifier);
+
+        await controller.perform(TeacherTopicLifecycleAction.close);
+
+        expect(repository.lifecycleRequests, hasLength(1));
+        expect(repository.fetchIds, hasLength(2));
+        expect(
+          lifecycleSubscription.read().status,
+          TeacherTopicLifecycleStatus.definiteFailure,
+        );
+        expect(lifecycleSubscription.read().feedback, _openHomeworkFeedback);
+        expect(
+          detailSubscription.read().topic!.status,
+          TeacherTopicStatus.active,
+        );
+
+        await controller.checkCurrentTopic();
+
+        expect(repository.lifecycleRequests, hasLength(1));
+        expect(repository.fetchIds, hasLength(2));
+      },
+    );
+
+    test(
+      'stale open Homework refresh cannot publish to a replacement session',
+      () async {
+        final pendingRefresh = Completer<TeacherTopic>();
+        var fetches = 0;
+        final repository = FakeTeacherTopicRepository(
+          onFetch: (id) {
+            fetches += 1;
+            if (fetches == 2) {
+              return pendingRefresh.future;
+            }
+            return Future.value(
+              teacherTopic(id: id, status: TeacherTopicStatus.active),
+            );
+          },
+          onLifecycle: (_, _) async => throw teacherServerFailure(
+            ApiErrorCodes.topicHasOpenAssessments,
+            statusCode: 409,
+          ),
+        );
+        final auth = FakeTeacherAuthSessionController.authenticated(
+          teacherUser('teacher-a'),
+        );
+        final harness = _Harness(topics: repository, auth: auth);
+        final detailProvider = teacherTopicDetailControllerProvider(_topicId);
+        final detailSubscription = harness.container.listen(
+          detailProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+        await flushTeacherControllers();
+        final lifecycleProvider = teacherTopicLifecycleControllerProvider(
+          _topicId,
+        );
+        final lifecycleSubscription = harness.container.listen(
+          lifecycleProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+        final lifecycleFuture = harness.container
+            .read(lifecycleProvider.notifier)
+            .perform(TeacherTopicLifecycleAction.close);
+        await flushTeacherControllers();
+        expect(
+          lifecycleSubscription.read().status,
+          TeacherTopicLifecycleStatus.reconciling,
+        );
+
+        auth.replaceUser(teacherUser('teacher-b'));
+        await flushTeacherControllers();
+        pendingRefresh.complete(
+          teacherTopic(id: _topicId, status: TeacherTopicStatus.closed),
+        );
+        await lifecycleFuture;
+        await flushTeacherControllers();
+
+        expect(
+          lifecycleSubscription.read().status,
+          TeacherTopicLifecycleStatus.idle,
+        );
+        expect(
+          detailSubscription.read().topic!.status,
+          TeacherTopicStatus.active,
+        );
+        expect(repository.lifecycleRequests, hasLength(1));
       },
     );
 

@@ -7,6 +7,7 @@ import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/teacher_homework.dart';
+import '../domain/teacher_homework_lifecycle.dart';
 import '../domain/teacher_homework_list_query.dart';
 import '../domain/teacher_homework_mutation.dart';
 import '../domain/teacher_question_mutation.dart';
@@ -125,6 +126,30 @@ class TeacherHomeworkRemoteDataSource {
       expectedStatus: 200,
       expectedMessage: TeacherHomeworkMutationDto.updateSuccessMessage,
       operation: _TeacherHomeworkMutationOperation.update,
+    );
+  }
+
+  Future<TeacherHomeworkMutationDto> performLifecycleAction(
+    String homeworkId,
+    TeacherHomeworkLifecycleAction action,
+  ) {
+    if (!isCanonicalTeacherHomeworkId(homeworkId)) {
+      throw ArgumentError.value(
+        homeworkId,
+        'homeworkId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return _sendMutation(
+      () => dio.post<Object?>(
+        '/teacher/homework/${Uri.encodeComponent(homeworkId)}/${action.segment}',
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherHomeworkMutationDto.lifecycleSuccessMessage(
+        action,
+      ),
+      operation: _TeacherHomeworkMutationOperation.lifecycle,
     );
   }
 
@@ -293,7 +318,7 @@ class TeacherHomeworkRemoteDataSource {
   }
 }
 
-enum _TeacherHomeworkMutationOperation { create, update }
+enum _TeacherHomeworkMutationOperation { create, update, lifecycle }
 
 bool _isExactHomeworkMutationFailure(
   Response<Object?>? response,
@@ -316,6 +341,8 @@ bool _isExactHomeworkMutationFailure(
     404 => code == ApiErrorCodes.resourceNotFound,
     409 when operation == _TeacherHomeworkMutationOperation.create =>
       code == ApiErrorCodes.topicNotEditable,
+    409 when operation == _TeacherHomeworkMutationOperation.lifecycle =>
+      _isDocumentedLifecycleConflict(code),
     409 =>
       code == ApiErrorCodes.topicNotEditable ||
           code == ApiErrorCodes.taskClosed ||
@@ -328,6 +355,18 @@ bool _isExactHomeworkMutationFailure(
   };
 
   return recognized && (status == 422 || envelope.errors.isEmpty);
+}
+
+bool _isDocumentedLifecycleConflict(String code) {
+  return code == ApiErrorCodes.topicNotEditable ||
+      code == ApiErrorCodes.taskNotActive ||
+      code == ApiErrorCodes.taskClosed ||
+      code == ApiErrorCodes.taskArchived ||
+      code == ApiErrorCodes.businessConflict ||
+      code == ApiErrorCodes.resultPairLocked ||
+      code == ApiErrorCodes.assessmentHasNoScoreablePoints ||
+      code == ApiErrorCodes.assessmentNotAssigned ||
+      code == ApiErrorCodes.deadlinePassed;
 }
 
 bool _isExactQuestionMutationFailure(

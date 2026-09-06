@@ -14,6 +14,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_group_student_l
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_student_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_student_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework_lifecycle.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_mutation.dart';
@@ -582,6 +583,7 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     this.onFetch,
     this.onCreate,
     this.onUpdate,
+    this.onLifecycle,
     this.onAddQuestion,
     this.onUpdateQuestion,
     this.onDeleteQuestion,
@@ -606,6 +608,11 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   onUpdate;
   Future<TeacherHomework> Function(
     String homeworkId,
+    TeacherHomeworkLifecycleAction action,
+  )?
+  onLifecycle;
+  Future<TeacherHomework> Function(
+    String homeworkId,
     TeacherQuestionCreateRequest request,
   )?
   onAddQuestion;
@@ -627,6 +634,8 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
       <({String topicId, TeacherHomeworkCreateRequest request})>[];
   final updateRequests =
       <({String homeworkId, TeacherHomeworkEditRequest request})>[];
+  final lifecycleRequests =
+      <({String homeworkId, TeacherHomeworkLifecycleAction action})>[];
   final addQuestionRequests =
       <({String homeworkId, TeacherQuestionCreateRequest request})>[];
   final updateQuestionRequests =
@@ -672,6 +681,18 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     fetchIds.add(homeworkId);
     return onFetch?.call(homeworkId) ??
         Future.value(teacherHomework(id: homeworkId));
+  }
+
+  @override
+  Future<TeacherHomework> performLifecycleAction(
+    String homeworkId,
+    TeacherHomeworkLifecycleAction action,
+  ) {
+    lifecycleRequests.add((homeworkId: homeworkId, action: action));
+    return onLifecycle?.call(homeworkId, action) ??
+        Future.value(
+          teacherHomework(id: homeworkId, status: action.expectedStatus),
+        );
   }
 
   @override
