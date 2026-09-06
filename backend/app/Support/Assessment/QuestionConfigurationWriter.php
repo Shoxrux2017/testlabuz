@@ -16,6 +16,7 @@ use App\Models\QuestionMatchingItem;
 use App\Models\QuestionOrderingItem;
 use App\Models\QuestionShortAcceptedAnswer;
 use App\Models\QuestionTrueFalseAnswer;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 use LogicException;
 
@@ -100,6 +101,106 @@ final class QuestionConfigurationWriter
             'orderingItems' => $orderingItems,
             'fillBlanks' => $fillBlanks,
         ]);
+    }
+
+    /** @param Collection<int, Question> $questions */
+    public function lockAndLoadConfigurations(Collection $questions): void
+    {
+        if ($questions->isEmpty()) {
+            return;
+        }
+
+        $institutionIds = $questions->pluck('institution_id')->unique()->values();
+
+        if ($institutionIds->count() !== 1) {
+            throw new LogicException('Questions must belong to one Institution.');
+        }
+
+        $institutionId = $institutionIds->first();
+        $questionIds = $questions->modelKeys();
+
+        $choiceOptions = QuestionChoiceOption::query()
+            ->where('institution_id', $institutionId)
+            ->whereIn('question_id', $questionIds)
+            ->orderBy('question_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        $trueFalseAnswers = QuestionTrueFalseAnswer::query()
+            ->where('institution_id', $institutionId)
+            ->whereIn('question_id', $questionIds)
+            ->orderBy('question_id')
+            ->lockForUpdate()
+            ->get();
+        $shortAnswers = QuestionShortAcceptedAnswer::query()
+            ->where('institution_id', $institutionId)
+            ->whereIn('question_id', $questionIds)
+            ->orderBy('question_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        $matchingItems = QuestionMatchingItem::query()
+            ->where('institution_id', $institutionId)
+            ->whereIn('question_id', $questionIds)
+            ->orderBy('question_id')
+            ->orderBy('position')
+            ->orderBy('side')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        $orderingItems = QuestionOrderingItem::query()
+            ->where('institution_id', $institutionId)
+            ->whereIn('question_id', $questionIds)
+            ->orderBy('question_id')
+            ->orderBy('correct_position')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        $fillBlanks = QuestionFillBlank::query()
+            ->where('institution_id', $institutionId)
+            ->whereIn('question_id', $questionIds)
+            ->orderBy('question_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+        $fillBlankAnswers = QuestionFillBlankAcceptedAnswer::query()
+            ->where('institution_id', $institutionId)
+            ->whereIn('blank_id', $fillBlanks->modelKeys())
+            ->orderBy('blank_id')
+            ->orderBy('position')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $fillBlankAnswersByBlank = $fillBlankAnswers->groupBy('blank_id');
+
+        foreach ($fillBlanks as $fillBlank) {
+            $fillBlank->setRelation(
+                'acceptedAnswers',
+                $fillBlankAnswersByBlank->get($fillBlank->id, new Collection),
+            );
+        }
+
+        $choiceOptionsByQuestion = $choiceOptions->groupBy('question_id');
+        $trueFalseAnswersByQuestion = $trueFalseAnswers->groupBy('question_id');
+        $shortAnswersByQuestion = $shortAnswers->groupBy('question_id');
+        $matchingItemsByQuestion = $matchingItems->groupBy('question_id');
+        $orderingItemsByQuestion = $orderingItems->groupBy('question_id');
+        $fillBlanksByQuestion = $fillBlanks->groupBy('question_id');
+
+        foreach ($questions as $question) {
+            $question->setRelations([
+                'choiceOptions' => $choiceOptionsByQuestion->get($question->id, new Collection),
+                'trueFalseAnswer' => $trueFalseAnswersByQuestion->get($question->id, new Collection)->first(),
+                'shortAcceptedAnswers' => $shortAnswersByQuestion->get($question->id, new Collection),
+                'matchingItems' => $matchingItemsByQuestion->get($question->id, new Collection),
+                'orderingItems' => $orderingItemsByQuestion->get($question->id, new Collection),
+                'fillBlanks' => $fillBlanksByQuestion->get($question->id, new Collection),
+            ]);
+        }
     }
 
     /** @param array<string, mixed> $configuration */
