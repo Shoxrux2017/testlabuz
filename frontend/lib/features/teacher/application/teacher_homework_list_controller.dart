@@ -140,6 +140,18 @@ class TeacherHomeworkListController extends Notifier<TeacherHomeworkListState> {
     _startLoad(state.query, retainResult: state.result != null);
   }
 
+  void refreshAfterMutation(TeacherSessionKey originatingSessionKey) {
+    if (!_matchesSession(originatingSessionKey)) {
+      return;
+    }
+
+    // A read that started before the mutation cannot establish the current
+    // authoritative list, even when it happens to use the same query.
+    _generation += 1;
+    _inFlightQuery = null;
+    _startLoad(state.query, retainResult: state.result != null);
+  }
+
   void retry() {
     if (state.status != TeacherHomeworkListStatus.error ||
         _activeSessionKey == null ||

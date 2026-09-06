@@ -25,7 +25,9 @@ abstract final class AppRouteNames {
   static const teacherTopicCreate = 'teacher-topic-create';
   static const teacherTopicDetail = 'teacher-topic-detail';
   static const teacherTopicEdit = 'teacher-topic-edit';
+  static const teacherHomeworkCreate = 'teacher-homework-create';
   static const teacherHomeworkDetail = 'teacher-homework-detail';
+  static const teacherHomeworkEdit = 'teacher-homework-edit';
   static const student = 'student';
   static const studentTopicDetail = 'student-topic-detail';
   static const parent = 'parent';
@@ -85,6 +87,8 @@ abstract final class AppRoutePaths {
   static const teacherTopicEditSegment = 'edit';
   static const teacherTopicIdParameter = 'topicId';
   static const teacherHomeworkSegment = 'homework';
+  static const teacherHomeworkCreateSegment = 'new';
+  static const teacherHomeworkEditSegment = 'edit';
   static const teacherHomeworkIdParameter = 'homeworkId';
   static const teacherTopicCreate =
       '$teacher/$teacherTopicsSegment/$teacherTopicCreateSegment';
@@ -92,9 +96,14 @@ abstract final class AppRoutePaths {
       '$teacher/$teacherTopicsSegment/:$teacherTopicIdParameter';
   static const teacherTopicEdit =
       '$teacherTopicDetail/$teacherTopicEditSegment';
+  static const teacherHomeworkCreate =
+      '$teacherTopicDetail/$teacherHomeworkSegment/'
+      '$teacherHomeworkCreateSegment';
   static const teacherHomeworkDetail =
       '$teacherTopicDetail/$teacherHomeworkSegment/'
       ':$teacherHomeworkIdParameter';
+  static const teacherHomeworkEdit =
+      '$teacherHomeworkDetail/$teacherHomeworkEditSegment';
   static const student = '/student';
   static const studentTopicsSegment = 'topics';
   static const studentTopicIdParameter = 'topicId';
@@ -314,7 +323,43 @@ abstract final class AppRoutePaths {
   }
 
   static bool isTeacherHomeworkDetailPath(String path) {
-    return teacherHomeworkIdFromPath(path) != null;
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 3 &&
+        _teacherTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == teacherHomeworkSegment &&
+        _teacherHomeworkIdPattern.hasMatch(segments[2]);
+  }
+
+  static bool isTeacherHomeworkCreatePath(String path) {
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 3 &&
+        _teacherTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == teacherHomeworkSegment &&
+        segments[2] == teacherHomeworkCreateSegment;
+  }
+
+  static bool isTeacherHomeworkEditPath(String path) {
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 4 &&
+        _teacherTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == teacherHomeworkSegment &&
+        _teacherHomeworkIdPattern.hasMatch(segments[2]) &&
+        segments[3] == teacherHomeworkEditSegment;
   }
 
   static bool isTeacherApprovedLocation(String path) {
@@ -322,7 +367,9 @@ abstract final class AppRoutePaths {
         isTeacherTopicCreatePath(path) ||
         isTeacherTopicDetailPath(path) ||
         isTeacherTopicEditPath(path) ||
-        isTeacherHomeworkDetailPath(path);
+        isTeacherHomeworkCreatePath(path) ||
+        isTeacherHomeworkDetailPath(path) ||
+        isTeacherHomeworkEditPath(path);
   }
 
   static String? teacherTopicIdFromPath(String path) {
@@ -340,12 +387,27 @@ abstract final class AppRoutePaths {
     final isDetail = segments.length == 1;
     final isEdit =
         segments.length == 2 && segments[1] == teacherTopicEditSegment;
-    final isHomework =
+    final isHomeworkCreate =
+        segments.length == 3 &&
+        segments[1] == teacherHomeworkSegment &&
+        segments[2] == teacherHomeworkCreateSegment;
+    final isHomeworkDetail =
         segments.length == 3 &&
         segments[1] == teacherHomeworkSegment &&
         _teacherHomeworkIdPattern.hasMatch(segments[2]);
+    final isHomeworkEdit =
+        segments.length == 4 &&
+        segments[1] == teacherHomeworkSegment &&
+        _teacherHomeworkIdPattern.hasMatch(segments[2]) &&
+        segments[3] == teacherHomeworkEditSegment;
 
-    return isDetail || isEdit || isHomework ? segments.first : null;
+    return isDetail ||
+            isEdit ||
+            isHomeworkCreate ||
+            isHomeworkDetail ||
+            isHomeworkEdit
+        ? segments.first
+        : null;
   }
 
   static String? teacherHomeworkIdFromPath(String path) {
@@ -355,7 +417,10 @@ abstract final class AppRoutePaths {
     }
 
     final segments = path.substring(prefix.length).split('/');
-    if (segments.length != 3 ||
+    final isDetail = segments.length == 3;
+    final isEdit =
+        segments.length == 4 && segments[3] == teacherHomeworkEditSegment;
+    if ((!isDetail && !isEdit) ||
         !_teacherTopicIdPattern.hasMatch(segments[0]) ||
         segments[1] != teacherHomeworkSegment ||
         !_teacherHomeworkIdPattern.hasMatch(segments[2])) {
@@ -395,6 +460,16 @@ abstract final class AppRoutePaths {
 
     return '${teacherTopicDetailLocation(topicId)}/$teacherHomeworkSegment/'
         '${Uri.encodeComponent(homeworkId)}';
+  }
+
+  static String teacherHomeworkCreateLocation(String topicId) {
+    return '${teacherTopicDetailLocation(topicId)}/$teacherHomeworkSegment/'
+        '$teacherHomeworkCreateSegment';
+  }
+
+  static String teacherHomeworkEditLocation(String topicId, String homeworkId) {
+    return '${teacherHomeworkDetailLocation(topicId, homeworkId)}/'
+        '$teacherHomeworkEditSegment';
   }
 
   static bool isStudentSegment(String path) {

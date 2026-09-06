@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/teacher_homework_detail_controller.dart';
@@ -30,6 +31,7 @@ class TeacherHomeworkDetailScreen extends ConsumerWidget {
     );
     final detailProvider = teacherHomeworkDetailControllerProvider(target);
     final detail = ref.watch(detailProvider);
+    final surface = ref.watch(appDeviceSurfaceProvider);
 
     void backToTopic() {
       if (context.canPop()) {
@@ -40,6 +42,14 @@ class TeacherHomeworkDetailScreen extends ConsumerWidget {
     }
 
     final hasConfirmedHomework = detail.homework != null;
+    final homework = detail.status == TeacherHomeworkDetailStatus.data
+        ? detail.homework
+        : null;
+    final canEdit =
+        surface == AppDeviceSurface.desktop &&
+        homework != null &&
+        (homework.status == TeacherHomeworkStatus.draft ||
+            homework.status == TeacherHomeworkStatus.active);
 
     return Scaffold(
       key: const Key('teacherHomeworkDetailScreen'),
@@ -52,6 +62,15 @@ class TeacherHomeworkDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
         ),
         actions: [
+          if (canEdit)
+            TextButton.icon(
+              key: const Key('teacherHomeworkEditButton'),
+              onPressed: () => context.go(
+                AppRoutePaths.teacherHomeworkEditLocation(topicId, homeworkId),
+              ),
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Edit'),
+            ),
           if (hasConfirmedHomework)
             IconButton(
               key: const Key('teacherHomeworkDetailRefreshButton'),

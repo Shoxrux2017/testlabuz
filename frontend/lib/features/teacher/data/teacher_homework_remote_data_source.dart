@@ -1,15 +1,18 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_homework_list_query.dart';
+import '../domain/teacher_homework_mutation.dart';
 import '../domain/teacher_topic.dart';
 import 'dto/teacher_homework_dto.dart';
 import 'dto/teacher_homework_list_dto.dart';
+import 'dto/teacher_homework_operation_dto.dart';
 
 final teacherHomeworkRemoteDataSourceProvider =
     Provider<TeacherHomeworkRemoteDataSource>((ref) {
@@ -27,6 +30,29 @@ class TeacherHomeworkRemoteDataSource {
 
   final Dio dio;
   final DioFailureMapper failureMapper;
+
+  Future<TeacherHomeworkMutationDto> createHomework(
+    String topicId,
+    TeacherHomeworkCreateRequest request,
+  ) {
+    if (!isCanonicalTeacherTopicId(topicId)) {
+      throw ArgumentError.value(
+        topicId,
+        'topicId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return _sendMutation(
+      () => dio.post<Object?>(
+        '/teacher/topics/${Uri.encodeComponent(topicId)}/homework',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 201,
+      expectedMessage: TeacherHomeworkMutationDto.createSuccessMessage,
+      operation: _TeacherHomeworkMutationOperation.create,
+    );
+  }
 
   Future<TeacherHomeworkListDto> fetchHomeworkList(
     String topicId,
@@ -80,6 +106,58 @@ class TeacherHomeworkRemoteDataSource {
     });
   }
 
+  Future<TeacherHomeworkMutationDto> updateHomework(
+    String homeworkId,
+    TeacherHomeworkEditRequest request,
+  ) {
+    if (!isCanonicalTeacherHomeworkId(homeworkId) || request.isEmpty) {
+      throw ArgumentError(
+        'Teacher Homework PATCH requires a canonical target and changed fields.',
+      );
+    }
+    return _sendMutation(
+      () => dio.patch<Object?>(
+        '/teacher/homework/${Uri.encodeComponent(homeworkId)}',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherHomeworkMutationDto.updateSuccessMessage,
+      operation: _TeacherHomeworkMutationOperation.update,
+    );
+  }
+
+  Future<TeacherHomeworkMutationDto> _sendMutation(
+    Future<Response<Object?>> Function() send, {
+    required int expectedStatus,
+    required String expectedMessage,
+    required _TeacherHomeworkMutationOperation operation,
+  }) async {
+    try {
+      final response = await send();
+      if (response.statusCode != expectedStatus) {
+        throw const TeacherHomeworkMutationOutcomeUnknownException();
+      }
+      try {
+        return TeacherHomeworkMutationDto.fromJson(
+          response.data,
+          expectedMessage: expectedMessage,
+        );
+      } on FormatException {
+        throw const TeacherHomeworkMutationOutcomeUnknownException();
+      }
+    } on TeacherHomeworkMutationOutcomeUnknownException {
+      rethrow;
+    } on DioException catch (exception) {
+      if (_isExactHomeworkMutationFailure(exception.response, operation)) {
+        throw ApiRequestException(failureMapper.map(exception));
+      }
+      throw const TeacherHomeworkMutationOutcomeUnknownException();
+    } catch (_) {
+      throw const TeacherHomeworkMutationOutcomeUnknownException();
+    }
+  }
+
   Future<T> _mapFailures<T>(Future<T> Function() request) async {
     try {
       return await request();
@@ -94,4 +172,103 @@ class TeacherHomeworkRemoteDataSource {
       );
     }
   }
+}
+
+enum _TeacherHomeworkMutationOperation { create, update }
+
+bool _isExactHomeworkMutationFailure(
+  Response<Object?>? response,
+  _TeacherHomeworkMutationOperation operation,
+) {
+  final status = response?.statusCode;
+  final envelope = _readExactHomeworkErrorEnvelope(response?.data);
+  if (status == null || envelope == null) {
+    return false;
+  }
+
+  final code = envelope.code;
+  final recognized = switch (status) {
+    401 => code == ApiErrorCodes.authenticationRequired,
+    403 =>
+      code == ApiErrorCodes.forbidden ||
+          code == ApiErrorCodes.passwordChangeRequired ||
+          code == ApiErrorCodes.userInactive ||
+          code == ApiErrorCodes.institutionInactive,
+    404 => code == ApiErrorCodes.resourceNotFound,
+    409 when operation == _TeacherHomeworkMutationOperation.create =>
+      code == ApiErrorCodes.topicNotEditable,
+    409 =>
+      code == ApiErrorCodes.topicNotEditable ||
+          code == ApiErrorCodes.taskClosed ||
+          code == ApiErrorCodes.taskArchived ||
+          code == ApiErrorCodes.businessConflict ||
+          code == ApiErrorCodes.officialTaskRequiresGroupAssignment,
+    422 => code == ApiErrorCodes.validationFailed,
+    429 => code == ApiErrorCodes.rateLimited,
+    _ => false,
+  };
+
+  return recognized && (status == 422 || envelope.errors.isEmpty);
+}
+
+_ExactHomeworkErrorEnvelope? _readExactHomeworkErrorEnvelope(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  final map = <String, Object?>{};
+  for (final entry in value.entries) {
+    if (entry.key is! String) {
+      return null;
+    }
+    map[entry.key as String] = entry.value;
+  }
+
+  const required = {'message', 'code', 'errors'};
+  const allowed = {...required, 'request_id'};
+  if (map.length < required.length ||
+      !map.keys.toSet().containsAll(required) ||
+      map.keys.any((key) => !allowed.contains(key))) {
+    return null;
+  }
+
+  final message = map['message'];
+  final code = map['code'];
+  final requestId = map['request_id'];
+  final rawErrors = map['errors'];
+  if (message is! String ||
+      message.trim().isEmpty ||
+      code is! String ||
+      code.isEmpty ||
+      rawErrors is! Map ||
+      (map.containsKey('request_id') &&
+          (requestId is! String || requestId.isEmpty))) {
+    return null;
+  }
+
+  final errors = <String, List<String>>{};
+  for (final entry in rawErrors.entries) {
+    if (entry.key is! String || entry.value is! List) {
+      return null;
+    }
+    final messages = <String>[];
+    for (final item in entry.value as List) {
+      if (item is! String || item.isEmpty) {
+        return null;
+      }
+      messages.add(item);
+    }
+    if (messages.isEmpty) {
+      return null;
+    }
+    errors[entry.key as String] = messages;
+  }
+
+  return _ExactHomeworkErrorEnvelope(code: code, errors: errors);
+}
+
+class _ExactHomeworkErrorEnvelope {
+  const _ExactHomeworkErrorEnvelope({required this.code, required this.errors});
+
+  final String code;
+  final Map<String, List<String>> errors;
 }

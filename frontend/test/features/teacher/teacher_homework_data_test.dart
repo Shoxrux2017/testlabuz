@@ -7,16 +7,59 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
+import 'package:testlabuz_client/features/teacher/data/dto/teacher_homework_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_remote_data_source.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework_form.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list_query.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework_mutation.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
 const _homeworkId = '20000000-0000-0000-0000-000000000001';
 
 void main() {
   group('TeacherHomeworkRemoteDataSource', () {
+    test('uses exact create and update mutation requests', () async {
+      final adapter = _RecordingAdapter((options) {
+        return switch (options.method) {
+          'POST' => _jsonResponse(201, {
+            'data': _homeworkJson(),
+            'message': 'Homework created successfully.',
+          }),
+          'PATCH' => _jsonResponse(200, {
+            'data': _homeworkJson()..['title'] = 'Updated Homework',
+            'message': 'Homework updated successfully.',
+          }),
+          _ => throw StateError('Unexpected request method.'),
+        };
+      });
+      final source = _source(adapter);
+
+      final created = await source.createHomework(_topicId, _createRequest());
+      final updated = await source.updateHomework(
+        _homeworkId,
+        _editTitleRequest(),
+      );
+
+      expect(created.homework.id, _homeworkId);
+      expect(updated.homework.title, 'Updated Homework');
+      final create = adapter.requests[0];
+      expect(create.method, 'POST');
+      expect(create.path, '/teacher/topics/$_topicId/homework');
+      expect(create.uri.path, '/api/v1/teacher/topics/$_topicId/homework');
+      expect(create.queryParameters, isEmpty);
+      expect(create.data, _createRequest().toJson());
+      expect(create.followRedirects, isFalse);
+      final update = adapter.requests[1];
+      expect(update.method, 'PATCH');
+      expect(update.path, '/teacher/homework/$_homeworkId');
+      expect(update.uri.path, '/api/v1/teacher/homework/$_homeworkId');
+      expect(update.queryParameters, isEmpty);
+      expect(update.data, {'title': 'Updated Homework'});
+      expect(update.followRedirects, isFalse);
+    });
+
     test('uses exact bodyless list GET and approved query', () async {
       final adapter = _RecordingAdapter(
         (_) => _jsonResponse(
@@ -122,6 +165,162 @@ void main() {
       );
     });
 
+    test('maps only exact recognized mutation failures as definite', () async {
+      final common = <(int, String)>[
+        (401, 'authentication_required'),
+        (403, 'forbidden'),
+        (403, 'password_change_required'),
+        (403, 'user_inactive'),
+        (403, 'institution_inactive'),
+        (404, 'resource_not_found'),
+        (422, 'validation_failed'),
+        (429, 'rate_limited'),
+      ];
+      final cases = <({bool create, int status, String code})>[
+        for (final pair in common)
+          (create: true, status: pair.$1, code: pair.$2),
+        (create: true, status: 409, code: 'topic_not_editable'),
+        for (final pair in common)
+          (create: false, status: pair.$1, code: pair.$2),
+        (create: false, status: 409, code: 'topic_not_editable'),
+        (create: false, status: 409, code: 'task_closed'),
+        (create: false, status: 409, code: 'task_archived'),
+        (create: false, status: 409, code: 'business_conflict'),
+        (
+          create: false,
+          status: 409,
+          code: 'official_task_requires_group_assignment',
+        ),
+      ];
+
+      for (final mutationCase in cases) {
+        final adapter = _RecordingAdapter(
+          (_) => _jsonResponse(mutationCase.status, {
+            'message': 'Safe server error.',
+            'code': mutationCase.code,
+            'errors': mutationCase.status == 422
+                ? {
+                    'title': ['The title is invalid.'],
+                  }
+                : <String, Object?>{},
+            'request_id': 'request-1',
+          }),
+        );
+        final source = _source(adapter);
+        final operation = mutationCase.create
+            ? source.createHomework(_topicId, _createRequest())
+            : source.updateHomework(_homeworkId, _editTitleRequest());
+
+        await expectLater(
+          operation,
+          throwsA(
+            isA<ApiRequestException>().having(
+              (error) => error.failure.serverCode,
+              'serverCode',
+              mutationCase.code,
+            ),
+          ),
+        );
+        expect(adapter.requests, hasLength(1));
+      }
+    });
+
+    test(
+      'malformed success, network ambiguity, and unknown errors stay unknown',
+      () async {
+        final handlers = <FutureOr<ResponseBody> Function(RequestOptions)>[
+          (_) => _jsonResponse(201, {'data': _homeworkJson()}),
+          (_) => _jsonResponse(201, {
+            'data': _homeworkJson(),
+            'message': 'Unexpected message.',
+          }),
+          (_) => _jsonResponse(201, {
+            'data': _homeworkJson(),
+            'message': 'Homework created successfully.',
+            'extra': true,
+          }),
+          (_) => _jsonResponse(200, {
+            'data': _homeworkJson(),
+            'message': 'Homework created successfully.',
+          }),
+          (_) => _jsonResponse(201, {
+            'data': _homeworkJson()..remove('status'),
+            'message': 'Homework created successfully.',
+          }),
+          (options) => throw DioException(
+            requestOptions: options,
+            type: DioExceptionType.connectionError,
+          ),
+          (_) => _jsonResponse(409, {
+            'message': 'Unknown conflict.',
+            'code': 'future_conflict',
+            'errors': <String, Object?>{},
+          }),
+          (_) => _jsonResponse(409, {
+            'message': 'Known code but invalid errors.',
+            'code': 'topic_not_editable',
+            'errors': {
+              'field': ['Must be empty for non-validation errors.'],
+            },
+          }),
+        ];
+
+        for (final handler in handlers) {
+          final adapter = _RecordingAdapter(handler);
+          await expectLater(
+            _source(adapter).createHomework(_topicId, _createRequest()),
+            throwsA(isA<TeacherHomeworkMutationOutcomeUnknownException>()),
+          );
+          expect(adapter.requests, hasLength(1));
+        }
+      },
+    );
+
+    test('unexpected update success message stays outcome unknown', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _jsonResponse(200, {
+          'data': _homeworkJson()..['title'] = 'Updated Homework',
+          'message': 'Unexpected update message.',
+        }),
+      );
+
+      await expectLater(
+        _source(adapter).updateHomework(_homeworkId, _editTitleRequest()),
+        throwsA(isA<TeacherHomeworkMutationOutcomeUnknownException>()),
+      );
+      expect(adapter.requests, hasLength(1));
+    });
+
+    test(
+      'rejects malformed mutation targets and empty PATCH before transport',
+      () {
+        final adapter = _RecordingAdapter(
+          (_) => _jsonResponse(201, {
+            'data': _homeworkJson(),
+            'message': 'Homework created successfully.',
+          }),
+        );
+        final source = _source(adapter);
+
+        expect(
+          () => source.createHomework('invalid', _createRequest()),
+          throwsArgumentError,
+        );
+        expect(
+          () => source.updateHomework('invalid', _editTitleRequest()),
+          throwsArgumentError,
+        );
+        expect(
+          () => source.updateHomework(
+            _homeworkId,
+            TeacherHomeworkEditRequest.empty(),
+          ),
+          throwsArgumentError,
+        );
+        expect(adapter.requests, isEmpty);
+      },
+    );
+
     test('rejects malformed target IDs before transport', () {
       final adapter = _RecordingAdapter(
         (_) => _jsonResponse(200, _listJson(const [], total: 0)),
@@ -180,7 +379,97 @@ void main() {
         throwsA(_failureKind(ApiFailureKind.invalidResponse)),
       );
     });
+
+    test(
+      'returns confirmed mutations and rejects mismatched authority',
+      () async {
+        late bool returnWrongTopic;
+        returnWrongTopic = false;
+        final adapter = _RecordingAdapter((options) {
+          final homework = _homeworkJson();
+          if (options.method == 'PATCH') {
+            homework['title'] = 'Updated Homework';
+          }
+          if (returnWrongTopic) {
+            homework['topic_id'] = '10000000-0000-0000-0000-000000000002';
+          }
+          return _jsonResponse(options.method == 'POST' ? 201 : 200, {
+            'data': homework,
+            'message': options.method == 'POST'
+                ? 'Homework created successfully.'
+                : 'Homework updated successfully.',
+          });
+        });
+        final repository = TeacherHomeworkRepositoryImpl(
+          remoteDataSource: _source(adapter),
+        );
+
+        expect(
+          (await repository.createHomework(_topicId, _createRequest())).id,
+          _homeworkId,
+        );
+        expect(
+          (await repository.updateHomework(
+            _homeworkId,
+            _editTitleRequest(),
+          )).title,
+          'Updated Homework',
+        );
+
+        returnWrongTopic = true;
+        await expectLater(
+          repository.createHomework(_topicId, _createRequest()),
+          throwsA(isA<TeacherHomeworkMutationOutcomeUnknownException>()),
+        );
+      },
+    );
+
+    test(
+      'accepts authoritative update success when intended fields differ',
+      () async {
+        final repository = TeacherHomeworkRepositoryImpl(
+          remoteDataSource: _source(
+            _RecordingAdapter(
+              (_) => _jsonResponse(200, {
+                'data': _homeworkJson(),
+                'message': 'Homework updated successfully.',
+              }),
+            ),
+          ),
+        );
+
+        final updated = await repository.updateHomework(
+          _homeworkId,
+          _editTitleRequest(),
+        );
+
+        expect(updated.id, _homeworkId);
+        expect(updated.title, 'Homework');
+      },
+    );
   });
+}
+
+TeacherHomeworkCreateRequest _createRequest() {
+  return TeacherHomeworkCreateRequest.fromForm(
+    TeacherHomeworkFormValue(
+      title: 'Homework',
+      studentInstructions: 'Complete the Homework.',
+    ),
+    'Asia/Tashkent',
+  );
+}
+
+TeacherHomeworkEditRequest _editTitleRequest() {
+  final homework = TeacherHomeworkDto.fromJson(_homeworkJson()).toDomain();
+  return TeacherHomeworkEditRequest.fromForm(
+    form: TeacherHomeworkFormValue.fromHomework(
+      homework,
+      'Asia/Tashkent',
+    ).copyWith(title: 'Updated Homework'),
+    initial: TeacherHomeworkEditSnapshot.fromHomework(homework),
+    institutionTimezone: 'Asia/Tashkent',
+  );
 }
 
 TeacherHomeworkRemoteDataSource _source(_RecordingAdapter adapter) {
