@@ -6,7 +6,6 @@ import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
-import 'package:testlabuz_client/features/teacher/application/teacher_homework_detail_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_mutation_activity.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_official_homework_controller.dart';
@@ -629,16 +628,15 @@ class _FakeResultPairRepository implements TeacherTopicResultPairRepository {
 }
 
 class _FakeHomeworkRepository implements TeacherHomeworkRepository {
-  _FakeHomeworkRepository(this.initial, {this.onFetch});
+  _FakeHomeworkRepository(this.initial);
 
   final TeacherHomework initial;
-  final Future<TeacherHomework> Function(String homeworkId)? onFetch;
   final fetchRequests = <String>[];
 
   @override
   Future<TeacherHomework> fetchHomework(String homeworkId) {
     fetchRequests.add(homeworkId);
-    return onFetch?.call(homeworkId) ?? Future.value(initial);
+    return Future.value(initial);
   }
 
   @override

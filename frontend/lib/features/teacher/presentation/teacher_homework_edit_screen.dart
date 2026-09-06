@@ -35,6 +35,7 @@ class TeacherHomeworkEditScreen extends ConsumerStatefulWidget {
 class _TeacherHomeworkEditScreenState
     extends ConsumerState<TeacherHomeworkEditScreen> {
   late final TeacherHomeworkRouteTarget _target;
+  late final TeacherHomeworkEditController _routeController;
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _instructionsController;
@@ -54,16 +55,18 @@ class _TeacherHomeworkEditScreenState
       topicId: widget.topicId,
       homeworkId: widget.homeworkId,
     );
+    _routeController = ref.read(
+      teacherHomeworkEditControllerProvider(_target).notifier,
+    );
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
     _instructionsController = TextEditingController();
-    ref
-        .read(teacherHomeworkEditControllerProvider(_target).notifier)
-        .enterRoute();
+    _routeController.enterRoute();
   }
 
   @override
   void dispose() {
+    _routeController.leaveRoute();
     _titleController.dispose();
     _descriptionController.dispose();
     _instructionsController.dispose();
@@ -80,7 +83,6 @@ class _TeacherHomeworkEditScreenState
   Widget build(BuildContext context) {
     final provider = teacherHomeworkEditControllerProvider(_target);
     final state = ref.watch(provider);
-    final controller = ref.read(provider.notifier);
     if (state.form != null) {
       _syncControllers(state.form!);
     }
@@ -110,7 +112,7 @@ class _TeacherHomeworkEditScreenState
             icon: const Icon(Icons.arrow_back),
           ),
         ),
-        body: SafeArea(child: _buildBody(state, controller)),
+        body: SafeArea(child: _buildBody(state, _routeController)),
       ),
     );
   }
@@ -285,10 +287,7 @@ class _TeacherHomeworkEditScreenState
   }
 
   Future<void> _chooseStudents() async {
-    final controller = ref.read(
-      teacherHomeworkEditControllerProvider(_target).notifier,
-    );
-    final launch = controller.beginStudentPicker();
+    final launch = _routeController.beginStudentPicker();
     if (launch == null) {
       return;
     }
@@ -297,9 +296,9 @@ class _TeacherHomeworkEditScreenState
       target: launch.target,
     );
     if (selection != null && mounted) {
-      controller.applyStudentSelection(selection, launch.owner);
+      _routeController.applyStudentSelection(selection, launch.owner);
     } else if (mounted) {
-      controller.cancelStudentPicker(launch.owner);
+      _routeController.cancelStudentPicker(launch.owner);
     }
   }
 
@@ -345,17 +344,15 @@ class _TeacherHomeworkEditScreenState
     if (time == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;
     }
-    ref
-        .read(teacherHomeworkEditControllerProvider(_target).notifier)
-        .updateDeadlineAt(
-          InstitutionWallClock(
-            year: date.year,
-            month: date.month,
-            day: date.day,
-            hour: time.hour,
-            minute: time.minute,
-          ),
-        );
+    _routeController.updateDeadlineAt(
+      InstitutionWallClock(
+        year: date.year,
+        month: date.month,
+        day: date.day,
+        hour: time.hour,
+        minute: time.minute,
+      ),
+    );
   }
 
   Future<void> _leaveWithGuard(TeacherHomeworkEditState state) async {
@@ -398,22 +395,18 @@ class _TeacherHomeworkEditScreenState
   }
 
   void _reviewHomework() {
-    ref
-        .read(teacherHomeworkEditControllerProvider(_target).notifier)
-        .leaveRoute();
+    _routeController.leaveRoute();
     context.go(
       AppRoutePaths.teacherHomeworkDetailLocation(
-        widget.topicId,
-        widget.homeworkId,
+        _target.topicId,
+        _target.homeworkId,
       ),
     );
   }
 
   void _backToTopic() {
-    ref
-        .read(teacherHomeworkEditControllerProvider(_target).notifier)
-        .leaveRoute();
-    context.go(AppRoutePaths.teacherTopicDetailLocation(widget.topicId));
+    _routeController.leaveRoute();
+    context.go(AppRoutePaths.teacherTopicDetailLocation(_target.topicId));
   }
 
   void _handleEffects(TeacherHomeworkEditState state) {
@@ -446,13 +439,11 @@ class _TeacherHomeworkEditScreenState
           ..showSnackBar(
             const SnackBar(content: Text('Homework updated successfully.')),
           );
-        ref
-            .read(teacherHomeworkEditControllerProvider(_target).notifier)
-            .leaveRoute();
+        _routeController.leaveRoute();
         context.go(
           AppRoutePaths.teacherHomeworkDetailLocation(
-            widget.topicId,
-            widget.homeworkId,
+            _target.topicId,
+            _target.homeworkId,
           ),
         );
       });

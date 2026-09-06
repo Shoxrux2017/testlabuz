@@ -36,6 +36,7 @@ import '../../features/teacher/presentation/teacher_question_builder_screen.dart
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
+import '../../features/teacher/application/teacher_homework_route_target.dart';
 import '../../features/teacher/application/teacher_session_key.dart';
 import 'app_route_paths.dart';
 import 'technical_root_screen.dart';
@@ -302,15 +303,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path:
                     '${AppRoutePaths.teacherHomeworkSegment}/'
                     '${AppRoutePaths.teacherHomeworkCreateSegment}',
-                builder: (context, state) => _buildTeacherDestination(
-                  TeacherHomeworkCreateScreen(
-                    topicId:
-                        state.pathParameters[AppRoutePaths
-                            .teacherTopicIdParameter] ??
-                        '',
-                  ),
-                  authoring: true,
-                ),
+                builder: (context, state) {
+                  final topicId =
+                      state.pathParameters[AppRoutePaths
+                          .teacherTopicIdParameter] ??
+                      '';
+                  return _buildTeacherDestination(
+                    TeacherHomeworkCreateScreen(
+                      key: ValueKey<String>(
+                        '${AppRouteNames.teacherHomeworkCreate}:'
+                        '${topicId.toLowerCase()}',
+                      ),
+                      topicId: topicId,
+                    ),
+                    authoring: true,
+                  );
+                },
               ),
               GoRoute(
                 name: AppRouteNames.teacherHomeworkDetail,
@@ -333,36 +341,54 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     name: AppRouteNames.teacherHomeworkEdit,
                     path: AppRoutePaths.teacherHomeworkEditSegment,
-                    builder: (context, state) => _buildTeacherDestination(
-                      TeacherHomeworkEditScreen(
-                        topicId:
-                            state.pathParameters[AppRoutePaths
-                                .teacherTopicIdParameter] ??
-                            '',
-                        homeworkId:
-                            state.pathParameters[AppRoutePaths
-                                .teacherHomeworkIdParameter] ??
-                            '',
-                      ),
-                      authoring: true,
-                    ),
+                    builder: (context, state) {
+                      final topicId =
+                          state.pathParameters[AppRoutePaths
+                              .teacherTopicIdParameter] ??
+                          '';
+                      final homeworkId =
+                          state.pathParameters[AppRoutePaths
+                              .teacherHomeworkIdParameter] ??
+                          '';
+                      final target = TeacherHomeworkRouteTarget(
+                        topicId: topicId,
+                        homeworkId: homeworkId,
+                      );
+                      return _buildTeacherDestination(
+                        TeacherHomeworkEditScreen(
+                          key: ValueKey<TeacherHomeworkRouteTarget>(target),
+                          topicId: target.topicId,
+                          homeworkId: target.homeworkId,
+                        ),
+                        authoring: true,
+                      );
+                    },
                   ),
                   GoRoute(
                     name: AppRouteNames.teacherHomeworkQuestions,
                     path: AppRoutePaths.teacherHomeworkQuestionsSegment,
-                    builder: (context, state) => _buildTeacherDestination(
-                      TeacherQuestionBuilderScreen(
-                        topicId:
-                            state.pathParameters[AppRoutePaths
-                                .teacherTopicIdParameter] ??
-                            '',
-                        homeworkId:
-                            state.pathParameters[AppRoutePaths
-                                .teacherHomeworkIdParameter] ??
-                            '',
-                      ),
-                      authoring: true,
-                    ),
+                    builder: (context, state) {
+                      final topicId =
+                          state.pathParameters[AppRoutePaths
+                              .teacherTopicIdParameter] ??
+                          '';
+                      final homeworkId =
+                          state.pathParameters[AppRoutePaths
+                              .teacherHomeworkIdParameter] ??
+                          '';
+                      final target = TeacherHomeworkRouteTarget(
+                        topicId: topicId,
+                        homeworkId: homeworkId,
+                      );
+                      return _buildTeacherDestination(
+                        TeacherQuestionBuilderScreen(
+                          key: ValueKey<TeacherHomeworkRouteTarget>(target),
+                          topicId: target.topicId,
+                          homeworkId: target.homeworkId,
+                        ),
+                        authoring: true,
+                      );
+                    },
                   ),
                 ],
               ),

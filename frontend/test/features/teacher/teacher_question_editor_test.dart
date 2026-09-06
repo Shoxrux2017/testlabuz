@@ -6,7 +6,6 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_question_builder_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
-import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_question_builder_screen.dart';
 

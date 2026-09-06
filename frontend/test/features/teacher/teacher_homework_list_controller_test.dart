@@ -194,7 +194,7 @@ void main() {
       final newer = Completer<TeacherHomeworkList>();
       var calls = 0;
       final repository = _FakeTeacherHomeworkRepository(
-        onFetchList: (_, __) {
+        onFetchList: (_, _) {
           calls += 1;
           return calls == 1 ? older.future : newer.future;
         },
@@ -229,7 +229,7 @@ void main() {
         final newSession = Completer<TeacherHomeworkList>();
         var calls = 0;
         final repository = _FakeTeacherHomeworkRepository(
-          onFetchList: (_, __) {
+          onFetchList: (_, _) {
             calls += 1;
             return calls == 1 ? oldSession.future : newSession.future;
           },
@@ -269,7 +269,7 @@ void main() {
         teacherUser('teacher-a'),
       );
       final logoutRepository = _FakeTeacherHomeworkRepository(
-        onFetchList: (_, __) => pendingLogout.future,
+        onFetchList: (_, _) => pendingLogout.future,
       );
       final logoutHarness = _Harness(repository: logoutRepository, auth: auth);
       final logoutSubscription = logoutHarness.listen();
@@ -289,7 +289,7 @@ void main() {
 
       final pendingDisposal = Completer<TeacherHomeworkList>();
       final disposalRepository = _FakeTeacherHomeworkRepository(
-        onFetchList: (_, __) => pendingDisposal.future,
+        onFetchList: (_, _) => pendingDisposal.future,
       );
       final disposalHarness = _Harness(repository: disposalRepository);
       final observed = <TeacherHomeworkListState>[];
@@ -322,7 +322,7 @@ void main() {
             teacherUser('teacher-a'),
           );
           final repository = _FakeTeacherHomeworkRepository(
-            onFetchList: (_, __) async => throw teacherServerFailure(code),
+            onFetchList: (_, _) async => throw teacherServerFailure(code),
           );
           final harness = _Harness(repository: repository, auth: auth);
           final subscription = harness.listen();
@@ -341,7 +341,7 @@ void main() {
 
     test('invalid success response failure becomes retryable error', () async {
       final repository = _FakeTeacherHomeworkRepository(
-        onFetchList: (_, __) async =>
+        onFetchList: (_, _) async =>
             throw teacherLocalFailure(ApiFailureKind.invalidResponse),
       );
       final harness = _Harness(repository: repository);
@@ -406,14 +406,13 @@ class _Harness {
 }
 
 class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
-  _FakeTeacherHomeworkRepository({this.onFetchList, this.onFetchHomework});
+  _FakeTeacherHomeworkRepository({this.onFetchList});
 
   Future<TeacherHomeworkList> Function(
     String topicId,
     TeacherHomeworkListQuery query,
   )?
   onFetchList;
-  Future<TeacherHomework> Function(String homeworkId)? onFetchHomework;
   final listRequests = <({String topicId, TeacherHomeworkListQuery query})>[];
 
   @override
@@ -444,8 +443,7 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
 
   @override
   Future<TeacherHomework> fetchHomework(String homeworkId) {
-    return onFetchHomework?.call(homeworkId) ??
-        Future.value(_homework(homeworkId: homeworkId));
+    return Future.value(_homework(homeworkId: homeworkId));
   }
 
   @override

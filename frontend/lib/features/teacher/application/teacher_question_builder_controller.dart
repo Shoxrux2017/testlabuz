@@ -35,7 +35,6 @@ class TeacherQuestionBuilderController
   var _editorGeneration = 0;
   var _ownsRoute = false;
   var _initialized = false;
-  var _clearServerLockOnNextRefresh = false;
   var _routeReloadRequired = false;
   var _routeReloadNeedsStart = false;
   var _routeReloadScheduled = false;
@@ -72,11 +71,11 @@ class TeacherQuestionBuilderController
     }
 
     if (detail.status == TeacherHomeworkDetailStatus.notFound) {
-      _clearServerLockOnNextRefresh = false;
+      final retainedServerLock = _initialized ? state.serverLocked : false;
       _initialized = true;
       return TeacherQuestionBuilderState(
         status: TeacherQuestionBuilderStatus.unavailable,
-        serverLocked: false,
+        serverLocked: retainedServerLock,
         authoritativeReloadPending: false,
         sharedMutationActive: activity.isActive,
         notice: 'This Homework is no longer available.',
@@ -87,9 +86,6 @@ class TeacherQuestionBuilderController
         detail.status == TeacherHomeworkDetailStatus.data && !detail.isStale
         ? detail.homework
         : null;
-    if (detail.status == TeacherHomeworkDetailStatus.error) {
-      _clearServerLockOnNextRefresh = false;
-    }
     if (homework == null || !_matchesTarget(homework)) {
       return _initialized
           ? state.copyWith(
@@ -108,13 +104,11 @@ class TeacherQuestionBuilderController
           ? state.topicNotEditable
           : false;
       _initialized = true;
-      final clearLock = _clearServerLockOnNextRefresh;
-      _clearServerLockOnNextRefresh = false;
       return TeacherQuestionBuilderState(
         authoritativeOrderIds: currentOrder,
         draftOrderIds: currentOrder,
         orderInitialized: true,
-        serverLocked: clearLock ? false : retainedServerLock,
+        serverLocked: retainedServerLock,
         topicNotEditable: retainedTopicNotEditable,
         authoritativeReloadPending: _routeReloadRequired,
         sharedMutationActive: activity.isActive,
@@ -126,13 +120,10 @@ class TeacherQuestionBuilderController
       currentOrder,
     );
     if (authoritativeChanged && state.orderDirty && !state.isBusy) {
-      final clearLock = _clearServerLockOnNextRefresh;
-      _clearServerLockOnNextRefresh = false;
       return state.copyWith(
         status: TeacherQuestionBuilderStatus.ready,
         authoritativeOrderIds: currentOrder,
         draftOrderIds: currentOrder,
-        serverLocked: clearLock ? false : state.serverLocked,
         authoritativeReloadPending: _routeReloadRequired,
         sharedMutationActive: activity.isActive,
         notice:
@@ -141,20 +132,9 @@ class TeacherQuestionBuilderController
       );
     }
     if (authoritativeChanged && !state.isBusy && !state.hasBlockingOutcome) {
-      final clearLock = _clearServerLockOnNextRefresh;
-      _clearServerLockOnNextRefresh = false;
       return state.copyWith(
         authoritativeOrderIds: currentOrder,
         draftOrderIds: currentOrder,
-        serverLocked: clearLock ? false : state.serverLocked,
-        authoritativeReloadPending: _routeReloadRequired,
-        sharedMutationActive: activity.isActive,
-      );
-    }
-    if (_clearServerLockOnNextRefresh && !state.isBusy) {
-      _clearServerLockOnNextRefresh = false;
-      return state.copyWith(
-        serverLocked: false,
         authoritativeReloadPending: _routeReloadRequired,
         sharedMutationActive: activity.isActive,
       );
@@ -395,8 +375,6 @@ class TeacherQuestionBuilderController
       _routeReloadNeedsStart = false;
       _routeReloadScheduled = false;
       _routeReloadInFlight = true;
-    } else {
-      _clearServerLockOnNextRefresh = true;
     }
     ref
         .read(teacherHomeworkDetailControllerProvider(target).notifier)
@@ -1016,7 +994,6 @@ class TeacherQuestionBuilderController
   void _clearSession() {
     _activeSessionKey = null;
     _initialized = false;
-    _clearServerLockOnNextRefresh = false;
     _routeReloadRequired = false;
     _routeReloadNeedsStart = false;
     _routeReloadScheduled = false;
