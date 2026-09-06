@@ -12,6 +12,7 @@ import 'package:testlabuz_client/features/teacher/data/teacher_homework_reposito
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list_query.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_list_pagination.dart';
 
@@ -414,6 +415,14 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   final listRequests = <({String topicId, TeacherHomeworkListQuery query})>[];
 
   @override
+  Future<TeacherHomework> createHomework(
+    String topicId,
+    TeacherHomeworkCreateRequest request,
+  ) {
+    throw UnimplementedError('Mutations are not used by list tests.');
+  }
+
+  @override
   Future<TeacherHomeworkList> fetchHomeworkList(
     String topicId,
     TeacherHomeworkListQuery query,
@@ -427,6 +436,14 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   Future<TeacherHomework> fetchHomework(String homeworkId) {
     return onFetchHomework?.call(homeworkId) ??
         Future.value(_homework(homeworkId: homeworkId));
+  }
+
+  @override
+  Future<TeacherHomework> updateHomework(
+    String homeworkId,
+    TeacherHomeworkEditRequest request,
+  ) {
+    throw UnimplementedError('Mutations are not used by list tests.');
   }
 }
 

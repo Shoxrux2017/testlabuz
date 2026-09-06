@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
+import '../application/teacher_topic_detail_controller.dart';
+import '../application/teacher_topic_detail_state.dart';
 import '../application/teacher_homework_list_controller.dart';
 import '../application/teacher_homework_list_state.dart';
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_homework_list.dart';
 import '../domain/teacher_homework_list_query.dart';
+import '../domain/teacher_topic.dart';
 import 'teacher_homework_formatters.dart';
 
 class TeacherHomeworkSection extends ConsumerStatefulWidget {
@@ -41,6 +45,16 @@ class _TeacherHomeworkSectionState
     final listProvider = teacherHomeworkListControllerProvider(widget.topicId);
     final state = ref.watch(listProvider);
     final controller = ref.read(listProvider.notifier);
+    final topicProvider = teacherTopicDetailControllerProvider(widget.topicId);
+    final topicDetail = ref.watch(topicProvider);
+    final topic = topicDetail.status == TeacherTopicDetailStatus.data
+        ? topicDetail.topic
+        : null;
+    final canCreate =
+        ref.watch(appDeviceSurfaceProvider) == AppDeviceSurface.desktop &&
+        topic != null &&
+        (topic.status == TeacherTopicStatus.draft ||
+            topic.status == TeacherTopicStatus.active);
 
     if (_searchController.text != state.searchDraft) {
       _searchController.value = TextEditingValue(
@@ -67,6 +81,19 @@ class _TeacherHomeworkSectionState
                     ),
                   ),
                 ),
+                if (canCreate) ...[
+                  FilledButton.icon(
+                    key: const Key('teacherHomeworkCreateButton'),
+                    onPressed: () => context.go(
+                      AppRoutePaths.teacherHomeworkCreateLocation(
+                        widget.topicId,
+                      ),
+                    ),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create Homework'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 IconButton(
                   key: const Key('teacherHomeworkRefreshButton'),
                   tooltip: 'Refresh Homework',

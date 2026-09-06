@@ -83,6 +83,34 @@ class TeacherHomeworkDetailController
     _startLoad(retainHomework: state.homework != null);
   }
 
+  void acceptAuthoritativeHomework(
+    TeacherHomework homework,
+    TeacherSessionKey originatingSessionKey,
+  ) {
+    if (!_matchesSession(originatingSessionKey) ||
+        homework.id.toLowerCase() != target.homeworkId.toLowerCase() ||
+        homework.topicId.toLowerCase() != target.topicId.toLowerCase()) {
+      return;
+    }
+
+    _cancelActiveRequest();
+    state = TeacherHomeworkDetailState(
+      status: TeacherHomeworkDetailStatus.data,
+      homework: homework,
+    );
+  }
+
+  void markNotFound(TeacherSessionKey originatingSessionKey) {
+    if (!_matchesSession(originatingSessionKey)) {
+      return;
+    }
+
+    _cancelActiveRequest();
+    state = const TeacherHomeworkDetailState(
+      status: TeacherHomeworkDetailStatus.notFound,
+    );
+  }
+
   void _startLoad({required bool retainHomework}) {
     final sessionKey = _activeSessionKey;
     if (sessionKey == null || _requestActive || !_matchesSession(sessionKey)) {
@@ -207,6 +235,10 @@ class TeacherHomeworkDetailController
 
   void _clearOwnership() {
     _activeSessionKey = null;
+    _cancelActiveRequest();
+  }
+
+  void _cancelActiveRequest() {
     _requestActive = false;
     _generation += 1;
   }

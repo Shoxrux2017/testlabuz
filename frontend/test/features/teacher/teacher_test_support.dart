@@ -16,6 +16,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_group_student_r
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list_query.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_list_pagination.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_learning_material.dart';
@@ -575,7 +576,12 @@ class FakeTeacherTopicRepository implements TeacherTopicRepository {
 }
 
 class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
-  FakeTeacherHomeworkRepository({this.onFetchList, this.onFetch});
+  FakeTeacherHomeworkRepository({
+    this.onFetchList,
+    this.onFetch,
+    this.onCreate,
+    this.onUpdate,
+  });
 
   Future<TeacherHomeworkList> Function(
     String topicId,
@@ -583,9 +589,33 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   )?
   onFetchList;
   Future<TeacherHomework> Function(String homeworkId)? onFetch;
+  Future<TeacherHomework> Function(
+    String topicId,
+    TeacherHomeworkCreateRequest request,
+  )?
+  onCreate;
+  Future<TeacherHomework> Function(
+    String homeworkId,
+    TeacherHomeworkEditRequest request,
+  )?
+  onUpdate;
 
   final listRequests = <({String topicId, TeacherHomeworkListQuery query})>[];
   final fetchIds = <String>[];
+  final createRequests =
+      <({String topicId, TeacherHomeworkCreateRequest request})>[];
+  final updateRequests =
+      <({String homeworkId, TeacherHomeworkEditRequest request})>[];
+
+  @override
+  Future<TeacherHomework> createHomework(
+    String topicId,
+    TeacherHomeworkCreateRequest request,
+  ) {
+    createRequests.add((topicId: topicId, request: request));
+    return onCreate?.call(topicId, request) ??
+        Future.value(teacherHomework(topicId: topicId));
+  }
 
   @override
   Future<TeacherHomeworkList> fetchHomeworkList(
@@ -603,6 +633,16 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   Future<TeacherHomework> fetchHomework(String homeworkId) {
     fetchIds.add(homeworkId);
     return onFetch?.call(homeworkId) ??
+        Future.value(teacherHomework(id: homeworkId));
+  }
+
+  @override
+  Future<TeacherHomework> updateHomework(
+    String homeworkId,
+    TeacherHomeworkEditRequest request,
+  ) {
+    updateRequests.add((homeworkId: homeworkId, request: request));
+    return onUpdate?.call(homeworkId, request) ??
         Future.value(teacherHomework(id: homeworkId));
   }
 }

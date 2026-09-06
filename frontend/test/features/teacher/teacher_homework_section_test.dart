@@ -7,8 +7,10 @@ import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_list.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_homework_section.dart';
 
 import 'teacher_test_support.dart';
@@ -141,7 +143,7 @@ void main() {
     expect(find.text('Questions: 4'), findsOneWidget);
     expect(find.text('Total points: 12.5'), findsOneWidget);
     expect(find.text('Deadline: 2026-09-10 17:00'), findsOneWidget);
-    expect(find.text('Create Homework'), findsNothing);
+    expect(find.text('Create Homework'), findsOneWidget);
     expect(find.text('Edit'), findsNothing);
     expect(find.text('Activate'), findsNothing);
     expect(find.text('Archive'), findsNothing);
@@ -200,22 +202,101 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.listRequests.last.query.page, 1);
   });
+
+  testWidgets('Create action requires confirmed editable Topic on desktop', (
+    tester,
+  ) async {
+    for (final status in [
+      TeacherTopicStatus.draft,
+      TeacherTopicStatus.active,
+    ]) {
+      await _pumpSection(
+        tester,
+        FakeTeacherHomeworkRepository(),
+        topics: FakeTeacherTopicRepository(
+          onFetch: (id) async => teacherTopic(id: id, status: status),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherHomeworkCreateButton')),
+        findsOneWidget,
+      );
+    }
+
+    for (final status in [
+      TeacherTopicStatus.closed,
+      TeacherTopicStatus.archived,
+    ]) {
+      await _pumpSection(
+        tester,
+        FakeTeacherHomeworkRepository(),
+        topics: FakeTeacherTopicRepository(
+          onFetch: (id) async => teacherTopic(id: id, status: status),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherHomeworkCreateButton')),
+        findsNothing,
+      );
+    }
+  });
+
+  testWidgets(
+    'Create action stays hidden while Topic is loading and on mobile',
+    (tester) async {
+      final pending = Completer<TeacherTopic>();
+      await _pumpSection(
+        tester,
+        FakeTeacherHomeworkRepository(),
+        topics: FakeTeacherTopicRepository(onFetch: (_) => pending.future),
+      );
+      expect(
+        find.byKey(const Key('teacherHomeworkCreateButton')),
+        findsNothing,
+      );
+      pending.complete(teacherTopic(id: _topicId));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherHomeworkCreateButton')),
+        findsOneWidget,
+      );
+
+      await _pumpSection(
+        tester,
+        FakeTeacherHomeworkRepository(),
+        surface: AppDeviceSurface.mobile,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherHomeworkCreateButton')),
+        findsNothing,
+      );
+    },
+  );
 }
 
 Future<void> _pumpSection(
   WidgetTester tester,
-  FakeTeacherHomeworkRepository repository,
-) async {
+  FakeTeacherHomeworkRepository repository, {
+  FakeTeacherTopicRepository? topics,
+  AppDeviceSurface surface = AppDeviceSurface.desktop,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
+      key: UniqueKey(),
       overrides: [
         authSessionControllerProvider.overrideWith(
           () => FakeTeacherAuthSessionController.authenticated(
             teacherUser('teacher-a'),
           ),
         ),
-        appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
+        appDeviceSurfaceProvider.overrideWithValue(surface),
         teacherHomeworkRepositoryProvider.overrideWithValue(repository),
+        teacherTopicRepositoryProvider.overrideWithValue(
+          topics ?? FakeTeacherTopicRepository(),
+        ),
       ],
       child: const MaterialApp(
         home: Scaffold(

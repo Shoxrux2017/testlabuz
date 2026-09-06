@@ -12,6 +12,10 @@ abstract final class ApiErrorCodes {
   static const currentPasswordInvalid = 'current_password_invalid';
   static const rateLimited = 'rate_limited';
   static const topicNotEditable = 'topic_not_editable';
+  static const taskClosed = 'task_closed';
+  static const taskArchived = 'task_archived';
+  static const officialTaskRequiresGroupAssignment =
+      'official_task_requires_group_assignment';
   static const unsupportedFileType = 'unsupported_file_type';
   static const fileTooLarge = 'file_too_large';
   static const fileUploadFailed = 'file_upload_failed';

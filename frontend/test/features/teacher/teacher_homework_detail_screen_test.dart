@@ -148,8 +148,41 @@ void main() {
       expect(find.text('Selected students: 2'), findsOneWidget);
       expect(find.text('No deadline'), findsOneWidget);
       expect(find.textContaining(_studentId), findsNothing);
+      expect(
+        find.byKey(const Key('teacherHomeworkEditButton')),
+        findsOneWidget,
+      );
     },
   );
+
+  testWidgets('Edit action requires current draft or active desktop detail', (
+    tester,
+  ) async {
+    for (final status in [
+      TeacherHomeworkStatus.draft,
+      TeacherHomeworkStatus.active,
+    ]) {
+      await _pumpDetail(
+        tester,
+        FakeTeacherHomeworkRepository(
+          onFetch: (id) async => teacherHomework(id: id, status: status),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherHomeworkEditButton')),
+        findsOneWidget,
+      );
+    }
+
+    await _pumpDetail(
+      tester,
+      FakeTeacherHomeworkRepository(),
+      surface: AppDeviceSurface.mobile,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
+  });
 
   testWidgets('refresh retains confirmed detail and marks a failure stale', (
     tester,
@@ -170,6 +203,7 @@ void main() {
 
     await _pumpDetail(tester, repository);
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('teacherHomeworkEditButton')), findsOneWidget);
     await tester.tap(
       find.byKey(const Key('teacherHomeworkDetailRefreshButton')),
     );
@@ -180,6 +214,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Confirmed Homework'), findsOneWidget);
+    expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
 
     refresh.completeError(teacherLocalFailure(ApiFailureKind.connection));
     await tester.pumpAndSettle();
@@ -190,6 +225,7 @@ void main() {
     );
     expect(find.text('Confirmed Homework'), findsOneWidget);
     expect(find.textContaining('Raw local failure'), findsNothing);
+    expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
   });
 
   testWidgets('long typed detail content fits a scaled mobile surface', (
@@ -234,6 +270,7 @@ void main() {
       find.byKey(const Key('teacherHomeworkDetailScroll')),
       findsOneWidget,
     );
+    expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
