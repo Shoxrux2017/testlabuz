@@ -5,19 +5,19 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 6 — Homework Assignment Management` |
-| Stage status | `In Progress — Backend Phase 2 pending` |
+| Stage status | `In Progress — Backend Phase 2 PASS; frontend not started` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition status | `Approved / Delivered` |
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
 | Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
-| Backend implementation | `Complete — S06-BE-001…006 Accepted / Delivered; Backend Phase 2 pending` |
-| Backend checkpoint | `Approved — Pending execution` |
+| Backend implementation | `Complete — S06-BE-001…006 Accepted / Delivered; Backend Phase 2 PASS` |
+| Backend checkpoint | `Completed — PASS` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `Approved — Pending execution` |
 | Integration gate | `Approved — Pending execution` |
 | Stage Closure Review | `Approved — Pending execution` |
-| Next permitted implementation gate | `S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review` |
+| Next permitted implementation gate | `S06-FE-001 — Homework Client Domain, Read Surfaces and Routing` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -712,7 +712,7 @@ tasks/backend/stage-06/S06-BE-PHASE-2-backend-block-review.md
 Status:
 
 ```text
-Approved — Pending execution
+Completed — PASS
 ```
 
 Entry gate:
@@ -744,7 +744,8 @@ P2 = 0
 P3 = 0
 ```
 
-Frontend implementation is prohibited until this checkpoint passes.
+Backend Phase 2 passed. `S06-FE-001` is unlocked as the next permitted
+implementation gate.
 
 ---
 
@@ -976,7 +977,7 @@ P3 = 0
 | `S06-BE-004 Accepted / Delivered` | `S06-BE-005` | `PASS — unlocked` |
 | `S06-BE-005 Accepted / Delivered` | `S06-BE-006` | `PASS — unlocked` |
 | `S06-BE-006 Accepted / Delivered` | `S06-BE-PHASE-2` | `PASS — unlocked` |
-| Backend Phase 2 `PASS` | `S06-FE-001` | `Pending` |
+| Backend Phase 2 `PASS` | `S06-FE-001` | `PASS — unlocked` |
 | `S06-FE-001 Accepted / Delivered` | `S06-FE-002` | `Pending` |
 | `S06-FE-002 Accepted / Delivered` | `S06-FE-003` | `Pending` |
 | `S06-FE-003 Accepted / Delivered` | `S06-FE-004` | `Pending` |
@@ -1294,10 +1295,10 @@ S06-BE-006: Accepted / Delivered — PR #153,
 merge c45e834784a303e74a41535a39293fbaefb6afc9
 
 Backend Phase 2:
-Approved — Pending execution
+Completed — PASS
 
 Dependency gate:
-S06-BE-006 Accepted / Delivered -> S06-BE-PHASE-2 = PASS — unlocked
+Backend Phase 2 PASS -> S06-FE-001 = PASS — unlocked
 
 S06-FE-001: Approved / Not delivered
 S06-FE-002: Approved / Not delivered
@@ -1314,10 +1315,11 @@ Stage 6 Closure Review:
 Approved — Pending execution
 
 Stage 6:
-In Progress — backend implementation complete; Backend Phase 2 pending
+In Progress — backend implementation complete; Backend Phase 2 PASS;
+frontend implementation not started
 
 Next permitted gate:
-S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review
+S06-FE-001 — Homework Client Domain, Read Surfaces and Routing
 ```
 
 ---
@@ -1326,28 +1328,17 @@ S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review
 
 Current implementation sequence:
 
-1. `S06-BE-006` delivered.
-2. This bookkeeping must be delivered to `origin/main`.
-3. Project Owner synchronizes local `main`.
-4. ChatGPT re-checks the new current `origin/main`.
-5. ChatGPT freezes the Backend Phase 2 audited implementation baseline/current
-   production head.
-6. Execute the read-only review and full backend regression suite:
+1. `S06-BE-001…006` are Accepted / Delivered.
+2. Backend Phase 2 is completed with `PASS`.
+3. The next permitted implementation gate is:
 
 ```text
-S06-BE-PHASE-2 — Stage 6 Backend Phase 2 Read-Only Block Review
+S06-FE-001 — Homework Client Domain, Read Surfaces and Routing
 ```
-
-7. Fix any Backend Phase 2 findings before proceeding.
-8. Only Backend Phase 2 `PASS` may unlock `S06-FE-001`.
 
 Do not start:
 
-- Backend Phase 2 before this bookkeeping is delivered, local `main` is
-  synchronized, and ChatGPT freezes the audited implementation baseline/current
-  production head;
-- multiple backend tasks in parallel;
-- frontend before Backend Phase 2 `PASS`;
+- `S06-FE-002` before `S06-FE-001` is Accepted / Delivered;
 - Integration before both Phase 2 checkpoints;
 - Stage 7 before Stage 6 closure.
 
