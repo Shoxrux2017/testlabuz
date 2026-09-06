@@ -56,7 +56,9 @@ class TeacherQuestionReadView extends StatelessWidget {
               SelectableText(question.instructions!),
             ],
             const SizedBox(height: 14),
-            _QuestionConfigurationView(configuration: question.configuration),
+            TeacherQuestionConfigurationReadView(
+              configuration: question.configuration,
+            ),
           ],
         ),
       ),
@@ -64,8 +66,11 @@ class TeacherQuestionReadView extends StatelessWidget {
   }
 }
 
-class _QuestionConfigurationView extends StatelessWidget {
-  const _QuestionConfigurationView({required this.configuration});
+class TeacherQuestionConfigurationReadView extends StatelessWidget {
+  const TeacherQuestionConfigurationReadView({
+    required this.configuration,
+    super.key,
+  });
 
   final TeacherQuestionConfiguration configuration;
 

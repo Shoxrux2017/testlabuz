@@ -9,6 +9,7 @@ import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_homework_list_query.dart';
 import '../domain/teacher_homework_mutation.dart';
+import '../domain/teacher_question_mutation.dart';
 import '../domain/teacher_topic.dart';
 import 'dto/teacher_homework_dto.dart';
 import 'dto/teacher_homework_list_dto.dart';
@@ -127,6 +128,93 @@ class TeacherHomeworkRemoteDataSource {
     );
   }
 
+  Future<TeacherHomeworkMutationDto> addQuestion(
+    String homeworkId,
+    TeacherQuestionCreateRequest request,
+  ) {
+    if (!isCanonicalTeacherHomeworkId(homeworkId)) {
+      throw ArgumentError.value(
+        homeworkId,
+        'homeworkId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return _sendQuestionMutation(
+      () => dio.post<Object?>(
+        '/teacher/assessments/${Uri.encodeComponent(homeworkId)}/questions',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 201,
+      expectedMessage: TeacherHomeworkMutationDto.addQuestionSuccessMessage,
+      operation: TeacherQuestionMutationOperation.add,
+    );
+  }
+
+  Future<TeacherHomeworkMutationDto> updateQuestion(
+    String questionId,
+    TeacherQuestionEditRequest request,
+  ) {
+    if (!isCanonicalTeacherHomeworkId(questionId) || request.isEmpty) {
+      throw ArgumentError(
+        'Teacher Question PATCH requires a canonical target and changed fields.',
+      );
+    }
+    return _sendQuestionMutation(
+      () => dio.patch<Object?>(
+        '/teacher/questions/${Uri.encodeComponent(questionId)}',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherHomeworkMutationDto.updateQuestionSuccessMessage,
+      operation: TeacherQuestionMutationOperation.update,
+    );
+  }
+
+  Future<TeacherHomeworkMutationDto> deleteQuestion(String questionId) {
+    if (!isCanonicalTeacherHomeworkId(questionId)) {
+      throw ArgumentError.value(
+        questionId,
+        'questionId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return _sendQuestionMutation(
+      () => dio.delete<Object?>(
+        '/teacher/questions/${Uri.encodeComponent(questionId)}',
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherHomeworkMutationDto.deleteQuestionSuccessMessage,
+      operation: TeacherQuestionMutationOperation.delete,
+    );
+  }
+
+  Future<TeacherHomeworkMutationDto> reorderQuestions(
+    String homeworkId,
+    TeacherQuestionReorderRequest request,
+  ) {
+    if (!isCanonicalTeacherHomeworkId(homeworkId)) {
+      throw ArgumentError.value(
+        homeworkId,
+        'homeworkId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return _sendQuestionMutation(
+      () => dio.post<Object?>(
+        '/teacher/assessments/${Uri.encodeComponent(homeworkId)}/questions/reorder',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage:
+          TeacherHomeworkMutationDto.reorderQuestionsSuccessMessage,
+      operation: TeacherQuestionMutationOperation.reorder,
+    );
+  }
+
   Future<TeacherHomeworkMutationDto> _sendMutation(
     Future<Response<Object?>> Function() send, {
     required int expectedStatus,
@@ -155,6 +243,37 @@ class TeacherHomeworkRemoteDataSource {
       throw const TeacherHomeworkMutationOutcomeUnknownException();
     } catch (_) {
       throw const TeacherHomeworkMutationOutcomeUnknownException();
+    }
+  }
+
+  Future<TeacherHomeworkMutationDto> _sendQuestionMutation(
+    Future<Response<Object?>> Function() send, {
+    required int expectedStatus,
+    required String expectedMessage,
+    required TeacherQuestionMutationOperation operation,
+  }) async {
+    try {
+      final response = await send();
+      if (response.statusCode != expectedStatus) {
+        throw TeacherQuestionMutationOutcomeUnknownException(operation);
+      }
+      try {
+        return TeacherHomeworkMutationDto.fromJson(
+          response.data,
+          expectedMessage: expectedMessage,
+        );
+      } on FormatException {
+        throw TeacherQuestionMutationOutcomeUnknownException(operation);
+      }
+    } on TeacherQuestionMutationOutcomeUnknownException {
+      rethrow;
+    } on DioException catch (exception) {
+      if (_isExactQuestionMutationFailure(exception.response, operation)) {
+        throw ApiRequestException(failureMapper.map(exception));
+      }
+      throw TeacherQuestionMutationOutcomeUnknownException(operation);
+    } catch (_) {
+      throw TeacherQuestionMutationOutcomeUnknownException(operation);
     }
   }
 
@@ -209,6 +328,54 @@ bool _isExactHomeworkMutationFailure(
   };
 
   return recognized && (status == 422 || envelope.errors.isEmpty);
+}
+
+bool _isExactQuestionMutationFailure(
+  Response<Object?>? response,
+  TeacherQuestionMutationOperation operation,
+) {
+  final status = response?.statusCode;
+  final envelope = _readExactHomeworkErrorEnvelope(response?.data);
+  if (status == null || envelope == null) {
+    return false;
+  }
+
+  final code = envelope.code;
+  final recognized = switch (status) {
+    401 => code == ApiErrorCodes.authenticationRequired,
+    403 =>
+      code == ApiErrorCodes.forbidden ||
+          code == ApiErrorCodes.passwordChangeRequired ||
+          code == ApiErrorCodes.userInactive ||
+          code == ApiErrorCodes.institutionInactive,
+    404 => code == ApiErrorCodes.resourceNotFound,
+    409 => _isDocumentedQuestionConflict(code, operation),
+    422 => code == ApiErrorCodes.validationFailed,
+    429 => code == ApiErrorCodes.rateLimited,
+    _ => false,
+  };
+
+  return recognized && (status == 422 || envelope.errors.isEmpty);
+}
+
+bool _isDocumentedQuestionConflict(
+  String code,
+  TeacherQuestionMutationOperation operation,
+) {
+  final allowedCodes = switch (operation) {
+    TeacherQuestionMutationOperation.add ||
+    TeacherQuestionMutationOperation.update ||
+    TeacherQuestionMutationOperation.delete ||
+    TeacherQuestionMutationOperation.reorder => const {
+      ApiErrorCodes.topicNotEditable,
+      ApiErrorCodes.taskClosed,
+      ApiErrorCodes.taskArchived,
+      ApiErrorCodes.businessConflict,
+      ApiErrorCodes.resultPairLocked,
+      ApiErrorCodes.assessmentHasNoScoreablePoints,
+    },
+  };
+  return allowedCodes.contains(code);
 }
 
 _ExactHomeworkErrorEnvelope? _readExactHomeworkErrorEnvelope(Object? value) {

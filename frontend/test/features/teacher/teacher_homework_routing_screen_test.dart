@@ -70,6 +70,37 @@ void main() {
     expect(AppRoutePaths.teacherHomeworkIdFromPath(edit), _homeworkId);
   });
 
+  test('Question Builder route helpers accept only the exact nested path', () {
+    final location = AppRoutePaths.teacherHomeworkQuestionsLocation(
+      _topicId,
+      _homeworkId,
+    );
+
+    expect(
+      location,
+      '/teacher/topics/$_topicId/homework/$_homeworkId/questions',
+    );
+    expect(AppRoutePaths.isTeacherHomeworkQuestionsPath(location), isTrue);
+    expect(AppRoutePaths.isTeacherHomeworkDetailPath(location), isFalse);
+    expect(AppRoutePaths.isTeacherApprovedLocation(location), isTrue);
+    expect(AppRoutePaths.teacherTopicIdFromPath(location), _topicId);
+    expect(AppRoutePaths.teacherHomeworkIdFromPath(location), _homeworkId);
+
+    for (final invalid in [
+      '/teacher/topics/not-a-uuid/homework/$_homeworkId/questions',
+      '/teacher/topics/$_topicId/homework/not-a-uuid/questions',
+      '/teacher/topics/$_topicId/homework/$_homeworkId/questions/extra',
+      '/teacher/topics/$_topicId/homework/$_homeworkId/questions/',
+      '/teacher/topics/$_topicId/homework/$_homeworkId/questions?private=1',
+      '/teacher/topics/$_topicId/homework/$_homeworkId/questions#fragment',
+    ]) {
+      expect(AppRoutePaths.isTeacherHomeworkQuestionsPath(invalid), isFalse);
+      expect(AppRoutePaths.isTeacherApprovedLocation(invalid), isFalse);
+      expect(AppRoutePaths.teacherTopicIdFromPath(invalid), isNull);
+      expect(AppRoutePaths.teacherHomeworkIdFromPath(invalid), isNull);
+    }
+  });
+
   testWidgets('desktop create and edit routes mount the authoring screens', (
     tester,
   ) async {
@@ -101,6 +132,28 @@ void main() {
 
     expect(find.byKey(const Key('teacherHomeworkEditScreen')), findsOneWidget);
     expect(editHomework.fetchIds, [_homeworkId]);
+  });
+
+  testWidgets('desktop direct Question Builder route mounts authoring screen', (
+    tester,
+  ) async {
+    final homework = FakeTeacherHomeworkRepository();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherHomeworkQuestionsLocation(
+        _topicId,
+        _homeworkId,
+      ),
+      homework: homework,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('teacherQuestionBuilderScreen')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('teacherHomeworkDetailScreen')), findsNothing);
+    expect(homework.fetchIds, [_homeworkId]);
   });
 
   testWidgets('mobile authoring deep links redirect to exact read routes', (
@@ -138,6 +191,25 @@ void main() {
     );
     expect(find.byKey(const Key('teacherHomeworkEditScreen')), findsNothing);
     expect(editHomework.fetchIds, [_homeworkId]);
+
+    final questionsHomework = FakeTeacherHomeworkRepository();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherHomeworkQuestionsLocation(
+        _topicId,
+        _homeworkId,
+      ),
+      homework: questionsHomework,
+      surface: AppDeviceSurface.mobile,
+    );
+    expect(find.byKey(const Key('teacherQuestionBuilderScreen')), findsNothing);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('teacherHomeworkDetailScreen')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('teacherQuestionBuilderScreen')), findsNothing);
+    expect(questionsHomework.fetchIds, [_homeworkId]);
   });
 
   testWidgets('mobile authoring redirects remain exact during bootstrap', (
@@ -180,6 +252,27 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('teacherHomeworkEditScreen')), findsNothing);
+
+    final questionsAuth = FakeTeacherAuthSessionController(
+      const AuthSessionState.bootstrapping(),
+    );
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherHomeworkQuestionsLocation(
+        _topicId,
+        _homeworkId,
+      ),
+      auth: questionsAuth,
+      surface: AppDeviceSurface.mobile,
+    );
+    expect(find.byKey(const Key('teacherQuestionBuilderScreen')), findsNothing);
+    questionsAuth.replaceUser(teacherUser('teacher-a'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('teacherHomeworkDetailScreen')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('teacherQuestionBuilderScreen')), findsNothing);
   });
 
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
@@ -260,6 +353,12 @@ void main() {
         '/teacher/topics/$_topicId/homework/new#fragment',
         '/teacher/topics/$_topicId/homework/$_homeworkId/edit?private=1',
         '/teacher/topics/$_topicId/homework/$_homeworkId/edit#fragment',
+        '/teacher/topics/not-a-uuid/homework/$_homeworkId/questions',
+        '/teacher/topics/$_topicId/homework/not-a-uuid/questions',
+        '/teacher/topics/$_topicId/homework/$_homeworkId/questions/extra',
+        '/teacher/topics/$_topicId/homework/$_homeworkId/questions/',
+        '/teacher/topics/$_topicId/homework/$_homeworkId/questions?private=1',
+        '/teacher/topics/$_topicId/homework/$_homeworkId/questions#fragment',
       ]) {
         final homework = FakeTeacherHomeworkRepository();
         await _pumpApp(tester, location: location, homework: homework);
@@ -279,6 +378,10 @@ void main() {
         );
         expect(
           find.byKey(const Key('teacherHomeworkEditScreen')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('teacherQuestionBuilderScreen')),
           findsNothing,
         );
         expect(homework.fetchIds, isEmpty);
@@ -339,6 +442,66 @@ void main() {
 
     expect(find.byKey(const Key('teacherTopicDetailScreen')), findsOneWidget);
     expect(find.byKey(const Key('teacherHomeworkDetailScreen')), findsNothing);
+  });
+
+  testWidgets('Manage Questions opens the canonical desktop Builder route', (
+    tester,
+  ) async {
+    final homework = FakeTeacherHomeworkRepository();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherHomeworkDetailLocation(
+        _topicId,
+        _homeworkId,
+      ),
+      homework: homework,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('teacherQuestionBuilderScreen')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('teacherHomeworkDetailScreen')), findsNothing);
+  });
+
+  testWidgets('session loss removes an open dirty Question editor safely', (
+    tester,
+  ) async {
+    final auth = FakeTeacherAuthSessionController.authenticated(
+      teacherUser('teacher-a'),
+    );
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherHomeworkQuestionsLocation(
+        _topicId,
+        _homeworkId,
+      ),
+      homework: FakeTeacherHomeworkRepository(),
+      auth: auth,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('teacherQuestionBuilderAddButton')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('teacherQuestionPromptField')),
+      'Unsaved session editor',
+    );
+    await tester.pump();
+
+    auth.logOut();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('teacherQuestionEditorDialog')), findsNothing);
+    expect(find.text('Discard Question changes?'), findsNothing);
+    expect(find.byKey(const Key('loginField')), findsOneWidget);
+    expect(find.byKey(const Key('teacherQuestionBuilderScreen')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
 

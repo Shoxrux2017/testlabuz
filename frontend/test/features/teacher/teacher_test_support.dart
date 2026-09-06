@@ -29,6 +29,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list_repo
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
 
 Future<void> flushTeacherControllers() async {
   await Future<void>.delayed(Duration.zero);
@@ -581,6 +582,10 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     this.onFetch,
     this.onCreate,
     this.onUpdate,
+    this.onAddQuestion,
+    this.onUpdateQuestion,
+    this.onDeleteQuestion,
+    this.onReorderQuestions,
   });
 
   Future<TeacherHomeworkList> Function(
@@ -599,6 +604,22 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     TeacherHomeworkEditRequest request,
   )?
   onUpdate;
+  Future<TeacherHomework> Function(
+    String homeworkId,
+    TeacherQuestionCreateRequest request,
+  )?
+  onAddQuestion;
+  Future<TeacherHomework> Function(
+    String questionId,
+    TeacherQuestionEditRequest request,
+  )?
+  onUpdateQuestion;
+  Future<TeacherHomework> Function(String questionId)? onDeleteQuestion;
+  Future<TeacherHomework> Function(
+    String homeworkId,
+    TeacherQuestionReorderRequest request,
+  )?
+  onReorderQuestions;
 
   final listRequests = <({String topicId, TeacherHomeworkListQuery query})>[];
   final fetchIds = <String>[];
@@ -606,6 +627,23 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
       <({String topicId, TeacherHomeworkCreateRequest request})>[];
   final updateRequests =
       <({String homeworkId, TeacherHomeworkEditRequest request})>[];
+  final addQuestionRequests =
+      <({String homeworkId, TeacherQuestionCreateRequest request})>[];
+  final updateQuestionRequests =
+      <({String questionId, TeacherQuestionEditRequest request})>[];
+  final deleteQuestionIds = <String>[];
+  final reorderQuestionRequests =
+      <({String homeworkId, TeacherQuestionReorderRequest request})>[];
+
+  @override
+  Future<TeacherHomework> addQuestion(
+    String homeworkId,
+    TeacherQuestionCreateRequest request,
+  ) {
+    addQuestionRequests.add((homeworkId: homeworkId, request: request));
+    return onAddQuestion?.call(homeworkId, request) ??
+        Future.value(teacherHomework(id: homeworkId));
+  }
 
   @override
   Future<TeacherHomework> createHomework(
@@ -637,6 +675,23 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   }
 
   @override
+  Future<TeacherHomework> deleteQuestion(String questionId) {
+    deleteQuestionIds.add(questionId);
+    return onDeleteQuestion?.call(questionId) ??
+        Future.value(teacherHomework());
+  }
+
+  @override
+  Future<TeacherHomework> reorderQuestions(
+    String homeworkId,
+    TeacherQuestionReorderRequest request,
+  ) {
+    reorderQuestionRequests.add((homeworkId: homeworkId, request: request));
+    return onReorderQuestions?.call(homeworkId, request) ??
+        Future.value(teacherHomework(id: homeworkId));
+  }
+
+  @override
   Future<TeacherHomework> updateHomework(
     String homeworkId,
     TeacherHomeworkEditRequest request,
@@ -644,6 +699,16 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     updateRequests.add((homeworkId: homeworkId, request: request));
     return onUpdate?.call(homeworkId, request) ??
         Future.value(teacherHomework(id: homeworkId));
+  }
+
+  @override
+  Future<TeacherHomework> updateQuestion(
+    String questionId,
+    TeacherQuestionEditRequest request,
+  ) {
+    updateQuestionRequests.add((questionId: questionId, request: request));
+    return onUpdateQuestion?.call(questionId, request) ??
+        Future.value(teacherHomework());
   }
 }
 

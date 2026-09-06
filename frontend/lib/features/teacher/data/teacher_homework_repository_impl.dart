@@ -7,6 +7,7 @@ import '../domain/teacher_homework_list.dart';
 import '../domain/teacher_homework_list_query.dart';
 import '../domain/teacher_homework_mutation.dart';
 import '../domain/teacher_homework_repository.dart';
+import '../domain/teacher_question_mutation.dart';
 import 'teacher_homework_remote_data_source.dart';
 
 final teacherHomeworkRepositoryProvider = Provider<TeacherHomeworkRepository>((
@@ -21,6 +22,21 @@ class TeacherHomeworkRepositoryImpl implements TeacherHomeworkRepository {
   const TeacherHomeworkRepositoryImpl({required this.remoteDataSource});
 
   final TeacherHomeworkRemoteDataSource remoteDataSource;
+
+  @override
+  Future<TeacherHomework> addQuestion(
+    String homeworkId,
+    TeacherQuestionCreateRequest request,
+  ) async {
+    final dto = await remoteDataSource.addQuestion(homeworkId, request);
+    final homework = dto.homework.toDomain();
+    _requireQuestionMutationTarget(
+      homework,
+      homeworkId,
+      TeacherQuestionMutationOperation.add,
+    );
+    return homework;
+  }
 
   @override
   Future<TeacherHomework> createHomework(
@@ -60,6 +76,27 @@ class TeacherHomeworkRepositoryImpl implements TeacherHomeworkRepository {
   }
 
   @override
+  Future<TeacherHomework> deleteQuestion(String questionId) async {
+    final dto = await remoteDataSource.deleteQuestion(questionId);
+    return dto.homework.toDomain();
+  }
+
+  @override
+  Future<TeacherHomework> reorderQuestions(
+    String homeworkId,
+    TeacherQuestionReorderRequest request,
+  ) async {
+    final dto = await remoteDataSource.reorderQuestions(homeworkId, request);
+    final homework = dto.homework.toDomain();
+    _requireQuestionMutationTarget(
+      homework,
+      homeworkId,
+      TeacherQuestionMutationOperation.reorder,
+    );
+    return homework;
+  }
+
+  @override
   Future<TeacherHomework> updateHomework(
     String homeworkId,
     TeacherHomeworkEditRequest request,
@@ -70,5 +107,24 @@ class TeacherHomeworkRepositoryImpl implements TeacherHomeworkRepository {
       throw const TeacherHomeworkMutationOutcomeUnknownException();
     }
     return homework;
+  }
+
+  @override
+  Future<TeacherHomework> updateQuestion(
+    String questionId,
+    TeacherQuestionEditRequest request,
+  ) async {
+    final dto = await remoteDataSource.updateQuestion(questionId, request);
+    return dto.homework.toDomain();
+  }
+}
+
+void _requireQuestionMutationTarget(
+  TeacherHomework homework,
+  String homeworkId,
+  TeacherQuestionMutationOperation operation,
+) {
+  if (homework.id.toLowerCase() != homeworkId.toLowerCase()) {
+    throw TeacherQuestionMutationOutcomeUnknownException(operation);
   }
 }

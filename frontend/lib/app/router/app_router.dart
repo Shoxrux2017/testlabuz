@@ -32,6 +32,7 @@ import '../../features/teacher/presentation/teacher_learning_workspace_screen.da
 import '../../features/teacher/presentation/teacher_homework_create_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_edit_screen.dart';
+import '../../features/teacher/presentation/teacher_question_builder_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
@@ -346,6 +347,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       authoring: true,
                     ),
                   ),
+                  GoRoute(
+                    name: AppRouteNames.teacherHomeworkQuestions,
+                    path: AppRoutePaths.teacherHomeworkQuestionsSegment,
+                    builder: (context, state) => _buildTeacherDestination(
+                      TeacherQuestionBuilderScreen(
+                        topicId:
+                            state.pathParameters[AppRoutePaths
+                                .teacherTopicIdParameter] ??
+                            '',
+                        homeworkId:
+                            state.pathParameters[AppRoutePaths
+                                .teacherHomeworkIdParameter] ??
+                            '',
+                      ),
+                      authoring: true,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -484,6 +502,11 @@ String? _authRedirect(
         final homeworkId = AppRoutePaths.teacherHomeworkIdFromPath(location)!;
         return AppRoutePaths.teacherHomeworkDetailLocation(topicId, homeworkId);
       }
+      if (AppRoutePaths.isTeacherHomeworkQuestionsPath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location)!;
+        final homeworkId = AppRoutePaths.teacherHomeworkIdFromPath(location)!;
+        return AppRoutePaths.teacherHomeworkDetailLocation(topicId, homeworkId);
+      }
       if (AppRoutePaths.isTeacherHomeworkCreatePath(location)) {
         final topicId = AppRoutePaths.teacherTopicIdFromPath(location)!;
         return AppRoutePaths.teacherTopicDetailLocation(topicId);
@@ -573,6 +596,13 @@ String? _authRedirect(
             ? AppRoutePaths.teacher
             : AppRoutePaths.teacherHomeworkDetailLocation(topicId, homeworkId);
       }
+      if (AppRoutePaths.isTeacherHomeworkQuestionsPath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location);
+        final homeworkId = AppRoutePaths.teacherHomeworkIdFromPath(location);
+        return topicId == null || homeworkId == null
+            ? AppRoutePaths.teacher
+            : AppRoutePaths.teacherHomeworkDetailLocation(topicId, homeworkId);
+      }
       if (AppRoutePaths.isTeacherHomeworkCreatePath(location)) {
         final topicId = AppRoutePaths.teacherTopicIdFromPath(location);
         return topicId == null
@@ -654,7 +684,8 @@ bool _keepsLocationDuringBootstrap(
           (AppRoutePaths.isTeacherTopicCreatePath(location) ||
               AppRoutePaths.isTeacherTopicEditPath(location) ||
               AppRoutePaths.isTeacherHomeworkCreatePath(location) ||
-              AppRoutePaths.isTeacherHomeworkEditPath(location)));
+              AppRoutePaths.isTeacherHomeworkEditPath(location) ||
+              AppRoutePaths.isTeacherHomeworkQuestionsPath(location)));
 }
 
 bool _canUseTeacherDestinations(UserRole role, AppDeviceSurface surface) {

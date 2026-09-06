@@ -155,34 +155,64 @@ void main() {
     },
   );
 
-  testWidgets('Edit action requires current draft or active desktop detail', (
-    tester,
-  ) async {
-    for (final status in [
-      TeacherHomeworkStatus.draft,
-      TeacherHomeworkStatus.active,
-    ]) {
+  testWidgets(
+    'authoring actions require current draft or active desktop detail',
+    (tester) async {
+      for (final status in [
+        TeacherHomeworkStatus.draft,
+        TeacherHomeworkStatus.active,
+      ]) {
+        await _pumpDetail(
+          tester,
+          FakeTeacherHomeworkRepository(
+            onFetch: (id) async => teacherHomework(id: id, status: status),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('teacherHomeworkEditButton')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+          findsOneWidget,
+        );
+      }
+
+      for (final status in [
+        TeacherHomeworkStatus.closed,
+        TeacherHomeworkStatus.archived,
+      ]) {
+        await _pumpDetail(
+          tester,
+          FakeTeacherHomeworkRepository(
+            onFetch: (id) async => teacherHomework(id: id, status: status),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('teacherHomeworkEditButton')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+          findsNothing,
+        );
+      }
+
       await _pumpDetail(
         tester,
-        FakeTeacherHomeworkRepository(
-          onFetch: (id) async => teacherHomework(id: id, status: status),
-        ),
+        FakeTeacherHomeworkRepository(),
+        surface: AppDeviceSurface.mobile,
       );
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
       expect(
-        find.byKey(const Key('teacherHomeworkEditButton')),
-        findsOneWidget,
+        find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+        findsNothing,
       );
-    }
-
-    await _pumpDetail(
-      tester,
-      FakeTeacherHomeworkRepository(),
-      surface: AppDeviceSurface.mobile,
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
-  });
+    },
+  );
 
   testWidgets('refresh retains confirmed detail and marks a failure stale', (
     tester,
@@ -215,6 +245,10 @@ void main() {
     );
     expect(find.text('Confirmed Homework'), findsOneWidget);
     expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
+    expect(
+      find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+      findsNothing,
+    );
 
     refresh.completeError(teacherLocalFailure(ApiFailureKind.connection));
     await tester.pumpAndSettle();
@@ -226,6 +260,10 @@ void main() {
     expect(find.text('Confirmed Homework'), findsOneWidget);
     expect(find.textContaining('Raw local failure'), findsNothing);
     expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
+    expect(
+      find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+      findsNothing,
+    );
   });
 
   testWidgets('long typed detail content fits a scaled mobile surface', (
@@ -271,6 +309,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('teacherHomeworkEditButton')), findsNothing);
+    expect(
+      find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 }
@@ -283,6 +325,7 @@ Future<void> _pumpDetail(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
+      key: UniqueKey(),
       overrides: [
         authSessionControllerProvider.overrideWith(
           () => FakeTeacherAuthSessionController.authenticated(

@@ -14,6 +14,9 @@ abstract final class ApiErrorCodes {
   static const topicNotEditable = 'topic_not_editable';
   static const taskClosed = 'task_closed';
   static const taskArchived = 'task_archived';
+  static const resultPairLocked = 'result_pair_locked';
+  static const assessmentHasNoScoreablePoints =
+      'assessment_has_no_scoreable_points';
   static const officialTaskRequiresGroupAssignment =
       'official_task_requires_group_assignment';
   static const unsupportedFileType = 'unsupported_file_type';

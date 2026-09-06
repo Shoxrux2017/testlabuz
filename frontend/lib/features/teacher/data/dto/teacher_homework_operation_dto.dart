@@ -26,6 +26,11 @@ class TeacherHomeworkMutationDto {
 
   static const createSuccessMessage = 'Homework created successfully.';
   static const updateSuccessMessage = 'Homework updated successfully.';
+  static const addQuestionSuccessMessage = 'Question created successfully.';
+  static const updateQuestionSuccessMessage = 'Question updated successfully.';
+  static const deleteQuestionSuccessMessage = 'Question deleted successfully.';
+  static const reorderQuestionsSuccessMessage =
+      'Questions reordered successfully.';
 
   final TeacherHomeworkDto homework;
 }
