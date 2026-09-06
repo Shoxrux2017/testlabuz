@@ -13,7 +13,8 @@
 | Planning baseline (historical) | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
 | Backend Phase 2 | `PASS` |
 | Backend contract source | Approved Stage 6 backend contracts `S06-BE-003` and `S06-BE-006`, reconciled with the delivered backend after Backend Phase 2 `PASS` |
-| Implementation baseline | `origin/main @ 22c70a7871d629d906599a13225e9b513f4619f0` |
+| Runtime reconciliation baseline | `origin/main @ 22c70a7871d629d906599a13225e9b513f4619f0` |
+| Implementation baseline | ChatGPT freezes current `origin/main` after this contract is delivered and immediately before Codex execution |
 | Flutter toolchain | FVM-pinned Flutter `3.44.7` unless current `origin/main` deliberately changes the pin before implementation |
 | Runtime Implementation Readiness | `PASS` |
 | Verification | `Codex — focused frontend verification only` |
@@ -26,12 +27,14 @@ reconciliation confirms:
 ```text
 S06-BE-001…006 = Accepted / Delivered
 Stage 6 Backend Phase 2 = PASS
-implementation baseline = origin/main @ 22c70a7871d629d906599a13225e9b513f4619f0
+runtime reconciliation baseline = origin/main @ 22c70a7871d629d906599a13225e9b513f4619f0
 current origin/main was re-checked as clean and synchronized
 final backend Homework endpoints/resources were re-inspected
 this contract matches the delivered backend
 runtime Implementation Readiness = PASS
 ```
+
+Before implementation Codex must start from the clean synchronized current main frozen by ChatGPT.
 
 If final Backend Phase 2 produces a public API change that materially conflicts with this contract, stop and return `BLOCKED`; ChatGPT must reconcile the frontend contract before implementation.
 
