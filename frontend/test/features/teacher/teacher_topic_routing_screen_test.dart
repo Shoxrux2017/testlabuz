@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +14,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_create_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_edit_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_topic_edit_state.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
@@ -19,10 +22,14 @@ import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_reposi
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_mutation.dart';
+import 'package:testlabuz_client/features/teacher/presentation/teacher_topic_detail_screen.dart';
+import 'package:testlabuz_client/features/teacher/presentation/teacher_topic_edit_screen.dart';
 
 import 'teacher_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
+const _topicBId = '10000000-0000-0000-0000-000000000002';
+const _caseTopicId = 'a0000000-0000-0000-0000-000000000001';
 const _homeworkId = '50000000-0000-0000-0000-000000000001';
 
 void main() {
@@ -99,6 +106,337 @@ void main() {
       expect(
         find.byKey(const Key('teacherTopicEditReadOnlyGroup')),
         findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Topic Edit A to B replaces State and transfers route ownership to B',
+    (tester) async {
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async => teacherTopic(
+          id: topicId,
+          title: topicId == _topicId ? 'Topic A' : 'Topic B',
+        ),
+        onUpdate: (topicId, request) async => teacherTopic(
+          id: topicId,
+          title:
+              (request.changedFields['title'] as String?) ??
+              (topicId == _topicId ? 'Topic A' : 'Topic B'),
+        ),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      final oldScreenState = tester.state(find.byType(TeacherTopicEditScreen));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherTopicEditScreen)),
+      );
+      final oldProvider = teacherTopicEditControllerProvider(_topicId);
+      final oldSubscription = container.listen(oldProvider, (_, _) {});
+      addTearDown(oldSubscription.close);
+      final oldController = container.read(oldProvider.notifier);
+      final oldForm = oldSubscription.read().form;
+      final router = container.read(appRouterProvider);
+
+      router.go(AppRoutePaths.teacherTopicEditLocation(_topicBId));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state(find.byType(TeacherTopicEditScreen)),
+        isNot(same(oldScreenState)),
+      );
+      oldController.updateTitle('Stale Topic A edit');
+      expect(oldSubscription.read().form, same(oldForm));
+
+      final newProvider = teacherTopicEditControllerProvider(_topicBId);
+      expect(container.read(newProvider).topic?.title, 'Topic B');
+      expect(container.read(newProvider).canEdit, isTrue);
+      await tester.enterText(
+        find.byKey(const Key('teacherTopicTitleField')),
+        'Owned Topic B edit',
+      );
+      await tester.pump();
+      expect(container.read(newProvider).form?.title, 'Owned Topic B edit');
+
+      final save = find.byKey(const Key('teacherTopicEditSaveButton'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(topics.updateRequests.map((entry) => entry.topicId), [_topicBId]);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherTopicDetailLocation(_topicBId),
+      );
+    },
+  );
+
+  testWidgets(
+    'late Topic A PATCH cannot publish or navigate from Topic Edit B',
+    (tester) async {
+      final pendingPatch = Completer<TeacherTopic>();
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async => teacherTopic(
+          id: topicId,
+          title: topicId == _topicId ? 'Topic A' : 'Topic B',
+        ),
+        onUpdate: (_, _) => pendingPatch.future,
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherTopicEditScreen)),
+      );
+      final oldProvider = teacherTopicEditControllerProvider(_topicId);
+      final oldSubscription = container.listen(oldProvider, (_, _) {});
+      addTearDown(oldSubscription.close);
+      container.read(oldProvider.notifier).updateTitle('Pending Topic A edit');
+      await tester.pump();
+
+      final save = find.byKey(const Key('teacherTopicEditSaveButton'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pump();
+      expect(oldSubscription.read().status, TeacherTopicEditStatus.submitting);
+      expect(topics.updateRequests.map((entry) => entry.topicId), [_topicId]);
+
+      final router = container.read(appRouterProvider);
+      router.go(AppRoutePaths.teacherTopicEditLocation(_topicBId));
+      await tester.pumpAndSettle();
+
+      pendingPatch.complete(
+        teacherTopic(id: _topicId, title: 'Pending Topic A edit'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(oldSubscription.read().status, TeacherTopicEditStatus.submitting);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherTopicEditLocation(_topicBId),
+      );
+      expect(
+        container
+            .read(teacherTopicEditControllerProvider(_topicBId))
+            .topic
+            ?.title,
+        'Topic B',
+      );
+      expect(find.text('Topic updated successfully.'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'late Topic A reconciliation cannot publish or navigate from Topic Edit B',
+    (tester) async {
+      final pendingReconciliation = Completer<TeacherTopic>();
+      var topicAFetches = 0;
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) {
+          if (topicId == _topicId) {
+            topicAFetches += 1;
+            if (topicAFetches == 2) {
+              return pendingReconciliation.future;
+            }
+          }
+          return Future.value(
+            teacherTopic(
+              id: topicId,
+              title: topicId == _topicId ? 'Topic A' : 'Topic B',
+            ),
+          );
+        },
+        onUpdate: (_, _) async {
+          throw const TeacherTopicMutationOutcomeUnknownException();
+        },
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_topicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherTopicEditScreen)),
+      );
+      final oldProvider = teacherTopicEditControllerProvider(_topicId);
+      final oldSubscription = container.listen(oldProvider, (_, _) {});
+      addTearDown(oldSubscription.close);
+      container
+          .read(oldProvider.notifier)
+          .updateTitle('Reconciling Topic A edit');
+      await tester.pump();
+
+      final save = find.byKey(const Key('teacherTopicEditSaveButton'));
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pump();
+      await tester.pump();
+      expect(oldSubscription.read().status, TeacherTopicEditStatus.reconciling);
+      expect(topics.fetchIds.where((id) => id == _topicId), hasLength(2));
+
+      final router = container.read(appRouterProvider);
+      router.go(AppRoutePaths.teacherTopicEditLocation(_topicBId));
+      await tester.pumpAndSettle();
+
+      pendingReconciliation.complete(
+        teacherTopic(id: _topicId, title: 'Reconciling Topic A edit'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(oldSubscription.read().status, TeacherTopicEditStatus.reconciling);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherTopicEditLocation(_topicBId),
+      );
+      expect(
+        container
+            .read(teacherTopicEditControllerProvider(_topicBId))
+            .topic
+            ?.title,
+        'Topic B',
+      );
+      expect(find.text('Topic updated successfully.'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'stale Topic A lifecycle confirmation cannot mutate Topic Detail B',
+    (tester) async {
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async => teacherTopic(
+          id: topicId,
+          title: topicId == _topicId ? 'Topic A' : 'Topic B',
+        ),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicDetailLocation(_topicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      final oldDetailElement = tester.element(
+        find.byType(TeacherTopicDetailScreen),
+      );
+      final container = ProviderScope.containerOf(oldDetailElement);
+      final router = container.read(appRouterProvider);
+      await tester.tap(
+        find.byKey(const ValueKey('teacherTopicLifecycleactivate')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Activate Topic?'), findsOneWidget);
+
+      router.go(AppRoutePaths.teacherTopicDetailLocation(_topicBId));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.element(find.byType(TeacherTopicDetailScreen)),
+        isNot(same(oldDetailElement)),
+      );
+      expect(find.text('Topic B'), findsOneWidget);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherTopicDetailLocation(_topicBId),
+      );
+      expect(
+        find.byKey(const Key('teacherTopicLifecycleConfirmButton')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('teacherTopicLifecycleConfirmButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(topics.lifecycleRequests, isEmpty);
+      expect(find.text('Topic B'), findsOneWidget);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.teacherTopicDetailLocation(_topicBId),
+      );
+    },
+  );
+
+  testWidgets(
+    'case-only Topic UUID spelling preserves semantic screen ownership',
+    (tester) async {
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async =>
+            teacherTopic(id: topicId, title: 'Case Topic'),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicEditLocation(_caseTopicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      final editState = tester.state(find.byType(TeacherTopicEditScreen));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TeacherTopicEditScreen)),
+      );
+      final provider = teacherTopicEditControllerProvider(_caseTopicId);
+      final controller = container.read(provider.notifier);
+      controller.updateTitle('Preserved case-only draft');
+      await tester.pump();
+
+      final router = container.read(appRouterProvider);
+      final uppercaseEditLocation = AppRoutePaths.teacherTopicEditLocation(
+        _caseTopicId.toUpperCase(),
+      );
+      router.go(uppercaseEditLocation);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.state(find.byType(TeacherTopicEditScreen)),
+        same(editState),
+      );
+      expect(container.read(provider).form?.title, 'Preserved case-only draft');
+      expect(container.read(provider.notifier), same(controller));
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        uppercaseEditLocation,
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('teacherTopicTitleField')),
+        'Edited after case-only navigation',
+      );
+      await tester.pump();
+      expect(
+        container.read(provider).form?.title,
+        'Edited after case-only navigation',
+      );
+
+      router.go(AppRoutePaths.teacherTopicDetailLocation(_caseTopicId));
+      await tester.pumpAndSettle();
+      final detailElement = tester.element(
+        find.byType(TeacherTopicDetailScreen),
+      );
+      final uppercaseDetailLocation = AppRoutePaths.teacherTopicDetailLocation(
+        _caseTopicId.toUpperCase(),
+      );
+      router.go(uppercaseDetailLocation);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.element(find.byType(TeacherTopicDetailScreen)),
+        same(detailElement),
+      );
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        uppercaseDetailLocation,
       );
     },
   );
