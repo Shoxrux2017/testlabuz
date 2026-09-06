@@ -550,6 +550,7 @@ task_not_active
 task_closed
 task_archived
 business_conflict
+result_pair_locked
 assessment_has_no_scoreable_points
 assessment_not_assigned
 deadline_passed
@@ -592,6 +593,14 @@ topicNotEditable
 resourceNotFound
 validationFailed
 ```
+
+FE-004 must reuse the delivered Stage 6:
+
+```text
+resultPairLocked = 'result_pair_locked'
+```
+
+Do not add a second constant for this code.
 
 Do not add unrelated Stage 7/8 codes.
 
@@ -839,6 +848,35 @@ Refresh and review its configuration.
 ```
 
 Do not invent the hidden condition.
+
+## `result_pair_locked`
+
+Treat this exact activation response as a definite lifecycle failure.
+
+- do not classify the mutation outcome as unknown;
+- do not retry or replay activation automatically;
+- refresh authoritative Homework when the route and Teacher session remain valid;
+- refresh the Topic result-pair state independently;
+- preserve ordinary Homework detail when it remains available;
+- keep the backend as authority.
+
+Show:
+
+```text
+Official Homework activation is locked by the current server state.
+Review the current official Homework status before taking another action.
+```
+
+Do not claim:
+
+- which Student Attempt caused the lock;
+- that corruption occurred;
+- that Blitz must exist;
+- that the Homework can be unlocked from Flutter.
+
+If the independent pair refresh confirms `lockedAt != null`, present the existing read-only locked Official state.
+
+If the pair refresh fails, keep the lifecycle failure definite and show the pair area's independent read error.
 
 ---
 
@@ -2292,6 +2330,7 @@ Do not modify:
 - [ ] Unknown lifecycle result reconciles via authoritative Homework GET and target status.
 - [ ] Confirmed lifecycle success updates detail and invalidates Topic Homework list.
 - [ ] Activation success refreshes mounted official pair state without making pair refresh part of lifecycle success.
+- [ ] Activation handles exact `409 result_pair_locked` as a definite conflict, refreshes authoritative Homework/result-pair state, and never auto-replays.
 - [ ] `assessment_has_no_scoreable_points`, `assessment_not_assigned`, `deadline_passed`, `topic_not_editable`, lifecycle state codes, and `business_conflict` have safe specific UX.
 - [ ] Flutter does not use device time to decide deadline validity.
 - [ ] Result-pair domain accepts Stage 6 partial pair with `blitzAssessmentId = null`.
@@ -2438,6 +2477,8 @@ Cover:
 - close;
 - archive;
 - documented exact 409 classification;
+- activate -> exact `409 result_pair_locked` is definite, not mutation-outcome-unknown;
+- activate -> `409 result_pair_locked` sends no automatic second POST;
 - malformed success -> unknown;
 - ambiguous network -> unknown.
 
@@ -2456,6 +2497,10 @@ Cover:
 - assignment conflict;
 - deadline conflict;
 - topic conflict;
+- activate -> `409 result_pair_locked` performs authoritative Homework GET reconciliation when session/target remain valid;
+- activate -> `409 result_pair_locked` refreshes result-pair state independently and produces locked-safe UX;
+- activate -> `409 result_pair_locked` keeps lifecycle failure definite when pair refresh fails and leaves the pair read error independent;
+- stale session/target completion from `result_pair_locked` reconciliation cannot publish;
 - close `task_not_active`;
 - closed/archived conflicts;
 - generic business conflict;
@@ -2464,6 +2509,8 @@ Cover:
 - list invalidation/detail acceptance;
 - duplicate/busy suppression;
 - stale session/target ignored.
+
+Do not modify official-designation PUT tests; their existing `result_pair_locked` behavior remains unchanged.
 
 ## 67.5 Homework detail / Topic section widgets
 
