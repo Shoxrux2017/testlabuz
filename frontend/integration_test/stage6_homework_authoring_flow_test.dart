@@ -199,9 +199,12 @@ class _Stage6Harness {
 
   Future<void> enter(Finder finder, String value) async {
     await waitFor(finder);
-    await tester.ensureVisible(finder.last);
-    await tester.tap(finder.last);
-    await tester.enterText(finder.last, value);
+    final target = finder.last;
+    await tester.ensureVisible(target);
+    await tester.pump();
+    await waitHitTestable(target);
+    await tester.tap(target);
+    await tester.enterText(target, value);
     await tester.pump();
   }
 
@@ -211,8 +214,11 @@ class _Stage6Harness {
 
   Future<void> tap(Finder finder) async {
     await waitFor(finder);
-    await tester.ensureVisible(finder.last);
-    await tester.tap(finder.last);
+    final target = finder.last;
+    await tester.ensureVisible(target);
+    await tester.pump();
+    await waitHitTestable(target);
+    await tester.tap(target);
     await tester.pump();
   }
 
@@ -226,7 +232,16 @@ class _Stage6Harness {
     Duration timeout = const Duration(seconds: 30),
   }) => pumpUntil(
     () => finder.evaluate().isNotEmpty,
-    reason: 'Expected a required Stage 6 widget.',
+    reason: 'Expected a required Stage 6 widget: $finder',
+    timeout: timeout,
+  );
+
+  Future<void> waitHitTestable(
+    Finder finder, {
+    Duration timeout = const Duration(seconds: 30),
+  }) => pumpUntil(
+    () => finder.hitTestable().evaluate().isNotEmpty,
+    reason: 'Expected a hit-testable Stage 6 widget: $finder',
     timeout: timeout,
   );
 
@@ -235,7 +250,7 @@ class _Stage6Harness {
     Duration timeout = const Duration(seconds: 30),
   }) => pumpUntil(
     () => finder.evaluate().isEmpty,
-    reason: 'Expected a transient Stage 6 widget to disappear.',
+    reason: 'Expected a transient Stage 6 widget to disappear: $finder',
     timeout: timeout,
   );
 
@@ -430,8 +445,7 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
       await h.enterLabel('Blank 2 answer 1', 'IP address');
     },
   );
-  expect(find.text('Questions: 10'), findsOneWidget);
-  expect(find.text('Total points: 20'), findsOneWidget);
+  _expectBuilderSummary(questionCount: 10, formattedPoints: '20');
 
   final singleId = _questionIdForPrompt(h, 'What does DNS primarily do?');
   await h.tap(find.byKey(ValueKey('teacherQuestionEdit$singleId')));
@@ -440,7 +454,9 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.enterKey('teacherQuestionPointsField', '1.5');
   await h.tapKey('teacherQuestionEditorSubmitButton');
   await h.waitGone(find.byKey(const Key('teacherQuestionEditorDialog')));
-  expect(find.text('Total points: 20.5'), findsOneWidget);
+  await h.settleUiTransition();
+  await h.waitFor(find.text(_updatedSinglePrompt));
+  _expectBuilderSummary(questionCount: 10, formattedPoints: '20.5');
 
   await _addQuestion(
     h,
@@ -449,26 +465,31 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
     points: '0.5',
     configure: () => h.tapText('False'),
   );
-  expect(find.text('Questions: 11'), findsOneWidget);
-  expect(find.text('Total points: 21'), findsOneWidget);
+  _expectBuilderSummary(questionCount: 11, formattedPoints: '21');
   final temporaryId = _questionIdForPrompt(h, _temporaryPrompt);
   await h.tap(find.byKey(ValueKey('teacherQuestionDelete$temporaryId')));
   await h.waitForKey('teacherQuestionDeleteConfirmButton');
   await h.tapKey('teacherQuestionDeleteConfirmButton');
   await h.waitGone(find.text(_temporaryPrompt));
-  expect(find.text('Questions: 10'), findsOneWidget);
-  expect(find.text('Total points: 20.5'), findsOneWidget);
+  await h.settleUiTransition();
+  _expectBuilderSummary(questionCount: 10, formattedPoints: '20.5');
 
   final fillId = _questionIdForPrompt(h, _fillPrompt);
   for (var index = 0; index < 9; index += 1) {
     await h.tap(find.byKey(ValueKey('teacherQuestionMoveUp$fillId')));
   }
   await h.tapKey('teacherQuestionBuilderSaveOrderButton');
+  final reorderNotice = find.descendant(
+    of: find.byKey(const Key('teacherQuestionBuilderNotice')),
+    matching: find.text('Questions reordered successfully.'),
+  );
+  await h.waitFor(reorderNotice);
+  expect(reorderNotice, findsOneWidget);
   await h.pumpUntil(
     () => _questionCardPosition(h, fillId) == 1,
     reason: 'Fill in Blank did not persist at position 1.',
   );
-  expect(find.text('Total points: 20.5'), findsOneWidget);
+  _expectBuilderSummary(questionCount: 10, formattedPoints: '20.5');
 
   await h.go(AppRoutePaths.teacherHomeworkDetailLocation(topicId, mainId));
   await h.waitForKey('teacherHomeworkDetailScreen');
@@ -476,7 +497,11 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.tapKey('teacherOfficialHomeworkActionButton');
   await h.waitForKey('teacherOfficialHomeworkConfirmButton');
   await h.tapKey('teacherOfficialHomeworkConfirmButton');
+  await h.waitGone(
+    find.byKey(const Key('teacherOfficialHomeworkConfirmDialog')),
+  );
   await h.waitForKey('teacherOfficialHomeworkBadge');
+  await h.waitFor(find.textContaining('cohort will be fixed'));
   expect(find.textContaining('cohort will be fixed'), findsOneWidget);
 
   await h.go(AppRoutePaths.teacherTopicDetailLocation(topicId));
@@ -491,42 +516,49 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.tapText('Selected students');
   await h.tapKey('teacherHomeworkChooseStudentsButton');
   await h.waitForKey('teacherHomeworkStudentPickerDialog');
-  await h.enterKey(
-    'teacherHomeworkStudentPickerSearchField',
-    'E2E S06 Student',
-  );
+  await h.enterKey('teacherHomeworkStudentPickerSearchField', 'E2E S06');
   await h.tapKey('teacherHomeworkStudentPickerSearchButton');
-  await h.waitFor(
-    find.byKey(
-      ValueKey(
-        'teacherHomeworkPickerStudent${h.oracle.actorId('student_alpha')}',
-      ),
+  final pickerDialog = find.byKey(
+    const Key('teacherHomeworkStudentPickerDialog'),
+  );
+  final alphaRow = find.byKey(
+    ValueKey(
+      'teacherHomeworkPickerStudent${h.oracle.actorId('student_alpha')}',
     ),
   );
+  final betaRow = find.byKey(
+    ValueKey('teacherHomeworkPickerStudent${h.oracle.actorId('student_beta')}'),
+  );
+  await h.waitFor(alphaRow);
+  await h.waitFor(betaRow);
+  expect(alphaRow, findsOneWidget);
+  expect(betaRow, findsOneWidget);
+  for (final eligible in const [
+    'E2E S06 Student Alpha',
+    'E2E S06 Student Beta',
+  ]) {
+    final eligibleName = find.descendant(
+      of: pickerDialog,
+      matching: find.text(eligible),
+    );
+    await h.waitFor(eligibleName);
+    expect(eligibleName, findsOneWidget);
+  }
   for (final excluded in const [
     'E2E S06 Student Ended',
     'E2E S06 Student Inactive',
     'E2E S06 Unrelated Student',
     'E2E S06 Foreign Student',
   ]) {
-    expect(find.text(excluded), findsNothing);
+    expect(
+      find.descendant(of: pickerDialog, matching: find.text(excluded)),
+      findsNothing,
+    );
   }
   expect(find.text(h.oracle.actorId('student_alpha')), findsNothing);
   expect(find.text(h.oracle.actorId('student_beta')), findsNothing);
-  await h.tap(
-    find.byKey(
-      ValueKey(
-        'teacherHomeworkPickerStudent${h.oracle.actorId('student_alpha')}',
-      ),
-    ),
-  );
-  await h.tap(
-    find.byKey(
-      ValueKey(
-        'teacherHomeworkPickerStudent${h.oracle.actorId('student_beta')}',
-      ),
-    ),
-  );
+  await h.tap(alphaRow);
+  await h.tap(betaRow);
   await h.tapKey('teacherHomeworkStudentPickerApplyButton');
   await h.waitGone(find.byKey(const Key('teacherHomeworkStudentPickerDialog')));
   await h.settleUiTransition();
@@ -584,7 +616,16 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.go(AppRoutePaths.teacherHomeworkDetailLocation(topicId, mainId));
   await h.waitFor(find.text(_mainTitle));
   await _homeworkLifecycle(h, 'activate', 'Active');
-  expect(find.textContaining('Official cohort prepared'), findsOneWidget);
+
+  final preparedCohort = find.descendant(
+    of: find.byKey(const Key('teacherOfficialHomeworkSection')),
+    matching: find.text('Official cohort prepared.'),
+  );
+
+  await h.waitFor(preparedCohort);
+  expect(preparedCohort, findsOneWidget);
+
+  await h.settleUiTransition();
 
   await h.go(AppRoutePaths.teacherTopicDetailLocation(topicId));
   await h.tap(find.byKey(const ValueKey('teacherTopicLifecycleclose')));
@@ -605,6 +646,7 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
     findsNothing,
   );
   expect(find.text('Topic: Active'), findsOneWidget);
+  await h.settleUiTransition();
 
   await h.go(AppRoutePaths.teacherHomeworkDetailLocation(topicId, mainId));
   await _homeworkLifecycle(h, 'close', 'Closed');
@@ -614,10 +656,8 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.go(AppRoutePaths.teacherTopicDetailLocation(topicId));
   await h.tap(find.byKey(const ValueKey('teacherTopicLifecycleclose')));
   await h.tapKey('teacherTopicLifecycleConfirmButton');
-  await h.pumpUntil(
-    () => find.text('Topic: Closed').evaluate().isNotEmpty,
-    reason: 'Authoring Topic did not close.',
-  );
+  await h.waitFor(find.text('Topic: Closed'));
+  await h.settleUiTransition();
 
   final lockedTopic = h.oracle.topicId('locked');
   final lockedHomework = h.oracle.homeworkId('locked');
@@ -668,6 +708,17 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   );
   expect(lockedAddButton, findsOneWidget);
   expect(h.tester.widget<FilledButton>(lockedAddButton).onPressed, isNull);
+  final lockedQuestionId = _questionIdForPrompt(h, 'DNS uses domain names.');
+  final lockedEditButton = find.byKey(
+    ValueKey('teacherQuestionEdit$lockedQuestionId'),
+  );
+  final lockedDeleteButton = find.byKey(
+    ValueKey('teacherQuestionDelete$lockedQuestionId'),
+  );
+  expect(lockedEditButton, findsOneWidget);
+  expect(h.tester.widget<TextButton>(lockedEditButton).onPressed, isNull);
+  expect(lockedDeleteButton, findsOneWidget);
+  expect(h.tester.widget<TextButton>(lockedDeleteButton).onPressed, isNull);
   expect(practiceId, isNot(mainId));
 }
 
@@ -687,12 +738,46 @@ Future<void> _runPersistenceFlow(_Stage6Harness h) async {
   await h.waitFor(find.text(_mainTitle));
   expect(find.text('Archived'), findsWidgets);
   expect(find.byKey(const Key('teacherOfficialHomeworkBadge')), findsOneWidget);
-  expect(find.textContaining('20.5'), findsWidgets);
-  expect(find.textContaining('10'), findsWidgets);
-  await h.tapKey('teacherHomeworkManageQuestionsButton');
+  expect(
+    find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
+    findsNothing,
+  );
+  await h.go(
+    AppRoutePaths.teacherHomeworkQuestionsLocation(authoringTopic, mainId),
+  );
   await h.waitForKey('teacherQuestionBuilderScreen');
-  expect(find.text('Questions: 10'), findsOneWidget);
-  expect(find.text('Total points: 20.5'), findsOneWidget);
+  final reviewOnlyMessage = find.byKey(
+    const Key('teacherQuestionBuilderReviewOnlyMessage'),
+  );
+  await h.waitFor(reviewOnlyMessage);
+  expect(
+    find.descendant(
+      of: reviewOnlyMessage,
+      matching: find.text('Question editing is unavailable for this Homework.'),
+    ),
+    findsOneWidget,
+  );
+  expect(
+    find.byKey(const Key('teacherQuestionBuilderAddButton')),
+    findsNothing,
+  );
+  expect(
+    find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('teacherQuestionEdit');
+    }),
+    findsNothing,
+  );
+  expect(
+    find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('teacherQuestionDelete');
+    }),
+    findsNothing,
+  );
+  _expectBuilderSummary(questionCount: 10, formattedPoints: '20.5');
   final fillId = _questionIdForPrompt(h, _fillPrompt);
   expect(_questionCardPosition(h, fillId), 1);
 
@@ -749,6 +834,8 @@ Future<void> _chooseDeadline(_Stage6Harness h) async {
       matching: find.text('OK'),
     ),
   );
+  await h.waitGone(find.byType(TimePickerDialog));
+  await h.settleUiTransition();
 }
 
 Future<void> _verifyNineTypeSelector(_Stage6Harness h) async {
@@ -777,8 +864,10 @@ Future<void> _verifyNineTypeSelector(_Stage6Harness h) async {
     expect(find.text(type), findsWidgets);
   }
   await h.tapText('Single choice');
+  await h.settleUiTransition();
   await h.tapKey('teacherQuestionEditorCancelButton');
   await h.waitGone(find.byKey(const Key('teacherQuestionEditorDialog')));
+  await h.settleUiTransition();
 }
 
 Future<void> _addQuestion(
@@ -794,28 +883,63 @@ Future<void> _addQuestion(
   if (type != 'Single choice') {
     await h.tap(_questionTypeDropdown());
     await h.tapText(type);
-    if (find
-        .byKey(const Key('teacherQuestionConfirmTypeButton'))
-        .evaluate()
-        .isNotEmpty) {
+    await h.settleUiTransition();
+    final confirmType = find.byKey(
+      const Key('teacherQuestionConfirmTypeButton'),
+    );
+    if (confirmType.evaluate().isNotEmpty) {
       await h.tapKey('teacherQuestionConfirmTypeButton');
+      await h.waitGone(confirmType);
+      await h.settleUiTransition();
     }
   }
   await h.enterKey('teacherQuestionPromptField', prompt);
   await h.enterKey('teacherQuestionPointsField', points);
   if (manual) {
     await h.tapText('Manual');
-    if (find
-        .byKey(const Key('teacherQuestionConfirmCheckingModeButton'))
-        .evaluate()
-        .isNotEmpty) {
+    await h.settleUiTransition();
+    final confirmCheckingMode = find.byKey(
+      const Key('teacherQuestionConfirmCheckingModeButton'),
+    );
+    if (confirmCheckingMode.evaluate().isNotEmpty) {
       await h.tapKey('teacherQuestionConfirmCheckingModeButton');
+      await h.waitGone(confirmCheckingMode);
+      await h.settleUiTransition();
     }
   }
   if (configure != null) await configure();
   await h.tapKey('teacherQuestionEditorSubmitButton');
   await h.waitGone(find.byKey(const Key('teacherQuestionEditorDialog')));
+  await h.settleUiTransition();
   await h.waitFor(find.text(prompt));
+}
+
+void _expectBuilderSummary({
+  required int questionCount,
+  required String formattedPoints,
+}) {
+  final questionCountSummary = find.byKey(
+    const Key('teacherQuestionBuilderQuestionCount'),
+  );
+  final totalPointsSummary = find.byKey(
+    const Key('teacherQuestionBuilderTotalPoints'),
+  );
+  expect(questionCountSummary, findsOneWidget);
+  expect(totalPointsSummary, findsOneWidget);
+  expect(
+    find.descendant(
+      of: questionCountSummary,
+      matching: find.text('Questions: $questionCount'),
+    ),
+    findsOneWidget,
+  );
+  expect(
+    find.descendant(
+      of: totalPointsSummary,
+      matching: find.text('Total points: $formattedPoints'),
+    ),
+    findsOneWidget,
+  );
 }
 
 Finder _questionTypeDropdown() => find.descendant(
@@ -828,16 +952,45 @@ Future<void> _homeworkLifecycle(
   String action,
   String expectedStatus,
 ) async {
+  const successMessages = {
+    'activate': 'Homework activated successfully.',
+    'close': 'Homework closed successfully.',
+    'archive': 'Homework archived successfully.',
+  };
+  final successMessage = successMessages[action];
+  if (successMessage == null) {
+    throw ArgumentError.value(
+      action,
+      'action',
+      'Unsupported lifecycle action.',
+    );
+  }
   await h.tap(find.byKey(ValueKey('teacherHomeworkLifecycle${action}Button')));
   await h.waitForKey('teacherHomeworkLifecycleConfirmButton');
   await h.tapKey('teacherHomeworkLifecycleConfirmButton');
   await h.waitGone(
     find.byKey(const Key('teacherHomeworkLifecycleConfirmDialog')),
   );
-  await h.pumpUntil(
-    () => find.text(expectedStatus).evaluate().isNotEmpty,
-    reason: 'Homework lifecycle $action did not reach $expectedStatus.',
+  final successNotice = find.byWidgetPredicate(
+    (widget) =>
+        widget is Text &&
+        widget.key == const Key('teacherHomeworkLifecycleNotice') &&
+        widget.data == successMessage,
   );
+  await h.waitFor(successNotice);
+  expect(successNotice, findsOneWidget);
+  final authoritativeStatus = find.descendant(
+    of: find.byKey(const Key('teacherHomeworkDetailScreen')),
+    matching: find.byWidgetPredicate(
+      (widget) =>
+          widget is Chip &&
+          widget.label is Text &&
+          (widget.label as Text).data == expectedStatus,
+    ),
+  );
+  await h.waitFor(authoritativeStatus);
+  expect(authoritativeStatus, findsOneWidget);
+  await h.settleUiTransition();
 }
 
 String _homeworkIdFromCurrentRoute(_Stage6Harness h) {

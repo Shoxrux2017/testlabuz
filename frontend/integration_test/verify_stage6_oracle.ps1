@@ -131,6 +131,53 @@ foreach ($entry in $mutations.GetEnumerator()) {
     Assert-Stage6OracleRejects -Mutation $entry.Value -Label $entry.Key
 }
 
+$firstSeederSnapshot = [pscustomobject] [ordered] @{
+    version = 1
+    institutions = @(
+        [pscustomobject] [ordered] @{
+            id = '06000000-0000-4000-8000-000000000101'
+            timezone = 'Asia/Tashkent'
+        }
+    )
+    users = @(
+        [pscustomobject] [ordered] @{
+            id = '06000000-0000-4000-9000-000000000201'
+            login_name = 'e2e_s06_target_teacher'
+            role = 'teacher'
+        }
+    )
+    owned_token_count = 0
+}
+$equalSeederSnapshot = [pscustomobject] [ordered] @{
+    owned_token_count = 0
+    users = @(
+        [pscustomobject] [ordered] @{
+            role = 'teacher'
+            login_name = 'e2e_s06_target_teacher'
+            id = '06000000-0000-4000-9000-000000000201'
+        }
+    )
+    institutions = @(
+        [pscustomobject] [ordered] @{
+            timezone = 'Asia/Tashkent'
+            id = '06000000-0000-4000-8000-000000000101'
+        }
+    )
+    version = 1
+}
+Assert-Stage6SeederRepeatability -FirstSnapshot $firstSeederSnapshot -SecondSnapshot $equalSeederSnapshot
+
+$mutatedSeederSnapshot = $equalSeederSnapshot | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+$mutatedSeederSnapshot.institutions[0].timezone = 'UTC'
+$rejectedSeederMutation = $false
+try {
+    Assert-Stage6SeederRepeatability -FirstSnapshot $firstSeederSnapshot -SecondSnapshot $mutatedSeederSnapshot
+}
+catch {
+    $rejectedSeederMutation = $true
+}
+if (-not $rejectedSeederMutation) { throw 'Stage 6 Seeder repeatability comparator accepted a stable semantic mutation.' }
+
 $badOraclePath = Join-Path ([IO.Path]::GetTempPath()) 'stage6-oracle.json'
 $rejectedPath = $false
 try { Assert-Stage6OraclePath -Path $badOraclePath | Out-Null } catch { $rejectedPath = $true }
@@ -140,4 +187,4 @@ $rejectedNestedPath = $false
 try { Assert-Stage6OraclePath -Path $nestedOraclePath | Out-Null } catch { $rejectedNestedPath = $true }
 if (-not $rejectedNestedPath) { throw 'Stage 6 oracle accepted a nested host path.' }
 
-Write-Output "Stage6OracleVerifier: PASS (valid null-Blitz facts plus $($mutations.Count) rejected mutations and path boundaries)"
+Write-Output "Stage6OracleVerifier: PASS (valid null-Blitz facts, $($mutations.Count) rejected mutations, path boundaries, and Seeder repeatability equality/mutation checks)"
