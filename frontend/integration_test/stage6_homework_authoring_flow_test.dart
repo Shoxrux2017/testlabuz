@@ -366,6 +366,10 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
     prompt: 'Upload the completed network presentation.',
     points: '4',
     configure: () async {
+      final fileConfig = find.byKey(
+        const Key('teacherQuestionFileBasedConfiguration'),
+      );
+      expect(fileConfig, findsOneWidget);
       for (final text in const [
         'PDF',
         'DOCX',
@@ -373,7 +377,10 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
         'PPTX',
         'Manual review',
       ]) {
-        expect(find.text(text), findsOneWidget);
+        expect(
+          find.descendant(of: fileConfig, matching: find.text(text)),
+          findsOneWidget,
+        );
       }
     },
   );
