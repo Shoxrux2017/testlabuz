@@ -5,19 +5,19 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 6 — Homework Assignment Management` |
-| Stage status | `In Progress — Backend Phase 2 PASS; frontend not started` |
+| Stage status | `In Progress — Backend Phase 2 PASS; Frontend Phase 2 PASS; Integration pending` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition status | `Approved / Delivered` |
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
 | Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
-| Backend implementation | `Complete — S06-BE-001…006 Accepted / Delivered; Backend Phase 2 PASS` |
+| Backend implementation | `Complete — Accepted / Delivered` |
 | Backend checkpoint | `Completed — PASS` |
-| Frontend implementation | `Not started` |
-| Frontend checkpoint | `Approved — Pending execution` |
+| Frontend implementation | `Complete — S06-FE-001…004 Accepted / Delivered` |
+| Frontend checkpoint | `Completed — PASS; audited head ba963e577930d2c28eb76b0458e42f0baddfdd3d` |
 | Integration gate | `Approved — Pending execution` |
 | Stage Closure Review | `Approved — Pending execution` |
-| Next permitted implementation gate | `S06-FE-001 — Homework Client Domain, Read Surfaces and Routing` |
+| Next permitted gate | `S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -602,10 +602,10 @@ Implementation proceeds in exact dependency order.
 | 4 | `S06-BE-004` | Backend | Teacher Question Mutation & Editing Integrity | `S06-BE-001…003 Accepted / Delivered` | `Accepted` | `Delivered — PR #149, merge 1f366e8b4b98f1f40a115ca02c64bb7709901156` | `tasks/backend/stage-06/S06-BE-004-teacher-question-mutation-editing-integrity.md` |
 | 5 | `S06-BE-005` | Backend | Homework Lifecycle, Recipient Snapshot & Topic Integration | `S06-BE-001…004 Accepted / Delivered` | `Accepted` | `Delivered — PR #151, merge 2bf1b94328f81810566af9bb0e9c739267e1352a` | `tasks/backend/stage-06/S06-BE-005-homework-lifecycle-recipient-snapshot-topic-integration.md` |
 | 6 | `S06-BE-006` | Backend | Official Homework Designation & Staged Result Pair | `S06-BE-001…005 Accepted / Delivered` | `Accepted` | `Delivered — PR #153, merge c45e834784a303e74a41535a39293fbaefb6afc9` | `tasks/backend/stage-06/S06-BE-006-official-homework-designation-staged-result-pair.md` |
-| 7 | `S06-FE-001` | Frontend | Homework Client Domain, Read Surfaces & Routing | Backend Phase 2 `PASS` | `Approved` | `Not delivered` | `tasks/frontend/stage-06/S06-FE-001-homework-client-domain-read-surfaces-routing.md` |
-| 8 | `S06-FE-002` | Frontend | Homework Draft Builder: Metadata, Assignment & Deadline | `S06-FE-001 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/frontend/stage-06/S06-FE-002-homework-draft-builder-metadata-assignment-deadline.md` |
-| 9 | `S06-FE-003` | Frontend | Nine-Type Question Builder | `S06-FE-001` + `S06-FE-002 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/frontend/stage-06/S06-FE-003-nine-type-question-builder.md` |
-| 10 | `S06-FE-004` | Frontend | Homework Lifecycle & Official Designation UX | `S06-FE-001…003 Accepted / Delivered` | `Approved` | `Not delivered` | `tasks/frontend/stage-06/S06-FE-004-homework-lifecycle-official-designation-ux.md` |
+| 7 | `S06-FE-001` | Frontend | Homework Client Domain, Read Surfaces & Routing | Backend Phase 2 `PASS` | `Accepted` | `Delivered — PR #159, merge 55aa1f351f694302c8d62600fa8f3ceb81680f42` | `tasks/frontend/stage-06/S06-FE-001-homework-client-domain-read-surfaces-routing.md` |
+| 8 | `S06-FE-002` | Frontend | Homework Draft Builder: Metadata, Assignment & Deadline | `S06-FE-001 Accepted / Delivered` | `Accepted` | `Delivered — PR #160, merge f1cc588be1d59835612b3b4b6364998c97bece4a` | `tasks/frontend/stage-06/S06-FE-002-homework-draft-builder-metadata-assignment-deadline.md` |
+| 9 | `S06-FE-003` | Frontend | Nine-Type Question Builder | `S06-FE-001` + `S06-FE-002 Accepted / Delivered` | `Accepted` | `Delivered — PR #161, merge 650064530d0a63d1d170287ac70cb837e6d02567` | `tasks/frontend/stage-06/S06-FE-003-nine-type-question-builder.md` |
+| 10 | `S06-FE-004` | Frontend | Homework Lifecycle & Official Designation UX | `S06-FE-001…003 Accepted / Delivered` | `Accepted` | `Delivered — PR #162, merge 817f28e20042c647aaaab414c49ab9c90def890a` | `tasks/frontend/stage-06/S06-FE-004-homework-lifecycle-official-designation-ux.md` |
 | 11 | `S06-INT-001` | Integration | Stage 6 Homework Authoring Real-Stack E2E | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Approved` | `Not delivered` | `tasks/integration/stage-06/S06-INT-001-stage-06-homework-authoring-real-stack-e2e.md` |
 
 No duplicate `CODEX-PROMPT` files are used.
@@ -744,8 +744,8 @@ P2 = 0
 P3 = 0
 ```
 
-Backend Phase 2 passed. `S06-FE-001` is unlocked as the next permitted
-implementation gate.
+Backend Phase 2 passed and unlocked the now-completed frontend implementation
+block.
 
 ---
 
@@ -818,7 +818,19 @@ tasks/frontend/stage-06/S06-FE-PHASE-2-frontend-block-review.md
 Status:
 
 ```text
-Approved — Pending execution
+Completed — PASS
+```
+
+Audited frontend implementation base:
+
+```text
+2eb392aa019fb83076e986599f0c1f1b211b8d87
+```
+
+Audited `origin/main`:
+
+```text
+ba963e577930d2c28eb76b0458e42f0baddfdd3d
 ```
 
 Entry gate:
@@ -851,7 +863,8 @@ P2 = 0
 P3 = 0
 ```
 
-Integration is prohibited until this checkpoint passes.
+The checkpoint passed with `P1=0, P2=0, P3=0`. Integration is unlocked, and
+`S06-INT-001` is the next permitted gate.
 
 ---
 
@@ -880,6 +893,12 @@ Entry:
 ```text
 Backend Phase 2 = PASS
 Frontend Phase 2 = PASS
+```
+
+Dependency status:
+
+```text
+Satisfied — S06-INT-001 unlocked
 ```
 
 Required integrated evidence:
@@ -978,11 +997,11 @@ P3 = 0
 | `S06-BE-005 Accepted / Delivered` | `S06-BE-006` | `PASS — unlocked` |
 | `S06-BE-006 Accepted / Delivered` | `S06-BE-PHASE-2` | `PASS — unlocked` |
 | Backend Phase 2 `PASS` | `S06-FE-001` | `PASS — unlocked` |
-| `S06-FE-001 Accepted / Delivered` | `S06-FE-002` | `Pending` |
-| `S06-FE-002 Accepted / Delivered` | `S06-FE-003` | `Pending` |
-| `S06-FE-003 Accepted / Delivered` | `S06-FE-004` | `Pending` |
-| `S06-FE-004 Accepted / Delivered` | Frontend Phase 2 | `Pending` |
-| Frontend Phase 2 `PASS` | `S06-INT-001` | `Pending` |
+| `S06-FE-001 Accepted / Delivered` | `S06-FE-002` | `PASS — completed` |
+| `S06-FE-002 Accepted / Delivered` | `S06-FE-003` | `PASS — completed` |
+| `S06-FE-003 Accepted / Delivered` | `S06-FE-004` | `PASS — completed` |
+| `S06-FE-004 Accepted / Delivered` | Frontend Phase 2 | `PASS — completed` |
+| Frontend Phase 2 `PASS` | `S06-INT-001` | `PASS — unlocked` |
 | `S06-INT-001 PASS` + delivery/smoke | Closure Review | `Pending` |
 | Closure `STAGE CLOSED` | Stage 7 planning | `Pending` |
 
@@ -1264,12 +1283,13 @@ STAGE_06_TASK_INDEX.md
 The Stage 6 planning package was delivered through PR #140 and merge
 `dc4d78c3a8d2072ae44710e433956572c1d011ce`. `S06-DOC-001` was delivered
 through PR #141 and merge `a90c9e9697e5e2b7eda332ec9497bd524f008776`.
-The remaining implementation, checkpoint, integration, and closure contracts
-are delivered planning contracts, but their executions remain pending.
+The backend and frontend implementation blocks and their Phase 2 checkpoints
+are complete. The Integration and closure contracts are delivered planning
+contracts whose executions remain pending.
 
 ---
 
-## 31. Current Planning Status
+## 31. Current Stage Status
 
 Current Stage 6 state:
 
@@ -1298,28 +1318,32 @@ Backend Phase 2:
 Completed — PASS
 
 Dependency gate:
-Backend Phase 2 PASS -> S06-FE-001 = PASS — unlocked
+Backend Phase 2 PASS + Frontend Phase 2 PASS -> S06-INT-001 = PASS — unlocked
 
-S06-FE-001: Approved / Not delivered
-S06-FE-002: Approved / Not delivered
-S06-FE-003: Approved / Not delivered
-S06-FE-004: Approved / Not delivered
+S06-FE-001: Accepted / Delivered — PR #159,
+merge 55aa1f351f694302c8d62600fa8f3ceb81680f42
+S06-FE-002: Accepted / Delivered — PR #160,
+merge f1cc588be1d59835612b3b4b6364998c97bece4a
+S06-FE-003: Accepted / Delivered — PR #161,
+merge 650064530d0a63d1d170287ac70cb837e6d02567
+S06-FE-004: Accepted / Delivered — PR #162,
+merge 817f28e20042c647aaaab414c49ab9c90def890a
 
 Frontend Phase 2:
-Approved — Pending execution
+Completed — PASS
+audited head ba963e577930d2c28eb76b0458e42f0baddfdd3d
 
 S06-INT-001:
-Approved / Not delivered / Not executed
+Approved / Not delivered — Pending execution
 
 Stage 6 Closure Review:
 Approved — Pending execution
 
 Stage 6:
-In Progress — backend implementation complete; Backend Phase 2 PASS;
-frontend implementation not started
+In Progress — Backend Phase 2 PASS; Frontend Phase 2 PASS; Integration pending
 
 Next permitted gate:
-S06-FE-001 — Homework Client Domain, Read Surfaces and Routing
+S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E
 ```
 
 ---
@@ -1330,16 +1354,16 @@ Current implementation sequence:
 
 1. `S06-BE-001…006` are Accepted / Delivered.
 2. Backend Phase 2 is completed with `PASS`.
-3. The next permitted implementation gate is:
+3. `S06-FE-001…004` are Accepted / Delivered.
+4. Frontend Phase 2 is completed with `PASS`.
+5. The next permitted gate is:
 
 ```text
-S06-FE-001 — Homework Client Domain, Read Surfaces and Routing
+S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E
 ```
 
 Do not start:
 
-- `S06-FE-002` before `S06-FE-001` is Accepted / Delivered;
-- Integration before both Phase 2 checkpoints;
 - Stage 7 before Stage 6 closure.
 
 ---

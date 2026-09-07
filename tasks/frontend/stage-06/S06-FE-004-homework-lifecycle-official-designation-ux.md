@@ -7,7 +7,9 @@
 | Task ID | `S06-FE-004` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Frontend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #162` |
+| Merge | `817f28e20042c647aaaab414c49ab9c90def890a` |
 | Implementation type | `Flutter Homework lifecycle + official Homework designation UX` |
 | Depends on | `S06-FE-001…003` all `Accepted / Delivered`; Stage 6 Backend Phase 2 remains `PASS` |
 | Planning/readiness baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |

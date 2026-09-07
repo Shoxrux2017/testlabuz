@@ -7,7 +7,9 @@
 | Task ID | `S06-FE-001` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Frontend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #159` |
+| Merge | `55aa1f351f694302c8d62600fa8f3ceb81680f42` |
 | Implementation type | `Flutter Teacher read-side Homework foundation` |
 | Depends on | `S06-BE-001…006 Accepted / Delivered` **and** Stage 6 Backend Phase 2 `PASS` |
 | Planning baseline (historical) | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
