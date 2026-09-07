@@ -793,7 +793,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
 | Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
-| Stage 6 — Homework Assignment Management | `In Progress` | `S06-FE-001 — Homework Client Domain, Read Surfaces and Routing` |
+| Stage 6 — Homework Assignment Management | `In Progress` | `S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E` |
 
 Current Stage 5 progress:
 
@@ -848,10 +848,14 @@ Current Stage 6 progress:
 - Stage 6 backend implementation: Complete — `S06-BE-001…006` Accepted / Delivered.
 - Backend Phase 2: PASS — audited `origin/main`
   `ab5f549acc334ffcbd0ee3c9cf3d22b390ac2f98`; P1=0, P2=0, P3=0.
-- Frontend implementation: Not started — `S06-FE-001` unlocked.
-- Frontend Phase 2, integration, and closure remain pending.
+- `S06-FE-001…004`: Accepted / Delivered.
+- Stage 6 frontend implementation: Complete.
+- Frontend Phase 2: PASS — audited `origin/main`
+  `ba963e577930d2c28eb76b0458e42f0baddfdd3d`; P1=0, P2=0, P3=0.
+- Integration: Approved — Pending execution.
+- Closure: Approved — Pending execution.
 - Next permitted gate:
-  `S06-FE-001 — Homework Client Domain, Read Surfaces and Routing`.
+  `S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E`.
 
 ---
 

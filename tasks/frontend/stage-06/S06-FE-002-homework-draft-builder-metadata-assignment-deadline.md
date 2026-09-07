@@ -7,7 +7,9 @@
 | Task ID | `S06-FE-002` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Frontend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #160` |
+| Merge | `f1cc588be1d59835612b3b4b6364998c97bece4a` |
 | Implementation type | `Flutter desktop Homework draft create/edit + selected-Student picker + deadline input` |
 | Depends on | `S06-FE-001 Accepted / Delivered`; Stage 6 Backend Phase 2 remains `PASS` |
 | Planning/readiness baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |

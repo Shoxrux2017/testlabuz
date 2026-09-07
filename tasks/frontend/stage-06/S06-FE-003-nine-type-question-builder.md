@@ -7,7 +7,9 @@
 | Task ID | `S06-FE-003` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Frontend` |
-| Status | `Approved` |
+| Status | `Accepted` |
+| Delivery | `Delivered — PR #161` |
+| Merge | `650064530d0a63d1d170287ac70cb837e6d02567` |
 | Implementation type | `Flutter desktop typed Question Builder + add/update/delete/reorder mutations` |
 | Depends on | `S06-FE-001`, `S06-FE-002` — both `Accepted / Delivered`; Stage 6 Backend Phase 2 remains `PASS` |
 | Planning/readiness baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
