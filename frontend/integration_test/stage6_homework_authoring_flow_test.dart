@@ -663,10 +663,11 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.waitGone(find.byKey(const Key('teacherQuestionEditorDialog')));
   await h.waitForKey('teacherQuestionBuilderLockedBanner');
   expect(find.textContaining('locked'), findsWidgets);
-  expect(
-    find.byKey(const Key('teacherQuestionBuilderAddButton')),
-    findsNothing,
+  final lockedAddButton = find.byKey(
+    const Key('teacherQuestionBuilderAddButton'),
   );
+  expect(lockedAddButton, findsOneWidget);
+  expect(h.tester.widget<FilledButton>(lockedAddButton).onPressed, isNull);
   expect(practiceId, isNot(mainId));
 }
 
