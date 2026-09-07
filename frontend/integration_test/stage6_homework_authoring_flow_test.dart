@@ -239,6 +239,14 @@ class _Stage6Harness {
     timeout: timeout,
   );
 
+  Future<void> settleUiTransition() async {
+    await tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 5),
+    );
+  }
+
   Future<void> waitForRoute(String route) => pumpUntil(
     () => _currentRoute() == route,
     reason: 'Expected route $route.',
@@ -521,6 +529,7 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   );
   await h.tapKey('teacherHomeworkStudentPickerApplyButton');
   await h.waitGone(find.byKey(const Key('teacherHomeworkStudentPickerDialog')));
+  await h.settleUiTransition();
   final createSelectedStudentCount = find.byKey(
     const Key('teacherHomeworkSelectedStudentCount'),
   );
@@ -528,6 +537,9 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   expect(
     h.tester.widget<Text>(createSelectedStudentCount).data,
     '2 Students selected',
+  );
+  await h.waitFor(
+    find.byKey(const Key('teacherHomeworkCreateSubmitButton')).hitTestable(),
   );
   await h.tapKey('teacherHomeworkCreateSubmitButton');
   await h.waitForKey('teacherHomeworkDetailScreen');
@@ -551,6 +563,7 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   );
   await h.tapKey('teacherHomeworkStudentPickerApplyButton');
   await h.waitGone(find.byKey(const Key('teacherHomeworkStudentPickerDialog')));
+  await h.settleUiTransition();
   final editSelectedStudentCount = find.byKey(
     const Key('teacherHomeworkSelectedStudentCount'),
   );
@@ -558,6 +571,9 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   expect(
     h.tester.widget<Text>(editSelectedStudentCount).data,
     '1 Student selected',
+  );
+  await h.waitFor(
+    find.byKey(const Key('teacherHomeworkEditSubmitButton')).hitTestable(),
   );
   await h.tapKey('teacherHomeworkEditSubmitButton');
   await h.waitForKey('teacherHomeworkDetailScreen');
