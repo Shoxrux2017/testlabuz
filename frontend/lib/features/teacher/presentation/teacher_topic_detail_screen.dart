@@ -25,7 +25,10 @@ class TeacherTopicDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final detailProvider = teacherTopicDetailControllerProvider(topicId);
+    final canonicalTopicId = topicId.toLowerCase();
+    final detailProvider = teacherTopicDetailControllerProvider(
+      canonicalTopicId,
+    );
     final detail = ref.watch(detailProvider);
     final surface = ref.watch(appDeviceSurfaceProvider);
     final session = ref.watch(authSessionControllerProvider);
@@ -34,13 +37,15 @@ class TeacherTopicDetailScreen extends ConsumerWidget {
       session,
       surface,
     ).eligibleKey;
-    final lifecycleProvider = teacherTopicLifecycleControllerProvider(topicId);
+    final lifecycleProvider = teacherTopicLifecycleControllerProvider(
+      canonicalTopicId,
+    );
     final lifecycle = surface == AppDeviceSurface.desktop
         ? ref.watch(lifecycleProvider)
         : const TeacherTopicLifecycleState();
     final materialMutationActive = surface == AppDeviceSurface.desktop
         ? ref
-              .watch(teacherMaterialMutationActivityProvider(topicId))
+              .watch(teacherMaterialMutationActivityProvider(canonicalTopicId))
               .isActiveFor(materialActivityOwner)
         : false;
     if (surface == AppDeviceSurface.desktop) {

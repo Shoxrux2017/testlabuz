@@ -12,9 +12,12 @@ import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/time/institution_timezone.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_material_mutation_activity.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_create_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_topic_detail_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_edit_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_edit_state.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_topic_lifecycle_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
@@ -365,6 +368,243 @@ void main() {
         router.routeInformationProvider.value.uri.path,
         AppRoutePaths.teacherTopicDetailLocation(_topicBId),
       );
+    },
+  );
+
+  testWidgets(
+    'case-only Topic detail navigation keeps an open lifecycle confirmation on one provider owner',
+    (tester) async {
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async =>
+            teacherTopic(id: topicId, title: 'Case Topic'),
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicDetailLocation(_caseTopicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      final detailElement = tester.element(
+        find.byType(TeacherTopicDetailScreen),
+      );
+      final container = ProviderScope.containerOf(detailElement);
+      final detailProvider = teacherTopicDetailControllerProvider(_caseTopicId);
+      final lifecycleProvider = teacherTopicLifecycleControllerProvider(
+        _caseTopicId,
+      );
+      final materialActivityProvider = teacherMaterialMutationActivityProvider(
+        _caseTopicId,
+      );
+      final detailController = container.read(detailProvider.notifier);
+      final lifecycleController = container.read(lifecycleProvider.notifier);
+      final materialActivityController = container.read(
+        materialActivityProvider.notifier,
+      );
+      final uppercaseTopicId = _caseTopicId.toUpperCase();
+      final uppercaseDetailProvider = teacherTopicDetailControllerProvider(
+        uppercaseTopicId,
+      );
+      final uppercaseLifecycleProvider =
+          teacherTopicLifecycleControllerProvider(uppercaseTopicId);
+      final uppercaseMaterialActivityProvider =
+          teacherMaterialMutationActivityProvider(uppercaseTopicId);
+
+      expect(topics.fetchIds, [_caseTopicId]);
+      expect(container.exists(uppercaseDetailProvider), isFalse);
+      expect(container.exists(uppercaseLifecycleProvider), isFalse);
+      expect(container.exists(uppercaseMaterialActivityProvider), isFalse);
+
+      await tester.tap(
+        find.byKey(const ValueKey('teacherTopicLifecycleactivate')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Activate Topic?'), findsOneWidget);
+
+      final router = container.read(appRouterProvider);
+      final uppercaseLocation = AppRoutePaths.teacherTopicDetailLocation(
+        uppercaseTopicId,
+      );
+      router.go(uppercaseLocation);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.element(find.byType(TeacherTopicDetailScreen)),
+        same(detailElement),
+      );
+      expect(container.read(detailProvider.notifier), same(detailController));
+      expect(
+        container.read(lifecycleProvider.notifier),
+        same(lifecycleController),
+      );
+      expect(
+        container.read(materialActivityProvider.notifier),
+        same(materialActivityController),
+      );
+      expect(container.exists(uppercaseDetailProvider), isFalse);
+      expect(container.exists(uppercaseLifecycleProvider), isFalse);
+      expect(container.exists(uppercaseMaterialActivityProvider), isFalse);
+      expect(topics.fetchIds, [_caseTopicId]);
+      expect(router.routeInformationProvider.value.uri.path, uppercaseLocation);
+
+      await tester.tap(
+        find.byKey(const Key('teacherTopicLifecycleConfirmButton')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(topics.lifecycleRequests, hasLength(1));
+      expect(topics.lifecycleRequests.single.topicId, _caseTopicId);
+      expect(
+        topics.lifecycleRequests.single.action,
+        TeacherTopicLifecycleAction.activate,
+      );
+      expect(
+        find.byKey(const ValueKey('teacherTopicLifecycleclose')),
+        findsOneWidget,
+      );
+      expect(container.read(detailProvider.notifier), same(detailController));
+      expect(
+        container.read(lifecycleProvider.notifier),
+        same(lifecycleController),
+      );
+      expect(container.exists(uppercaseDetailProvider), isFalse);
+      expect(container.exists(uppercaseLifecycleProvider), isFalse);
+      expect(container.exists(uppercaseMaterialActivityProvider), isFalse);
+    },
+  );
+
+  testWidgets(
+    'case-only Topic detail navigation keeps an in-flight lifecycle mutation visible and singular',
+    (tester) async {
+      final pendingLifecycle = Completer<TeacherTopic>();
+      final topics = FakeTeacherTopicRepository(
+        onFetch: (topicId) async =>
+            teacherTopic(id: topicId, title: 'Case Topic'),
+        onLifecycle: (_, _) => pendingLifecycle.future,
+      );
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherTopicDetailLocation(_caseTopicId),
+        topics: topics,
+      );
+      await tester.pumpAndSettle();
+
+      final detailElement = tester.element(
+        find.byType(TeacherTopicDetailScreen),
+      );
+      final container = ProviderScope.containerOf(detailElement);
+      final detailProvider = teacherTopicDetailControllerProvider(_caseTopicId);
+      final lifecycleProvider = teacherTopicLifecycleControllerProvider(
+        _caseTopicId,
+      );
+      final materialActivityProvider = teacherMaterialMutationActivityProvider(
+        _caseTopicId,
+      );
+      final detailController = container.read(detailProvider.notifier);
+      final lifecycleController = container.read(lifecycleProvider.notifier);
+      final materialActivityController = container.read(
+        materialActivityProvider.notifier,
+      );
+      final uppercaseTopicId = _caseTopicId.toUpperCase();
+      final uppercaseDetailProvider = teacherTopicDetailControllerProvider(
+        uppercaseTopicId,
+      );
+      final uppercaseLifecycleProvider =
+          teacherTopicLifecycleControllerProvider(uppercaseTopicId);
+      final uppercaseMaterialActivityProvider =
+          teacherMaterialMutationActivityProvider(uppercaseTopicId);
+
+      await tester.tap(
+        find.byKey(const ValueKey('teacherTopicLifecycleactivate')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('teacherTopicLifecycleConfirmButton')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(topics.lifecycleRequests, hasLength(1));
+      expect(topics.lifecycleRequests.single.topicId, _caseTopicId);
+      expect(container.read(lifecycleProvider).isBusy, isTrue);
+      expect(
+        find.byKey(const Key('teacherTopicDetailProgress')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('teacherTopicLifecycleactivate')),
+            )
+            .onPressed,
+        isNull,
+      );
+
+      final router = container.read(appRouterProvider);
+      final uppercaseLocation = AppRoutePaths.teacherTopicDetailLocation(
+        uppercaseTopicId,
+      );
+      router.go(uppercaseLocation);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        tester.element(find.byType(TeacherTopicDetailScreen)),
+        same(detailElement),
+      );
+      expect(container.read(detailProvider.notifier), same(detailController));
+      expect(
+        container.read(lifecycleProvider.notifier),
+        same(lifecycleController),
+      );
+      expect(
+        container.read(materialActivityProvider.notifier),
+        same(materialActivityController),
+      );
+      expect(container.read(lifecycleProvider).isBusy, isTrue);
+      expect(
+        find.byKey(const Key('teacherTopicDetailProgress')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('teacherTopicLifecycleactivate')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(container.exists(uppercaseDetailProvider), isFalse);
+      expect(container.exists(uppercaseLifecycleProvider), isFalse);
+      expect(container.exists(uppercaseMaterialActivityProvider), isFalse);
+      expect(topics.lifecycleRequests, hasLength(1));
+      expect(router.routeInformationProvider.value.uri.path, uppercaseLocation);
+
+      pendingLifecycle.complete(
+        teacherTopic(
+          id: _caseTopicId,
+          title: 'Lifecycle completed',
+          status: TeacherTopicStatus.active,
+        ),
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Lifecycle completed'), findsOneWidget);
+      expect(find.byKey(const Key('teacherTopicDetailProgress')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('teacherTopicLifecycleclose')),
+        findsOneWidget,
+      );
+      expect(topics.lifecycleRequests, hasLength(1));
+      expect(container.read(detailProvider.notifier), same(detailController));
+      expect(
+        container.read(lifecycleProvider.notifier),
+        same(lifecycleController),
+      );
+      expect(container.exists(uppercaseDetailProvider), isFalse);
+      expect(container.exists(uppercaseLifecycleProvider), isFalse);
+      expect(container.exists(uppercaseMaterialActivityProvider), isFalse);
     },
   );
 
