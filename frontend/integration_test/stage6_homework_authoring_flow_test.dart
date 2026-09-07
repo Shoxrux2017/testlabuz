@@ -616,7 +616,16 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.go(AppRoutePaths.teacherHomeworkDetailLocation(topicId, mainId));
   await h.waitFor(find.text(_mainTitle));
   await _homeworkLifecycle(h, 'activate', 'Active');
-  expect(find.textContaining('Official cohort prepared'), findsOneWidget);
+
+  final preparedCohort = find.descendant(
+    of: find.byKey(const Key('teacherOfficialHomeworkSection')),
+    matching: find.text('Official cohort prepared.'),
+  );
+
+  await h.waitFor(preparedCohort);
+  expect(preparedCohort, findsOneWidget);
+
+  await h.settleUiTransition();
 
   await h.go(AppRoutePaths.teacherTopicDetailLocation(topicId));
   await h.tap(find.byKey(const ValueKey('teacherTopicLifecycleclose')));
