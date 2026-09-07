@@ -65,8 +65,7 @@ class _Stage6Oracle {
   static Future<_Stage6Oracle> load(String path) async {
     final file = File(path);
     final basename = file.uri.pathSegments.last;
-    final systemTemp = Directory.systemTemp.absolute.path;
-    if (file.parent.absolute.path != systemTemp ||
+    if (!_isSystemTempDirectory(file.parent) ||
         !RegExp(
           r'^testlabuz-stage6-oracle-[a-f0-9]{32}\.json$',
         ).hasMatch(basename)) {
@@ -94,6 +93,17 @@ class _Stage6Oracle {
   String topicId(String key) => _string(_map(_map(raw['topics'])[key]), 'id');
   String homeworkId(String key) =>
       _string(_map(_map(raw['homework'])[key]), 'id');
+}
+
+bool _isSystemTempDirectory(Directory directory) {
+  try {
+    return FileSystemEntity.identicalSync(
+      directory.path,
+      Directory.systemTemp.path,
+    );
+  } on FileSystemException {
+    return false;
+  }
 }
 
 class _Stage6Harness {
