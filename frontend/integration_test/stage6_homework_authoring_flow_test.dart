@@ -651,6 +651,15 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
     findsNothing,
   );
   await h.tapKey('teacherQuestionEditorCancelButton');
+  await h.waitFor(find.text('Discard Question changes?'));
+  expect(find.byKey(const Key('teacherQuestionEditorDialog')), findsOneWidget);
+  expect(
+    find.byKey(const Key('teacherQuestionDiscardChangesButton')),
+    findsOneWidget,
+  );
+  await h.tapKey('teacherQuestionDiscardChangesButton');
+  await h.waitGone(find.text('Discard Question changes?'));
+  await h.settleUiTransition();
   await h.waitGone(find.byKey(const Key('teacherQuestionEditorDialog')));
   await h.waitForKey('teacherQuestionBuilderLockedBanner');
   expect(find.textContaining('locked'), findsWidgets);
