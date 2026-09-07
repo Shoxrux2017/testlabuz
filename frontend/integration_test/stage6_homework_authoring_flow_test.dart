@@ -589,8 +589,21 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.go(AppRoutePaths.teacherTopicDetailLocation(topicId));
   await h.tap(find.byKey(const ValueKey('teacherTopicLifecycleclose')));
   await h.tapKey('teacherTopicLifecycleConfirmButton');
-  await h.waitForKey('teacherTopicLifecycleCheckCurrentButton');
-  expect(find.textContaining('draft/active Homework'), findsWidgets);
+  await h.waitFor(
+    find.text(
+      "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.",
+    ),
+  );
+  expect(
+    find.text(
+      "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.",
+    ),
+    findsOneWidget,
+  );
+  expect(
+    find.byKey(const Key('teacherTopicLifecycleCheckCurrentButton')),
+    findsNothing,
+  );
   expect(find.text('Topic: Active'), findsOneWidget);
 
   await h.go(AppRoutePaths.teacherHomeworkDetailLocation(topicId, mainId));
