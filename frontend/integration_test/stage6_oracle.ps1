@@ -279,8 +279,8 @@ function Assert-Stage6DatabasePostconditions {
         [string] $main.institution_id -cne '06000000-0000-4000-8000-000000000101' -or
         [string] $main.teacher_id -cne '06000000-0000-4000-9000-000000000201' -or
         [string] $main.topic_id -cne $script:Stage6AuthoringTopicId -or [string] $main.type -cne 'homework' -or
-        [string] $main.title -cne 'E2E S06 Official Homework' -or [string] $main.description -cne 'Networking fundamentals' -or
-        [string] $main.student_instructions -cne 'Complete every question.' -or [string] $main.assignment_mode -cne 'group' -or
+        [string] $main.title -cne 'E2E S06 Official Homework' -or [string] $main.description -cne 'E2E S06 official draft description' -or
+        [string] $main.student_instructions -cne 'Complete every question carefully.' -or [string] $main.assignment_mode -cne 'group' -or
         [decimal] $main.total -ne [decimal] 20.5 -or [string] $main.status -cne 'archived' -or
         ([DateTimeOffset] $main.deadline_at).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') -cne '2035-06-15T13:00:00Z' -or
         @($main.attempts).Count -ne 0

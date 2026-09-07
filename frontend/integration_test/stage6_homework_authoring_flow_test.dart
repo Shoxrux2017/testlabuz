@@ -273,11 +273,11 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.enterKey('teacherHomeworkTitleField', _mainTitle);
   await h.enterKey(
     'teacherHomeworkDescriptionField',
-    'Networking fundamentals',
+    'E2E S06 official draft description',
   );
   await h.enterKey(
     'teacherHomeworkInstructionsField',
-    'Complete every question.',
+    'Complete every question carefully.',
   );
   expect(find.text('Whole group'), findsWidgets);
   await _chooseDeadline(h);

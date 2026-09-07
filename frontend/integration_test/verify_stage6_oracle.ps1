@@ -60,8 +60,8 @@ function New-Stage6ValidFacts {
         main = [pscustomobject] @{
             id = $mainId; institution_id = '06000000-0000-4000-8000-000000000101'
             topic_id = '06000000-0000-4000-c000-000000000101'; teacher_id = '06000000-0000-4000-9000-000000000201'
-            type = 'homework'; title = 'E2E S06 Official Homework'; description = 'Networking fundamentals'
-            student_instructions = 'Complete every question.'; assignment_mode = 'group'; total = '20.500000'
+            type = 'homework'; title = 'E2E S06 Official Homework'; description = 'E2E S06 official draft description'
+            student_instructions = 'Complete every question carefully.'; assignment_mode = 'group'; total = '20.500000'
             status = 'archived'; deadline_at = '2035-06-15T13:00:00+00:00'
             recipients = @(
                 [pscustomobject] @{ student_id = '06000000-0000-4000-9000-000000000301'; assignment_source = 'group' },
@@ -108,6 +108,8 @@ $mutations = [ordered] @{
     'missing main Homework' = { param($f) $f.main_count = 0 }
     'duplicate main Homework' = { param($f) $f.main_count = 2 }
     'wrong tenant' = { param($f) $f.main.institution_id = 'foreign' }
+    'wrong description' = { param($f) $f.main.description = 'wrong' }
+    'wrong student instructions' = { param($f) $f.main.student_instructions = 'wrong' }
     'wrong Question count' = { param($f) $f.main.questions = @($f.main.questions | Select-Object -First 9) }
     'non-contiguous positions' = { param($f) $f.main.questions[9].position = 11 }
     'wrong total' = { param($f) $f.main.total = '21.000000' }

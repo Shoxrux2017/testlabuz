@@ -59,6 +59,8 @@ class Stage6E2eSeederTest extends TestCase
 
     private const LOCKED_PAIR_ID = '06000000-0000-4000-f100-000000000101';
 
+    private const DYNAMIC_MAIN_HOMEWORK_ID = '06000000-0000-4000-d000-000000000201';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -260,6 +262,77 @@ class Stage6E2eSeederTest extends TestCase
         ));
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $ownedTokenId]);
         $this->assertDatabaseHas('personal_access_tokens', ['id' => $unrelatedTokenId]);
+    }
+
+    public function test_seeder_resets_completed_authoring_state_and_preserves_unrelated_rows(): void
+    {
+        $unrelatedInstitution = Institution::factory()->create(['name' => 'Unrelated Stage 6 completed-run sentinel']);
+        $unrelatedBefore = DB::table('institutions')->where('id', $unrelatedInstitution->id)->sole();
+
+        (new Stage6E2eSeeder)->run();
+
+        $transitionedAt = now();
+        DB::table('topics')->where('id', self::AUTHORING_TOPIC_ID)->update([
+            'status' => TopicStatus::Closed->value,
+            'closed_at' => $transitionedAt,
+            'updated_at' => $transitionedAt,
+        ]);
+        DB::table('assessments')->insert([
+            'id' => self::DYNAMIC_MAIN_HOMEWORK_ID,
+            'institution_id' => self::TARGET_INSTITUTION_ID,
+            'topic_id' => self::AUTHORING_TOPIC_ID,
+            'teacher_id' => self::TARGET_TEACHER_ID,
+            'type' => 'homework',
+            'title' => 'E2E S06 Official Homework',
+            'description' => 'E2E S06 official draft description',
+            'student_instructions' => 'Complete every question carefully.',
+            'assignment_mode' => 'group',
+            'total_possible_points' => '20.500000',
+            'created_at' => $transitionedAt->copy()->subMinutes(3),
+            'updated_at' => $transitionedAt,
+        ]);
+        DB::table('homework_assignments')->insert([
+            'assessment_id' => self::DYNAMIC_MAIN_HOMEWORK_ID,
+            'institution_id' => self::TARGET_INSTITUTION_ID,
+            'status' => HomeworkStatus::Archived->value,
+            'deadline_at' => '2035-06-15 13:00:00+00',
+            'activated_at' => $transitionedAt->copy()->subMinutes(2),
+            'closed_at' => $transitionedAt->copy()->subMinute(),
+            'archived_at' => $transitionedAt,
+            'created_at' => $transitionedAt->copy()->subMinutes(3),
+            'updated_at' => $transitionedAt,
+        ]);
+
+        (new Stage6E2eSeeder)->run();
+
+        $authoringTopic = DB::table('topics')->where('id', self::AUTHORING_TOPIC_ID)->sole();
+        self::assertSame(TopicStatus::Active->value, $authoringTopic->status);
+        self::assertNotNull($authoringTopic->activated_at);
+        self::assertNull($authoringTopic->closed_at);
+        self::assertNull($authoringTopic->archived_at);
+        $this->assertDatabaseMissing('assessments', ['id' => self::DYNAMIC_MAIN_HOMEWORK_ID]);
+        $this->assertDatabaseMissing('homework_assignments', ['assessment_id' => self::DYNAMIC_MAIN_HOMEWORK_ID]);
+        self::assertEquals(
+            $unrelatedBefore,
+            DB::table('institutions')->where('id', $unrelatedInstitution->id)->sole(),
+        );
+    }
+
+    public function test_seeder_does_not_accept_closed_lifecycle_for_other_owned_topics(): void
+    {
+        (new Stage6E2eSeeder)->run();
+
+        $transitionedAt = now();
+        DB::table('topics')->where('id', self::LOCKED_TOPIC_ID)->update([
+            'status' => TopicStatus::Closed->value,
+            'closed_at' => $transitionedAt,
+            'updated_at' => $transitionedAt,
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Stage 6 E2E Topic manifest collision detected.');
+
+        (new Stage6E2eSeeder)->run();
     }
 
     protected function tearDown(): void

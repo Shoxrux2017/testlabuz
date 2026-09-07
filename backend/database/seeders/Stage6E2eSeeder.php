@@ -332,13 +332,26 @@ class Stage6E2eSeeder extends Seeder
                 || $topic->group_id !== $expected['group_id']
                 || $topic->teacher_id !== $expected['teacher_id']
                 || $topic->title !== $expected['title']
-                || $topic->status !== TopicStatus::Active
-                || $topic->activated_at === null
-                || $topic->closed_at !== null
-                || $topic->archived_at !== null) {
+                || ! $this->topicLifecycleMatchesOwnedState($topic)) {
                 throw new RuntimeException('Stage 6 E2E Topic manifest collision detected.');
             }
         }
+    }
+
+    private function topicLifecycleMatchesOwnedState(Topic $topic): bool
+    {
+        if ($topic->status === TopicStatus::Active) {
+            return $topic->activated_at !== null
+                && $topic->closed_at === null
+                && $topic->archived_at === null;
+        }
+
+        return $topic->id === self::AUTHORING_TOPIC_ID
+            && $topic->status === TopicStatus::Closed
+            && $topic->activated_at !== null
+            && $topic->closed_at !== null
+            && $topic->closed_at->greaterThanOrEqualTo($topic->activated_at)
+            && $topic->archived_at === null;
     }
 
     /**
