@@ -64,12 +64,12 @@ class _Stage6Oracle {
 
   static Future<_Stage6Oracle> load(String path) async {
     final file = File(path);
-    final resolved = file.absolute.path;
+    final basename = file.uri.pathSegments.last;
     final systemTemp = Directory.systemTemp.absolute.path;
     if (file.parent.absolute.path != systemTemp ||
         !RegExp(
-          r'testlabuz-stage6-oracle-[a-f0-9]{32}\.json$',
-        ).hasMatch(resolved)) {
+          r'^testlabuz-stage6-oracle-[a-f0-9]{32}\.json$',
+        ).hasMatch(basename)) {
       throw StateError('The Stage 6 oracle path is unsafe.');
     }
     final raw = _map(jsonDecode(await file.readAsString()));
