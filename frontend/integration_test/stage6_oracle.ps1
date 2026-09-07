@@ -46,6 +46,368 @@ function Invoke-Stage6ReadOnlyPhp {
     catch { throw "Stage 6 read-only database probe returned invalid $Marker JSON." }
 }
 
+function ConvertTo-Stage6CanonicalLogicalValue {
+    param([AllowNull()][object] $Value)
+
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [string] -or $Value -is [ValueType]) { return $Value }
+    if ($Value -is [Collections.IDictionary]) {
+        $properties = [ordered] @{}
+        foreach ($key in @($Value.Keys | ForEach-Object { [string] $_ } | Sort-Object)) {
+            $properties[$key] = ConvertTo-Stage6CanonicalLogicalValue -Value $Value[$key]
+        }
+        return [pscustomobject] $properties
+    }
+    if ($Value -is [Collections.IEnumerable]) {
+        $items = @(
+            foreach ($item in $Value) {
+                ConvertTo-Stage6CanonicalLogicalValue -Value $item
+            }
+        )
+        return ,$items
+    }
+
+    $properties = [ordered] @{}
+    foreach ($property in @($Value.PSObject.Properties | Sort-Object Name)) {
+        $properties[$property.Name] = ConvertTo-Stage6CanonicalLogicalValue -Value $property.Value
+    }
+    [pscustomobject] $properties
+}
+
+function ConvertTo-Stage6CanonicalLogicalJson {
+    param([Parameter(Mandatory = $true)][psobject] $Snapshot)
+
+    $canonical = ConvertTo-Stage6CanonicalLogicalValue -Value $Snapshot
+    $canonical | ConvertTo-Json -Depth 100 -Compress
+}
+
+function Get-Stage6SeederLogicalSnapshot {
+    param([Parameter(Mandatory = $true)][string] $BackendContainerName)
+
+    $program = @'
+$institutionIds = [
+    '06000000-0000-4000-8000-000000000101',
+    '06000000-0000-4000-8000-000000000102',
+];
+$userIds = [
+    '06000000-0000-4000-9000-000000000101',
+    '06000000-0000-4000-9000-000000000201',
+    '06000000-0000-4000-9000-000000000301',
+    '06000000-0000-4000-9000-000000000302',
+    '06000000-0000-4000-9000-000000000303',
+    '06000000-0000-4000-9000-000000000304',
+    '06000000-0000-4000-9000-000000000401',
+    '06000000-0000-4000-9000-000000000402',
+    '06000000-0000-4000-9000-000000000501',
+    '06000000-0000-4000-9000-000000000502',
+    '06000000-0000-4000-9000-000000000503',
+];
+$groupIds = [
+    '06000000-0000-4000-a000-000000000101',
+    '06000000-0000-4000-a000-000000000102',
+    '06000000-0000-4000-a000-000000000103',
+];
+$teacherMembershipIds = [
+    '06000000-0000-4000-b100-000000000101',
+    '06000000-0000-4000-b100-000000000102',
+    '06000000-0000-4000-b100-000000000103',
+];
+$studentMembershipIds = [
+    '06000000-0000-4000-b200-000000000101',
+    '06000000-0000-4000-b200-000000000102',
+    '06000000-0000-4000-b200-000000000103',
+    '06000000-0000-4000-b200-000000000104',
+    '06000000-0000-4000-b200-000000000105',
+    '06000000-0000-4000-b200-000000000106',
+];
+$topicIds = [
+    '06000000-0000-4000-c000-000000000101',
+    '06000000-0000-4000-c000-000000000102',
+    '06000000-0000-4000-c000-000000000103',
+    '06000000-0000-4000-c000-000000000104',
+    '06000000-0000-4000-c000-000000000105',
+    '06000000-0000-4000-c000-000000000106',
+];
+$assessmentIds = [
+    '06000000-0000-4000-d000-000000000101',
+    '06000000-0000-4000-d000-000000000102',
+    '06000000-0000-4000-d000-000000000103',
+    '06000000-0000-4000-d000-000000000104',
+    '06000000-0000-4000-d000-000000000105',
+];
+$recipientIds = [
+    '06000000-0000-4000-e000-000000000101',
+    '06000000-0000-4000-e000-000000000102',
+    '06000000-0000-4000-e000-000000000103',
+];
+$attemptIds = ['06000000-0000-4000-f000-000000000101'];
+$pairIds = ['06000000-0000-4000-f100-000000000101'];
+$questionIds = [
+    '06000000-0000-4000-6100-000000000101',
+    '06000000-0000-4000-6100-000000000102',
+    '06000000-0000-4000-6100-000000000103',
+];
+$logicalBoolean = static fn ($value): bool => $value === true || $value === 1 || $value === '1' || $value === 't' || $value === 'true';
+$deadlineState = static function ($value): string {
+    if ($value === null) { return 'none'; }
+    return \Carbon\Carbon::parse($value)->isPast() ? 'past' : 'future';
+};
+$sortRows = static function (array $rows, string $identity = 'id'): array {
+    usort($rows, static fn (array $left, array $right): int => strcmp((string) $left[$identity], (string) $right[$identity]));
+    return array_values($rows);
+};
+$assertCount = static function ($rows, int $expected, string $label): void {
+    if (count($rows) !== $expected) {
+        throw new RuntimeException("Stage 6 Seeder logical snapshot is missing expected {$label} rows.");
+    }
+};
+
+$settings = DB::table('institution_settings')
+    ->whereIn('institution_id', $institutionIds)
+    ->get(['institution_id', 'timezone'])
+    ->keyBy('institution_id');
+$institutions = DB::table('institutions')->whereIn('id', $institutionIds)->get()->map(
+    static function ($row) use ($settings): array {
+        return [
+            'id' => $row->id,
+            'name' => $row->name,
+            'type' => $row->type,
+            'status' => $row->status,
+            'contact_email' => $row->contact_email,
+            'contact_phone' => $row->contact_phone,
+            'address' => $row->address,
+            'description' => $row->description,
+            'created_by_user_id' => $row->created_by_user_id,
+            'deactivated' => $row->deactivated_at !== null,
+            'timezone' => $settings->get($row->id)?->timezone,
+        ];
+    }
+)->all();
+$users = DB::table('users')->whereIn('id', $userIds)->get([
+    'id',
+    'institution_id',
+    'role',
+    'full_name',
+    'login_name',
+    'email',
+    'phone',
+    'is_active',
+    'must_change_password',
+    'deactivated_at',
+    'created_by_user_id',
+])->map(
+    static function ($row) use ($logicalBoolean): array {
+        return [
+            'id' => $row->id,
+            'institution_id' => $row->institution_id,
+            'role' => $row->role,
+            'full_name' => $row->full_name,
+            'login_name' => $row->login_name,
+            'email' => $row->email,
+            'phone' => $row->phone,
+            'active' => $logicalBoolean($row->is_active),
+            'must_change_password' => $logicalBoolean($row->must_change_password),
+            'deactivated' => $row->deactivated_at !== null,
+            'created_by_user_id' => $row->created_by_user_id,
+        ];
+    }
+)->all();
+$groups = DB::table('groups')->whereIn('id', $groupIds)->get()->map(
+    static fn ($row): array => [
+        'id' => $row->id,
+        'institution_id' => $row->institution_id,
+        'name' => $row->name,
+        'level' => $row->level,
+        'subject_direction' => $row->subject_direction,
+        'description' => $row->description,
+        'status' => $row->status,
+        'created_by_user_id' => $row->created_by_user_id,
+        'archived' => $row->archived_at !== null,
+    ]
+)->all();
+$teacherMemberships = DB::table('group_teacher_memberships')->whereIn('id', $teacherMembershipIds)->get()->map(
+    static fn ($row): array => [
+        'id' => $row->id,
+        'institution_id' => $row->institution_id,
+        'group_id' => $row->group_id,
+        'teacher_id' => $row->teacher_id,
+        'assigned_by_user_id' => $row->assigned_by_user_id,
+        'started' => $row->started_at !== null,
+        'ended' => $row->ended_at !== null,
+    ]
+)->all();
+$studentMemberships = DB::table('group_student_memberships')->whereIn('id', $studentMembershipIds)->get()->map(
+    static fn ($row): array => [
+        'id' => $row->id,
+        'institution_id' => $row->institution_id,
+        'group_id' => $row->group_id,
+        'student_id' => $row->student_id,
+        'assigned_by_user_id' => $row->assigned_by_user_id,
+        'started' => $row->started_at !== null,
+        'ended' => $row->ended_at !== null,
+    ]
+)->all();
+$topics = DB::table('topics')->whereIn('id', $topicIds)->get()->map(
+    static fn ($row): array => [
+        'id' => $row->id,
+        'institution_id' => $row->institution_id,
+        'group_id' => $row->group_id,
+        'teacher_id' => $row->teacher_id,
+        'title' => $row->title,
+        'description' => $row->description,
+        'subject' => $row->subject,
+        'student_instructions' => $row->student_instructions,
+        'lesson_scheduled' => $row->lesson_at !== null,
+        'status' => $row->status,
+        'activated' => $row->activated_at !== null,
+        'closed' => $row->closed_at !== null,
+        'archived' => $row->archived_at !== null,
+    ]
+)->all();
+$homework = DB::table('homework_assignments')->whereIn('assessment_id', $assessmentIds)->get()->keyBy('assessment_id');
+$assessments = DB::table('assessments')->whereIn('id', $assessmentIds)->get()->map(
+    static function ($row) use ($deadlineState, $homework): array {
+        $assignment = $homework->get($row->id);
+        return [
+            'id' => $row->id,
+            'institution_id' => $row->institution_id,
+            'topic_id' => $row->topic_id,
+            'teacher_id' => $row->teacher_id,
+            'type' => $row->type,
+            'title' => $row->title,
+            'description' => $row->description,
+            'student_instructions' => $row->student_instructions,
+            'assignment_mode' => $row->assignment_mode,
+            'total_possible_points' => (string) $row->total_possible_points,
+            'homework_present' => $assignment !== null,
+            'homework_institution_id' => $assignment?->institution_id,
+            'status' => $assignment?->status,
+            'deadline' => $deadlineState($assignment?->deadline_at),
+            'activated' => $assignment?->activated_at !== null,
+            'closed' => $assignment?->closed_at !== null,
+            'archived' => $assignment?->archived_at !== null,
+        ];
+    }
+)->all();
+$recipients = DB::table('assessment_students')->whereIn('id', $recipientIds)->get()->map(
+    static fn ($row): array => [
+        'id' => $row->id,
+        'institution_id' => $row->institution_id,
+        'assessment_id' => $row->assessment_id,
+        'student_id' => $row->student_id,
+        'assignment_source' => $row->assignment_source,
+        'assigned' => $row->assigned_at !== null,
+        'assigned_by_user_id' => $row->assigned_by_user_id,
+    ]
+)->all();
+$attempts = DB::table('assessment_attempts')->whereIn('id', $attemptIds)->get()->map(
+    static function ($row) use ($deadlineState, $logicalBoolean): array {
+        return [
+            'id' => $row->id,
+            'institution_id' => $row->institution_id,
+            'assessment_id' => $row->assessment_id,
+            'assessment_student_id' => $row->assessment_student_id,
+            'student_id' => $row->student_id,
+            'attempt_number' => (int) $row->attempt_number,
+            'status' => $row->status,
+            'started' => $row->started_at !== null,
+            'deadline' => $deadlineState($row->deadline_at),
+            'submitted' => $row->submitted_at !== null,
+            'finalized' => $row->finalized_at !== null,
+            'finalization_reason' => $row->finalization_reason,
+            'locked' => $row->locked_at !== null,
+            'official_score_eligible' => $logicalBoolean($row->official_score_eligible),
+            'earned_points' => $row->earned_points === null ? null : (string) $row->earned_points,
+            'possible_points' => (string) $row->possible_points,
+            'normalized_score' => $row->normalized_score === null ? null : (string) $row->normalized_score,
+            'scoring_completed' => $row->scoring_completed_at !== null,
+        ];
+    }
+)->all();
+$pairs = DB::table('topic_result_pairs')->whereIn('id', $pairIds)->get()->map(
+    static fn ($row): array => [
+        'id' => $row->id,
+        'institution_id' => $row->institution_id,
+        'topic_id' => $row->topic_id,
+        'homework_assessment_id' => $row->homework_assessment_id,
+        'blitz_assessment_id' => $row->blitz_assessment_id,
+        'designated_by_user_id' => $row->designated_by_user_id,
+        'designated' => $row->designated_at !== null,
+        'cohort_snapshotted' => $row->cohort_snapshotted_at !== null,
+        'locked' => $row->locked_at !== null,
+    ]
+)->all();
+$questions = DB::table('questions')->whereIn('id', $questionIds)->get()->map(
+    static fn ($row): array => [
+        'id' => $row->id,
+        'institution_id' => $row->institution_id,
+        'assessment_id' => $row->assessment_id,
+        'type' => $row->type,
+        'prompt' => $row->prompt,
+        'instructions' => $row->instructions,
+        'points' => (string) $row->points,
+        'position' => (int) $row->position,
+        'checking_mode' => $row->checking_mode,
+    ]
+)->all();
+$trueFalseRows = DB::table('question_true_false_answers')->whereIn('question_id', $questionIds)->get()->map(
+    static fn ($row): array => [
+        'question_id' => $row->question_id,
+        'institution_id' => $row->institution_id,
+        'correct_value' => $logicalBoolean($row->correct_value),
+    ]
+)->all();
+$assertCount($settings, count($institutionIds), 'Institution Setting');
+$assertCount($institutions, count($institutionIds), 'Institution');
+$assertCount($users, count($userIds), 'User');
+$assertCount($groups, count($groupIds), 'Group');
+$assertCount($teacherMemberships, count($teacherMembershipIds), 'Teacher membership');
+$assertCount($studentMemberships, count($studentMembershipIds), 'Student membership');
+$assertCount($topics, count($topicIds), 'Topic');
+$assertCount($homework, count($assessmentIds), 'Homework assignment');
+$assertCount($assessments, count($assessmentIds), 'Assessment');
+$assertCount($recipients, count($recipientIds), 'recipient');
+$assertCount($attempts, count($attemptIds), 'Attempt');
+$assertCount($pairs, count($pairIds), 'result pair');
+$assertCount($questions, count($questionIds), 'Question');
+$assertCount($trueFalseRows, count($questionIds), 'True/False typed');
+$snapshot = [
+    'version' => 1,
+    'institutions' => $sortRows($institutions),
+    'users' => $sortRows($users),
+    'groups' => $sortRows($groups),
+    'teacher_memberships' => $sortRows($teacherMemberships),
+    'student_memberships' => $sortRows($studentMemberships),
+    'topics' => $sortRows($topics),
+    'assessments' => $sortRows($assessments),
+    'recipients' => $sortRows($recipients),
+    'attempts' => $sortRows($attempts),
+    'result_pairs' => $sortRows($pairs),
+    'questions' => $sortRows($questions),
+    'true_false_rows' => $sortRows($trueFalseRows, 'question_id'),
+    'owned_token_count' => DB::table('personal_access_tokens')
+        ->where('tokenable_type', \App\Models\User::class)
+        ->whereIn('tokenable_id', $userIds)
+        ->count(),
+];
+echo 'Stage6SeederLogicalSnapshot:'.base64_encode(json_encode($snapshot, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+'@
+    Invoke-Stage6ReadOnlyPhp -BackendContainerName $BackendContainerName -Program $program -Marker 'Stage6SeederLogicalSnapshot:'
+}
+
+function Assert-Stage6SeederRepeatability {
+    param(
+        [Parameter(Mandatory = $true)][psobject] $FirstSnapshot,
+        [Parameter(Mandatory = $true)][psobject] $SecondSnapshot
+    )
+
+    $firstCanonical = ConvertTo-Stage6CanonicalLogicalJson -Snapshot $FirstSnapshot
+    $secondCanonical = ConvertTo-Stage6CanonicalLogicalJson -Snapshot $SecondSnapshot
+    if ($firstCanonical -cne $secondCanonical) {
+        throw 'Stage 6 Seeder repeatability check found a logical fixture-state difference.'
+    }
+}
+
 function New-Stage6SanitizedOracle {
     param(
         [Parameter(Mandatory = $true)][string] $BackendContainerName,
@@ -239,7 +601,11 @@ $facts = [
     'authoring_pair' => $pair, 'locked_pair' => $lockedPair, 'locked' => $packAssessment(DB::table('assessments')->where('id', $lockedHomework)->first()),
     'fake_blitz_count' => DB::table('assessments')->where('topic_id', $authoringTopic)->where('type', 'blitz')->count(),
     'rejected_homework_count' => DB::table('assessments')->where('topic_id', $authoringTopic)->where('title', 'E2E S06 Foreign Student Rejected')->count(),
-    'temporary_question_count' => DB::table('questions')->where('prompt', 'E2E S06 Temporary Question')->count(),
+    'temporary_question_count' => DB::table('questions')
+        ->join('assessments', 'assessments.id', '=', 'questions.assessment_id')
+        ->where('assessments.topic_id', $authoringTopic)
+        ->where('questions.prompt', 'E2E S06 Temporary Question')
+        ->count(),
 ];
 echo 'Stage6DatabaseFacts:'.base64_encode(json_encode($facts, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
 '@

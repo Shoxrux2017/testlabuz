@@ -112,7 +112,10 @@ try {
 
     $sharedPassword = New-Stage6SharedPassword
     Invoke-Stage6Seeder
+    $firstSeederSnapshot = Get-Stage6SeederLogicalSnapshot -BackendContainerName $backendContainerName
     Invoke-Stage6Seeder
+    $secondSeederSnapshot = Get-Stage6SeederLogicalSnapshot -BackendContainerName $backendContainerName
+    Assert-Stage6SeederRepeatability -FirstSnapshot $firstSeederSnapshot -SecondSnapshot $secondSeederSnapshot
     Write-Output 'Stage6SeederRepeatability: PASS'
 
     $oraclePath = Join-Path ([IO.Path]::GetTempPath()) ('testlabuz-stage6-oracle-' + [guid]::NewGuid().ToString('N') + '.json')
