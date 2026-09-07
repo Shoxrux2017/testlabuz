@@ -520,7 +520,15 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
     ),
   );
   await h.tapKey('teacherHomeworkStudentPickerApplyButton');
-  expect(find.text('2 Students selected'), findsOneWidget);
+  await h.waitGone(find.byKey(const Key('teacherHomeworkStudentPickerDialog')));
+  final createSelectedStudentCount = find.byKey(
+    const Key('teacherHomeworkSelectedStudentCount'),
+  );
+  expect(createSelectedStudentCount, findsOneWidget);
+  expect(
+    h.tester.widget<Text>(createSelectedStudentCount).data,
+    '2 Students selected',
+  );
   await h.tapKey('teacherHomeworkCreateSubmitButton');
   await h.waitForKey('teacherHomeworkDetailScreen');
   await h.waitFor(find.text(_practiceTitle));
@@ -542,7 +550,15 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
     find.byKey(const ValueKey('teacherHomeworkStudentPickerRemoveSelected1')),
   );
   await h.tapKey('teacherHomeworkStudentPickerApplyButton');
-  expect(find.text('1 Student selected'), findsOneWidget);
+  await h.waitGone(find.byKey(const Key('teacherHomeworkStudentPickerDialog')));
+  final editSelectedStudentCount = find.byKey(
+    const Key('teacherHomeworkSelectedStudentCount'),
+  );
+  expect(editSelectedStudentCount, findsOneWidget);
+  expect(
+    h.tester.widget<Text>(editSelectedStudentCount).data,
+    '1 Student selected',
+  );
   await h.tapKey('teacherHomeworkEditSubmitButton');
   await h.waitForKey('teacherHomeworkDetailScreen');
   await h.waitFor(find.text(_practiceTitle));
