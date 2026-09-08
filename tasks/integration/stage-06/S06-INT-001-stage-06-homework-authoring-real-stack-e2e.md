@@ -7,7 +7,7 @@
 | Task ID | `S06-INT-001` |
 | Stage | `Stage 6 — Homework Assignment Management` |
 | Area | `Integration / real-stack E2E` |
-| Status | `Approved` |
+| Status | `Accepted / Delivered / PASS` |
 | Depends on | Stage 6 Backend Phase 2 `PASS`; Stage 6 Frontend Phase 2 `PASS` |
 | Planning/readiness baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
 | Implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex execution |
@@ -19,6 +19,8 @@
 | Routine Git/GitHub delivery | `Project Owner` |
 | Implementation Readiness Gate | `PASS — planning contract`; execution remains Phase-2 gated |
 | Next gate on final PASS | `Stage 6 Closure Review` |
+| Final verified `main` | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| Final execution date | `2026-09-08` |
 
 This file is the complete task-specific implementation contract. Do not create a duplicate `CODEX-PROMPT` file.
 
@@ -2972,3 +2974,64 @@ Stage 6 Closure Review
 Closure must reuse still-valid Backend Phase 2, Frontend Phase 2, and S06-INT-001 evidence.
 
 Do not rerun broad suites/builds/E2E solely for closure unless a post-integration production change invalidates them.
+
+---
+
+# 85. Final Execution and Evidence
+
+Final status:
+
+```text
+Accepted / Delivered / PASS
+final verified main = 89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5
+```
+
+Integration assets were initially delivered in:
+
+```text
+PR #167
+test(stage6): add homework real-stack e2e
+```
+
+Subsequent integration-only corrections were delivered in PR #168 through PR
+#181. These corrections affected integration/test assets only. No production
+defect was identified during `S06-INT-001`, and no Stage 6 production code was
+changed by the integration fixes.
+
+Final Windows runner evidence:
+
+```text
+exit code = 0
+duration = 279.4s
+
+Stage6RuntimeGuard: PASS
+Stage6SeederRepeatability: PASS
+Stage6ApiSecurity: PASS
+Stage6WindowsAuthoringFlow: PASS
+Stage6DatabasePostconditions: PASS
+Stage6FrozenUnrelatedState: PASS
+Stage6BackendRestartGuard: PASS
+Stage6WindowsPersistenceFlow: PASS
+Stage6PersistencePostconditions: PASS
+Stage6MandatoryCleanup: PASS
+
+Automated real-stack Integration = PASS
+```
+
+Project Owner smoke evidence:
+
+```text
+Windows manual smoke = PASS
+Android Teacher read-only smoke = PASS
+```
+
+Final findings:
+
+```text
+P1 = 0
+P2 = 0
+P3 = 0
+```
+
+No production findings were recorded. The next gate after this accepted
+integration result was the Stage 6 Closure Review.

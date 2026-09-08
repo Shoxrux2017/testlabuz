@@ -5,19 +5,20 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 6 — Homework Assignment Management` |
-| Stage status | `In Progress — Backend Phase 2 PASS; Frontend Phase 2 PASS; Integration pending` |
+| Stage status | `Closed` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Decomposition status | `Approved / Delivered` |
 | Planning baseline `origin/main` | `d1678b42009287a56c0b31a053e54109406feb8b` |
 | Previous Stage | `Stage 5 — Closed` |
 | Documentation alignment | `S06-DOC-001 Accepted / Delivered — PR #141, merge a90c9e9697e5e2b7eda332ec9497bd524f008776` |
 | Backend implementation | `Complete — Accepted / Delivered` |
-| Backend checkpoint | `Completed — PASS` |
+| Backend checkpoint | `Completed — PASS; audited head ab5f549acc334ffcbd0ee3c9cf3d22b390ac2f98` |
 | Frontend implementation | `Complete — S06-FE-001…004 Accepted / Delivered` |
 | Frontend checkpoint | `Completed — PASS; audited head ba963e577930d2c28eb76b0458e42f0baddfdd3d` |
-| Integration gate | `Approved — Pending execution` |
-| Stage Closure Review | `Approved — Pending execution` |
-| Next permitted gate | `S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E` |
+| Integration gate | `Completed — PASS` |
+| Stage Closure Review | `Completed — PASS` |
+| Final accepted Stage 6 head | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| Next permitted gate | `Stage 7 planning/decomposition only` |
 
 This index is the authoritative Stage 6 implementation map after the approved
 planning package is delivered to `origin/main`.
@@ -606,7 +607,7 @@ Implementation proceeds in exact dependency order.
 | 8 | `S06-FE-002` | Frontend | Homework Draft Builder: Metadata, Assignment & Deadline | `S06-FE-001 Accepted / Delivered` | `Accepted` | `Delivered — PR #160, merge f1cc588be1d59835612b3b4b6364998c97bece4a` | `tasks/frontend/stage-06/S06-FE-002-homework-draft-builder-metadata-assignment-deadline.md` |
 | 9 | `S06-FE-003` | Frontend | Nine-Type Question Builder | `S06-FE-001` + `S06-FE-002 Accepted / Delivered` | `Accepted` | `Delivered — PR #161, merge 650064530d0a63d1d170287ac70cb837e6d02567` | `tasks/frontend/stage-06/S06-FE-003-nine-type-question-builder.md` |
 | 10 | `S06-FE-004` | Frontend | Homework Lifecycle & Official Designation UX | `S06-FE-001…003 Accepted / Delivered` | `Accepted` | `Delivered — PR #162, merge 817f28e20042c647aaaab414c49ab9c90def890a` | `tasks/frontend/stage-06/S06-FE-004-homework-lifecycle-official-designation-ux.md` |
-| 11 | `S06-INT-001` | Integration | Stage 6 Homework Authoring Real-Stack E2E | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Approved` | `Not delivered` | `tasks/integration/stage-06/S06-INT-001-stage-06-homework-authoring-real-stack-e2e.md` |
+| 11 | `S06-INT-001` | Integration | Stage 6 Homework Authoring Real-Stack E2E | Backend Phase 2 `PASS` + Frontend Phase 2 `PASS` | `Accepted / Delivered / PASS` | `PR #167; integration-only corrections PR #168–181; final verified main 89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` | `tasks/integration/stage-06/S06-INT-001-stage-06-homework-authoring-real-stack-e2e.md` |
 
 No duplicate `CODEX-PROMPT` files are used.
 
@@ -713,6 +714,18 @@ Status:
 
 ```text
 Completed — PASS
+```
+
+Accepted evidence:
+
+```text
+audited head = ab5f549acc334ffcbd0ee3c9cf3d22b390ac2f98
+563 passed
+22,720 assertions
+Pint = PASS — 466 files
+P1 = 0
+P2 = 0
+P3 = 0
 ```
 
 Entry gate:
@@ -863,8 +876,22 @@ P2 = 0
 P3 = 0
 ```
 
-The checkpoint passed with `P1=0, P2=0, P3=0`. Integration is unlocked, and
-`S06-INT-001` is the next permitted gate.
+Accepted evidence:
+
+```text
+audited head = ba963e577930d2c28eb76b0458e42f0baddfdd3d
+1554 tests = PASS
+analyze = PASS
+format = PASS
+Windows debug build = PASS
+Android debug build = PASS
+P1 = 0
+P2 = 0
+P3 = 0
+```
+
+The checkpoint passed with `P1=0, P2=0, P3=0` and unlocked the now-completed
+`S06-INT-001` integration gate.
 
 ---
 
@@ -885,7 +912,7 @@ tasks/integration/stage-06/S06-INT-001-stage-06-homework-authoring-real-stack-e2
 Status:
 
 ```text
-Approved — Pending execution
+Accepted / Delivered / PASS
 ```
 
 Entry:
@@ -898,7 +925,7 @@ Frontend Phase 2 = PASS
 Dependency status:
 
 ```text
-Satisfied — S06-INT-001 unlocked
+Completed — PASS
 ```
 
 Required integrated evidence:
@@ -923,6 +950,20 @@ Required integrated evidence:
 - Windows manual smoke;
 - Android read-only Teacher smoke.
 
+Final accepted evidence:
+
+```text
+initial assets = PR #167, test(stage6): add homework real-stack e2e
+integration-only corrections = PR #168 through PR #181
+final verified main = 89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5
+Windows runner = PASS, exit code 0, duration 279.4s
+all ten required automated markers = PASS
+Windows manual smoke = PASS
+Android Teacher read-only smoke = PASS
+no production findings or production corrections
+P1 = 0, P2 = 0, P3 = 0
+```
+
 Final Integration PASS requires:
 
 ```text
@@ -944,7 +985,7 @@ tasks/STAGE_06_CLOSURE_REVIEW.md
 Status:
 
 ```text
-Approved — Pending execution
+Completed — PASS
 ```
 
 Stage Closure Review begins only after:
@@ -1002,8 +1043,8 @@ P3 = 0
 | `S06-FE-003 Accepted / Delivered` | `S06-FE-004` | `PASS — completed` |
 | `S06-FE-004 Accepted / Delivered` | Frontend Phase 2 | `PASS — completed` |
 | Frontend Phase 2 `PASS` | `S06-INT-001` | `PASS — unlocked` |
-| `S06-INT-001 PASS` + delivery/smoke | Closure Review | `Pending` |
-| Closure `STAGE CLOSED` | Stage 7 planning | `Pending` |
+| `S06-INT-001 PASS` + delivery/smoke | Closure Review | `PASS — completed` |
+| Closure `STAGE CLOSED` | Stage 7 planning/decomposition | `PASS — permitted` |
 
 ---
 
@@ -1318,7 +1359,7 @@ Backend Phase 2:
 Completed — PASS
 
 Dependency gate:
-Backend Phase 2 PASS + Frontend Phase 2 PASS -> S06-INT-001 = PASS — unlocked
+Backend Phase 2 PASS + Frontend Phase 2 PASS -> S06-INT-001 = completed — PASS
 
 S06-FE-001: Accepted / Delivered — PR #159,
 merge 55aa1f351f694302c8d62600fa8f3ceb81680f42
@@ -1334,43 +1375,46 @@ Completed — PASS
 audited head ba963e577930d2c28eb76b0458e42f0baddfdd3d
 
 S06-INT-001:
-Approved / Not delivered — Pending execution
+Accepted / Delivered / PASS — PR #167; integration-only corrections PR #168–181
+final verified main 89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5
+automated real-stack PASS; Windows smoke PASS; Android smoke PASS
 
 Stage 6 Closure Review:
-Approved — Pending execution
+Completed — PASS
 
 Stage 6:
-In Progress — Backend Phase 2 PASS; Frontend Phase 2 PASS; Integration pending
+Closed
 
 Next permitted gate:
-S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E
+Stage 7 planning/decomposition only
 ```
 
 ---
 
 ## 32. Next Permitted Action
 
-Current implementation sequence:
+Completed Stage 6 sequence:
 
 1. `S06-BE-001…006` are Accepted / Delivered.
 2. Backend Phase 2 is completed with `PASS`.
 3. `S06-FE-001…004` are Accepted / Delivered.
 4. Frontend Phase 2 is completed with `PASS`.
-5. The next permitted gate is:
+5. `S06-INT-001` and the Stage 6 Closure Review are completed with `PASS`.
+6. The next permitted gate is:
 
 ```text
-S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E
+Stage 7 planning/decomposition only
 ```
 
-Do not start:
+Do not mark as started:
 
-- Stage 7 before Stage 6 closure.
+- Stage 7 implementation.
 
 ---
 
-## 33. Final Stage 6 Closure Target
+## 33. Final Stage 6 Closure State
 
-The final desired state is:
+The accepted final state is:
 
 ```text
 S06-BE-001…006 = Accepted / Delivered
@@ -1392,11 +1436,10 @@ P3 = 0
 Stage 6 Closure Review = STAGE CLOSED
 ```
 
-Only after that:
+The next permitted gate is:
 
 ```text
-Stage 7 — Student Homework and Submission Flow
-planning and decomposition
+Stage 7 planning/decomposition only
 ```
 
-becomes permitted.
+Stage 7 implementation has not started.
