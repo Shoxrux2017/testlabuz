@@ -731,7 +731,9 @@ Future<void> _runPersistenceFlow(_Stage6Harness h) async {
   await h.waitForKey('teacherHomeworkSection');
   await h.enterKey('teacherHomeworkSearchField', _mainTitle);
   await h.tapKey('teacherHomeworkSearchButton');
-  await h.waitFor(find.text(_mainTitle));
+  final mainRow = _homeworkRowForTitle(_mainTitle);
+  await h.waitFor(mainRow);
+  expect(mainRow, findsOneWidget);
   final mainId = _homeworkIdForTitle(h, _mainTitle);
   await h.tap(find.byKey(ValueKey('teacherHomeworkCard$mainId')));
   await h.waitForKey('teacherHomeworkDetailScreen');
@@ -784,8 +786,15 @@ Future<void> _runPersistenceFlow(_Stage6Harness h) async {
   await h.go(AppRoutePaths.teacherTopicDetailLocation(authoringTopic));
   await h.enterKey('teacherHomeworkSearchField', _practiceTitle);
   await h.tapKey('teacherHomeworkSearchButton');
-  await h.waitFor(find.text(_practiceTitle));
-  expect(find.text('Archived'), findsWidgets);
+  final practiceRow = _homeworkRowForTitle(_practiceTitle);
+  await h.waitFor(practiceRow);
+  expect(practiceRow, findsOneWidget);
+  final practiceArchived = find.descendant(
+    of: practiceRow,
+    matching: find.text('Archived'),
+  );
+  await h.waitFor(practiceArchived);
+  expect(practiceArchived, findsOneWidget);
 
   final lockedTopic = h.oracle.topicId('locked');
   final lockedHomework = h.oracle.homeworkId('locked');
@@ -998,15 +1007,17 @@ String _homeworkIdFromCurrentRoute(_Stage6Harness h) {
   return id;
 }
 
+Finder _homeworkRowForTitle(String title) => find.ancestor(
+  of: find.text(title),
+  matching: find.byWidgetPredicate((widget) {
+    final key = widget.key;
+    return key is ValueKey<String> &&
+        key.value.startsWith('teacherHomeworkCard');
+  }),
+);
+
 String _homeworkIdForTitle(_Stage6Harness h, String title) {
-  final target = find.ancestor(
-    of: find.text(title),
-    matching: find.byWidgetPredicate((widget) {
-      final key = widget.key;
-      return key is ValueKey<String> &&
-          key.value.startsWith('teacherHomeworkCard');
-    }),
-  );
+  final target = _homeworkRowForTitle(title);
   if (target.evaluate().length != 1) {
     throw StateError(
       'The Stage 6 Homework title did not resolve to exactly one keyed Homework row.',
