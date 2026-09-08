@@ -26,6 +26,13 @@ function Assert-Stage6FrozenPath {
     }
 }
 
+function Assert-Stage6ReadOnlyPhpPath {
+    param([Parameter(Mandatory = $true)][string] $Path)
+    if ($Path -notmatch '\A/tmp/testlabuz-stage6-readonly-[a-f0-9]{32}\.php\.txt\z') {
+        throw 'Stage 6 read-only PHP transport must use its exact container-temp namespace.'
+    }
+}
+
 function Invoke-Stage6ReadOnlyPhp {
     param(
         [Parameter(Mandatory = $true)][string] $BackendContainerName,
@@ -35,15 +42,56 @@ function Invoke-Stage6ReadOnlyPhp {
     if ($BackendContainerName -cne 'testlabuz-stage6-e2e-app') {
         throw 'Stage 6 oracle may query only the dedicated backend container.'
     }
-    $output = & docker exec $BackendContainerName php artisan tinker "--execute=$Program" 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "Stage 6 read-only database probe failed for $Marker." }
-    $match = [regex]::Match(($output -join "`n"), ([regex]::Escape($Marker) + '(?<payload>[A-Za-z0-9+/=]+)'))
-    if (-not $match.Success) { throw "Stage 6 read-only database probe omitted $Marker." }
+
+    $containerPath = '/tmp/testlabuz-stage6-readonly-' + [Guid]::NewGuid().ToString('N') + '.php.txt'
+    Assert-Stage6ReadOnlyPhpPath -Path $containerPath
+
+    $probeErrorMessage = $null
+    $result = $null
     try {
-        $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($match.Groups['payload'].Value))
-        $json | ConvertFrom-Json
+        $originalOutputEncoding = $OutputEncoding
+        try {
+            $OutputEncoding = [Text.UTF8Encoding]::new($false)
+            $null = @($Program | & docker exec -i $BackendContainerName sh -c "umask 077; cat > '$containerPath'" 2>&1)
+            if ($LASTEXITCODE -ne 0) { throw 'Stage 6 read-only PHP transport failed.' }
+        }
+        finally {
+            $OutputEncoding = $originalOutputEncoding
+        }
+
+        $tinkerProgram = "eval(file_get_contents('$containerPath'));"
+        $output = & docker exec $BackendContainerName php artisan tinker "--execute=$tinkerProgram" 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Stage 6 read-only database probe failed for $Marker." }
+        $match = [regex]::Match(($output -join "`n"), ([regex]::Escape($Marker) + '(?<payload>[A-Za-z0-9+/=]+)'))
+        if (-not $match.Success) { throw "Stage 6 read-only database probe omitted $Marker." }
+        try {
+            $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($match.Groups['payload'].Value))
+            $result = $json | ConvertFrom-Json
+        }
+        catch { throw "Stage 6 read-only database probe returned invalid $Marker JSON." }
     }
-    catch { throw "Stage 6 read-only database probe returned invalid $Marker JSON." }
+    catch {
+        $probeErrorMessage = $_.Exception.Message
+    }
+    finally {
+        $cleanupFailed = $false
+        try {
+            $null = @(& docker exec $BackendContainerName rm -f -- $containerPath 2>&1)
+            $cleanupFailed = $LASTEXITCODE -ne 0
+        }
+        catch {
+            $cleanupFailed = $true
+        }
+        if ($cleanupFailed) {
+            if ($null -ne $probeErrorMessage) {
+                throw "$probeErrorMessage Stage 6 read-only PHP temporary-file cleanup also failed."
+            }
+            throw 'Stage 6 read-only PHP temporary-file cleanup failed.'
+        }
+    }
+
+    if ($null -ne $probeErrorMessage) { throw $probeErrorMessage }
+    $result
 }
 
 function ConvertTo-Stage6CanonicalLogicalValue {
