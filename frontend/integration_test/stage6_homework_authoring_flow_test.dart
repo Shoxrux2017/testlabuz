@@ -999,20 +999,20 @@ String _homeworkIdFromCurrentRoute(_Stage6Harness h) {
 }
 
 String _homeworkIdForTitle(_Stage6Harness h, String title) {
-  final card = find
-      .ancestor(
-        of: find.text(title),
-        matching: find.byWidgetPredicate(
-          (widget) =>
-              widget is Card &&
-              widget.key is ValueKey<String> &&
-              (widget.key! as ValueKey<String>).value.startsWith(
-                'teacherHomeworkCard',
-              ),
-        ),
-      )
-      .first;
-  final key = h.tester.widget<Card>(card).key;
+  final target = find.ancestor(
+    of: find.text(title),
+    matching: find.byWidgetPredicate((widget) {
+      final key = widget.key;
+      return key is ValueKey<String> &&
+          key.value.startsWith('teacherHomeworkCard');
+    }),
+  );
+  if (target.evaluate().length != 1) {
+    throw StateError(
+      'The Stage 6 Homework title did not resolve to exactly one keyed Homework row.',
+    );
+  }
+  final key = h.tester.widget(target).key;
   if (key is! ValueKey<String> ||
       !key.value.startsWith('teacherHomeworkCard')) {
     throw StateError('The Stage 6 Homework card identity is invalid.');
