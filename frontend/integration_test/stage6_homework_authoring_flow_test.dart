@@ -500,7 +500,7 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.waitGone(
     find.byKey(const Key('teacherOfficialHomeworkConfirmDialog')),
   );
-  await h.waitForKey('teacherOfficialHomeworkBadge');
+  await _expectOfficialHomeworkBadge(h);
   await h.waitFor(find.textContaining('cohort will be fixed'));
   expect(find.textContaining('cohort will be fixed'), findsOneWidget);
 
@@ -651,7 +651,7 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.go(AppRoutePaths.teacherHomeworkDetailLocation(topicId, mainId));
   await _homeworkLifecycle(h, 'close', 'Closed');
   await _homeworkLifecycle(h, 'archive', 'Archived');
-  expect(find.byKey(const Key('teacherOfficialHomeworkBadge')), findsOneWidget);
+  await _expectOfficialHomeworkBadge(h);
 
   await h.go(AppRoutePaths.teacherTopicDetailLocation(topicId));
   await h.tap(find.byKey(const ValueKey('teacherTopicLifecycleclose')));
@@ -667,7 +667,7 @@ Future<void> _runAuthoringFlow(_Stage6Harness h) async {
   await h.waitForKey('teacherHomeworkDetailScreen');
   await h.waitFor(find.text('E2E S06 Locked Official Homework'));
   expect(find.text('Active'), findsWidgets);
-  expect(find.byKey(const Key('teacherOfficialHomeworkBadge')), findsOneWidget);
+  await _expectOfficialHomeworkBadge(h);
   expect(find.textContaining('selection locked'), findsWidgets);
   expect(
     find.byKey(const Key('teacherOfficialHomeworkActionButton')),
@@ -739,7 +739,7 @@ Future<void> _runPersistenceFlow(_Stage6Harness h) async {
   await h.waitForKey('teacherHomeworkDetailScreen');
   await h.waitFor(find.text(_mainTitle));
   expect(find.text('Archived'), findsWidgets);
-  expect(find.byKey(const Key('teacherOfficialHomeworkBadge')), findsOneWidget);
+  await _expectOfficialHomeworkBadge(h);
   expect(
     find.byKey(const Key('teacherHomeworkManageQuestionsButton')),
     findsNothing,
@@ -804,8 +804,14 @@ Future<void> _runPersistenceFlow(_Stage6Harness h) async {
   await h.waitForKey('teacherHomeworkDetailScreen');
   await h.waitFor(find.text('E2E S06 Locked Official Homework'));
   expect(find.text('Active'), findsWidgets);
-  expect(find.byKey(const Key('teacherOfficialHomeworkBadge')), findsOneWidget);
+  await _expectOfficialHomeworkBadge(h);
   expect(find.textContaining('selection locked'), findsWidgets);
+}
+
+Future<void> _expectOfficialHomeworkBadge(_Stage6Harness h) async {
+  final badge = find.byKey(const Key('teacherOfficialHomeworkBadge'));
+  await h.waitFor(badge);
+  expect(badge, findsOneWidget);
 }
 
 Future<void> _chooseDeadline(_Stage6Harness h) async {
