@@ -6,22 +6,22 @@
 |---|---|
 | Review ID | `STAGE-06-CLOSURE` |
 | Stage | `Stage 6 — Homework Assignment Management` |
-| Status | `Approved — Pending execution` |
+| Status | `Completed` |
 | Review mode | `Independent read-only closure audit followed by closure/documentation bookkeeping` |
 | Verification model | `Workflow v3 — Lean Verification` |
 | Planning baseline | `origin/main @ d1678b42009287a56c0b31a053e54109406feb8b` |
-| Review date | `[execution date]` |
+| Review date | `2026-09-08` |
 | Stage index | `tasks/STAGE_06_TASK_INDEX.md` |
-| Audited `origin/main` | `[final accepted Stage 6 SHA]` |
-| Local `main` | `[same SHA expected]` |
-| Ahead/behind | `[0/0 expected]` |
-| Working tree | `[Clean expected]` |
-| Backend Phase 2 | `[PASS required]` |
-| Frontend Phase 2 | `[PASS required]` |
-| Integration | `[S06-INT-001 PASS required]` |
-| Project Owner smoke | `[Windows + Android PASS required]` |
-| Open findings | `[P1=0, P2=0, P3=0 required]` |
-| Closure verdict | `PENDING` |
+| Audited `origin/main` | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| Local `main` | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| Ahead/behind | `0/0` |
+| Working tree | `Clean` |
+| Backend Phase 2 | `PASS` |
+| Frontend Phase 2 | `PASS` |
+| Integration | `S06-INT-001 PASS` |
+| Project Owner smoke | `Windows + Android PASS` |
+| Open findings | `P1=0, P2=0, P3=0` |
+| Closure verdict | `STAGE CLOSED` |
 
 Stage 6 Closure Review begins only after all implementation, delivery, Backend Phase 2, Frontend Phase 2, Integration, required fixes, real-stack verification, and required Project Owner smoke are complete.
 
@@ -69,30 +69,30 @@ At closure time, re-fetch and audit current GitHub `main` as the sole source of 
 
 # 3. Closure Entry Conditions
 
-All required conditions must pass.
+All required conditions passed on the accepted Stage 6 head.
 
-| Condition | Required result | Evidence |
+| Condition | Result | Evidence |
 |---|---|---|
 | Stage 5 explicitly closed | `PASS` | `tasks/STAGE_05_CLOSURE_REVIEW.md` |
 | Stage 6 decomposition approved | `PASS` | Stage 6 planning + `STAGE_06_TASK_INDEX.md` |
-| `S06-DOC-001` documentation alignment Accepted / Delivered | `PASS` | documentation PR/merge evidence |
+| `S06-DOC-001` documentation alignment Accepted / Delivered | `PASS` | PR #141 / accepted task evidence |
 | `S06-BE-001…006` all Accepted | `PASS` | task/index evidence |
 | `S06-BE-001…006` all delivered | `PASS` | PR/merge evidence |
-| Stage 6 Backend Phase 2 | `PASS` | `S06-BE-PHASE-2-backend-block-review.md` |
+| Stage 6 Backend Phase 2 | `PASS` | audited head `ab5f549acc334ffcbd0ee3c9cf3d22b390ac2f98` |
 | `S06-FE-001…004` all Accepted | `PASS` | task/index evidence |
 | `S06-FE-001…004` all delivered | `PASS` | PR/merge evidence |
-| Stage 6 Frontend Phase 2 | `PASS` | `S06-FE-PHASE-2-frontend-block-review.md` |
-| `S06-INT-001` assets delivered | `PASS` | integration PR/merge |
-| Automated real-stack Integration | `PASS` | final Stage 6 runner |
-| Required Integration production fixes delivered | `PASS/N/A` | focused fix evidence |
-| Project Owner Windows smoke | `PASS` | Stage 6 integration evidence |
-| Project Owner Android smoke | `PASS` | Stage 6 integration evidence |
-| Documentation contracts synchronized | `PASS` | Section 15 |
-| Current `origin/main` contains final accepted Stage 6 product | `PASS` | final SHA |
-| Local `main == origin/main` | `PASS` | Git evidence |
-| Ahead/behind | `0/0` | Git evidence |
-| Working tree | `Clean` | Git evidence |
-| Open findings | `P1=0, P2=0, P3=0` | review evidence |
+| Stage 6 Frontend Phase 2 | `PASS` | audited head `ba963e577930d2c28eb76b0458e42f0baddfdd3d` |
+| `S06-INT-001` assets delivered | `PASS` | PR #167; integration-only corrections PR #168–181 |
+| Automated real-stack Integration | `PASS` | final Windows runner exit code `0`, duration `279.4s`; ten required PASS markers |
+| Required Integration production fixes delivered | `N/A` | no production defect or production correction was required |
+| Project Owner Windows smoke | `PASS` | accepted Stage 6 integration evidence |
+| Project Owner Android smoke | `PASS` | accepted real-stack read-only evidence |
+| Documentation contracts synchronized | `PASS` | `S06-DOC-001` and closure audit evidence |
+| Current `origin/main` contains final accepted Stage 6 product | `PASS` | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| Local `main == origin/main` | `PASS` | both at `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| Ahead/behind | `0/0` | local Git closure preflight |
+| Working tree | `Clean` | local Git closure preflight |
+| Open findings | `P1=0, P2=0, P3=0` | final closure audit |
 
 Any failed required entry condition blocks closure.
 
@@ -100,19 +100,19 @@ Do not mark Stage 6 closed with a `CONDITIONAL PASS`.
 
 ---
 
-# 4. Approved Stage 6 Task Inventory
+# 4. Accepted Stage 6 Task Inventory
 
-Closure must reconcile the exact delivered task inventory.
+Closure reconciled the exact delivered task inventory.
 
 ## Stage-wide documentation gate
 
-| Order | Task | Capability | Required final state |
+| Order | Task | Capability | Final state |
 |---:|---|---|---|
 | 0 | `S06-DOC-001` | Stage 6 Homework / staged result-pair documentation alignment | `Accepted / Delivered` |
 
 ## Backend block
 
-| Order | Task | Capability | Required final state |
+| Order | Task | Capability | Final state |
 |---:|---|---|---|
 | 1 | `S06-BE-001` | Assessment & Homework Persistence Foundation | `Accepted / Delivered` |
 | 2 | `S06-BE-002` | Typed Question Persistence & Domain Contracts | `Accepted / Delivered` |
@@ -130,7 +130,7 @@ P1=0, P2=0, P3=0
 
 ## Frontend block
 
-| Order | Task | Capability | Required final state |
+| Order | Task | Capability | Final state |
 |---:|---|---|---|
 | 7 | `S06-FE-001` | Homework Client Domain, Read Surfaces & Routing | `Accepted / Delivered` |
 | 8 | `S06-FE-002` | Homework Draft Builder: Metadata, Assignment & Deadline | `Accepted / Delivered` |
@@ -146,7 +146,7 @@ P1=0, P2=0, P3=0
 
 ## Integration
 
-| Order | Task | Capability | Required final state |
+| Order | Task | Capability | Final state |
 |---:|---|---|---|
 | 11 | `S06-INT-001` | Stage 6 Homework Authoring Real-Stack E2E | `Accepted / Delivered / PASS` |
 
@@ -190,13 +190,37 @@ Closure verdict cannot be `STAGE CLOSED` unless this complete criterion is verif
 - real-stack Integration;
 - security/Tenant matrix.
 
+Closure result: `PASS`.
+
+| Acceptance boundary | Accepted evidence |
+|---|---|
+| Backend implementation, authorization, persistence, and integrity | `S06-BE-001…006` Accepted / Delivered; Backend Phase 2 `PASS` |
+| Desktop authoring and mobile capability boundary | `S06-FE-001…004` Accepted / Delivered; Frontend Phase 2 `PASS` |
+| Real-stack behavior, security, persistence, and smoke | `S06-INT-001` Accepted / Delivered / `PASS`; Windows and Android smoke `PASS` |
+
+Stage 6 therefore delivers:
+
+- Teacher structured Homework authoring;
+- Group and selected-Student assignment;
+- exactly nine Question types;
+- authoritative points;
+- fixed three attempts;
+- Institution-timezone deadline handling;
+- Homework lifecycle;
+- recipient snapshots;
+- editing integrity;
+- the official Homework/staged result pair;
+- Tenant isolation;
+- the desktop-authoring/mobile-read-only boundary;
+- real-stack persistence.
+
 ---
 
 # 7. Roadmap Required-Test Matrix
 
-Closure must map every Stage 6 roadmap test requirement.
+Closure mapped every Stage 6 roadmap test requirement to accepted evidence.
 
-| Roadmap required test | Required result | Expected evidence |
+| Roadmap required test | Closure result | Accepted evidence |
 |---|---|---|
 | Builder validation for all nine types | `PASS` | BE-002/004, FE-003, Phase 2, Integration |
 | Question/answer validation | `PASS` | typed persistence/domain + all-nine E2E |
@@ -317,6 +341,9 @@ Closure must confirm these did **not** enter Stage 6 as production behavior:
 Structural Attempt persistence and test fixtures are allowed only for integrity/lock readiness.
 
 No production Student Attempt route may be live in Stage 6.
+
+Closure result: `PASS` — all Stage 7+ exclusions remain preserved. Stage 7
+planning/decomposition may begin, but Stage 7 implementation has not started.
 
 ---
 
@@ -813,21 +840,21 @@ Any Stage 6 implementation that requires a breaking result-pair redesign in Stag
 
 # 24. Backend Phase 2 Evidence Validity
 
-At closure fill:
+Accepted closure evidence:
 
 | Field | Value |
 |---|---|
 | Review | `S06-BE-PHASE-2` |
-| Audited SHA | `[SHA]` |
-| Verdict | `[PASS required]` |
-| Findings | `[P1=0,P2=0,P3=0]` |
-| Full backend suite | `[PASS evidence]` |
-| Pint | `[PASS]` |
-| Stage-wide diff | `[PASS]` |
-| Later backend production changes | `[None / list]` |
-| Evidence still valid | `[Yes/No]` |
-| Additional rerun required | `[None / exact commands]` |
-| Additional rerun result | `[N/A / result]` |
+| Audited SHA | `ab5f549acc334ffcbd0ee3c9cf3d22b390ac2f98` |
+| Verdict | `PASS` |
+| Findings | `P1=0, P2=0, P3=0` |
+| Full backend suite | `PASS — 563 passed, 22,720 assertions` |
+| Pint | `PASS — 466 files` |
+| Stage-wide diff | `PASS` |
+| Later backend production changes | `None that invalidate the accepted checkpoint` |
+| Evidence still valid | `Yes` |
+| Additional rerun required | `None` |
+| Additional rerun result | `N/A` |
 
 Do not rerun the full backend suite during closure merely by habit.
 
@@ -842,24 +869,24 @@ Record the reason.
 
 # 25. Frontend Phase 2 Evidence Validity
 
-At closure fill:
+Accepted closure evidence:
 
 | Field | Value |
 |---|---|
 | Review | `S06-FE-PHASE-2` |
-| Audited SHA | `[SHA]` |
-| Verdict | `[PASS required]` |
-| Findings | `[P1=0,P2=0,P3=0]` |
-| Full frontend suite | `[PASS evidence]` |
-| Analyze | `[PASS]` |
-| Format | `[PASS]` |
-| Windows debug build | `[PASS]` |
-| Android debug build | `[PASS]` |
-| Stage-wide diff | `[PASS]` |
-| Later frontend production changes | `[None / list]` |
-| Evidence still valid | `[Yes/No]` |
-| Additional rerun required | `[None / exact commands]` |
-| Additional rerun result | `[N/A / result]` |
+| Audited SHA | `ba963e577930d2c28eb76b0458e42f0baddfdd3d` |
+| Verdict | `PASS` |
+| Findings | `P1=0, P2=0, P3=0` |
+| Full frontend suite | `PASS — 1554 tests` |
+| Analyze | `PASS` |
+| Format | `PASS` |
+| Windows debug build | `PASS` |
+| Android debug build | `PASS` |
+| Stage-wide diff | `PASS` |
+| Later frontend production changes | `None; subsequent Stage 6 changes were integration/test assets and bookkeeping only` |
+| Evidence still valid | `Yes` |
+| Additional rerun required | `None` |
+| Additional rerun result | `N/A` |
 
 Do not rerun full frontend suite/builds during closure if current accepted evidence remains valid.
 
@@ -867,26 +894,59 @@ Do not rerun full frontend suite/builds during closure if current accepted evide
 
 # 26. Integration Evidence Validity
 
-At closure fill:
+Accepted closure evidence:
 
 | Field | Value |
 |---|---|
 | Task | `S06-INT-001` |
-| Final tested production SHA | `[SHA]` |
-| Runtime guard | `[PASS]` |
-| Seeder repeatability | `[PASS]` |
-| API security matrix | `[PASS]` |
-| Windows real-stack authoring flow | `[PASS]` |
-| Nine-type matrix | `[PASS]` |
-| DB oracle | `[PASS]` |
-| Unrelated-state oracle | `[PASS]` |
-| Restart persistence | `[PASS]` |
-| Windows manual smoke | `[PASS]` |
-| Android real-stack smoke | `[PASS]` |
-| Findings | `[P1=0,P2=0,P3=0]` |
-| Later production changes | `[None / list]` |
-| Evidence still valid | `[Yes/No]` |
-| Required rerun | `[None / exact scenario]` |
+| Final tested production SHA | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| Asset delivery | `PR #167 — test(stage6): add homework real-stack e2e` |
+| Integration-only corrections | `PR #168 through PR #181` |
+| Final Windows runner | `PASS — exit code 0, duration 279.4s` |
+| Runtime guard | `PASS` |
+| Seeder repeatability | `PASS` |
+| API security matrix | `PASS` |
+| Windows real-stack authoring flow | `PASS` |
+| Nine-type matrix | `PASS` |
+| DB oracle | `PASS` |
+| Unrelated-state oracle | `PASS` |
+| Backend restart guard | `PASS` |
+| Restart persistence | `PASS` |
+| Windows manual smoke | `PASS` |
+| Android real-stack smoke | `PASS` |
+| Findings | `P1=0, P2=0, P3=0` |
+| Later production changes | `None; integration corrections changed integration/test assets only` |
+| Evidence still valid | `Yes` |
+| Required rerun | `None` |
+
+The final automated runner reported all required markers:
+
+```text
+Stage6RuntimeGuard: PASS
+Stage6SeederRepeatability: PASS
+Stage6ApiSecurity: PASS
+Stage6WindowsAuthoringFlow: PASS
+Stage6DatabasePostconditions: PASS
+Stage6FrozenUnrelatedState: PASS
+Stage6BackendRestartGuard: PASS
+Stage6WindowsPersistenceFlow: PASS
+Stage6PersistencePostconditions: PASS
+Stage6MandatoryCleanup: PASS
+```
+
+```text
+Automated real-stack Integration = PASS
+```
+
+The closure read-only audit confirmed:
+
+- no Stage 6 backend production change invalidated Backend Phase 2 after its accepted checkpoint;
+- after the Frontend Phase 2 audited head, subsequent Stage 6 changes were integration/test assets and bookkeeping only;
+- no `frontend/lib/**` production change occurred after Frontend Phase 2;
+- both Phase 2 checkpoints therefore remain valid for closure.
+
+Integration fixes were test/integration-asset-only. No production correction was
+required after Phase 2. Accepted Phase 2 evidence therefore remains valid.
 
 Final closure requires Integration evidence valid for the final accepted Stage 6 product.
 
@@ -898,39 +958,45 @@ Closure reuses the required Integration manual smoke.
 
 ## Windows
 
-Required final evidence includes:
+Accepted evidence includes:
 
 - real Teacher login;
-- Homework authoring surface;
+- Homework create/edit;
 - selected Student picker;
 - Institution timezone deadline;
 - Question Builder type selector;
+- exactly nine Question types;
 - keyboard-accessible Question ordering;
-- locked official read state.
+- discard protection;
+- locked official Homework server rejection;
+- sticky locked Question Builder state.
 
 ## Android
 
-Required final evidence includes:
+Accepted evidence for `E2E S06 Locked Official Homework` includes:
 
 - real Teacher login;
 - Homework list/detail;
-- official read state;
-- fixed attempt display;
+- Active / Whole group state;
+- Question count and total points;
+- Institution timezone `Asia/Tashkent`;
+- Official Homework, prepared official cohort, and locked official selection;
+- fixed attempt display: Normal attempts = 3;
 - Question read content;
-- no Stage 6 mutation/authoring controls.
+- no desktop authoring controls;
+- no lifecycle mutation controls;
+- no official mutation controls.
 
 Do not claim PASS if Project Owner did not run required smoke.
 
-Record:
+Accepted Project Owner results:
 
 ```text
-Windows smoke: PASS / FAIL / Not run
-Android smoke: PASS / FAIL / Not run
+Windows manual smoke = PASS
+Android Teacher read-only smoke = PASS
 Confirmed by: Project Owner
-Date: ...
+Date: 2026-09-08
 ```
-
-`Not run` blocks closure.
 
 ---
 
@@ -1165,19 +1231,19 @@ No broad backend/frontend/E2E rerun is required for docs-only closure changes wh
 
 ---
 
-# 36. Final Repository State
+# 36. Final Accepted Repository State
 
-Before formal final verdict/delivery:
+Closure preflight recorded:
 
-| Check | Required |
+| Check | Closure evidence |
 |---|---|
-| `origin/main` | final accepted Stage 6 implementation + evidence |
-| local `main` | same as `origin/main` |
+| `origin/main` | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
+| local `main` | `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5` |
 | ahead/behind | `0/0` |
-| working tree | clean |
-| unexpected files | none |
-| open production PR/fix required | none |
-| unresolved findings | none |
+| working tree | `Clean` |
+| unexpected files | `None` |
+| open production PR/fix required | `None` |
+| unresolved findings | `None` |
 
 After closure PR merge:
 
@@ -1348,13 +1414,11 @@ with exact reason.
 
 ---
 
-# 40. Closure Verdict Template
+# 40. Closure Verdict
 
-If everything passes:
+Accepted final verdict:
 
 ```text
-STAGE CLOSED
-
 Stage 6 — Homework Assignment Management satisfies its roadmap acceptance
 criterion and Definition of Done.
 
@@ -1372,24 +1436,27 @@ Documentation alignment: PASS
 P1 = 0
 P2 = 0
 P3 = 0
+
+STAGE CLOSED
 ```
 
-Do not populate this template with PASS values until actual evidence exists.
+The accepted evidence satisfies every Stage 6 closure entry condition and the
+roadmap acceptance criterion. No production finding was identified during
+`S06-INT-001`, and no Stage 6 production code was changed by integration fixes.
 
 ---
 
 # 41. Next Stage
 
-After closure bookkeeping is merged and final Git synchronization passes, the next permitted gate is:
+The next permitted gate is:
 
 ```text
-Stage 7 — Student Homework and Submission Flow
-planning and decomposition
+Stage 7 planning/decomposition only
 ```
 
 A new Stage 7 chat must recover current project state from GitHub `main`.
 
-Do not begin Stage 7 implementation from this planning baseline or from memory.
+Stage 7 implementation is not started or authorized by this closure.
 
 ---
 

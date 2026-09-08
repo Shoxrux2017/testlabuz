@@ -793,7 +793,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 3 — Institution Administration and User Management | `Closed` | Historical |
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
 | Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
-| Stage 6 — Homework Assignment Management | `In Progress` | `S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E` |
+| Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 
 Current Stage 5 progress:
 
@@ -852,10 +852,17 @@ Current Stage 6 progress:
 - Stage 6 frontend implementation: Complete.
 - Frontend Phase 2: PASS — audited `origin/main`
   `ba963e577930d2c28eb76b0458e42f0baddfdd3d`; P1=0, P2=0, P3=0.
-- Integration: Approved — Pending execution.
-- Closure: Approved — Pending execution.
-- Next permitted gate:
-  `S06-INT-001 — Stage 6 Homework Authoring Real-Stack E2E`.
+- `S06-INT-001`: Accepted / Delivered / PASS — initial assets PR #167;
+  integration-only corrections PR #168–181.
+- Final accepted Stage 6 head:
+  `89bc58f4b6d20cb3fa9b50e7e71d82e9f73475f5`.
+- Automated real-stack Integration: PASS — all ten required markers.
+- Project Owner Windows manual smoke: PASS.
+- Project Owner Android Teacher read-only smoke: PASS.
+- Stage 6 Closure Review: PASS — STAGE CLOSED.
+- Stage 6 — Homework Assignment Management: Closed.
+- Next permitted workflow step: Stage 7 planning/decomposition only; Stage 7
+  implementation has not started.
 
 ---
 
