@@ -724,7 +724,16 @@ scope queries to owned test data, protect unrelated or foreign state from
 accidental mutation, and include required cleanup verification.
 
 When a previous Stage established a reliable implementation pattern for the
-same technical problem, inspect and reuse it when its assumptions still apply.
+same technical problem, ChatGPT should identify the applicable reusable
+source/test primitive during integration planning or preflight.
+
+The current integration contract should then direct Codex only to the
+immediately relevant source/test asset or established implementation pattern
+needed for the assigned change. Codex must not read previous task contracts,
+Stage history, closure reviews, or unrelated integration assets to discover
+what to implement.
+
+Reuse the established primitive only when its assumptions still apply.
 Examples include:
 
 ```text
