@@ -971,14 +971,12 @@ Future<void> _homeworkLifecycle(
   await h.waitGone(
     find.byKey(const Key('teacherHomeworkLifecycleConfirmDialog')),
   );
-  final successNotice = find.byWidgetPredicate(
-    (widget) =>
-        widget is Text &&
-        widget.key == const Key('teacherHomeworkLifecycleNotice') &&
-        widget.data == successMessage,
+  final successFeedback = find.descendant(
+    of: find.byType(SnackBar),
+    matching: find.text(successMessage),
   );
-  await h.waitFor(successNotice);
-  expect(successNotice, findsOneWidget);
+  await h.waitFor(successFeedback);
+  expect(successFeedback, findsOneWidget);
   final authoritativeStatus = find.descendant(
     of: find.byKey(const Key('teacherHomeworkDetailScreen')),
     matching: find.byWidgetPredicate(
