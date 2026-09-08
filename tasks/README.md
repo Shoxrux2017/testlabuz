@@ -631,6 +631,135 @@ If a production finding requires code:
 
 The accepted integration state must be delivered to `origin/main`.
 
+### 12.1 Integration Harness Preflight and Reliability Discipline
+
+Before the first full real-stack runner for a Stage integration task, ChatGPT
+must perform a focused read-only review of the integration harness and assets.
+This preflight is an additional reliability step; it does not replace automated
+real-stack execution, security/tenant verification, persistence verification,
+or required manual smoke.
+
+Integration automation must prefer stable identity such as:
+
+```text
+Key
+ID
+route/target identity
+scoped container identity
+```
+
+over globally matching visible text when that text may occur elsewhere. Scope
+assertions to the intended widget, dialog, row, card, or configuration container
+whenever global matching could be ambiguous.
+
+Do not assume:
+
+```text
+API completed -> next widget is immediately ready in the same frame
+```
+
+Use bounded condition-based waits for asynchronous UI state. For interactive
+controls and modal transitions, wait for the intended transition or state,
+require the target control to be hit-testable when interaction depends on it,
+and do not replace synchronization with arbitrary sleeps.
+
+Before changing production because an integration assertion failed, verify that
+the harness expectation matches the approved production contract.
+Server-authoritative lifecycle, lock, conflict, reconciliation, persistence, and
+official-state behavior must be asserted according to that contract. Do not
+modify correct production behavior merely to satisfy an incorrect integration
+expectation.
+
+Every material integration failure must first be classified as exactly one of:
+
+```text
+production defect
+integration-harness defect
+environment/runtime defect
+```
+
+Apply the corresponding boundary:
+
+```text
+production defect
+-> ChatGPT prepares a separate focused production-fix contract
+
+integration-harness defect
+-> correct only the relevant integration/test asset
+
+environment/runtime defect
+-> correct the runtime/environment without changing production behavior
+```
+
+Do not silently cross these boundaries.
+
+For Windows/PowerShell integration infrastructure, do not pass large scripts or
+large PHP programs through command-line arguments when shell or runtime limits
+may truncate or corrupt them. When applicable, prefer an already established
+safe repository pattern such as:
+
+```text
+stdin
+-> restricted temporary container file
+-> short execution wrapper
+-> guaranteed cleanup
+```
+
+Do not duplicate an existing proven transport helper or pattern without a
+concrete reason.
+
+When a Stage needs seeded integration state, real-stack fixtures should remain:
+
+```text
+deterministic
+repeatable
+fail-closed
+ownership-safe
+Tenant-safe
+```
+
+Independent persistence verification must use authoritative backend/database
+state rather than trusting Flutter UI alone, assert exact relevant invariants,
+scope queries to owned test data, protect unrelated or foreign state from
+accidental mutation, and include required cleanup verification.
+
+When a previous Stage established a reliable implementation pattern for the
+same technical problem, inspect and reuse it when its assumptions still apply.
+Examples include:
+
+```text
+bounded async waits
+hit-testable control waits
+stable keyed row lookup
+scoped assertions
+safe PowerShell/container transport
+deterministic seeding
+independent DB oracle
+mandatory cleanup
+restart persistence checks
+```
+
+Do not copy an entire previous Stage integration harness blindly. Reuse only the
+primitive or pattern whose assumptions match the current Stage.
+
+> Each closed Stage should reduce the probability of repeating already-solved
+> engineering and integration failures in later Stages without reducing
+> verification depth.
+
+Integration preflight exists to prevent avoidable:
+
+```text
+full run
+-> harness-only failure
+-> tiny fix
+-> full run again
+```
+
+cycles. It must never justify skipping a required runner, weakening assertions,
+removing negative or security scenarios, replacing real-stack verification with
+mocks, skipping required Windows/Android/manual smoke, or accepting flaky or
+nondeterministic tests.
+
 ---
 
 ## 12A. Evidence Validity and Minimum Rerun Policy
