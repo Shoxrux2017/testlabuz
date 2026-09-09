@@ -11,14 +11,14 @@
 | Implementation type | `Private Student submission upload/replace/read/download for file_based Homework Questions` |
 | Depends on | `S07-BE-001…005` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline | `origin/main @ f6cbcba055de75c32242dfbfd06fbd3d1b8c86ee` |
+| Current review baseline | `origin/main @ 6bf4f9fcab4e15201c5e26d7447b4e52c1465aa5` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-001…005 = Accepted / Delivered` |
+| Readiness Gate | Pending ChatGPT current-main revalidation after contract correction; Codex implementation is not authorized until `PASS` |
 | Verification | focused Student file-answer/storage/download/concurrency verification only |
 | Delivery | Project Owner |
 | Backend block checkpoint | Stage 7 Backend Phase 2 after `S07-BE-001…007` |
 
-Start only after all dependencies are delivered, the implementation baseline is re-checked, and Git preflight is safe.
+Start only after ChatGPT current-main revalidation returns `PASS`, all dependencies are delivered, the implementation baseline is re-checked, and Git preflight is safe.
 
 Do not create a duplicate `CODEX-PROMPT`.
 
@@ -540,21 +540,68 @@ Existing saved file answer remains unchanged.
 
 ## Attempt editability
 
-Require:
+After locking/re-resolving the authenticated Student Attempt, validate the full
+delivered BE-005 structural Homework Attempt invariant before normal editability
+or any file-answer DB mutation:
 
 ```text
-status = in_progress
+attempt.institution_id = authenticated Student Institution
+attempt.student_id = authenticated Student
+attempt.assessment_id = locked Homework Assessment
+attempt.assessment_student_id = authoritative persisted AssessmentStudent recipient
+attempt.deadline_at = null
+attempt.status in (in_progress, submitted, waiting_for_teacher_review, checked)
+attempt.finalization_reason != timeout_auto_submit
+```
+
+`timed_out_finalized` and `timeout_auto_submit` are Blitz-only and invalid for
+Homework.
+
+For `status = in_progress`, require exactly:
+
+```text
+submitted_at = null
 finalized_at = null
 locked_at = null
+finalization_reason = null
 ```
 
-Otherwise:
+Any structural Homework invariant failure is:
 
 ```text
-409 attempt_not_editable
+LogicException / server invariant failure
+500 server_error
 ```
 
-New blob is cleaned up.
+Required outcome:
+
+- zero AttemptAnswer/AnswerFile/File DB mutation;
+- newly stored preliminary blob cleanup is attempted;
+- existing saved file graph/blob remains unchanged;
+- do not silently repair the Attempt;
+- do not convert persisted corruption into `attempt_not_editable`.
+
+Only after structural validation succeeds apply normal editability:
+
+```text
+status = in_progress                         => editable
+structurally valid terminal Homework Attempt => 409 attempt_not_editable
+```
+
+The valid terminal Homework statuses are `submitted`,
+`waiting_for_teacher_review`, and `checked`. A non-editable rejection also
+requires new blob cleanup and leaves the existing saved file unchanged.
+
+Preserve the delivered lifecycle/deadline precedence from the checks above:
+
+```text
+task_closed
+task_archived
+task_not_active
+deadline_passed
+```
+
+Normal `attempt_not_editable` must not replace those errors.
 
 ---
 
@@ -609,7 +656,10 @@ New blob cleanup required.
 
 # 14. Existing File-Answer Integrity
 
-For an existing `AttemptAnswer` on a `file_based` Question require:
+Before exact-binary no-op comparison, replacement, or resume serialization,
+validate the complete persisted graph. Preserve the delivered shared parent
+AttemptAnswer validation. For an existing `AttemptAnswer` on a `file_based`
+Question require these checking fields exactly:
 
 ```text
 checking_status = pending
@@ -619,29 +669,92 @@ checked_by_user_id = null
 checked_at = null
 ```
 
-Required typed structure:
+Required persisted family for the Question:
 
 ```text
-exactly one answer_files row
-no non-file typed child rows
+1 AttemptAnswer
+1 AnswerFile
+1 linked File
+0 non-file typed child rows
 ```
 
-The linked `File` must have:
+Every incompatible non-file typed relation must be empty.
+
+## 14.1 AnswerFile identity
 
 ```text
-same Institution
-category = student_submission
-uploaded_by_user_id = authenticated Student
-removed_at = null
+answer_file.id = valid persisted identity
+answer_file.institution_id = authenticated Student Institution = Attempt Institution
+answer_file.answer_id = locked AttemptAnswer.id
+answer_file.file_id = linked File.id
 ```
 
-If these invariants fail:
+Any identity/linkage mismatch is persisted corruption. The read path validates
+the same linkage to its authoritative persisted AttemptAnswer.
+
+## 14.2 Linked File identity/security
+
+```text
+file.institution_id = authenticated Student Institution = Attempt Institution
+file.id = answer_file.file_id
+file.category = student_submission
+file.uploaded_by_user_id = authenticated Student
+file.removed_at = null
+```
+
+## 14.3 Persisted File metadata
+
+```text
+extension in (pdf, docx, ppt, pptx)
+size_bytes > 0
+size_bytes <= 15_728_640
+checksum_sha256 = non-null lowercase exactly 64 hexadecimal characters
+storage_disk = non-empty
+storage_key = non-empty
+original_name = non-empty, <= 500 Unicode code points
+original filename extension matches persisted canonical extension case-insensitively
+```
+
+Persisted `mime_type` must equal the canonical MIME for the persisted extension:
+
+```text
+pdf  => application/pdf
+docx => application/vnd.openxmlformats-officedocument.wordprocessingml.document
+ppt  => application/vnd.ms-powerpoint
+pptx => application/vnd.openxmlformats-officedocument.presentationml.presentation
+```
+
+An existing historical File is not required to satisfy the current Institution
+upload setting. That limit may have been lowered after a successful upload.
+Historical validity uses the metadata rules above, including the platform cap;
+the current effective setting controls only a new upload/replacement.
+
+## 14.4 Corruption outcomes
+
+Mutation-side corruption discovered before no-op/replacement:
 
 ```text
 409 business_conflict
 ```
 
-Do not silently repair or erase review/scoring state.
+Required outcome:
+
+- no existing DB row mutation;
+- no silent repair or replacement-as-repair;
+- no erasure of review/scoring state;
+- existing referenced blob remains authoritative;
+- newly stored preliminary blob cleanup is attempted.
+
+GET/Start/resume read-side corruption:
+
+```text
+LogicException / server invariant failure
+500 server_error
+```
+
+Do not serialize or silently omit the corrupt Answer. Do not repair, delete, or
+rewrite the graph. Do not expose File/AnswerFile IDs or storage internals in the
+server-error response.
 
 For no existing Answer, there must be no stray `answer_files` relation for that Attempt/Question.
 
@@ -826,13 +939,14 @@ A future explicit removal feature would require its own contract.
 
 # 19. File Answer Response
 
-Extend delivered:
+Use the delivered generic:
 
 ```text
 StudentAttemptAnswerStateResource
 ```
 
-for `file_based`.
+with the shared canonical `file_based` answer value defined in Section 20.
+Do not add a file-only serializer or require a file-specific resource change.
 
 PUT success:
 
@@ -880,29 +994,101 @@ using the returned File ID.
 
 # 20. Extend Attempt Resume Read
 
-Modify delivered BE-005:
+Extend the delivered shared BE-005 persisted-answer integrity path:
 
 ```text
-ShowStudentHomeworkAttempt
-StudentHomeworkAttemptResource
-StudentAttemptAnswerStateResource
+StudentHomeworkAttemptAnswerStates
+-> StudentHomeworkAnswerIntegrity
 ```
 
-to include saved file-based answers in the existing:
+This path is authoritative for:
 
 ```text
-answers
+GET own Attempt
+Start/resume response
+new Start/resume idempotency integrity gate
 ```
 
-array.
+## 20.1 Shared integrity and canonical projection
 
-File state uses the exact metadata shape from Section 19.
+Modify:
+
+```text
+backend/app/Support/Student/StudentHomeworkAnswerIntegrity.php
+```
+
+so `QuestionType::FileBased` uses the same canonical persisted-answer validation
+as the other eight Question types. `StudentHomeworkAnswerIntegrity::load(...)`
+must load enough AnswerFile/File fields to validate the complete Section 14
+graph, including AnswerFile persisted identity, institution, answer/file linkage,
+all File identity/security/metadata fields, and every incompatible typed relation.
+
+The valid persisted family is exactly one AttemptAnswer, one AnswerFile, one
+valid linked File, and zero non-file typed child rows. The shared canonical
+value is exactly:
+
+```json
+{
+  "file": {
+    "id": "file-uuid",
+    "original_name": "homework.pdf",
+    "extension": "pdf",
+    "size_bytes": 1234
+  }
+}
+```
+
+The existing generic `StudentHomeworkAttemptAnswerStates` and
+`StudentAttemptAnswerStateResource` propagate that value into the existing
+`answers` array without a second serializer. File state uses the exact metadata
+shape from Section 19.
+
+Do not require file-specific business logic in `ShowStudentHomeworkAttempt`,
+`StudentHomeworkAttemptResource`, or `StudentAttemptAnswerStateResource`.
+Modify them only if a concrete current-code requirement needs a generic,
+minimal adaptation. The preferred/current architecture extends the shared
+integrity canonical projection.
 
 Unanswered file-based Questions have no fabricated answer entry.
 
 Do not read blob bytes merely to serialize Attempt state.
 
-No storage path/disk/checksum leakage.
+Never expose `storage_disk`, `storage_key`, `mime_type`, `checksum_sha256`,
+`uploaded_by_user_id`, `institution_id`, or `removed_at` in the canonical answer.
+
+## 20.2 Read-side corruption
+
+If GET/Start/resume discovers any corrupt persisted file-answer graph:
+
+```text
+LogicException / server invariant failure
+500 server_error
+```
+
+Do not serialize the corrupt Answer, silently omit it, or repair/delete/rewrite
+it. The server-error response must not expose File/AnswerFile IDs or storage
+internals.
+
+## 20.3 Start/resume durable idempotency
+
+Preserve delivered BE-005 validation inside the new Start/resume claim
+transaction before idempotency completion. The shared path above must enforce:
+
+```text
+new Idempotency-Key + existing in_progress Attempt + valid file answer
+=> integrity passes => complete claim => 200
+
+new Idempotency-Key + existing in_progress Attempt + corrupt file answer
+=> LogicException => transaction rollback => 500 server_error
+=> no completed claim and no incomplete claim
+```
+
+Do not catch corruption and complete the claim, delete a completed record after
+the fact, bypass file-answer integrity during Start, or create a second
+file-specific Start serializer.
+
+A previously completed historical Start replay remains historical. Later
+introduced corruption must not cause that record to be deleted or rewritten.
 
 ---
 
@@ -1400,12 +1586,31 @@ backend/tests/Feature/Files/ProtectedStudentSubmissionDownloadApiTest.php
 ```text
 backend/app/Http/Requests/Student/StudentHomeworkAttemptAnswerRequest.php
 backend/app/Http/Controllers/Api/V1/Student/StudentHomeworkAttemptAnswerController.php
-backend/app/Http/Resources/Student/StudentAttemptAnswerStateResource.php
-backend/app/Actions/Student/ShowStudentHomeworkAttempt.php
-backend/app/Http/Resources/Student/StudentHomeworkAttemptResource.php
+backend/app/Support/Student/StudentHomeworkAnswerIntegrity.php
 
 backend/app/Http/Controllers/Api/V1/Files/ProtectedFileDownloadController.php
 ```
+
+Allow modification of:
+
+```text
+backend/app/Support/Student/StudentHomeworkAttemptAnswerStates.php
+```
+
+only if a minimal focused change is genuinely required for eager-loading or
+canonical projection.
+
+These delivered generic consumers are not required modification targets:
+
+```text
+backend/app/Actions/Student/ShowStudentHomeworkAttempt.php
+backend/app/Http/Resources/Student/StudentHomeworkAttemptResource.php
+backend/app/Http/Resources/Student/StudentAttemptAnswerStateResource.php
+```
+
+They may change only for a concrete current-code requirement that remains
+generic/minimal. Do not special-case `file_based` in them or create a parallel
+file-only resume serializer; extend the shared integrity canonical projection.
 
 Modify delivered Student answer access/support only if required for focused reuse of its exact lock/lifecycle logic.
 
@@ -1527,6 +1732,52 @@ Verify:
 - duplicate newly stored blob cleanup attempted;
 - no extra DB row.
 
+## Persisted file-answer corruption before no-op/replacement
+
+Use an existing file answer and safely corrupt one persisted invariant at a
+time. Cover at least:
+
+- AnswerFile wrong Institution;
+- AnswerFile wrong answer/file linkage;
+- File wrong Institution or uploader mismatch;
+- wrong File category;
+- removed File;
+- checksum null, uppercase/noncanonical, wrong length, or non-hexadecimal;
+- wrong canonical MIME for the persisted extension;
+- invalid persisted extension or size outside `1..15_728_640`;
+- empty original filename, more than 500 Unicode code points, or filename
+  extension mismatch;
+- empty storage key/disk where the fixture permits;
+- a non-file typed child mixed with AnswerFile;
+- missing linked File or missing AnswerFile;
+- parent AttemptAnswer checking fields that violate Section 14.
+
+Include both otherwise identical incoming bytes/name and changed replacement
+uploads to prove validation precedes no-op comparison and replacement.
+
+For every corruption case expect:
+
+```text
+409 business_conflict
+zero existing AttemptAnswer/AnswerFile/File DB row or timestamp mutation
+no silent repair or replacement-as-repair
+existing referenced blob remains authoritative
+newly stored preliminary blob cleanup attempted
+```
+
+Take snapshots after intentionally introducing fixture corruption. Use safe
+fixture manipulation without permanently weakening DB constraints.
+
+## Historical File after Institution limit reduction
+
+Lower the Institution setting after a successful upload. The existing File
+remains structurally valid even if it exceeds the new setting, provided it
+satisfies Section 14. GET/Start/resume must still return its canonical metadata.
+
+A replacement within the new effective limit succeeds with stable IDs; a new
+upload/replacement above that limit still receives `422 file_too_large`.
+Do not use the current setting to classify historical metadata as corruption.
+
 ---
 
 # 32. `StudentHomeworkFileAnswerLifecycleTest`
@@ -1547,7 +1798,10 @@ No blob stored after preliminary denial.
 
 Persisted assigned own Attempt remains editable if active/pre-deadline.
 
-## Submitted Attempt
+## Structurally valid terminal Homework Attempts
+
+Cover `submitted`, `waiting_for_teacher_review`, and `checked`, with the full
+Section 12 Homework invariant satisfied:
 
 ```text
 409 attempt_not_editable
@@ -1556,6 +1810,38 @@ Persisted assigned own Attempt remains editable if active/pre-deadline.
 New blob cleanup required.
 
 Existing file unchanged.
+
+## Corrupt locked Homework Attempt
+
+Validate the complete Section 12 invariant after locking/re-resolving the
+authenticated Student Attempt. Cover incorrect Institution/Student/Assessment/
+authoritative persisted AssessmentStudent recipient linkage where safe fixtures
+permit, and at least these corrupt states:
+
+```text
+attempt.deadline_at != null
+attempt.status = timed_out_finalized
+attempt.finalization_reason = timeout_auto_submit
+in_progress + submitted_at != null
+in_progress + finalized_at != null
+in_progress + locked_at != null
+in_progress + finalization_reason != null
+```
+
+Use an otherwise active, pre-deadline Homework and a preliminary upload already
+stored before final locked validation. For every structural failure expect:
+
+```text
+LogicException / safe server invariant failure
+500 server_error
+zero AttemptAnswer/AnswerFile/File DB mutation
+new preliminary blob cleanup attempted
+existing authoritative file graph/blob unchanged
+```
+
+Do not silently repair the Attempt or map persisted corruption to
+`409 attempt_not_editable`. Use safe fixture manipulation without permanently
+weakening DB constraints.
 
 ## Closed
 
@@ -1576,6 +1862,10 @@ Existing file unchanged.
 - new blob cleanup attempted;
 - Attempt is BE-002 deadline-finalized;
 - `409 deadline_passed`.
+
+Preserve lifecycle/deadline rejection precedence: `task_closed`,
+`task_archived`, `task_not_active`, then `deadline_passed`; normal
+`attempt_not_editable` does not mask those errors.
 
 ## Setting lowered during upload
 
@@ -1603,11 +1893,23 @@ Verify:
 
 Do not weaken DB constraints permanently.
 
+## Fixed-key Start/resume file-answer integrity
+
+The mandatory fixed-new-key corruption/rollback/fixture-repair/replay regression
+specified in Section 35 may live in this lifecycle test file. It must run in the
+focused BE-006 command; the directly affected BE-005
+`StudentHomeworkAttemptIdempotencyTest` must also remain green.
+
 ---
 
 # 33. `ProtectedStudentSubmissionDownloadApiTest`
 
 At minimum:
+
+Use success fixtures with the complete valid AnswerFile/File graph from
+Section 14. Preserve the download-specific authorization and error behavior in
+Sections 23–25; mutation and GET/Start/resume corruption outcomes are covered
+separately in Sections 31 and 35.
 
 ## Owner Student
 
@@ -1679,6 +1981,11 @@ A `student_submission` File row not linked through AnswerFile/Attempt ownership:
 404
 ```
 
+Also cover broken AnswerFile Institution/answer/file linkage and missing
+AnswerFile/linked File using safe fixture manipulation. An inaccessible
+ownership chain retains the existing privacy-safe `404` outcome; no repair or
+storage-internal disclosure is allowed.
+
 ## Wrong category
 
 Learning material continues to be handled by existing action, not Student submission access.
@@ -1728,6 +2035,12 @@ checking_status = pending
 no score fields
 ```
 
+Validate the final persisted graph against all Section 14 identity, checking,
+metadata, and typed-family rules through the shared integrity path. Each
+committed answer must have exactly one valid AnswerFile/File and no incompatible
+non-file typed child; canonical read metadata must describe the same complete
+committed replacement.
+
 Superseded blobs must have cleanup attempted according to commit order.
 
 If cross-process storage fake cannot faithfully verify cleanup, use a deterministic local private disk fixture for this test only.
@@ -1764,7 +2077,16 @@ Do not use arbitrary sleeps as synchronization.
 
 # 35. Extend Resume / Answer Privacy Tests
 
-Update/extend focused BE-005 tests so:
+Update/extend focused tests through the delivered shared path:
+
+```text
+StudentHomeworkAttemptAnswerStates
+-> StudentHomeworkAnswerIntegrity
+```
+
+## Valid file-answer canonical projection
+
+Prove:
 
 ```text
 GET /student/attempts/{attempt}
@@ -1802,6 +2124,58 @@ removed_at
 
 Do not expose binary content from Attempt GET.
 
+Validate the complete Section 14 graph before canonical projection. Verify
+historical metadata remains valid after an Institution setting reduction as
+specified in Section 31. No file-only resume/Start serializer is permitted.
+
+## Read-side corruption
+
+For GET own Attempt and a new Start/resume request, cover the Section 31
+persisted corruption cases, including wrong AnswerFile Institution/linkage,
+missing AnswerFile/File, uploader/category/removal errors, noncanonical
+checksum/MIME/filename/storage metadata, and mixed non-file typed children.
+
+Expect `LogicException` / safe server invariant failure mapped to
+`500 server_error`. Do not serialize or silently omit the corrupt Answer,
+repair/delete/rewrite it, or expose File/AnswerFile IDs or storage internals in
+the error response. Assert persisted Attempt/AnswerFile/File state is unchanged.
+Use safe fixture manipulation without permanently weakening DB constraints.
+
+## Mandatory fixed-key Start/resume idempotency regression
+
+Use an existing active, pre-deadline Homework, an existing own `in_progress`
+Attempt, a corrupt persisted `file_based` Answer, and one fixed new Start
+`Idempotency-Key`. This regression may live in
+`StudentHomeworkFileAnswerLifecycleTest`.
+
+Send every request below to:
+
+```text
+POST /api/v1/student/homework/{homework}/attempts
+```
+
+with that same fixed key:
+
+1. First request while corruption exists: `500 server_error`; zero
+   `idempotency_records` for the key, with neither a completed nor an incomplete
+   claim; Attempt, AttemptAnswer, AnswerFile, and File remain unchanged.
+2. Retry while corruption remains: `500 server_error`; still zero idempotency
+   records and unchanged persisted state.
+3. Repair only the intentionally corrupted test fixture. Retry the same key:
+   `200`, the same existing Attempt, exactly one completed `200` Start
+   idempotency record, and canonical file metadata in `answers`.
+4. Replay the same key: `200`, the same Attempt and canonical answer, the same
+   single idempotency record, and no timestamp churn.
+
+This proves shared file-answer integrity runs inside the new claim transaction
+before completion, and a thrown `LogicException` rolls back the whole claim.
+Do not implement catch-and-complete behavior or delete a completed record after
+the fact.
+
+Also preserve the historical replay boundary: corruption introduced after a
+completed Start must not delete/rewrite that historical completed record.
+The directly affected BE-005 idempotency regression suite must remain green.
+
 ---
 
 # 36. Directly Affected Regression Tests
@@ -1813,6 +2187,7 @@ tests/Feature/Student/StudentHomeworkAnswerSaveApiTest.php
 tests/Feature/Student/StudentHomeworkAnswerValidationTest.php
 tests/Feature/Student/StudentHomeworkAnswerLifecycleTest.php
 tests/Feature/Student/StudentHomeworkAttemptStartApiTest.php
+tests/Feature/Student/StudentHomeworkAttemptIdempotencyTest.php
 
 tests/Feature/Persistence/StudentAnswerSubmissionPersistenceTest.php
 tests/Feature/Persistence/StudentAnswerSubmissionFactoryModelTest.php
@@ -1824,7 +2199,9 @@ tests/Feature/Files/ProtectedLearningMaterialDownloadApiTest.php
 
 Rationale:
 
-- shared answer route/request/resource is extended;
+- shared answer route/request and canonical projection are extended;
+- the shared persisted Answer integrity path now validates `file_based` inside
+  the new Start/resume idempotency claim transaction;
 - BE-001 AnswerFile/File persistence is now live;
 - existing file inspector/private storage/download dispatcher must not regress learning-material behavior.
 
@@ -1861,6 +2238,7 @@ docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app p
   tests/Feature/Student/StudentHomeworkAnswerValidationTest.php \
   tests/Feature/Student/StudentHomeworkAnswerLifecycleTest.php \
   tests/Feature/Student/StudentHomeworkAttemptStartApiTest.php \
+  tests/Feature/Student/StudentHomeworkAttemptIdempotencyTest.php \
   tests/Feature/Persistence/StudentAnswerSubmissionPersistenceTest.php \
   tests/Feature/Persistence/StudentAnswerSubmissionFactoryModelTest.php \
   tests/Feature/Teacher/TeacherLearningMaterialUploadApiTest.php \
@@ -1919,6 +2297,48 @@ PASS only if all are true.
 - no score/checking mutation;
 - parent Attempt timestamps/status unchanged.
 
+## Homework Attempt structural integrity
+
+- the full delivered BE-005 Homework Attempt invariant in Section 12 is
+  validated after locked re-resolution and before file-answer mutation;
+- Institution, Student, Assessment, and authoritative persisted
+  AssessmentStudent recipient identities match; `attempt.deadline_at = null`;
+- only `in_progress`, `submitted`, `waiting_for_teacher_review`, and `checked`
+  are valid Homework statuses; `timed_out_finalized` and `timeout_auto_submit`
+  remain Blitz-only;
+- an `in_progress` Attempt has exactly null `submitted_at`, `finalized_at`,
+  `locked_at`, and `finalization_reason`;
+- corrupt Homework Attempt state, including every listed corrupt `in_progress`
+  state, causes `LogicException` / safe server invariant failure
+  (`500 server_error`), new blob compensation, and zero answer/file DB mutation;
+- existing authoritative file state is unchanged; the Attempt is never silently
+  repaired and corruption is never converted to `attempt_not_editable`;
+- a structurally valid terminal Homework Attempt receives
+  `409 attempt_not_editable`;
+- delivered `task_closed`, `task_archived`, `task_not_active`, and
+  `deadline_passed` precedence remains intact.
+
+## Persisted file graph
+
+- the complete existing AttemptAnswer/AnswerFile/File graph is validated before
+  exact-binary no-op comparison, replacement, and resume serialization;
+- parent checking fields remain exactly pending/null as specified in Section 14;
+- exactly one AnswerFile has a valid persisted identity and the correct
+  Institution/AttemptAnswer/File linkage, with one valid linked File and zero
+  incompatible non-file typed children;
+- File Institution, ID, uploader, category, removal state, extension, platform
+  size bounds, non-empty storage fields, and original filename all satisfy
+  Section 14;
+- persisted checksum is non-null lowercase 64-hex, MIME is canonical for the
+  persisted extension, and the non-empty filename is at most 500 Unicode code
+  points with a case-insensitive matching extension;
+- historical File validity does not depend on the current Institution upload
+  limit; that effective limit still controls new uploads/replacements;
+- wrong/missing/mixed/noncanonical persisted graph on mutation receives
+  `409 business_conflict`, with no DB mutation, no silent repair or
+  replacement-as-repair, the existing referenced blob unchanged, and new blob
+  cleanup attempted.
+
 ## Compensation
 
 - rollback/rejection cleans new blob best-effort;
@@ -1933,11 +2353,37 @@ PASS only if all are true.
 - deadline rejection performs cleanup + BE-002 reconciliation;
 - cross-tenant/other-Student direct IDs do not leak existence.
 
-## Resume
+## Resume/read
 
 - saved file metadata appears in Attempt answers;
+- `file_based` uses the shared
+  `StudentHomeworkAttemptAnswerStates -> StudentHomeworkAnswerIntegrity` path
+  and its canonical value through the existing generic resource;
+- GET/Start/resume corruption causes `LogicException` / safe server invariant
+  failure (`500 server_error`); the Answer is never serialized, silently omitted,
+  repaired, deleted, or rewritten;
+- no File/AnswerFile IDs or storage internals appear in the server-error response;
 - no storage internals/checksum leak;
-- no binary content in JSON.
+- no binary content in JSON;
+- no file-specific Start/resume serializer or unnecessary special-case changes
+  to generic actions/resources.
+
+## Start idempotency
+
+- a new Start/resume key with an existing `in_progress` Attempt completes only
+  after shared file-answer integrity passes, then returns `200`;
+- a corrupt file answer raises `LogicException` inside the new claim
+  transaction, returns `500 server_error`, and rolls back the claim completely:
+  no completed or incomplete durable record and unchanged Attempt/answer/file
+  state;
+- the fixed-key regression in Section 35 proves repeated `500` responses leave
+  zero records, then the same key after fixture-only repair returns the same
+  Attempt with canonical metadata and exactly one completed `200` record;
+- replay uses that same one record with no timestamp churn;
+- corruption is not caught to complete a claim, integrity is not bypassed, and
+  completed records are not deleted after the fact;
+- a previously completed historical Start record remains historical and is
+  never deleted/rewritten because corruption was introduced later.
 
 ## Download
 
@@ -1977,6 +2423,8 @@ PASS only if all are true.
 
 - exact Pint command passes;
 - exact focused/named regression test command passes;
+- `StudentHomeworkAttemptIdempotencyTest` remains a directly affected regression
+  and passes with the mandatory fixed-key BE-006 regression;
 - no uncontracted broad suite/static tool is run;
 - `git diff --check` passes;
 - focused self-review passes.
@@ -2010,6 +2458,30 @@ Attempt/File replacement locks = FOR UPDATE
 Topic/Assessment/Homework/Question/InstitutionSetting upload locks = shared/read
 download File lock = shared/read before stream opening
 different Students/different Attempts = concurrent uploads allowed
+Homework Attempt structural invariant = exact delivered BE-005 invariant (Section 12)
+Homework Attempt identity = authenticated Institution/Student + locked Assessment + authoritative persisted AssessmentStudent
+Homework Attempt deadline_at = null
+Homework Attempt statuses = in_progress,submitted,waiting_for_teacher_review,checked
+Homework Attempt timed_out_finalized / timeout_auto_submit = invalid Blitz-only state
+Homework in_progress = submitted_at/finalized_at/locked_at/finalization_reason all null
+corrupt Homework Attempt = server invariant failure + new blob compensation + zero answer/file DB mutation
+valid terminal Homework Attempt = 409 attempt_not_editable after structural validation
+lifecycle/deadline precedence = task_closed,task_archived,task_not_active,deadline_passed
+file_based resume integrity = shared StudentHomeworkAnswerIntegrity path via StudentHomeworkAttemptAnswerStates
+file_based valid persisted family = one AttemptAnswer + exactly one AnswerFile + one valid linked File + zero non-file typed children
+AnswerFile/File identity/security/metadata = complete Section 14 validation before no-op/replacement/resume
+mutation-side corrupt persisted file graph = 409 business_conflict, never silent repair or replacement-as-repair
+mutation-side corrupt graph compensation = zero DB mutation + existing authoritative blob unchanged + new blob cleanup attempted
+read/resume corrupt persisted file graph = server invariant failure, never serialization/silent omission/repair
+file_based canonical value = file{id,original_name,extension,size_bytes}, no storage internals
+persisted student_submission checksum = non-null lowercase 64-hex
+persisted MIME = canonical MIME for persisted extension
+historical existing File validity does not depend on current Institution upload limit
+new Start/resume claim completion occurs only after file-answer integrity passes
+new Start/resume key + corrupt file answer = LogicException + transaction rollback + 500 + no durable claim
+fixed new key after fixture repair = same Attempt + one completed 200 record; replay has no timestamp churn
+completed historical Start replay = preserved, never deleted/rewritten after later corruption
+StudentHomeworkAttemptIdempotencyTest remains a directly affected regression
 no file clear in Stage 7
 Student protected download requires Attempt ownership + matching File uploader
 Teacher Student-submission download = Stage 9, not BE-006
@@ -2032,6 +2504,12 @@ Codex must not substitute:
   differs from the authenticated Student;
 - validating the 500-character filename limit with UTF-8 byte length;
 - running expensive binary inspection before the early effective-size gate;
+- mapping a corrupt Homework Attempt to `attempt_not_editable` or silently
+  repairing it;
+- replacing a corrupt persisted file graph as a repair;
+- a parallel file-only Start/resume serializer or bypass of shared integrity;
+- completing a new Start claim before file-answer integrity succeeds;
+- deleting/rewriting a completed historical Start record after later corruption;
 - Teacher access pulled forward;
 - scoring/file-content inspection for grading.
 
