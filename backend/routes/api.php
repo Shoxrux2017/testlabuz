@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
+use App\Http\Controllers\Api\V1\Student\StudentHomeworkController;
 use App\Http\Controllers\Api\V1\Student\StudentTopicController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherHomeworkController;
@@ -129,6 +130,8 @@ Route::prefix('teacher')
 Route::prefix('student')
     ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::Student->value])
     ->group(function (): void {
+        Route::get('homework', [StudentHomeworkController::class, 'index']);
+        Route::get('homework/{homework}', [StudentHomeworkController::class, 'show']);
         Route::get('topics', [StudentTopicController::class, 'index']);
         Route::get('topics/{topic}', [StudentTopicController::class, 'show']);
     });
