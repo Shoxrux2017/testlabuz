@@ -11,9 +11,9 @@
 | Implementation type | `Laravel typed Student Homework answer save/replace + resume answer read state` |
 | Depends on | `S07-BE-001…004` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline | `origin/main @ f6cbcba055de75c32242dfbfd06fbd3d1b8c86ee` |
+| Current review baseline | `origin/main @ 5f6b0af0f830116d92908f78590b39fd03fc32c5` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-002…004 = Accepted / Delivered` |
+| Readiness Gate | Pending ChatGPT current-main revalidation after contract correction; Codex implementation is not authorized until PASS |
 | Verification | focused Student answer/API/persistence/concurrency verification only |
 | Delivery | Project Owner |
 | Backend block checkpoint | Stage 7 Backend Phase 2 after `S07-BE-001…007` |
@@ -565,10 +565,26 @@ each item = object with exactly:
   item_id
   position
 item_id = UUID string
-position = integer
+position = real JSON integer
 item IDs distinct
 positions distinct
 ```
+
+Strict JSON type examples:
+
+```text
+valid:
+1
+invalid:
+"1"
+1.0
+true
+null
+```
+
+Laravel/PHP numeric coercion is not authoritative. Numeric strings are invalid.
+JSON floating-point values such as `1.0` are invalid even when mathematically
+integral. The raw decoded JSON type controls this validation.
 
 Domain rules:
 
@@ -883,15 +899,54 @@ Do not throw the deadline exception after performing reconciliation inside the s
 
 ## 11.3 Attempt editability
 
-After passing active/deadline rules require:
+After passing the lifecycle/deadline rules above, first validate that the
+locked Attempt is a structurally valid Homework Attempt before treating it as
+editable or terminal. Require:
 
 ```text
-attempt.status = in_progress
-attempt.finalized_at = null
-attempt.locked_at = null
+attempt.institution_id = authenticated Student Institution
+attempt.student_id = authenticated Student
+attempt.assessment_id = locked Homework Assessment
+attempt.assessment_student_id = authoritative Student recipient
+attempt.deadline_at = null
+attempt.status in (
+  in_progress,
+  submitted,
+  waiting_for_teacher_review,
+  checked
+)
+attempt.finalization_reason != timeout_auto_submit
 ```
 
-Otherwise:
+`timed_out_finalized` and `timeout_auto_submit` are Blitz-only and invalid for
+Homework.
+
+For `status = in_progress`, require exactly:
+
+```text
+submitted_at = null
+finalized_at = null
+locked_at = null
+finalization_reason = null
+```
+
+If any of these structural Homework invariants fail:
+
+```text
+LogicException / server invariant failure
+```
+
+There must be zero answer mutation. Do not silently repair the Attempt, replace
+or normalize invalid Homework state, or convert corruption to
+`attempt_not_editable`.
+
+Only after structural validation succeeds, normal business editability requires:
+
+```text
+status = in_progress
+```
+
+Otherwise a structurally valid terminal Homework Attempt returns:
 
 ```text
 409 attempt_not_editable
@@ -899,7 +954,9 @@ Otherwise:
 
 No answer writes.
 
-An explicitly submitted Attempt while Homework is still active therefore returns `attempt_not_editable`.
+A structurally valid explicitly submitted Attempt while Homework is still active
+therefore returns `attempt_not_editable`. The lifecycle/deadline error precedence
+in Sections 11.1–11.2 remains unchanged.
 
 ---
 
@@ -1108,9 +1165,16 @@ No `attempt_answers` row is created for semantic-empty/cleared state.
 
 # 16. Existing Answer Integrity
 
-Before replace/clear, the locked existing `AttemptAnswer`, if any, must have:
+Before semantic no-op comparison, replace, or clear, validate the locked existing
+`AttemptAnswer`, if any, and its entire persisted typed graph against the locked
+Question.
+
+## 16.1 Parent identity and checking state
 
 ```text
+attempt_answer.institution_id = authenticated Student Institution
+attempt_answer.attempt_id = locked Attempt
+attempt_answer.question_id = locked Question
 checking_status = pending
 awarded_points = null
 feedback = null
@@ -1118,17 +1182,104 @@ checked_by_user_id = null
 checked_at = null
 ```
 
-and must contain only the typed child structure compatible with the current Question type.
+For every existing non-file Answer, `answer_files` must be absent.
 
-If not:
+All typed child IDs must belong to the same Institution and the same locked
+Question. Do not rely only on tenant foreign keys: a child from another Question
+in the same Institution is persisted corruption.
+
+Exactly one typed family may exist according to the locked Question type. Every
+incompatible typed relation must be empty. The required family must satisfy the
+following integrity rules before any no-op comparison, replacement, or clear.
+
+## 16.2 Single Choice
+
+- `selectedOptions` count = exactly 1;
+- the selected option belongs to the locked Question;
+- all other typed relations are empty.
+
+## 16.3 Multiple Choice
+
+- `selectedOptions` count >= 1;
+- every option belongs to the locked Question;
+- selection count <= current valid `max_selections` from Section 13;
+- all other typed relations are empty.
+
+The correctness flag may be used only to derive `max_selections`, never exposed.
+
+## 16.4 True / False
+
+- exactly one `answer_boolean_values` row;
+- no other typed relation.
+
+No Question `correct_value` is needed; do not load it for this validation.
+
+## 16.5 Short Written / Open Written
+
+- exactly one `answer_text_values` row;
+- stored text is semantically non-empty under the BE-005 Unicode-whitespace
+  helper from Section 6;
+- no other typed relation.
+
+Do not rewrite stored text while validating integrity.
+
+## 16.6 Matching
+
+Require one or more existing mapping rows. For every row:
+
+- `left_item_id` belongs to the locked Question and has `side = left`;
+- `right_item_id` belongs to the locked Question and has `side = right`.
+
+Require no duplicate logical left/right assignments: each left ID and each
+right ID may occur at most once.
+
+Do not load/use `match_key`. All incompatible typed relations must be empty.
+
+## 16.7 Ordering
+
+Require one or more existing ordering rows. For every row:
+
+- `ordering_item_id` belongs to the locked Question;
+- `1 <= submitted_position <= total locked Question ordering-item count`.
+
+Item IDs and submitted positions must remain unique.
+
+Do not load/use `correct_position`. All incompatible typed relations must be
+empty.
+
+## 16.8 Fill Blank
+
+Require one or more existing value rows. For every row:
+
+- `blank_id` belongs to the locked Question;
+- text is semantically non-empty under the BE-005 Unicode-whitespace helper
+  from Section 6.
+
+Do not rewrite stored text while validating integrity. Do not load accepted
+answers. All incompatible typed relations must be empty.
+
+## 16.9 Corruption outcome
+
+Any failure of the parent or typed-graph requirements above, including an
+incompatible/missing/mixed/wrong-Question typed structure, returns:
 
 ```text
 409 business_conflict
 ```
 
-Do not erase Teacher/scoring state or silently repair incompatible typed rows.
+Requirements:
 
-A non-file Question must not have an `answer_files` row.
+- zero answer mutation;
+- no child deletion;
+- no parent deletion;
+- no timestamp rewrite;
+- no silent repair;
+- no delete-and-recreate workaround;
+- do not erase Teacher/scoring state.
+
+This integrity check must complete before semantic no-op comparison, replace,
+or clear. The API response must not expose child IDs, correctness data, SQL
+details, internal column names, or corruption details.
 
 ---
 
@@ -1835,6 +1986,40 @@ checked_at = null
 
 No score fields on Attempt change.
 
+## Existing Answer integrity
+
+With otherwise valid requests against an active, pre-deadline own Homework
+Attempt, add focused corrupted persisted-Answer fixtures for at least:
+
+- Choice Answer referencing an option from another same-Institution Question;
+- Single Choice with multiple persisted selections;
+- existing Answer with mixed typed families;
+- non-file Answer with an `answer_files` row;
+- Matching child referencing another same-Institution Question;
+- Matching left/right child referencing an item with the wrong side;
+- Ordering child referencing another same-Institution Question;
+- Ordering child with `submitted_position < 1` or greater than the total
+  locked Question ordering-item count;
+- Fill child referencing another same-Institution Question;
+- Written persisted semantic-empty text under the BE-005 Unicode-whitespace
+  helper;
+- missing expected typed payload for an existing parent `AttemptAnswer`.
+
+Expected for every fixture:
+
+```text
+409 business_conflict
+```
+
+Exercise the integrity gate before semantic no-op comparison, replace, and
+supported clear requests. Assert that all persisted corrupt state remains
+unchanged, including parent/typed/file rows and timestamps: no answer mutation,
+child or parent deletion, timestamp rewrite, silent repair, or
+delete-and-recreate workaround.
+
+Assert that error responses expose no child IDs, correctness data, SQL details,
+internal column names, or corruption details.
+
 ---
 
 # 29. `StudentHomeworkAnswerValidationTest`
@@ -1905,11 +2090,17 @@ Reject non-boolean.
 - >50;
 - duplicate item IDs;
 - duplicate positions;
+- `1` => valid JSON integer;
+- `"1"` => `422 validation_failed`;
+- `1.0` => `422 validation_failed`;
 - non-integer;
 - position <1;
 - position > total Question items;
 - wrong Question item;
 - empty clear.
+
+Send the numeric-type fixtures as raw JSON so `1.0` remains a JSON
+floating-point value on the wire.
 
 ## Fill
 
@@ -1943,13 +2134,39 @@ Persisted assignment/own Attempt remains editable while lifecycle/deadline allow
 
 ## Submitted Attempt
 
-Active Homework + explicit terminal/submitted Attempt:
+Active Homework + structurally valid explicit terminal/submitted Attempt:
 
 ```text
 409 attempt_not_editable
 ```
 
 No mutation.
+
+## Corrupted locked Homework Attempt
+
+With active Homework before its deadline and an otherwise valid request,
+add focused locked-Attempt fixtures for at least:
+
+- Homework `Attempt.deadline_at != null`;
+- `status = timed_out_finalized`;
+- `finalization_reason = timeout_auto_submit`;
+- `status = in_progress` + `submitted_at != null`;
+- `status = in_progress` + `finalized_at != null`;
+- `status = in_progress` + `locked_at != null`;
+- `status = in_progress` + `finalization_reason != null`.
+
+For every fixture prove:
+
+```text
+LogicException / server invariant failure
+```
+
+Never convert these failures to `attempt_not_editable`. Verify zero answer
+writes: no Answer/typed rows are created, replaced, or cleared, and all existing
+answer state remains unchanged. Verify the Attempt is not repaired, replaced,
+or normalized and its persisted state remains unchanged.
+
+Preserve the lifecycle/deadline error precedence from Sections 11.1–11.2.
 
 ## Teacher closed
 
@@ -2182,6 +2399,22 @@ PASS only if all are true.
 - Question must belong to the Attempt Assessment;
 - persisted assignment remains authoritative;
 - current Group membership not required;
+- after lifecycle/deadline checks, locked Homework Attempt structural validation
+  precedes any editable/terminal use;
+- locked Attempt Institution/Student, Assessment, and `assessment_student_id`
+  match the authenticated Student Institution/Student, locked Homework
+  Assessment, and authoritative Student recipient;
+- Homework `Attempt.deadline_at = null`;
+- Homework Attempt status is only `in_progress`, `submitted`,
+  `waiting_for_teacher_review`, or `checked`; Blitz-only `timed_out_finalized`
+  and `timeout_auto_submit` are server invariant failures;
+- `in_progress` requires `submitted_at`, `finalized_at`, `locked_at`, and
+  `finalization_reason` all null;
+- structural Homework corruption causes `LogicException` / server invariant
+  failure with zero answer writes and no Attempt repair, replacement, or
+  normalization; it is never converted to `attempt_not_editable`;
+- a structurally valid terminal Homework Attempt returns
+  `409 attempt_not_editable`;
 - only `in_progress` active pre-deadline Attempt is editable;
 - post-deadline write never commits;
 - due request triggers BE-002 reconciliation before error response.
@@ -2197,6 +2430,8 @@ PASS only if all are true.
 - child IDs scoped to current Question/Institution;
 - Matching sides enforced without match-key usage;
 - Ordering submitted positions validated without correct-position usage;
+- Ordering submitted position requires a real JSON integer; numeric
+  strings/floats are rejected;
 - Multiple Choice cap uses count of correct options but exposes no identities;
 - exact `selection_limit_exceeded` behavior;
 - written/fill text limits enforced.
@@ -2206,6 +2441,19 @@ PASS only if all are true.
 - normalized BE-001 tables only;
 - one parent AttemptAnswer per Attempt/Question;
 - checking state always pending/null score on Student save;
+- existing Answer parent identity/checking state and typed graph are validated
+  before no-op comparison, replace, or clear, as required by Section 16;
+- typed children belong to the same Institution and the exact locked Question,
+  not merely the Institution;
+- exactly the required non-empty typed family exists for the locked Question;
+  incompatible typed relations and `answer_files` are absent for non-file
+  Answers;
+- incompatible/mixed/missing/wrong-Question or otherwise invalid persisted
+  Answer structure returns `409 business_conflict`;
+- corrupted existing Answer state is never silently repaired: zero mutation,
+  child/parent deletion, timestamp rewrite, or delete-and-recreate workaround;
+- corruption responses expose no child IDs, correctness data, SQL details,
+  internal column names, or corruption details;
 - replacement is atomic;
 - clear removes child then parent;
 - no empty fabricated parent Answer;
@@ -2270,15 +2518,24 @@ Open max = 20000 Unicode chars
 Matching partial = allowed
 Ordering partial = allowed
 Ordering request positions = 1-based
+Ordering position JSON type = integer only; "1" and 1.0 are invalid
 Fill partial = allowed
 Written semantic empty = trim(text)=='' => clear
 clear = no AttemptAnswer row
+existing AttemptAnswer integrity validation = mandatory before mutation/no-op
+typed child ownership = exact locked Question
+mixed/wrong-Question/missing typed graph = 409 business_conflict
+corrupt existing Answer = never silently repaired
 same semantic state = write-free 200 no-op
 exact Student text = preserved from authoritative raw JSON
 empty JSON string remains String; middleware-normalized input is not authoritative
 semantic-empty helper = explicit Unicode-whitespace decision only; never storage normalization
 deadline save gate = server observedAt < deadline
 deadline rejection = reconcile through BE-002 then 409
+locked Homework Attempt structural validation precedes answer editability use
+Homework Attempt.deadline_at = null
+Blitz-only status/reason = server invariant failure
+in_progress terminal metadata must all be null
 Attempt FOR UPDATE lock = mutation/finalization serialization boundary
 Topic/Assessment/Homework/Question = shared/read locks for BE-005
 different Students/different Attempts = concurrent answer saves allowed
