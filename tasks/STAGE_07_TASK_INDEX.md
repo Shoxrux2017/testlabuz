@@ -5,21 +5,21 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 7 — Student Homework and Submission Flow` |
-| Stage status | `Backend implementation in progress — S07-BE-001…004 Accepted / Delivered` |
+| Stage status | `Backend implementation in progress — S07-BE-001…005 Accepted / Delivered` |
 | Verification model | `Workflow v3 — Lean Verification + Integration Harness Preflight discipline` |
 | Decomposition status | `Approved` |
 | Planning baseline `origin/main` | `294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline `origin/main` | `275a1b2087a5d3e5a15c0ef1d3e50bba923236b2` |
+| Current review baseline `origin/main` | `c03a600a92257a8a64730d603658381fb5ffb854` |
 | Previous Stage | `Stage 6 — Closed / PASS` |
 | GitHub source of truth | `Current main must be re-checked before every executable task` |
 | Documentation contract | `S07-DOC-001 — Accepted / Delivered via PR #187` |
-| Backend implementation | `S07-BE-001…004 Accepted / Delivered; S07-BE-005 is pending sequential current-main review` |
+| Backend implementation | `S07-BE-001…005 Accepted / Delivered; S07-BE-006 is pending sequential current-main review` |
 | Backend checkpoint | `S07-BE-PHASE-2 — prepared, not executed` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `S07-FE-PHASE-2 — prepared, not executed` |
 | Integration | `S07-INT-001 — prepared, not executed` |
 | Closure | `STAGE_07_CLOSURE_REVIEW — prepared, not executed` |
-| Next permitted executable gate | `S07-BE-005 current-main implementation-readiness review by ChatGPT` |
+| Next permitted executable gate | `S07-BE-006 current-main implementation-readiness review by ChatGPT` |
 
 This index is the authoritative Stage 7 orchestration map. The planning package
 has already been delivered to `origin/main`; the current review baseline above
@@ -53,7 +53,7 @@ integrated
 closed
 ```
 
-Stage 7 backend implementation is in progress. S07-BE-001…004 are Accepted / Delivered, and S07-BE-005 is the next contract pending sequential current-main review.
+Stage 7 backend implementation is in progress. S07-BE-001…005 are Accepted / Delivered, and S07-BE-006 is the next contract pending sequential current-main review.
 
 ---
 
@@ -210,7 +210,7 @@ implement. Codex receives the current self-contained implementation contract.
 | 2 | `S07-BE-002` | Backend | Homework finalization/deadline engine + Teacher close integration | BE-001 | `Approved` | `PASS — implemented and accepted` | `Accepted / Delivered — PR #192, merge a145d7bc9146a0d8470693449961771824663676` | `tasks/backend/stage-07/S07-BE-002-homework-attempt-finalization-deadline-engine.md` |
 | 3 | `S07-BE-003` | Backend | Student Homework read API | BE-001 + BE-002 | `Approved` | `PASS — implemented and accepted` | `Accepted / Delivered — PR #194, merge 1a7e86d3d08902feab3f004b21754aa7e2f1f98a` | `tasks/backend/stage-07/S07-BE-003-student-homework-read-api.md` |
 | 4 | `S07-BE-004` | Backend | Idempotent Attempt start/resume + official pair lock | BE-001 + BE-002 + BE-003 | `Approved` | `PASS — implemented and accepted` | `Accepted / Delivered — PR #196, merge 275a1b2087a5d3e5a15c0ef1d3e50bba923236b2` | `tasks/backend/stage-07/S07-BE-004-idempotent-homework-attempt-start-resume.md` |
-| 5 | `S07-BE-005` | Backend | Eight non-file typed answer save/replace | BE-004 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-005-typed-student-answer-save-replace.md` |
+| 5 | `S07-BE-005` | Backend | Eight non-file typed answer save/replace | BE-004 | `Approved` | `PASS — implemented and accepted` | `Accepted / Delivered — PR #201, merge c03a600a92257a8a64730d603658381fb5ffb854` | `tasks/backend/stage-07/S07-BE-005-typed-student-answer-save-replace.md` |
 | 6 | `S07-BE-006` | Backend | File-based answer upload/replace/protected Student download | BE-005 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-006-file-based-student-answer-flow.md` |
 | 7 | `S07-BE-007` | Backend | Idempotent final Homework Submit | BE-002 + BE-005 + BE-006 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-007-idempotent-final-homework-submit.md` |
 | 8 | `S07-BE-PHASE-2` | Backend review | Complete Stage 7 backend read-only block review + full backend regression | BE-001…007 | `Prepared` | `Pending review before checkpoint execution` | `Not executed` | `tasks/backend/stage-07/S07-BE-PHASE-2-backend-block-review.md` |
@@ -342,15 +342,20 @@ Stage entry and mandatory documentation alignment are complete:
 - [x] `S07-BE-004` implementation passed ChatGPT acceptance review.
 - [x] PR #196 was merged to `main`.
 - [x] `S07-BE-004 = Accepted / Delivered`.
+- [x] `S07-BE-005` contract passed ChatGPT current-main Implementation Readiness review.
+- [x] `S07-BE-005` implementation passed ChatGPT acceptance review.
+- [x] PR #201 was merged to `main`.
+- [x] `S07-BE-005 = Accepted / Delivered`.
+- [x] Current `origin/main` was re-checked at `c03a600a92257a8a64730d603658381fb5ffb854`.
 
 The next review gate is:
 
 ```text
-S07-BE-005 current-main implementation-readiness review
+S07-BE-006 current-main implementation-readiness review
 ```
 
-Before Codex may start `S07-BE-005`, ChatGPT must first perform its sequential
-current-main review against the delivered `S07-BE-001…004` implementation and
+Before Codex may start `S07-BE-006`, ChatGPT must first perform its sequential
+current-main review against the delivered `S07-BE-001…005` implementation and
 current repository state.
 
 Later tasks still require their dependencies to become `Accepted / Delivered`
@@ -368,8 +373,8 @@ PR #187
 merge = 6529ae4b4a114828d0636baec597d10c03ef3164
 ```
 
-This gate is satisfied. Backend implementation is in progress: `S07-BE-001…004`
-are Accepted / Delivered. `S07-BE-005` is pending its required sequential
+This gate is satisfied. Backend implementation is in progress: `S07-BE-001…005`
+are Accepted / Delivered. `S07-BE-006` is pending its required sequential
 current-main review before execution may be authorized.
 
 `S07-DOC-001` aligned live `docs/01–09` so Stage 7 execution/finalization no longer
