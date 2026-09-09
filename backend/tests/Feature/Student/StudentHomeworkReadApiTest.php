@@ -53,6 +53,7 @@ class StudentHomeworkReadApiTest extends TestCase
         $this->assertSame([
             ['methods' => ['GET'], 'uri' => 'api/v1/student/homework', 'middleware' => $middleware],
             ['methods' => ['GET'], 'uri' => 'api/v1/student/homework/{homework}', 'middleware' => $middleware],
+            ['methods' => ['POST'], 'uri' => 'api/v1/student/homework/{homework}/attempts', 'middleware' => $middleware],
         ], $routes);
 
         $institution = $this->institution();

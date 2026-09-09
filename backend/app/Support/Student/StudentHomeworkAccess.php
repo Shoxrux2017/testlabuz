@@ -69,7 +69,7 @@ class StudentHomeworkAccess
                 ->select([
                     'id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id',
                     'attempt_number', 'status', 'started_at', 'submitted_at', 'finalized_at',
-                    'finalization_reason', 'locked_at',
+                    'finalization_reason', 'locked_at', 'deadline_at',
                 ])
                 // Validate the complete recipient graph after loading this Student's rows.
                 ->where('student_id', $student->id)

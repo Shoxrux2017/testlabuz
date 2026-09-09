@@ -16,6 +16,8 @@ final class ApiErrorResponse
 
     private const CODE_ASSESSMENT_NOT_ASSIGNED = 'assessment_not_assigned';
 
+    private const CODE_ATTEMPTS_EXHAUSTED = 'attempts_exhausted';
+
     private const CODE_BUSINESS_CONFLICT = 'business_conflict';
 
     private const CODE_DEADLINE_PASSED = 'deadline_passed';
@@ -29,6 +31,8 @@ final class ApiErrorResponse
     private const CODE_CURRENT_PASSWORD_INVALID = 'current_password_invalid';
 
     private const CODE_INSTITUTION_INACTIVE = 'institution_inactive';
+
+    private const CODE_IDEMPOTENCY_KEY_REUSED = 'idempotency_key_reused';
 
     private const CODE_INVALID_CREDENTIALS = 'invalid_credentials';
 
@@ -350,6 +354,45 @@ final class ApiErrorResponse
         return self::json(
             'The assessment is not assigned to any eligible students.',
             self::CODE_ASSESSMENT_NOT_ASSIGNED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function studentAssessmentNotAssigned(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This Homework is no longer assigned to the current Student.',
+            self::CODE_ASSESSMENT_NOT_ASSIGNED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function attemptsExhausted(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'No Homework attempts remain.',
+            self::CODE_ATTEMPTS_EXHAUSTED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function idempotencyKeyReused(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The Idempotency-Key has already been used for a different request.',
+            self::CODE_IDEMPOTENCY_KEY_REUSED,
             Response::HTTP_CONFLICT,
         );
     }
