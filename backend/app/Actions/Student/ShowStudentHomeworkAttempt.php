@@ -6,6 +6,7 @@ use App\Enums\AssessmentAttemptStatus;
 use App\Models\AssessmentAttempt;
 use App\Models\User;
 use App\Support\Student\StudentHomeworkAttemptAccess;
+use App\Support\Student\StudentHomeworkAttemptAnswerStates;
 use Illuminate\Database\Eloquent\Collection;
 use LogicException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,6 +16,7 @@ class ShowStudentHomeworkAttempt
     public function __construct(
         private readonly StudentHomeworkAttemptAccess $access,
         private readonly ShowStudentHomework $showHomework,
+        private readonly StudentHomeworkAttemptAnswerStates $answerStates,
     ) {}
 
     public function __invoke(User $student, string $attemptId): AssessmentAttempt
@@ -60,6 +62,9 @@ class ShowStudentHomeworkAttempt
         }
 
         $attempt->setRelation('assessment', $homework);
+        $attempt->setAttribute('student_answer_states', ($this->answerStates)(
+            $student->institution_id, $attempt, $homework->getRelation('questions'),
+        ));
 
         return $attempt;
     }

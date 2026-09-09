@@ -18,6 +18,10 @@ final class ApiErrorResponse
 
     private const CODE_ATTEMPTS_EXHAUSTED = 'attempts_exhausted';
 
+    private const CODE_ATTEMPT_NOT_EDITABLE = 'attempt_not_editable';
+
+    private const CODE_SELECTION_LIMIT_EXCEEDED = 'selection_limit_exceeded';
+
     private const CODE_BUSINESS_CONFLICT = 'business_conflict';
 
     private const CODE_DEADLINE_PASSED = 'deadline_passed';
@@ -381,6 +385,33 @@ final class ApiErrorResponse
             'No Homework attempts remain.',
             self::CODE_ATTEMPTS_EXHAUSTED,
             Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function attemptNotEditable(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This Homework attempt is no longer editable.',
+            self::CODE_ATTEMPT_NOT_EDITABLE,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function selectionLimitExceeded(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'Too many options were selected for this Question.',
+            self::CODE_SELECTION_LIMIT_EXCEEDED,
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            ['selected_option_ids' => ['Select no more than the allowed number of options.']],
         );
     }
 
