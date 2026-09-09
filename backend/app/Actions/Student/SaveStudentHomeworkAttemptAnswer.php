@@ -3,7 +3,6 @@
 namespace App\Actions\Student;
 
 use App\Actions\Homework\FinalizeHomeworkAttemptsAtDeadline;
-use App\Enums\AssessmentAttemptFinalizationReason;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
@@ -15,7 +14,6 @@ use App\Exceptions\Student\StudentHomeworkDeadlinePassedException;
 use App\Exceptions\Student\StudentHomeworkNotActiveException;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
-use App\Models\AssessmentStudent;
 use App\Models\AttemptAnswer;
 use App\Models\Question;
 use App\Models\User;
@@ -95,7 +93,7 @@ class SaveStudentHomeworkAttemptAnswer
                 return null;
             }
 
-            $this->assertValidAttempt($student, $assessment, $attempt);
+            $this->access->assertValidAnswerAttempt($student, $assessment, $attempt);
 
             if ($attempt->status !== AssessmentAttemptStatus::InProgress) {
                 throw new AttemptNotEditableException;
@@ -109,7 +107,7 @@ class SaveStudentHomeworkAttemptAnswer
             $existingValue = null;
 
             if ($answer !== null) {
-                $this->integrity->load(new Collection([$answer]));
+                $this->integrity->load(new Collection([$answer]), institutionId: $student->institution_id);
 
                 try {
                     $existingValue = $this->integrity->canonical($answer, $attempt, $question);
@@ -137,25 +135,5 @@ class SaveStudentHomeworkAttemptAnswer
         }
 
         return $result;
-    }
-
-    private function assertValidAttempt(User $student, Assessment $assessment, AssessmentAttempt $attempt): void
-    {
-        $recipient = AssessmentStudent::query()
-            ->where('institution_id', $student->institution_id)
-            ->where('assessment_id', $assessment->id)
-            ->where('student_id', $student->id)->first(['id']);
-
-        if ($attempt->institution_id !== $student->institution_id || $attempt->student_id !== $student->id
-            || $attempt->assessment_id !== $assessment->id || $recipient === null
-            || $attempt->assessment_student_id !== $recipient->id || $attempt->deadline_at !== null
-            || ! in_array($attempt->status, [AssessmentAttemptStatus::InProgress, AssessmentAttemptStatus::Submitted,
-                AssessmentAttemptStatus::WaitingForTeacherReview, AssessmentAttemptStatus::Checked], true)
-            || $attempt->finalization_reason === AssessmentAttemptFinalizationReason::TimeoutAutoSubmit
-            || ($attempt->status === AssessmentAttemptStatus::InProgress
-                && ($attempt->submitted_at !== null || $attempt->finalized_at !== null
-                    || $attempt->locked_at !== null || $attempt->finalization_reason !== null))) {
-            throw new LogicException('Locked Homework Attempt has an invalid structural state.');
-        }
     }
 }

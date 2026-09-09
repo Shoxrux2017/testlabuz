@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Files;
 
-use App\Actions\Files\DownloadLearningMaterialFile;
+use App\Actions\Files\DownloadProtectedFile;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Files\ProtectedFileDownloadRequest;
 use App\Models\User;
@@ -16,11 +16,11 @@ class ProtectedFileDownloadController extends Controller
     public function __invoke(
         ProtectedFileDownloadRequest $request,
         string $file,
-        DownloadLearningMaterialFile $downloadLearningMaterialFile,
+        DownloadProtectedFile $downloadProtectedFile,
     ): StreamedResponse {
         /** @var User $actor */
         $actor = $request->user();
-        $download = $downloadLearningMaterialFile($actor, $file);
+        $download = $downloadProtectedFile($actor, $file);
         $filename = $this->safeFilename($download);
         $fallback = $this->asciiFallback($filename, $download->canonicalExtension);
 

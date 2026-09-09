@@ -5,6 +5,7 @@ namespace App\Http\Requests\Student;
 use App\Domain\Assessment\QuestionAuthoringLimits;
 use App\Support\Student\StudentAnswerText;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 use JsonException;
@@ -24,6 +25,10 @@ class StudentHomeworkAttemptAnswerRequest extends FormRequest
     /** @return array<string, mixed> */
     public function validationData(): array
     {
+        if ($this->isMultipart()) {
+            return $this->all();
+        }
+
         return $this->rawObject() === null
             ? []
             : json_decode($this->getContent(), true, flags: JSON_THROW_ON_ERROR);
@@ -32,6 +37,13 @@ class StudentHomeworkAttemptAnswerRequest extends FormRequest
     /** @return array<string, list<mixed>> */
     public function rules(): array
     {
+        if ($this->isMultipart()) {
+            return [
+                'type' => ['required', 'string', Rule::in(['file_based'])],
+                'file' => ['required', 'file'],
+            ];
+        }
+
         $rules = ['type' => ['required', 'string', Rule::in([
             'single_choice', 'multiple_choice', 'true_false', 'short_written',
             'open_written', 'matching', 'ordering', 'fill_in_blank',
@@ -69,6 +81,12 @@ class StudentHomeworkAttemptAnswerRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            if ($this->isMultipart()) {
+                $this->validateFileUpload($validator);
+
+                return;
+            }
+
             $raw = $this->rawObject();
 
             if ($raw === null) {
@@ -157,6 +175,30 @@ class StudentHomeworkAttemptAnswerRequest extends FormRequest
     {
         if (! is_string($text) || mb_strlen($text) > $limit || ($nonEmpty && StudentAnswerText::isEmpty($text))) {
             $validator->errors()->add($field, 'The answer text is invalid.');
+        }
+    }
+
+    private function isMultipart(): bool
+    {
+        return strtolower(trim(explode(';', (string) $this->header('Content-Type'), 2)[0])) === 'multipart/form-data';
+    }
+
+    private function validateFileUpload(Validator $validator): void
+    {
+        if ($this->query->all() !== []) {
+            $validator->errors()->add('query', 'Query parameters are not allowed for this endpoint.');
+        }
+
+        if (array_diff(array_keys($this->all()), ['type', 'file']) !== []) {
+            $validator->errors()->add('body', 'The answer contains fields that are not allowed.');
+        }
+
+        $upload = $this->file('file');
+
+        if ($upload instanceof UploadedFile && $upload->isValid()
+            && (! is_int($upload->getSize()) || $upload->getSize() <= 0
+                || mb_strlen($upload->getClientOriginalName(), 'UTF-8') > 500)) {
+            $validator->errors()->add('file', 'The uploaded file is invalid.');
         }
     }
 
