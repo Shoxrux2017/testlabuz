@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
+use App\Http\Controllers\Api\V1\Student\StudentHomeworkAttemptAnswerController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkAttemptController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkController;
 use App\Http\Controllers\Api\V1\Student\StudentTopicController;
@@ -135,6 +136,7 @@ Route::prefix('student')
         Route::get('homework/{homework}', [StudentHomeworkController::class, 'show']);
         Route::post('homework/{homework}/attempts', [StudentHomeworkAttemptController::class, 'store']);
         Route::get('attempts/{attempt}', [StudentHomeworkAttemptController::class, 'show']);
+        Route::put('attempts/{attempt}/answers/{question}', [StudentHomeworkAttemptAnswerController::class, 'update']);
         Route::get('topics', [StudentTopicController::class, 'index']);
         Route::get('topics/{topic}', [StudentTopicController::class, 'show']);
     });

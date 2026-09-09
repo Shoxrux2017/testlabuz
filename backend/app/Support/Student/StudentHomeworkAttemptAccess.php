@@ -54,10 +54,22 @@ final class StudentHomeworkAttemptAccess
     /** @return array{topic: Topic, assessment: Assessment, homework: HomeworkAssignment} */
     public function lockHomework(User $student, Assessment $preliminaryAssessment): array
     {
+        return $this->lockHomeworkRows($student, $preliminaryAssessment, exclusive: true);
+    }
+
+    /** @return array{topic: Topic, assessment: Assessment, homework: HomeworkAssignment} */
+    public function shareHomeworkForAnswer(User $student, Assessment $preliminaryAssessment): array
+    {
+        return $this->lockHomeworkRows($student, $preliminaryAssessment, exclusive: false);
+    }
+
+    /** @return array{topic: Topic, assessment: Assessment, homework: HomeworkAssignment} */
+    private function lockHomeworkRows(User $student, Assessment $preliminaryAssessment, bool $exclusive): array
+    {
         $topic = Topic::query()
             ->where('institution_id', $student->institution_id)
             ->whereKey($preliminaryAssessment->topic_id)
-            ->lockForUpdate()
+            ->lock($exclusive)
             ->first();
 
         if ($topic === null) {
@@ -69,7 +81,7 @@ final class StudentHomeworkAttemptAccess
             ->where('topic_id', $topic->id)
             ->where('type', AssessmentType::Homework->value)
             ->whereKey($preliminaryAssessment->id)
-            ->lockForUpdate()
+            ->lock($exclusive)
             ->first();
 
         if ($assessment === null) {
@@ -79,7 +91,7 @@ final class StudentHomeworkAttemptAccess
         $homework = HomeworkAssignment::query()
             ->where('institution_id', $student->institution_id)
             ->where('assessment_id', $assessment->id)
-            ->lockForUpdate()
+            ->lock($exclusive)
             ->first();
 
         if ($homework === null) {

@@ -123,7 +123,7 @@ class StudentHomeworkAttemptStartApiTest extends TestCase
             'id' => $attempt->id, 'assessment_id' => $homework->assessment_id,
             'attempt_number' => 1, 'status' => 'in_progress', 'started_at' => '2026-09-09T12:00:00Z',
             'submitted_at' => null, 'finalized_at' => null, 'finalization_reason' => null,
-            'deadline_at' => $hasDeadline ? '2026-09-10T12:00:00Z' : null, 'questions' => [],
+            'deadline_at' => $hasDeadline ? '2026-09-10T12:00:00Z' : null, 'questions' => [], 'answers' => [],
         ], $response->json('data'));
         $this->assertSame(['data'], array_keys($response->json()));
         $this->assertTrue(Str::isUuid($attempt->id));
@@ -343,30 +343,32 @@ class StudentHomeworkAttemptStartApiTest extends TestCase
             'exact boundary blocks resume' => [0, true], 'past deadline blocks resume' => [-1, true]];
     }
 
-    public function test_own_attempt_get_reconciles_due_state_and_reuses_safe_questions_without_reading_saved_answers(): void
+    public function test_own_attempt_get_reconciles_due_state_and_returns_safe_questions_and_saved_answers(): void
     {
         $student = $this->student();
         $homework = $this->homework($student, attributes: ['deadline_at' => now()->addMinute()]);
         $question = Question::factory()->singleChoice()->create(['assessment_id' => $homework->assessment_id, 'institution_id' => $student->institution_id]);
-        QuestionChoiceOption::factory()->create(['question_id' => $question->id, 'option_text' => 'Visible choice', 'is_correct' => true]);
+        $option = QuestionChoiceOption::factory()->create(['question_id' => $question->id, 'option_text' => 'Visible choice', 'is_correct' => true]);
         $attempt = $this->attempt($homework, $student);
-        AttemptAnswer::factory()->create(['attempt_id' => $attempt->id, 'question_id' => $question->id, 'feedback' => 'saved-answer-secret']);
+        $answer = AttemptAnswer::factory()->create(['attempt_id' => $attempt->id, 'question_id' => $question->id]);
+        $answer->selectedOptions()->attach($option->id, ['institution_id' => $student->institution_id, 'created_at' => now()]);
+        $answerBefore = $answer->fresh()->getAttributes();
         $safeQuestions = $this->requestAs($student, 'GET', '/api/v1/student/homework/'.$homework->assessment_id)->assertOk()->json('data.questions');
         $this->travel(2)->minutes();
-        DB::flushQueryLog();
-        DB::enableQueryLog();
-        try {
-            $response = $this->requestAs($student, 'GET', '/api/v1/student/attempts/'.$attempt->id)->assertOk()
-                ->assertJsonPath('data.status', 'submitted')->assertJsonPath('data.finalized_at', '2026-09-09T12:01:00Z')
-                ->assertJsonPath('data.finalization_reason', 'homework_deadline_auto_submit');
-            $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'submitted_at',
-                'finalized_at', 'finalization_reason', 'deadline_at', 'questions'], array_keys($response->json('data')));
-            $this->assertSame($safeQuestions, $response->json('data.questions'));
-            $this->assertEmpty(array_filter(DB::getQueryLog(), fn (array $query): bool => str_contains($query['query'], 'attempt_answers')));
-        } finally {
-            DB::disableQueryLog();
-        }
-        foreach (['answers', 'is_correct', 'checking_mode', 'earned_points', 'possible_points', 'assessment_student_id', 'student_id', 'institution_id', 'saved-answer-secret'] as $hidden) {
+        $response = $this->requestAs($student, 'GET', '/api/v1/student/attempts/'.$attempt->id)->assertOk()
+            ->assertJsonPath('data.status', 'submitted')->assertJsonPath('data.finalized_at', '2026-09-09T12:01:00Z')
+            ->assertJsonPath('data.finalization_reason', 'homework_deadline_auto_submit');
+        $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'submitted_at',
+            'finalized_at', 'finalization_reason', 'deadline_at', 'questions', 'answers'], array_keys($response->json('data')));
+        $this->assertSame($safeQuestions, $response->json('data.questions'));
+        $this->assertSame([[
+            'question_id' => $question->id, 'type' => 'single_choice',
+            'answer' => ['selected_option_ids' => [$option->id]], 'updated_at' => '2026-09-09T12:00:00Z',
+        ]], $response->json('data.answers'));
+        $this->assertSame($answerBefore, $answer->fresh()->getAttributes());
+        foreach (['is_correct', 'correct_value', 'accepted_answers', 'correct_position', 'match_key',
+            'checking_status', 'awarded_points', 'feedback', 'checked_by_user_id', 'checked_at', 'attempt_id',
+            'checking_mode', 'earned_points', 'possible_points', 'assessment_student_id', 'student_id', 'institution_id'] as $hidden) {
             $this->assertStringNotContainsString('"'.$hidden.'"', $response->getContent());
         }
     }

@@ -8,6 +8,7 @@ use App\Models\HomeworkAssignment;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection as SupportCollection;
 use LogicException;
 
 /** @mixin AssessmentAttempt */
@@ -26,9 +27,10 @@ class StudentHomeworkAttemptResource extends JsonResource
 
         $homework = $assessment->getRelation('homeworkAssignment');
         $questions = $assessment->getRelation('questions');
+        $answerStates = $this->getAttribute('student_answer_states');
 
-        if (! $homework instanceof HomeworkAssignment || ! $questions instanceof Collection) {
-            throw new LogicException('Student Attempt resources require preloaded Homework and Questions.');
+        if (! $homework instanceof HomeworkAssignment || ! $questions instanceof Collection || ! $answerStates instanceof SupportCollection) {
+            throw new LogicException('Student Attempt resources require preloaded Homework, Questions and Answer states.');
         }
 
         return [
@@ -42,6 +44,7 @@ class StudentHomeworkAttemptResource extends JsonResource
             'finalization_reason' => $this->finalization_reason?->value,
             'deadline_at' => $homework->deadline_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
             'questions' => StudentQuestionResource::collection($questions),
+            'answers' => StudentAttemptAnswerStateResource::collection($answerStates),
         ];
     }
 }

@@ -4,8 +4,12 @@ namespace App\Actions\Student;
 
 use App\Enums\AssessmentAttemptStatus;
 use App\Models\AssessmentAttempt;
+use App\Models\Question;
 use App\Models\User;
+use App\Support\Student\StudentHomeworkAnswerIntegrity;
+use App\Support\Student\StudentHomeworkAnswerValue;
 use App\Support\Student\StudentHomeworkAttemptAccess;
+use App\Support\Student\StudentHomeworkAttemptAnswerMutationResult;
 use Illuminate\Database\Eloquent\Collection;
 use LogicException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,6 +19,8 @@ class ShowStudentHomeworkAttempt
     public function __construct(
         private readonly StudentHomeworkAttemptAccess $access,
         private readonly ShowStudentHomework $showHomework,
+        private readonly StudentHomeworkAnswerValue $answerValues,
+        private readonly StudentHomeworkAnswerIntegrity $answerIntegrity,
     ) {}
 
     public function __invoke(User $student, string $attemptId): AssessmentAttempt
@@ -60,6 +66,29 @@ class ShowStudentHomeworkAttempt
         }
 
         $attempt->setRelation('assessment', $homework);
+        $questions = $homework->getRelation('questions');
+        $this->answerValues->loadQuestions($questions, $student->institution_id);
+        // Scope by the authorized Attempt, but do not hide corrupt Answer ownership or Question IDs.
+        $answers = $attempt->answers()->get();
+        $this->answerIntegrity->load($answers);
+        $questionsById = $questions->keyBy('id');
+
+        foreach ($answers as $answer) {
+            $question = $questionsById->get($answer->question_id);
+
+            if (! $question instanceof Question) {
+                throw new LogicException('Persisted Student answer does not belong to the authorized Question set.');
+            }
+
+            $answer->setAttribute('student_answer_value', $this->answerIntegrity->canonical($answer, $attempt, $question));
+        }
+
+        $answersByQuestion = $answers->keyBy('question_id');
+        $attempt->setAttribute('student_answer_states', $questions
+            ->filter(fn (Question $question): bool => $answersByQuestion->has($question->id))
+            ->map(fn (Question $question): StudentHomeworkAttemptAnswerMutationResult => new StudentHomeworkAttemptAnswerMutationResult(
+                $question, $answersByQuestion->get($question->id),
+            ))->values());
 
         return $attempt;
     }
