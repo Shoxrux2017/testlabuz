@@ -21,6 +21,7 @@ use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
 use App\Models\HomeworkAssignment;
 use App\Models\IdempotencyRecord;
+use App\Models\Question;
 use App\Models\Topic;
 use App\Models\TopicResultPair;
 use App\Models\User;
@@ -28,6 +29,7 @@ use App\Support\Idempotency\IdempotencyGuard;
 use App\Support\Idempotency\IdempotencyRequestFingerprint;
 use App\Support\Student\StudentHomeworkAccess;
 use App\Support\Student\StudentHomeworkAttemptAccess;
+use App\Support\Student\StudentHomeworkAttemptAnswerStates;
 use App\Support\Student\StudentHomeworkAttemptStartResult;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +44,7 @@ final class StartStudentHomeworkAttempt
         private readonly IdempotencyRequestFingerprint $fingerprints,
         private readonly IdempotencyGuard $idempotency,
         private readonly FinalizeHomeworkAttemptsAtDeadline $finalizeAtDeadline,
+        private readonly StudentHomeworkAttemptAnswerStates $answerStates,
     ) {}
 
     public function __invoke(User $student, string $homeworkId, string $idempotencyKey): StudentHomeworkAttemptStartResult
@@ -102,6 +105,14 @@ final class StartStudentHomeworkAttempt
             $current = $studentAttempts->first(fn (AssessmentAttempt $attempt) => $attempt->status === AssessmentAttemptStatus::InProgress);
 
             if ($current !== null) {
+                $questions = Question::query()
+                    ->select(['id', 'institution_id', 'assessment_id', 'type', 'position'])
+                    ->where('institution_id', $student->institution_id)
+                    ->where('assessment_id', $assessment->id)
+                    ->orderBy('position')
+                    ->orderBy('id')
+                    ->get();
+                ($this->answerStates)($student->institution_id, $current, $questions);
                 $this->idempotency->complete($claim, 'assessment_attempt', $current->id, 200);
 
                 return new StudentHomeworkAttemptStartResult($current->id, 200);

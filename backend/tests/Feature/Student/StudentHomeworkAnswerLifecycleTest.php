@@ -14,11 +14,13 @@ use App\Models\AssessmentStudent;
 use App\Models\AttemptAnswer;
 use App\Models\GroupStudentMembership;
 use App\Models\HomeworkAssignment;
+use App\Models\IdempotencyRecord;
 use App\Models\Institution;
 use App\Models\InstitutionSetting;
 use App\Models\Question;
 use App\Models\QuestionChoiceOption;
 use App\Models\Topic;
+use App\Models\TopicResultPair;
 use App\Models\User;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -392,6 +394,83 @@ class StudentHomeworkAnswerLifecycleTest extends TestCase
         }
 
         return $cases;
+    }
+
+    public function test_new_resume_claim_rolls_back_on_corrupt_answers_and_the_same_key_succeeds_after_fixture_repair(): void
+    {
+        [$student, $homework, $attempt, $question] = $this->fixture();
+        $pair = TopicResultPair::factory()->create([
+            'homework_assessment_id' => $homework->assessment_id,
+            'designated_at' => now()->subHours(2), 'cohort_snapshotted_at' => now()->subHours(2),
+            'locked_at' => $attempt->started_at,
+        ]);
+        $answer = $this->savedText($attempt, $question);
+        $validAnswersBefore = $this->answerState();
+        $corruption = AnswerBooleanValue::factory()->create(['answer_id' => $answer->id, 'boolean_value' => true]);
+        $attemptBefore = $attempt->fresh()->getAttributes();
+        $answersBefore = $this->answerState();
+        $pairBefore = $pair->fresh()->getAttributes();
+        $key = '87fb121f-7ced-4cd9-9ee2-3cbf9c689708';
+        $server = [
+            'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_IDEMPOTENCY_KEY' => $key,
+            'HTTP_AUTHORIZATION' => 'Bearer '.$student->createToken('student-answer-resume-rollback-test')->plainTextToken,
+        ];
+        $request = function () use ($homework, $server): TestResponse {
+            try {
+                return $this->call('POST', '/api/v1/student/homework/'.$homework->assessment_id.'/attempts', [], [], [], $server, '');
+            } finally {
+                $this->app['auth']->forgetGuards();
+            }
+        };
+        $this->assertDatabaseMissing('idempotency_records', ['idempotency_key' => $key]);
+
+        for ($requestNumber = 0; $requestNumber < 2; $requestNumber++) {
+            $this->travel(1)->minutes();
+            $response = $this->withoutAnswerWrites($request, true);
+
+            $this->assertSafeServerError($response);
+            foreach ([$answer->id, $question->id, ...self::ANSWER_TABLES,
+                'Original Student answer', 'SQL', 'LogicException', 'answer_id', 'boolean_value'] as $hidden) {
+                $this->assertStringNotContainsString($hidden, $response->getContent());
+            }
+            $this->assertDatabaseMissing('idempotency_records', ['idempotency_key' => $key]);
+            $this->assertSame($attemptBefore, $attempt->fresh()->getAttributes());
+            $this->assertSame($answersBefore, $this->answerState());
+            $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
+            $this->assertDatabaseCount('assessment_attempts', 1);
+        }
+
+        $corruption->delete();
+        $this->assertSame($validAnswersBefore, $this->answerState());
+        $this->travel(1)->minutes();
+
+        $this->withoutAnswerWrites($request, true)->assertOk()->assertJsonPath('data.id', $attempt->id)
+            ->assertJsonPath('data.answers.0.answer.text', 'Original Student answer');
+
+        $record = IdempotencyRecord::query()->where('idempotency_key', $key)->sole();
+        $this->assertSame('student.homework.attempt.start', $record->operation->value);
+        $this->assertSame($student->institution_id, $record->institution_id);
+        $this->assertSame($student->id, $record->user_id);
+        $this->assertSame('assessment_attempt', $record->result_resource_type);
+        $this->assertSame($attempt->id, $record->result_resource_id);
+        $this->assertSame(200, $record->response_status);
+        $this->assertNotNull($record->completed_at);
+        $this->assertSame($attemptBefore, $attempt->fresh()->getAttributes());
+        $this->assertSame($validAnswersBefore, $this->answerState());
+        $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
+        $this->assertDatabaseCount('assessment_attempts', 1);
+        $this->assertDatabaseCount('idempotency_records', 1);
+        $recordBefore = $record->getAttributes();
+        $this->travel(1)->minutes();
+
+        $this->withoutAnswerWrites($request, true)->assertOk()->assertJsonPath('data.id', $attempt->id);
+
+        $this->assertSame($recordBefore, IdempotencyRecord::query()->where('idempotency_key', $key)->sole()->getAttributes());
+        $this->assertSame($attemptBefore, $attempt->fresh()->getAttributes());
+        $this->assertSame($validAnswersBefore, $this->answerState());
+        $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
+        $this->assertDatabaseCount('assessment_attempts', 1);
+        $this->assertDatabaseCount('idempotency_records', 1);
     }
 
     private function student(?Institution $institution = null): User
