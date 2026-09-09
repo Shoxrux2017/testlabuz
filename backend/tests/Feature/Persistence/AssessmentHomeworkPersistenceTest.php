@@ -174,7 +174,7 @@ class AssessmentHomeworkPersistenceTest extends TestCase
             'assessment_student_id' => $recipient->id,
             'student_id' => $recipient->student_id,
             'attempt_number' => 2,
-            'status' => AssessmentAttemptStatus::InProgress->value,
+            'status' => AssessmentAttemptStatus::Submitted->value,
             'started_at' => now(),
             'deadline_at' => null,
             'submitted_at' => null,
@@ -219,6 +219,7 @@ class AssessmentHomeworkPersistenceTest extends TestCase
             'assessment_id' => $recipient->assessment_id,
             'student_id' => $recipient->student_id,
             'attempt_number' => 2,
+            'status' => AssessmentAttemptStatus::Submitted,
             'possible_points' => '20.000000',
         ]);
         $this->assertDatabaseRejects(fn () => DB::table('assessment_attempts')->insert(array_merge(

@@ -95,7 +95,7 @@ class AssessmentHomeworkSchemaInspectionTest extends TestCase
         $this->assertFalse(Schema::hasColumn('homework_assignments', 'attempt_limit'));
         $this->assertTrue(Schema::hasTable('questions'));
 
-        foreach (['blitz_tasks', 'attempt_answers', 'official_task_scores', 'topic_results'] as $table) {
+        foreach (['blitz_tasks', 'official_task_scores', 'topic_results'] as $table) {
             $this->assertFalse(Schema::hasTable($table), "Table {$table} is outside this persistence foundation.");
         }
     }
