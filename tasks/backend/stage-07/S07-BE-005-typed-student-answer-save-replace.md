@@ -11,7 +11,7 @@
 | Implementation type | `Laravel typed Student Homework answer save/replace + resume answer read state` |
 | Depends on | `S07-BE-001…004` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline | `origin/main @ 5f6b0af0f830116d92908f78590b39fd03fc32c5` |
+| Current review baseline | `origin/main @ 178016eb628691f386b0373533080e77ce328cd3` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
 | Readiness Gate | Pending ChatGPT current-main revalidation after contract correction; Codex implementation is not authorized until PASS |
 | Verification | focused Student answer/API/persistence/concurrency verification only |
@@ -1748,6 +1748,78 @@ through answer serialization.
 
 No hidden queries from Resources.
 
+## 23.2 Persisted Answer integrity on resume read
+
+Before any persisted Answer is included in any of the following representations,
+validate its persisted graph:
+
+- `GET /api/v1/student/attempts/{attempt}`;
+- Start response;
+- resume response.
+
+Require every loaded `AttemptAnswer`:
+
+```text
+institution_id = authenticated Student Institution
+attempt_id = current authorized Attempt
+question_id = one of the already authorized Student-safe Questions
+              belonging to the current Homework Assessment
+```
+
+An Answer whose `question_id` is not one of the current Assessment's authorized
+loaded Questions is persisted corruption.
+
+For every Answer, apply the same typed-graph integrity requirements from
+Section 16 against its authorized current-Assessment Question:
+
+- exact typed family for the Question type;
+- all child IDs belong to the exact Question and Institution, not merely the
+  Institution;
+- no mixed typed families;
+- no missing required typed payload;
+- no `answer_files` for the eight non-file BE-005 types;
+- Single Choice: exactly one valid current-Question option;
+- Multiple Choice: non-empty valid current-Question selections within current
+  `max_selections`;
+- True/False: exactly one boolean value;
+- Written: exactly one semantically non-empty text value under the BE-005
+  Unicode-whitespace helper;
+- Matching: one or more mappings using only current-Question left/right items
+  with correct sides and no duplicate logical left/right assignments;
+- Ordering: one or more current-Question items with unique item IDs and valid
+  unique 1-based submitted positions within the current Question item count;
+- Fill: one or more current-Question blanks with semantically non-empty text
+  under the BE-005 Unicode-whitespace helper.
+
+Do not load/use protected answer-key values except the already permitted
+internal Multiple Choice correctness count needed for `max_selections`.
+
+### Read corruption outcome
+
+Unlike the mutation-side `409 business_conflict`, corruption discovered while
+producing a read representation is an internal persisted invariant failure:
+
+```text
+LogicException / server invariant failure
+```
+
+Requirements:
+
+- do not serialize the corrupt Answer;
+- do not silently omit it and continue;
+- do not expose a wrong-Question child ID;
+- do not repair, delete, normalize, or otherwise mutate persisted state;
+- do not expose SQL, table/column names, child IDs, correctness data, or internal
+  exception details.
+
+The normal API boundary must therefore produce its safe server-error response.
+The same rule applies when Start/resume subsequently calls the Attempt read
+projection.
+
+A focused reusable internal integrity helper may be extracted if useful so PUT
+integrity and resume-read integrity do not diverge. Do not create a generic
+framework or new architecture.
+
 ---
 
 # 24. Controller
@@ -1906,9 +1978,15 @@ backend/app/Support/ApiErrorResponse.php
 
 backend/app/Actions/Student/ShowStudentHomeworkAttempt.php
 backend/app/Http/Resources/Student/StudentHomeworkAttemptResource.php
+
+backend/tests/Feature/Student/StudentHomeworkAttemptStartApiTest.php
 ```
 
 Modify delivered BE-004 Student Attempt access/support only if a focused lock method is needed.
+
+The existing `StudentHomeworkAttemptStartApiTest.php` may change only where the
+BE-005 public Attempt representation intentionally changed, as explicitly
+required by Section 32. Do not weaken unrelated BE-004 coverage.
 
 No migration, file-storage, Submit/scoring/docs/frontend/E2E files.
 
@@ -2298,6 +2376,62 @@ awarded_points
 
 Start/resume response after existing saved answers uses the same Attempt Resource and includes them.
 
+## Persisted Answer integrity on resume read
+
+Add focused BE-005 coverage proving GET own Attempt fails safely as a server
+invariant under Section 23.2 when persisted answer state contains at least:
+
+- `Answer.question_id` from another Assessment;
+- Choice child from another same-Institution Question;
+- mixed typed families;
+- missing expected typed payload;
+- non-file Answer with an `answer_files` row.
+
+For every fixture, verify `LogicException` / server invariant failure reaches
+the normal API boundary's safe server-error response. The corrupt Answer must
+never be serialized or silently omitted so the read can continue. Assert no
+wrong-Question child ID, SQL, table/column names, child IDs, correctness data,
+checking/scoring data, or internal exception details appear in the response.
+
+Verify no data mutation: all persisted corrupt parent/typed/file rows and their
+timestamps remain unchanged. No repair, deletion, normalization, or timestamp
+rewrite is permitted. Start/resume must enforce the same integrity gate when
+calling the Attempt read projection.
+
+## Required BE-004 Attempt resource regression update
+
+Update `backend/tests/Feature/Student/StudentHomeworkAttemptStartApiTest.php`
+only for the intentional BE-005 public Attempt representation change.
+
+For a new/start response with no saved Answer, the existing exact expected
+Attempt resource must include:
+
+```json
+"answers": []
+```
+
+The exact public key set must include `answers` after `questions`.
+
+The existing own-Attempt GET regression's assertion that Attempt GET does not
+read `attempt_answers` is obsolete because BE-005 intentionally adds saved-answer
+resume state. Update that regression to:
+
+- create a structurally valid persisted BE-005 non-file Answer;
+- perform GET own Attempt;
+- preserve the existing deadline reconciliation assertions;
+- preserve Student-safe Question assertions;
+- assert the canonical saved `answers` representation;
+- assert no correctness/checking/scoring/internal ownership fields leak.
+
+Remove only the obsolete assertion that no `attempt_answers` query occurs.
+Do not preserve the old deliberately malformed parent-only Answer fixture once
+BE-005 makes Answers part of the read representation.
+
+Do not weaken ownership/privacy checks, deadline behavior, Student-safe Question
+projection, Attempt lifecycle assertions, or any unrelated BE-004 coverage.
+`StudentHomeworkAttemptStartApiTest.php` remains a directly affected regression
+in Sections 33 and 34.
+
 ---
 
 # 33. Directly Affected Regression Tests
@@ -2469,6 +2603,24 @@ PASS only if all are true.
 ## Resume representation
 
 - GET Attempt and Start/resume responses include canonical saved answer states;
+- persisted Answer integrity validation under Section 23.2 is mandatory before
+  serialization in GET Attempt and Start/resume;
+- every loaded Answer's Institution/Attempt match the authenticated Student
+  Institution and current authorized Attempt, and its `question_id` maps to an
+  authorized current-Assessment Student-safe Question;
+- each Answer satisfies the same typed-graph integrity requirements from
+  Section 16 against that exact Question, including no incompatible/missing
+  payload or `answer_files` for non-file types;
+- protected answer-key values are not loaded/used except the permitted internal
+  Multiple Choice correctness count needed for `max_selections`;
+- corrupt resume Answer graphs cause `LogicException` / server invariant
+  failure through the normal API boundary's safe server-error response;
+- corrupt Answers are never serialized, silently omitted, or repaired; persisted
+  corrupt rows and timestamps remain unchanged;
+- read corruption responses expose no SQL, table/column names, child IDs,
+  correctness data, or internal exception details;
+- focused GET own Attempt tests cover every persisted corruption case required
+  by Section 32 with safe failure, no data mutation, and no sensitive output;
 - unanswered Questions remain absent from `answers`;
 - no correct-answer/checking/scoring fields leak.
 
@@ -2494,6 +2646,9 @@ PASS only if all are true.
 
 - exact Pint command passes;
 - exact focused/named regression test command passes;
+- existing BE-004 Attempt resource tests are updated only for the intentional
+  BE-005 `answers` representation as required by Section 32 and remain otherwise
+  regression-preserving;
 - no uncontracted broad suite/static tool is run;
 - `git diff --check` passes;
 - focused self-review passes.
@@ -2526,6 +2681,10 @@ existing AttemptAnswer integrity validation = mandatory before mutation/no-op
 typed child ownership = exact locked Question
 mixed/wrong-Question/missing typed graph = 409 business_conflict
 corrupt existing Answer = never silently repaired
+resume-read Answer integrity = mandatory before serialization
+Answer.question_id must map to authorized current-Assessment Student Question
+corrupt resume Answer graph = server invariant failure
+corrupt Answer is never serialized, omitted silently, or repaired
 same semantic state = write-free 200 no-op
 exact Student text = preserved from authoritative raw JSON
 empty JSON string remains String; middleware-normalized input is not authoritative
