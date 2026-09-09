@@ -11,8 +11,9 @@
 | Type | `Laravel/PostgreSQL persistence foundation` |
 | Depends on | `S07-DOC-001 = Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Implementation baseline | ChatGPT re-checks/fixes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependency above |
+| Current review baseline | `origin/main @ b04833df22798c3c1ca42c3de3f0a0be01df4417` |
+| Implementation baseline | ChatGPT re-checks current `origin/main` immediately before Codex starts |
+| Readiness Gate | `PASS — contract corrected/revalidated`; execution remains blocked until `S07-DOC-001 = Accepted / Delivered` |
 | Verification | focused backend persistence only |
 | Delivery | Project Owner |
 | Block checkpoint | Stage 7 Backend Phase 2 after `S07-BE-001…007` |
@@ -126,6 +127,49 @@ assessment_attempts_one_in_progress_per_student_unique
 ```
 
 It must reject two concurrent persisted `in_progress` rows for the same Student/Assessment while allowing historical terminal Attempts.
+
+This is a **shared `assessment_attempts` structural invariant**, not a Homework-only
+predicate. It therefore applies to every Assessment type stored in this table,
+including future Blitz Attempts:
+
+```text
+for one assessment_id + student_id
+there may be at most one status = in_progress row
+```
+
+This does **not** implement Stage 8 Blitz workflow or exception behavior. It only
+locks the structural rule that a future Blitz replacement/exception Attempt may
+start only after the earlier Attempt for that same Student/Assessment is no
+longer `in_progress`. Do not add Blitz runtime logic in BE-001.
+
+### Existing-data precondition
+
+Adding the partial unique index must be data-preserving. Before applying the new
+index in the implementation environment, check for already-invalid duplicate
+rows equivalent to:
+
+```sql
+select assessment_id, student_id, count(*)
+from assessment_attempts
+where status = 'in_progress'
+group by assessment_id, student_id
+having count(*) > 1;
+```
+
+Required outcome:
+
+```text
+no rows => continue
+one or more rows => BLOCKED
+```
+
+If duplicates already exist, report exact affected `assessment_id` /
+`student_id` evidence. Do **not** delete Attempts, choose a winner, change status,
+auto-finalize, renumber, or otherwise repair historical data inside this task.
+
+The forward migration itself must contain no duplicate-cleanup/backfill behavior.
+If a deployment database violates this prerequisite, creation of the unique
+index must fail rather than silently rewrite data.
 
 Do not alter existing:
 
@@ -610,9 +654,21 @@ IdempotencyRecordFactory
 
 No factory for the choice pivot.
 
-Defaults must be tenant-consistent.
+Defaults must produce a **domain-coherent same-tenant graph**, not merely UUIDs
+that happen to belong to the same Institution.
 
-`AttemptAnswerFactory` default:
+`AttemptAnswerFactory` default must derive one `AssessmentAttempt` first and then
+use a Question from that **same Assessment and Institution**:
+
+```text
+attempt.institution_id = answer.institution_id
+question.institution_id = answer.institution_id
+question.assessment_id = attempt.assessment_id
+```
+
+The default must never independently create a Question on a different Assessment.
+
+`AttemptAnswerFactory` checking defaults:
 
 ```text
 checking_status = pending
@@ -622,15 +678,27 @@ checked_by_user_id = null
 checked_at = null
 ```
 
-`AnswerFileFactory` uses an existing `files` row with:
+Typed child factories must derive `institution_id` from their parent
+`AttemptAnswer`; they must not independently create a mismatched tenant graph.
+
+`AnswerFileFactory` must produce a structurally valid file-answer graph:
 
 ```text
-category = student_submission
+AttemptAnswer.question.type = file_based
+File.institution_id = AttemptAnswer.institution_id
+File.category = student_submission
+File.uploaded_by_user_id = AttemptAnswer.attempt.student_id
+File.removed_at = null
 ```
 
-but performs no physical storage I/O.
+The File row may be created through the existing File factory/state helpers, but
+the resulting uploader must be the Student who owns the parent Attempt, not the
+FileFactory's default Teacher.
 
-`IdempotencyRecordFactory` uses lowercase SHA-256-shaped fingerprint and valid completion metadata.
+`AnswerFileFactory` performs no physical storage I/O.
+
+`IdempotencyRecordFactory` must use a User from the same Institution, a lowercase
+SHA-256-shaped fingerprint, and internally valid completion metadata.
 
 ---
 
@@ -778,7 +846,8 @@ Cover at minimum:
 ### one-in-progress index
 - one allowed;
 - second same Student/Assessment rejected;
-- terminal historical row + one in-progress allowed.
+- terminal historical row + one in-progress allowed;
+- the same structural invariant is verified for a Blitz-typed Assessment without implementing Blitz runtime behavior.
 
 ### typed children
 - choice duplicate + cross-tenant option rejection;
@@ -809,8 +878,12 @@ Verify:
 - casts listed above;
 - main relationships;
 - factory tenant consistency;
+- `AttemptAnswerFactory` Question uses the same Assessment as the parent Attempt;
+- typed child factories inherit the parent Answer Institution;
 - AttemptAnswer pending/null checking defaults;
-- AnswerFile factory uses `student_submission`;
+- `AnswerFileFactory` uses a `file_based` Question;
+- `AnswerFileFactory` File is `student_submission`, same-Institution, active, and uploaded by the parent Attempt's Student;
+- `IdempotencyRecordFactory` User belongs to the same Institution;
 - no real storage I/O.
 
 ---
@@ -827,7 +900,15 @@ tests/Feature/Persistence/AssessmentHomeworkFactoryModelTest.php
 tests/Feature/Persistence/QuestionSchemaInspectionTest.php
 tests/Feature/Persistence/QuestionPersistenceTest.php
 tests/Feature/Persistence/QuestionFactoryModelTest.php
+
+tests/Feature/Persistence/TopicLearningMaterialSchemaInspectionTest.php
+tests/Feature/Persistence/TopicLearningMaterialPersistenceTest.php
+tests/Feature/Persistence/TopicLearningMaterialFactoryModelTest.php
 ```
+
+The Stage 5 Topic/Learning-Material persistence regressions are required because
+BE-001 adds `File::answerFile()` and builds `AnswerFileFactory` on the existing
+shared `files` model/factory graph.
 
 Do not run full backend suite; that belongs to Backend Phase 2.
 
@@ -835,9 +916,19 @@ Do not run full backend suite; that belongs to Backend Phase 2.
 
 # 17. Verification
 
-Use the repository's normal backend/container command wrapper.
+Run from `backend/` through the repository's normal backend/container wrapper.
 
-Run the required formatter/static check for changed PHP files, then:
+Run the exact backend format check:
+
+```bash
+./vendor/bin/pint --test
+```
+
+No additional broad static-analysis command is required for this persistence-only
+task unless the current repository configuration makes one mandatory for the
+changed files.
+
+Then run exactly the focused/new + directly affected regression set:
 
 ```bash
 php artisan test \
@@ -849,7 +940,10 @@ php artisan test \
   tests/Feature/Persistence/AssessmentHomeworkFactoryModelTest.php \
   tests/Feature/Persistence/QuestionSchemaInspectionTest.php \
   tests/Feature/Persistence/QuestionPersistenceTest.php \
-  tests/Feature/Persistence/QuestionFactoryModelTest.php
+  tests/Feature/Persistence/QuestionFactoryModelTest.php \
+  tests/Feature/Persistence/TopicLearningMaterialSchemaInspectionTest.php \
+  tests/Feature/Persistence/TopicLearningMaterialPersistenceTest.php \
+  tests/Feature/Persistence/TopicLearningMaterialFactoryModelTest.php
 ```
 
 Then:
@@ -875,21 +969,24 @@ PASS only if:
 - no generic JSON answer payload exists;
 - tenant composite FKs are enforced;
 - one file per answer and unique file reuse are enforced;
-- one `in_progress` Attempt per Student/Assessment is structurally enforced;
+- one `in_progress` Attempt per Student/Assessment is structurally enforced for the shared Attempt table, including Blitz-typed Assessments;
+- pre-existing duplicate `in_progress` rows are never silently repaired; they block implementation/migration application;
 - historical terminal Attempts remain valid;
 - durable idempotency scope is exactly Institution+User+operation+key;
 - idempotency fingerprint/completion checks are enforced;
 - no TTL/cache-only idempotency is introduced;
 - required enums/models/factories exist and remain persistence-focused;
+- factories produce same-Assessment/same-Student coherent answer/file graphs as specified;
 - no API/lifecycle/finalization/storage/scoring functionality leaked into BE-001;
-- new focused tests and named regressions pass;
-- formatter/static check and `git diff --check` pass.
+- new focused tests and all named Assessment/Question/File regressions pass;
+- `./vendor/bin/pint --test` and `git diff --check` pass.
 
 Locked implementation choices:
 
 ```text
 typed normalized answer tables
-PostgreSQL partial unique in-progress guard
+PostgreSQL partial unique in-progress guard on shared assessment_attempts
+at most one in_progress per Student/Assessment for every Assessment type
 choice selections as pivot, no composite-key package
 initial checking_status = pending
 answer_files -> existing files table

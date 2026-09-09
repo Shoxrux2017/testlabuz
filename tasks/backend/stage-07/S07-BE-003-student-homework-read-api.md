@@ -11,8 +11,9 @@
 | Implementation type | `Laravel Student Homework list/detail API + Student-safe Question projection + read-path deadline reconciliation` |
 | Depends on | `S07-BE-001` and `S07-BE-002` — both `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependencies above |
+| Current review baseline | `origin/main @ b04833df22798c3c1ca42c3de3f0a0be01df4417` |
+| Implementation baseline | ChatGPT re-checks current `origin/main` immediately before Codex starts |
+| Readiness Gate | `PASS — contract corrected/revalidated`; execution remains blocked until `S07-BE-001` and `S07-BE-002` are both `Accepted / Delivered` |
 | Verification | focused Student read/API/security verification only |
 | Delivery | Project Owner |
 | Backend block checkpoint | Stage 7 Backend Phase 2 after `S07-BE-001…007` |
@@ -286,7 +287,7 @@ same Institution
 assessment type = homework
 homework status = active
 deadline_at IS NOT NULL
-deadline_at <= scanNow
+deadline_at <= supplied readAt
 Student is persisted assessment_students recipient
 Student has an assessment_attempts row:
   student_id = authenticated Student
@@ -324,24 +325,89 @@ Call the same BE-002 per-Homework action.
 
 Never use a user-supplied Homework UUID to trigger reconciliation before Student authorization is established.
 
-## 8.3 Invocation order
+## 8.3 Consistent read decision instant
 
-List:
+List/detail must not use one clock instant for reconciliation and a later
+independent `now()` for attempt availability. A response represents one
+authoritative read decision instant.
+
+### List
+
+Required flow:
 
 ```text
-ReconcileStudentHomeworkDeadlines::all(student)
--> query/paginate fresh read state
+1. capture readAt = now()
+2. ReconcileStudentHomeworkDeadlines::all(student, readAt)
+3. query/paginate fresh read state
+4. project every attempts summary using exactly readAt
 ```
 
-Detail:
+Required signature:
 
 ```text
-resolve authorized Homework
--> ReconcileStudentHomeworkDeadlines::one(...)
--> reload fresh detail projection
+all(User $student, CarbonInterface $readAt): void
 ```
 
-Thus response attempt state cannot remain stale merely because Scheduler has not run yet.
+Candidate discovery for `all()` uses:
+
+```text
+deadline_at <= readAt
+```
+
+not a separately captured later `scanNow`.
+
+For every candidate, still call delivered BE-002
+`FinalizeHomeworkAttemptsAtDeadline`, which re-checks current state/time under
+locks. Because that action runs after `readAt`, every Homework already due at
+`readAt` is reconciled before the fresh read query.
+
+### Detail
+
+Required flow:
+
+```text
+1. resolve authorized Homework
+2. capture readAt = now()
+3. ReconcileStudentHomeworkDeadlines::one(student, authorizedHomework, readAt)
+4. reload fresh detail projection
+5. project attempts summary using exactly readAt
+```
+
+Required signature:
+
+```text
+one(
+    User $student,
+    Assessment $authorizedHomework,
+    CarbonInterface $readAt
+): void
+```
+
+`one()` invokes BE-002 when the authorized active Homework has:
+
+```text
+deadline_at != null
+AND deadline_at <= readAt
+```
+
+It may no-op without invoking BE-002 when the deadline is absent/future at the
+read decision instant.
+
+### Snapshot rule
+
+`StudentHomeworkAttemptSummary` must receive `readAt`; it must **not call
+`now()` internally**.
+
+Therefore one response cannot claim simultaneously:
+
+```text
+deadline passed at projection time
+AND Attempt still in_progress merely because reconciliation used an earlier clock
+```
+
+If wall-clock time crosses the deadline after `readAt`, that does not make the
+response internally stale: it is a coherent snapshot as of `readAt`, and the
+next relevant request/Scheduler run reconciles the later state.
 
 ---
 
@@ -439,10 +505,10 @@ direction = desc
 Rules:
 
 ```text
-created_at => assessments.created_at
-title      => lower(assessments.title)
-deadline   => homework_assignments.deadline_at NULLS LAST
-status     => homework_assignments.status
+created_at  => assessments.created_at
+title       => lower(assessments.title)
+deadline_at => homework_assignments.deadline_at NULLS LAST
+status      => homework_assignments.status
 ```
 
 Always add deterministic Assessment ID tie-breaker in the same requested direction.
@@ -492,7 +558,9 @@ with fields needed for read state:
 
 ```text
 id
+institution_id
 assessment_id
+assessment_student_id
 student_id
 attempt_number
 status
@@ -506,6 +574,39 @@ locked_at
 Maximum normal Homework Attempts are fixed at three, so eager loading these rows is bounded.
 
 Do not load all Students' Attempts.
+
+## 10.2 Attempt / recipient integrity
+
+The read projection must validate each loaded Attempt against the authoritative
+persisted recipient row for the authenticated Student/Homework.
+
+For every Attempt used by list/detail summary require:
+
+```text
+attempt.institution_id = student.institution_id
+attempt.assessment_id = homework.id
+attempt.student_id = student.id
+attempt.assessment_student_id = authoritative assessment_students.id
+```
+
+The authoritative recipient row is the same row that grants this Student access
+to this Homework.
+
+If any loaded Attempt violates this graph:
+
+```text
+server invariant failure / LogicException
+```
+
+Do not:
+
+- count it in `used`;
+- expose it as `in_progress_attempt`;
+- use it for `my_status`;
+- silently substitute another recipient;
+- repair persistence inside this read task.
+
+The response must fail rather than present corrupted Attempt history.
 
 ---
 
@@ -521,13 +622,15 @@ It receives already loaded authenticated-Student Attempt rows plus Homework life
 
 Resources must not independently decide attempt availability.
 
-Capture one:
+The caller supplies the single Section 8.3:
 
 ```text
-observedAt = now()
+readAt
 ```
 
-per list/detail projection operation.
+for the complete list/detail projection operation.
+
+`StudentHomeworkAttemptSummary` must not call `now()` itself.
 
 ## 11.1 `allowed`
 
@@ -537,11 +640,12 @@ Always:
 3
 ```
 
-## 11.2 `used`
+## 11.2 `used` and Homework-only Attempt state
 
-Count every persisted Attempt row belonging to this Student/Homework.
+Count every persisted normal Homework Attempt row belonging to this
+Student/Homework after Section 10.2 integrity validation.
 
-Includes:
+The only Attempt statuses valid for Homework read projection are:
 
 ```text
 in_progress
@@ -550,7 +654,40 @@ waiting_for_teacher_review
 checked
 ```
 
-and any other valid historical stored status if present.
+`timed_out_finalized` is a Blitz-only persisted status. If it appears on a
+Homework Attempt:
+
+```text
+server invariant failure / LogicException
+```
+
+Do not serialize it, map it to `submitted`, ignore it, or expose it as a generic
+historical status.
+
+Finalization-reason consistency for Homework read:
+
+```text
+in_progress:
+  finalization_reason = null
+
+submitted:
+  finalization_reason in (
+    student_submit,
+    task_closed_auto_finalize,
+    homework_deadline_auto_submit
+  )
+
+waiting_for_teacher_review / checked:
+  must never use timeout_auto_submit
+```
+
+Any Homework Attempt using:
+
+```text
+timeout_auto_submit
+```
+
+is also a server invariant failure.
 
 No fabricated row means no usage.
 
@@ -574,7 +711,7 @@ If:
 
 ```text
 deadline_at != null
-AND observedAt >= deadline_at
+AND readAt >= deadline_at
 ```
 
 then:
@@ -607,7 +744,8 @@ Else if one `in_progress` Attempt exists:
 in_progress
 ```
 
-Else use the highest `attempt_number` Attempt's persisted status.
+Else use the highest `attempt_number` Attempt's persisted **Homework-valid**
+status from Section 11.2.
 
 During Stage 7 before checking this will normally be:
 
@@ -793,7 +931,35 @@ position ASC
 id ASC
 ```
 
-## 14.2 Safe eager-loading
+## 14.2 Institution setting invariant
+
+Load `InstitutionSetting` by the authenticated Student Institution.
+
+For Student file-answer read metadata the row is required.
+
+If it is missing:
+
+```text
+server invariant failure / LogicException
+```
+
+Do not:
+
+- fall back silently to 15 MB;
+- return `404`;
+- fabricate an InstitutionSetting row;
+- mutate configuration from this read task.
+
+When present require:
+
+```text
+1 <= student_submission_max_mb <= 15
+```
+
+The database normally enforces this range; an impossible loaded value is still
+treated as a server invariant failure.
+
+## 14.3 Safe eager-loading
 
 Load only data needed for Student projection.
 
@@ -1153,7 +1319,8 @@ shared authoring position
 
 ### Safe display ordering
 
-The response order itself must not reveal the correct pair.
+The response order must be independent of correct pairing and must not encode
+a correctness signal.
 
 Do not order both sides by persisted `position`.
 
@@ -1194,17 +1361,29 @@ Never return or load into the Student projection:
 correct_position
 ```
 
-The array order must not equal the authoring correct order by construction.
+Student display order must be **independent of** the authoring correct order.
+Do not attempt to guarantee that the displayed order is always different from
+the correct order: doing so would itself create a correctness side channel
+because the Student could infer that the inverse/alternative order is correct.
 
-Use deterministic safe hash order:
+Use deterministic safe hash order based only on public/non-correctness identity:
 
 ```text
 sha256("ordering|{question_id}|{item_id}")
 ```
 
-then item ID tie-breaker.
+then item ID as collision tie-breaker.
 
-Do not use DB creation order or UUID lexical order alone.
+The ordering algorithm must never:
+
+- read `correct_position`;
+- compare generated display order with the correct order;
+- conditionally reshuffle because the two happen to match.
+
+Accidental equality between the deterministic display order and the correct
+order is allowed because the backend does not signal whether equality occurred.
+
+Do not use DB creation order, authoring position, or UUID lexical order alone.
 
 ## 18.9 Fill in the Blank
 
@@ -1430,14 +1609,16 @@ Valid unrelated/inaccessible Topic UUID produces no leak and no unrelated rows.
 
 ## Pagination/sorting
 
-Verify:
+Verify public sort values and mapping:
 
 ```text
 created_at
 title
-deadline_at NULLS LAST
+deadline_at
 status
 ```
+
+including `deadline_at` => SQL `NULLS LAST`.
 
 and deterministic ID tie-breaker.
 
@@ -1462,6 +1643,26 @@ three used =>
 closed/deadline passed =>
   remaining 0 even if used < 3
 ```
+
+## Attempt graph integrity
+
+Create/corrupt a focused persisted Attempt graph where
+`assessment_student_id` belongs to a different recipient than the Attempt's
+`assessment_id + student_id` identity.
+
+Read must fail as a server invariant; the corrupted Attempt must not contribute
+to `used`, `my_status`, or `in_progress_attempt`.
+
+## Homework-only status/reason integrity
+
+Verify Homework read fails safely for:
+
+```text
+status = timed_out_finalized
+finalization_reason = timeout_auto_submit
+```
+
+Do not expose either Blitz-only machine value to Student Homework JSON.
 
 ## List response
 
@@ -1520,9 +1721,16 @@ Verify Student right-side output order is **not** derived from matching position
 
 ## Ordering leak
 
-Create items in correct sequence and with IDs/creation sequence that would make naive ordering leak.
+Create items with a known correct sequence and creation/UUID ordering that
+would make naive persistence ordering leak.
 
-Verify response matches safe-hash display order and contains no correct positions.
+Verify:
+
+- response matches the deterministic safe-hash display order;
+- no `correct_position` is selected/serialized;
+- display-order computation is unchanged whether the safe-hash result happens
+  to equal or differ from the correct order;
+- there is no conditional "force different from correct" reshuffle.
 
 ## Fill Blank
 
@@ -1531,6 +1739,9 @@ Verify placeholder key/id/position present, accepted answers absent.
 ## File
 
 Verify allowed extensions and effective institution/platform size bytes.
+
+Also verify missing `InstitutionSetting` causes a server invariant failure rather
+than a silent 15 MB fallback.
 
 ---
 
@@ -1598,6 +1809,17 @@ Verify that request did **not** trigger deadline reconciliation for that inacces
 
 Read is write-free with respect to Attempt finalization.
 
+## Read-decision boundary consistency
+
+Use controlled/frozen time to verify the response uses one `readAt`:
+
+- deadline just after `readAt` => response may still show the pre-deadline
+  snapshot consistently;
+- deadline at/equal/before `readAt` => BE-002 reconciliation occurs before fresh
+  projection and no `in_progress` Attempt is returned;
+- `StudentHomeworkAttemptSummary` does not capture a later independent clock
+  value that can make `remaining` disagree with the Attempt state.
+
 ---
 
 # 26. Query Regression Test Requirement
@@ -1641,9 +1863,16 @@ Do not run full backend suite.
 
 # 28. Verification
 
-Use the repository's normal Docker/Sail backend command wrapper.
+From `backend/`, use the repository's normal Docker/Sail command wrapper.
 
-Run required formatter/static check for changed PHP files.
+Run the exact backend format check:
+
+```bash
+./vendor/bin/pint --test
+```
+
+No additional broad static-analysis command is required unless current
+repository configuration makes one mandatory for the changed files.
 
 Then exactly:
 
@@ -1691,13 +1920,20 @@ PASS only if all are true.
 - current Group membership is not required after assignment;
 - draft Homework remains hidden;
 - cross-tenant/other-Student/direct-ID access is privacy-safe `404`;
-- unauthorized show cannot trigger reconciliation of inaccessible Homework.
+- unauthorized show cannot trigger reconciliation of inaccessible Homework;
+- every Attempt used by Student read is validated against the exact authoritative
+  `assessment_students` recipient row;
+- corrupted Attempt/recipient graphs fail as server invariants and are never
+  presented as valid Student history.
 
 ## Deadline state
 
 - list/detail reconcile current Student's due in-progress Homework before returning state;
 - BE-002 action is reused, not reimplemented;
 - exact deadline timestamp semantics remain intact;
+- one `readAt` controls reconciliation eligibility and attempt availability for
+  each response;
+- Attempt summary does not capture a second independent `now()`;
 - never-started Student gets no fabricated Attempt.
 
 ## Attempts
@@ -1706,6 +1942,9 @@ PASS only if all are true.
 - used counts actual rows;
 - remaining becomes zero when closed/archived/deadline-passed;
 - my_status is deterministic;
+- Homework read accepts only `in_progress|submitted|waiting_for_teacher_review|checked`;
+- `timed_out_finalized` / `timeout_auto_submit` on Homework are server invariant
+  failures and never serialized;
 - detail exposes current in-progress Attempt identity only when it exists;
 - no score is calculated/returned;
 - score_visible = false.
@@ -1719,8 +1958,12 @@ PASS only if all are true.
 - Matching match keys not queried/returned;
 - Ordering correct positions not queried/returned;
 - Multiple Choice exposes only `max_selections`, not which options are correct;
-- Matching/Ordering array order does not leak correct relationships/order;
-- file metadata uses platform/institution effective size.
+- Matching/Ordering display order is deterministic and independent of protected
+  pairing/correct-position data;
+- Ordering never force-differs from the correct order and therefore creates no
+  inverse correctness side channel;
+- file metadata uses platform/institution effective size;
+- missing InstitutionSetting fails as a server invariant with no fallback.
 
 ## Quality
 
@@ -1734,7 +1977,7 @@ PASS only if all are true.
 
 - focused tests pass;
 - named regressions pass;
-- formatter/static check passes;
+- `./vendor/bin/pint --test` passes;
 - `git diff --check` passes;
 - focused diff review passes.
 
@@ -1750,15 +1993,23 @@ draft Homework = hidden
 current Group membership = not required after assignment snapshot
 Student Homework status filter = active|closed|archived
 list sorts = created_at|title|deadline_at|status
+deadline_at sort maps to homework_assignments.deadline_at NULLS LAST
 pagination = 20 default, 100 max
 read deadline reconciliation = reuse BE-002
+one readAt per list/detail response
+Attempt summary never calls now() independently
 Student detail = no saved answer payload
 Student Question projection = independent from TeacherQuestionResource
 checking_mode = not returned
 Matching match_key/paired order = never returned
-Ordering correct_position/correct order = never returned
+Ordering correct_position = never loaded/returned
+Ordering display order = deterministic hash independent of correct_position; no force-different reshuffle
 Fill accepted answers = never loaded/returned
+Homework Attempt statuses = in_progress|submitted|waiting_for_teacher_review|checked only
+Blitz-only timed_out_finalized/timeout_auto_submit on Homework = server invariant failure
+Attempt recipient identity = exact assessment_students row must match
 File max = min(15 MB platform, institution setting)
+missing InstitutionSetting = server invariant failure, no fallback
 score_visible = false in Stage 7
 ```
 
@@ -1770,6 +2021,12 @@ Codex must not substitute:
 - generic full Question `configuration`;
 - per-Question hidden SQL queries;
 - stale Scheduler-only deadline state;
+- a second independent projection-time `now()`;
+- treating Blitz-only Attempt status/reason as generic Homework history;
+- silently accepting an Attempt whose `assessment_student_id` does not match the
+  current Homework/Student recipient;
+- forcing Ordering display order to differ from the correct order;
+- silent 15 MB fallback when InstitutionSetting is missing;
 - score/official-score calculation.
 
 ---
