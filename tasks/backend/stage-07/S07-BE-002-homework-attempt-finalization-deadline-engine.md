@@ -11,8 +11,9 @@
 | Implementation type | `Laravel Homework finalization engine + deadline reconciliation + Scheduler + Teacher close integration` |
 | Depends on | `S07-BE-001 = Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependency above |
+| Current review baseline | `origin/main @ b04833df22798c3c1ca42c3de3f0a0be01df4417` |
+| Implementation baseline | ChatGPT re-checks current `origin/main` immediately before Codex starts |
+| Readiness Gate | `PASS — contract corrected/revalidated`; execution remains blocked until `S07-BE-001 = Accepted / Delivered` |
 | Verification | focused backend lifecycle/deadline/concurrency verification only |
 | Delivery | Project Owner |
 | Backend block checkpoint | Stage 7 Backend Phase 2 after `S07-BE-001…007` |
@@ -203,23 +204,62 @@ finalizeAtClose(AssessmentAttempt $attempt, CarbonInterface $closedAt): bool
 
 The exact concrete Carbon interface/type may follow current project conventions, but callers must pass an authoritative server instant.
 
-## 6.1 Common precondition
+## 6.1 Common precondition and structural consistency
 
-Both methods operate only when:
+Both methods may transition only a structurally editable Attempt:
 
 ```text
-attempt.status = in_progress
+status = in_progress
+submitted_at = null
+finalized_at = null
+locked_at = null
+finalization_reason = null
 ```
 
-If the Attempt is already any terminal/review state, return:
+If the Attempt is already any terminal/review state:
+
+```text
+status != in_progress
+```
+
+return:
 
 ```text
 false
 ```
 
-with **zero writes**.
+with **zero writes** and preserve all existing reason/timestamps.
 
-Do not rewrite existing reason/timestamps.
+If:
+
+```text
+status = in_progress
+```
+
+but any of these are already non-null:
+
+```text
+submitted_at
+finalized_at
+locked_at
+finalization_reason
+```
+
+this is a persisted server invariant violation, not a state to repair.
+
+Required behavior:
+
+```text
+throw LogicException (or the repository's equivalent internal invariant exception)
+outer transaction rolls back
+zero successful finalization writes
+```
+
+Do **not** clear, overwrite, normalize, or silently repair inconsistent historical
+fields inside `HomeworkAttemptFinalizer`.
+
+The finalizer assumes its caller already holds the `AssessmentAttempt` row lock;
+it does not acquire an independent transaction/lock itself.
 
 ## 6.2 Deadline transition
 
@@ -468,8 +508,28 @@ int  => deadline is reached; value is count of newly finalized Attempts
 Preconditions:
 
 - caller already holds the Homework row lock;
-- caller already holds locks for the relevant Assessment Attempts;
-- all passed Attempts are from the same Institution/Assessment aggregate.
+- caller already holds locks for the relevant Assessment Attempts.
+
+`finalizeLocked` must **verify**, not merely assume, aggregate scope before any
+transition.
+
+For every passed Attempt require:
+
+```text
+attempt.institution_id = homework.institution_id
+attempt.assessment_id = homework.assessment_id
+```
+
+If any passed Attempt violates either condition:
+
+```text
+throw LogicException (or repository-equivalent internal invariant failure)
+zero successful finalization writes
+outer transaction rolls back
+```
+
+Do not drop the mismatching row, partially finalize the valid rows, or query a
+replacement collection silently.
 
 When deadline is reached, this method uses:
 
@@ -895,7 +955,36 @@ Submit vs deadline vs close => exactly one transition from in_progress
 
 Do not implement Submit now.
 
-## 15.4 Lock ordering
+## 15.4 Future answer/file mutation vs finalization
+
+BE-002 establishes the finalization side of this Stage 7 invariant:
+
+```text
+Student answer/file mutation commits first
+=> that committed Student work is part of the later frozen Attempt
+
+Submit/deadline/Teacher-close finalization commits first
+=> a later Student answer/file mutation cannot commit
+```
+
+Required finalization-side rule:
+
+- deadline reconciliation and Teacher close hold the target
+  `AssessmentAttempt FOR UPDATE` lock through the terminal state write and
+  transaction commit;
+- the terminal transition is decided only from the locked current Attempt state;
+- BE-002 must not release the Attempt lock and then perform the finalization
+  write outside that transaction.
+
+Later BE-005/BE-006 Student mutation paths use the compatible parent/Attempt lock
+order and re-check lifecycle/deadline/editability after acquiring the Attempt
+lock.
+
+BE-002 does not implement answer/file writes, but it must preserve the lock
+boundary required so no Student write can commit after an Attempt has already
+been frozen.
+
+## 15.5 Lock ordering
 
 Teacher close retains its current broader order:
 
@@ -932,6 +1021,9 @@ Required write-free cases:
 - repeated reconciliation after finalization;
 - already-closed Teacher close;
 - finalizer called for an already-terminal Attempt.
+
+A structurally inconsistent `in_progress` Attempt is **not** a no-op: it is an
+internal invariant failure and the surrounding transaction must roll back.
 
 A retry/no-op must not rewrite:
 
@@ -1077,6 +1169,45 @@ After successful reconciliation:
 ## 18.10 Tenant scope
 
 Calling the internal action with the wrong Institution ID does not mutate the target Homework/Attempts.
+
+## 18.11 Inconsistent in-progress Attempt
+
+Persist an intentionally inconsistent structural row where:
+
+```text
+status = in_progress
+```
+
+but one of:
+
+```text
+finalized_at / locked_at / finalization_reason / submitted_at
+```
+
+is non-null.
+
+Calling the finalizer/reconciliation must:
+
+```text
+fail as an internal invariant
+perform no repair
+roll back any surrounding transition
+```
+
+## 18.12 `finalizeLocked` aggregate mismatch
+
+Pass a locked Attempt from another Assessment/Institution into
+`finalizeLocked` together with the target Homework.
+
+Expect:
+
+```text
+internal invariant failure
+zero successful transitions
+outer transaction rollback
+```
+
+Do not silently filter the mismatching Attempt.
 
 ---
 
@@ -1247,6 +1378,15 @@ The second worker must actually enter a PostgreSQL lock wait; do not simulate co
 
 Keep the concurrency test focused. Submit races belong to BE-007.
 
+The test must also assert that the finalization worker retains the
+`AssessmentAttempt` row lock until commit. It is sufficient in BE-002 to prove
+the lock boundary itself using a second controlled worker attempting a direct
+same-row `FOR UPDATE` acquisition/update probe; do not implement Student answer
+business behavior in this task.
+
+This lock-boundary proof exists so later BE-005/BE-006 answer/file mutations can
+compose with BE-002 without inventing a different finalization lock.
+
 ---
 
 # 22. Direct Regression Scope
@@ -1272,9 +1412,16 @@ Do not run the full backend suite.
 
 # 23. Verification
 
-From the backend environment use the repository's normal Docker/Sail wrapper.
+From `backend/`, use the repository's normal Docker/Sail wrapper.
 
-Run formatter/static checks required for changed PHP files.
+Run the exact backend format check:
+
+```bash
+./vendor/bin/pint --test
+```
+
+No additional broad static-analysis command is required for this task unless the
+current repository configuration makes one mandatory for the changed files.
 
 Then run exactly:
 
@@ -1319,7 +1466,8 @@ PASS only if all are true.
 - deadline uses exact `homework_assignments.deadline_at`;
 - close-before-deadline uses one captured close instant;
 - no answer/checking/scoring mutation occurs;
-- no unanswered/never-started rows are fabricated.
+- no unanswered/never-started rows are fabricated;
+- structurally inconsistent `in_progress` Attempts fail as server invariants and are never silently repaired.
 
 ## Deadline engine
 
@@ -1327,6 +1475,8 @@ PASS only if all are true.
 - it locks current state and is idempotent;
 - exact `>=` boundary is used;
 - repeated calls are write-free;
+- `finalizeLocked` verifies every passed Attempt belongs to the same Homework Institution/Assessment aggregate;
+- aggregate mismatch causes transaction rollback with no partial transition;
 - later Student request tasks can reuse it.
 
 ## Scheduler
@@ -1355,7 +1505,9 @@ PASS only if all are true.
 ## Concurrency
 
 - PostgreSQL test proves deadline reconciliation and Teacher close serialize;
-- final terminal reason/timestamps cannot be double-written/replaced.
+- final terminal reason/timestamps cannot be double-written/replaced;
+- automatic finalization holds the `AssessmentAttempt` row lock through terminal transition/commit;
+- the lock boundary is compatible with later answer/file mutation so no post-freeze Student write can commit.
 
 ## Scope
 
@@ -1371,7 +1523,7 @@ PASS only if all are true.
 
 - focused tests pass;
 - named regressions pass;
-- formatter/static checks pass;
+- `./vendor/bin/pint --test` passes;
 - `git diff --check` passes;
 - focused self-review finds no scope leakage.
 
@@ -1396,6 +1548,10 @@ scheduler cadence = everyMinute
 overlap lock = withoutOverlapping(5)
 batch candidate pagination = keyset, not offset
 PostgreSQL row locks = concurrency boundary
+finalizer requires structurally clean in_progress state
+finalizeLocked validates Attempt Institution/Assessment aggregate
+AssessmentAttempt lock held through finalization commit
+answer/file write vs finalization compatibility is mandatory
 ```
 
 Codex must not substitute:
