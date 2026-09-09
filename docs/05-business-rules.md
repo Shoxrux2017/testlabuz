@@ -576,6 +576,9 @@ Supplementary/practice Homework may be assigned to the Topic group or to selecte
 **BR-HW-005 — Official result-bearing Homework**  
 A Topic may contain multiple Homework assignments, but exactly one whole-group Homework must be designated as the official result-bearing Homework. Only that Homework’s official Student score is compared with the designated official Blitz score for the final Topic result. A selected-Students Homework is not eligible for official designation.
 
+**BR-HW-005A — First official Homework activity locks pair meaning**
+Creating the first Attempt for the official Homework must, in the same transaction, resolve and lock the result pair in the same Institution/Topic, require a persisted cohort snapshot and the Student's membership in that official cohort, and set a null pair `locked_at` plus `updated_at` to the same `startedAt` used for the Attempt. An existing `locked_at` must be preserved. `blitz_assessment_id` may remain null; the flow must never replace official Homework/cohort identity or create a Blitz. Structural pair/cohort inconsistency fails atomically without repair/resnapshot, and practice Homework must not mutate the result pair.
+
 ### Homework Structure
 
 **BR-HW-006 — Required homework information**  
@@ -619,7 +622,7 @@ Homework must not become active until required information, questions, correct-a
 Assigned students may start and submit active homework only while deadline, attempt, assignment, and permission rules allow it.
 
 **BR-HW-012 — Closed Homework and in-progress attempts**  
-Closing Homework immediately blocks new attempts and further Student answer changes. Every existing `in_progress` attempt must be auto-finalized by the backend using answers saved before closure: answered components are checked normally, unanswered components receive zero, and answered manual-review questions remain Waiting for teacher review. Students who never started do not receive fabricated empty Attempts. Existing submitted/finalized work may still be reviewed, and unused normal attempt capacity becomes unavailable because the Homework is closed. The auto-finalization reason is `task_closed_auto_finalize`.
+Closing Homework blocks new Starts and Student answer/file/Submit writes. Before the deadline, the backend captures one `closedAt = server_now` and atomically closes the Homework and freezes every still-`in_progress` Attempt as `status = submitted`, `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`; all changes commit or roll back together. Finalization preserves only already-committed Student answers/files as pending, performs no Stage 7 checking/scoring, and creates neither an Attempt for a never-started Student nor an answer row for an unanswered Question. At or after the deadline, close must reconcile the deadline first and preserve `homework_deadline_auto_submit` plus the exact deadline timestamp. Repeated close/finalization must not rewrite an already-frozen reason or timestamp. Stage 9 may later check the frozen work and apply the approved missing-answer-zero policy.
 
 **BR-HW-013 — Archived homework**  
 Archived homework must be retained for history and reports and must not accept new activity.
@@ -633,10 +636,10 @@ A Teacher may define a homework deadline.
 The Student must see the deadline before starting the homework.
 
 **BR-HW-016 — Deadline auto-finalization**  
-At the authoritative Homework deadline, the backend must immediately block new attempts and further Student answer changes. Every existing `in_progress` Homework Attempt is automatically finalized using the answers saved before the deadline. Answered components are evaluated normally, unanswered components receive zero, and answered manual-review questions remain Waiting for teacher review. A Student who never started does not receive a fabricated empty Attempt. Any unused Homework attempt capacity becomes unavailable after the deadline. The finalization reason is `homework_deadline_auto_submit`. Once this Attempt is fully checked, it remains eligible for normal Homework official-score selection unless another approved validity rule excludes it. Advanced late-submission penalties and post-deadline completion workflows are outside the MVP.
+When `server_now >= deadline_at`, the authoritative Homework deadline reconciliation must block new Starts and Student answer/file/Submit writes and freeze every existing `in_progress` Homework Attempt using only work already committed before finalization. The frozen state is `status = submitted`, `submitted_at = null`, `finalized_at = locked_at = deadline_at`, and `finalization_reason = homework_deadline_auto_submit`; delayed processing must not replace the exact historical deadline instant. Saved answers remain pending with no Stage 7 checking, awarded points, review metadata, or payload/file rewrite. A never-saved Question requires no fabricated answer row, a never-started Student receives no fabricated Attempt, and unused attempt capacity becomes unavailable. Stage 9 later checks the frozen work, treats missing answers as zero under the approved policy, and performs official-score selection. Advanced late-submission penalties and post-deadline completion workflows are outside the MVP.
 
 **BR-HW-017 — Deadline boundary and late requests**  
-A Student submission or answer-write request is valid only if the backend receives and accepts it before the authoritative deadline. Once deadline auto-finalization wins the state transition, later writes/submits must be rejected as locked/late and must not create a second finalization. Safe retries of the already-finalized logical operation must not duplicate work.
+A Homework Start or Student answer/file/Submit mutation may continue only when the post-lock authoritative check has `server_now < deadline_at`. Relevant Student Homework/Attempt reads, Start, answer/file mutation, Submit, Teacher close when the deadline may have passed, and the Scheduler must reuse one behavior such as `FinalizeHomeworkAttemptsAtDeadline`; Scheduler latency never extends eligibility. Submit, deadline reconciliation, and Teacher close serialize through deterministic locks and produce exactly one transition from `in_progress`, preserving the first committed reason/timestamps. Answer/file mutation uses the same Homework/Attempt lock boundary and re-checks lifecycle, authoritative time, and editability: a mutation committed first is part of the frozen Attempt; finalization committed first causes zero answer/file-domain mutation and the documented conflict. No Student write may commit after freeze.
 
 **BR-HW-018 — Authoritative time and institution timezone**  
 Deadline validation must use backend-authoritative time. Authoritative timestamps must be stored as UTC instants. Teachers enter educational dates and times in the institution’s configured IANA timezone, and educational schedules are displayed in that institution timezone. A device clock or device timezone must not change the actual deadline. Changing an institution timezone later must not change the absolute instant of an already-created deadline.
@@ -657,6 +660,8 @@ Homework with attempts, submissions, scores, or results must not be permanently 
 
 ### Homework Scoring and Visibility
 
+The rules in this subsection are Stage 9 behavior. Stage 7 only freezes Student work as immutable `submitted` history and does not check answers, award points, create Teacher-review metadata, or select an official Homework score.
+
 **BR-HW-022 — Automatic and manual scoring**  
 Automatically checkable questions may be scored by the system. Questions requiring judgment must wait for Teacher review.
 
@@ -672,6 +677,8 @@ A Parent may view a connected child’s homework completion status, released sco
 ---
 
 ## 8. Assignment Type and Checking Rules
+
+For Homework, this section's checking, awarded-points, review, and score-completion rules are Stage 9 behavior applied to immutable Stage 7 `submitted` history. Stage 7 may validate and persist each answer type but leaves saved answers pending and does not execute these checking rules. Blitz retains its separately approved checking/timing ownership.
 
 ### General Question Rules
 
@@ -819,6 +826,9 @@ The official Homework score is the highest normalized score among the Student’
 
 **BR-ATT-003 — No fourth normal Homework attempt**  
 After the Student has used three normal Homework attempts, the system must block a fourth normal attempt. The approved MVP does not include a Teacher-granted extra Homework attempt.
+
+**BR-ATT-003A — One current Homework Attempt and Start/resume**
+For one Student/Homework, at most one Attempt may have `status = in_progress`. A valid Start returns/resumes that existing Attempt without consuming capacity; otherwise it allocates `max(existing attempt_number) + 1`, up to 3, under application locking and database enforcement. Concurrent same-key or different-key Starts must still create at most one logical/current Attempt, must not duplicate or skip an attempt number because of a race, and a Start after Attempts 1, 2, and 3 exist is rejected as exhausted.
 
 **BR-ATT-004 — Blitz has one normal attempt**  
 Every Blitz task in the MVP must allow **one normal attempt** per assigned Student.
@@ -1376,7 +1386,7 @@ The MVP may use these Student-level submission statuses:
 - Not completed
 
 **BR-STAT-004 — Status belongs to the Student submission**  
-Submitted, waiting for review, checked, invalidated-by-exception, and not-completed states must be tracked per Student submission or requirement, not used as a replacement for task lifecycle status. A Blitz timeout does not create an expired attempt; it automatically finalizes the attempt under the approved timeout rule.
+Submitted, waiting for review, checked, invalidated-by-exception, and not-completed states must be tracked per Student submission or requirement, not used as a replacement for task lifecycle status. Stage 7 Homework transitions only from editable `in_progress` to frozen `submitted`; `submitted` does not imply explicit Student Submit or completed checking. Only Stage 9 Homework checking may later move that history to `waiting_for_teacher_review` or `checked`. A Blitz timeout does not create an expired attempt; it automatically finalizes the attempt under the approved timeout rule, and the Blitz-specific `timed_out_finalized` / `timeout_auto_submit` semantics remain unchanged.
 
 ### Result Calculation Statuses
 
@@ -1458,13 +1468,15 @@ The task, Student account, and institution must be active, and deadline/time/att
 **BR-SUB-003 — One Student owns the attempt**  
 An attempt and submission must be permanently connected to the authenticated Student. Another Student or Parent must not submit on that Student’s behalf.
 
-**BR-SUB-004 — In-progress saving is optional**  
-The platform may save in-progress answers when supported. Auto-save and offline drafts are not mandatory MVP requirements.
+**BR-SUB-004 — Homework save/replace and optional background drafts**
+Stage 7 Homework must support explicit typed-answer and private file-answer save/replace on an editable `in_progress` Attempt. Each saved/replaced answer remains `checking_status = pending` with `awarded_points`, `feedback`, `checked_by_user_id`, and `checked_at` null. A Question the Student never saved requires no `attempt_answers` row merely to represent zero. Background auto-save and offline drafts are not mandatory MVP requirements; this Homework rule does not change separately approved Blitz persistence/timing behavior.
 
 ### Final Submission
 
 **BR-SUB-005 — Explicit submission and authoritative auto-finalization**  
-For Homework, the Student may explicitly submit an in-progress Attempt before the deadline; if the authoritative Homework deadline arrives first, the backend automatically finalizes the saved Attempt according to the Homework deadline rules. For Blitz, the Student may explicitly submit before time expires; if the timer reaches zero first, the backend automatically finalizes the saved Attempt according to the Blitz timeout rules.
+For Homework, explicit Student Submit before deadline freezes the `in_progress` Attempt as `status = submitted` using one captured `finalizedAt = server_now` for `submitted_at`, `finalized_at`, and `locked_at`, with `finalization_reason = student_submit`. Deadline or Teacher-close finalization also ends as immutable `submitted`, but leaves `submitted_at = null` and uses the authoritative reason/time defined in BR-HW-012/016. Every Stage 7 path freezes only already-committed Student work and leaves answers pending for Stage 9.
+
+For Blitz, the Student may explicitly submit before time expires; if the timer reaches zero first, the backend automatically finalizes the saved Attempt according to the existing Blitz timeout rules. This Homework alignment does not change Blitz lifecycle, timer, timeout, checking, scoring, or exception behavior.
 
 **BR-SUB-006 — Submission validation**  
 Before accepting a final submission, the system must validate:
@@ -1474,6 +1486,7 @@ Before accepting a final submission, the system must validate:
 - Attempt availability
 - Deadline or blitz time
 - Required answers where applicable
+- For Stage 7 Homework, an unanswered Question does not require a fabricated answer row; only answer payloads actually provided must pass structural validation
 - File type and size where applicable
 - Institution and group scope
 
@@ -1492,8 +1505,10 @@ A valid submission must record:
 - Score when available
 - Teacher feedback when added
 
+For Stage 7 Homework specifically, finalization also records the authoritative reason/timestamps, preserves only already-committed answers/private file references as pending, and leaves score, awarded points, checking/review metadata, and Teacher feedback unavailable until Stage 9.
+
 **BR-SUB-008 — Final submission locks the attempt**  
-After final submission, the Student must not change that attempt’s answers.
+After final submission for any task, the Student must not change that Attempt's answers. For Homework, the same prohibition applies after Submit, deadline, or Teacher-close finalization: answer/file mutation and finalization must serialize through the relevant Homework/Attempt lock boundary and re-read lifecycle, authoritative time, and editability after locking. If the Student mutation commits first, that committed state is part of the frozen Attempt. If finalization commits first, the later mutation performs zero answer/file-domain mutation and returns the documented lifecycle/deadline/editability conflict. A rejected file replacement must leave persisted file identity/content unchanged. Existing Blitz final-submission/timeout write protection remains unchanged.
 
 **BR-SUB-009 — New attempt is separate**  
 When another attempt is allowed, it must create a separate attempt record rather than modifying the previous submitted attempt.
@@ -1783,13 +1798,13 @@ The final cross-document audit added the following mandatory clarifications:
 1. Automatic Short Written checking uses deterministic normalized exact matching: Unicode NFC normalization, trim, collapsed whitespace, Unicode case-fold comparison, and normalized Uzbek apostrophe variants; punctuation/technical symbols remain significant and fuzzy/AI matching is excluded.
 2. Draft assessments may have zero total points, but Homework/Blitz activation requires a backend-recalculated `total_possible_points > 0`.
 3. If highest Homework scores tie exactly, the lowest `attempt_number` is the official attempt reference.
-4. Closing an active Homework or Blitz auto-finalizes every existing in-progress attempt with reason `task_closed_auto_finalize`; unanswered components receive zero and no fake Attempts are created for Students who never started.
+4. Closing active Homework before its deadline freezes every existing `in_progress` Attempt as `submitted` from already-committed pending work with `task_closed_auto_finalize`, creates no fake Attempt/answer row, and leaves checking/scoring to Stage 9. Closing active Blitz retains its separately approved auto-finalization, unanswered-zero, checking, and scoring semantics with `task_closed_auto_finalize`.
 5. Administrator-created accounts require first-login password change and normal application access is blocked until the change succeeds.
 6. Result closure requires a terminal Student+Topic state and remains independent from visibility/release.
 
 ### Second-Audit Homework Deadline Decision — Resolved
 
-The final post-audit deadline rule is approved: an `in_progress` Homework Attempt is auto-finalized at the authoritative Homework deadline using saved answers. Unanswered components receive zero, answered automatic components are checked normally, answered manual-review components remain pending Teacher review, Students who never started receive no fabricated Attempt, and unused remaining Homework attempts become unavailable. The backend records `homework_deadline_auto_submit` and rejects later answer/submission mutations after finalization. No Homework-deadline behavior remains open.
+The final post-audit deadline rule is approved: an `in_progress` Homework Attempt is frozen at the authoritative Homework deadline as `submitted` using already-committed saved work, with `submitted_at = null`, `finalized_at = locked_at = deadline_at`, and `homework_deadline_auto_submit`. Stage 7 leaves saved answers pending, fabricates neither an answer row for an unanswered Question nor an Attempt for a never-started Student, makes unused remaining attempts unavailable, and rejects later answer/file/Submit mutation. Stage 9 later checks the frozen history and treats missing answers as zero under the approved policy. No Homework-deadline behavior remains open.
 
 ### MVP Rule Success Criteria
 

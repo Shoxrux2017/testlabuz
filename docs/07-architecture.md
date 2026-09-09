@@ -396,6 +396,7 @@ Responsible for use cases such as:
 - ActivateHomework
 - StartHomeworkAttempt
 - SubmitHomeworkAttempt
+- FinalizeHomeworkAttemptsAtDeadline
 - ActivateBlitz
 - StartBlitzAttempt
 - SubmitBlitzAttempt
@@ -419,6 +420,8 @@ Responsible for reusable rules such as:
 - Institution scope validation
 - Task lifecycle transitions
 - Fixed Homework/Blitz attempt availability
+- Homework execution/finalization separately from later Homework checking/scoring
+- Homework deadline/close finalization and answer/file write-versus-freeze serialization
 - Student-specific Blitz attempt exceptions
 - Blitz timing mode/deadline resolution
 - Blitz timeout finalization
@@ -679,7 +682,9 @@ Database transactions should be used when one business action writes multiple re
 Examples:
 
 - Create task + questions + options
-- Submit attempt + answers + file references + status
+- Save/replace a Homework answer or file reference under the Attempt editability lock
+- Finalize a Homework Attempt from already-committed Student work + lifecycle metadata
+- Protected Homework Start/Submit + durable idempotency claim/result
 - Manual review + score update + task score
 - Official score update + topic result recalculation
 - Final result calculation + rule snapshot
@@ -726,7 +731,7 @@ Every institution-level record must either:
 - Store `institution_id` directly, or
 - Have an unambiguous parent relationship that resolves to exactly one institution.
 
-For high-risk records such as users, groups, topics, tasks, attempts, submissions, files, and results, direct institution ownership is preferred where it improves safe querying and constraints.
+For high-risk records such as users, groups, topics, tasks, attempts, submissions, files, idempotency records, and results, direct institution ownership is preferred where it improves safe querying and constraints.
 
 Exact redundancy choices belong in `08-database.md`.
 
@@ -792,6 +797,14 @@ Return or mutate
 ```
 
 Direct record IDs must never bypass scoping.
+
+Student Homework/Attempt/Answer/File access starts from the authenticated Institution and Student, then resolves the frozen `assessment_students` recipient, owned Attempt, Assessment, and Question relationships inside that scope. Current Group membership must not replace persisted assignment history. Idempotency lookup is likewise tenant-first and user-first:
+
+```text
+institution_id + user_id + operation + idempotency_key
+```
+
+The backend must never find a globally matching key first and authorize afterward.
 
 ---
 
@@ -975,6 +988,8 @@ Both eventual official tasks must use `assignment_mode = group`; selected-Studen
 
 The pair lock prevents replacement of already meaningful official work/cohort. It does not prohibit the one-time completion of an absent Blitz side that satisfies the locked Topic/cohort contract. Completion must not clear the lock, replace the official Homework, or change the locked cohort.
 
+Creating the first Attempt for the Homework referenced by `topic_result_pairs.homework_assessment_id` locks that official meaning in the same transaction. The backend resolves and locks the pair in the same Institution/Topic, requires `cohort_snapshotted_at` and the Student's membership in the persisted official Homework recipient cohort, and uses one captured `startedAt` for both the new Attempt and a previously-null pair `locked_at`/`updated_at`. An existing non-null `locked_at` is preserved. The transaction may leave `blitz_assessment_id = null`, must never replace official Homework/cohort identity or create a Blitz, and fails atomically on structural pair/cohort inconsistency rather than repairing or resnapshotting it. Practice Homework attempts do not mutate `topic_result_pairs`.
+
 Avoid storing the whole topic workflow in one large serialized JSON field.
 
 ---
@@ -1118,6 +1133,8 @@ FillInBlankChecker
 
 Open written and file-based types return/manual-route rather than automatic judgment in the MVP.
 
+For Homework, Stage 7 only persists and freezes Student work with answer checking fields still pending. These checking strategies, awarded points, Teacher review, Attempt scores, and official Homework score resolution are Stage 9 responsibilities.
+
 ---
 
 ## 13.2 Approved Partial-Credit Policy
@@ -1211,6 +1228,8 @@ The backend is authoritative for all awarded points.
 
 Every Student try must be its own immutable historical attempt after finalization/submission.
 
+Homework execution history and the Homework checking engine are separate boundaries. Stage 7 creates/resumes Attempts, persists typed/file answers, and freezes the already-committed Student work as `submitted`; Stage 9 later checks that frozen history, applies the approved missing-answer-as-zero policy without fabricating answer rows, performs required Teacher review, and computes/selects scores.
+
 Conceptual structure:
 
 ```text
@@ -1244,12 +1263,13 @@ Responsibilities:
 - Check task lifecycle.
 - Check Homework deadline or Blitz timing.
 - Enforce the approved fixed attempt limits.
+- Resume the one current `in_progress` Homework Attempt rather than spending another attempt.
 - Calculate next attempt number.
 - Start attempt.
 - Lock/finalize attempt.
 - Determine whether another attempt is permitted.
 - Preserve attempt history.
-- Expose whether an attempt is eligible for official scoring.
+- Expose scoring eligibility only to the later owning checking/scoring workflow; for Homework this is Stage 9, never Stage 7.
 
 The service must not accept a client-provided arbitrary attempt limit.
 
@@ -1270,11 +1290,13 @@ Rules:
 
 - Normal attempt numbers are 1, 2, and 3.
 - A fourth normal Homework attempt is not permitted.
+- At most one Attempt may be `in_progress` for one Student/Homework; application locking and a PostgreSQL partial unique index enforce this invariant together.
+- Start returns the existing `in_progress` Attempt without consuming capacity, or atomically allocates `max(attempt_number) + 1` when no current Attempt exists and capacity/lifecycle/deadline rules pass.
 - Each attempt is stored independently.
-- A submitted attempt is immutable to the Student.
-- The official Homework score is the **highest valid completed score** among eligible Homework attempts. If several attempts tie exactly for that highest normalized score, the attempt with the lowest `attempt_number` is the official attempt reference.
-- An attempt requiring Teacher review is not fully scored until review is complete.
-- Whenever a later eligible attempt produces a higher score before result closure, the official Homework score and any open dependent Topic result must be recalculated through the normal domain workflow.
+- A Stage 7 finalized Attempt is stored as `submitted` and is immutable to the Student.
+- Stage 9 later chooses the official Homework score as the **highest valid completed score** among eligible Homework attempts. If several attempts tie exactly for that highest normalized score, the attempt with the lowest `attempt_number` is the official attempt reference.
+- In Stage 9, an attempt requiring Teacher review is not fully scored until review is complete.
+- In Stage 9, whenever a later eligible attempt produces a higher score before result closure, the official Homework score and any open dependent Topic result must be recalculated through the normal domain workflow.
 - The Teacher does not manually select the official Homework attempt and does not override the fixed attempt count.
 
 ---
@@ -1332,13 +1354,41 @@ Exact database field names/status codes belong in `08-database.md`; the architec
 
 ## 14.6 Submission Locking and Task-Close Finalization
 
-After explicit final submission, authoritative Blitz timeout, or Teacher task-close auto-finalization:
+### Homework execution and freeze
+
+Every Stage 7 Homework finalization path transitions only an `in_progress` Attempt to immutable `submitted` and freezes only previously committed Student work:
+
+```text
+explicit Student Submit:
+  submitted_at = finalized_at = locked_at = captured server instant
+  finalization_reason = student_submit
+
+authoritative Homework deadline:
+  submitted_at = null
+  finalized_at = locked_at = exact homework_assignments.deadline_at
+  finalization_reason = homework_deadline_auto_submit
+
+Teacher close before deadline:
+  submitted_at = null
+  finalized_at = locked_at = captured close instant
+  finalization_reason = task_closed_auto_finalize
+```
+
+Teacher close and all still-`in_progress` Attempt transitions commit atomically. At or after the deadline, close first runs the shared deadline reconciliation and preserves the deadline reason/timestamp; it must not rewrite an earlier terminal event. No Attempt or unanswered `attempt_answers` row is fabricated. Saved answers remain pending and Stage 7 writes no awarded points, checking metadata, Attempt score, or official score.
+
+Answer/file mutation and finalization serialize through deterministic relevant Homework/Attempt row locks. Lifecycle, authoritative time, and editability are re-read after locking. If the Student mutation commits first, that committed state is frozen; if finalization commits first, the later mutation makes zero answer/file-domain changes and returns the documented conflict. A rejected file replacement cannot change persisted answer/file identity or content.
+
+### Blitz preservation
+
+After explicit final submission, authoritative Blitz timeout, or Teacher task-close auto-finalization under the Blitz contract:
 
 - Student answer data becomes immutable for that attempt.
 - Teacher may review/score but must not rewrite Student answers.
-- A new attempt is possible only when the task is still active and the fixed Homework policy or approved Blitz exception allows it.
+- A new Blitz attempt is possible only when the task is still active and the approved Blitz exception allows it.
 
-When an authorized Teacher closes active Homework or Blitz, the backend must atomically stop new starts/writes and finalize every existing `in_progress` attempt using saved answers. Unanswered components receive zero; manual-review answers remain pending review. Students who never started receive no fabricated Attempt. The finalization reason is `task_closed_auto_finalize`.
+When an authorized Teacher closes an active Blitz, the backend atomically stops new starts/writes and finalizes every existing `in_progress` Blitz Attempt using saved answers. Unanswered components receive zero, manual-review answers remain pending review, Students who never started receive no fabricated Attempt, and `finalization_reason = task_closed_auto_finalize`.
+
+The existing Blitz timer, timeout, finalization, checking, scoring, exception, and `timed_out_finalized` / `timeout_auto_submit` semantics remain unchanged.
 
 ---
 
@@ -1789,6 +1839,16 @@ not_completed
 ```
 
 `timed_out_finalized` is an architectural concept, not necessarily the final persisted enum name. It means the authoritative Blitz deadline ended, saved work was finalized, and the attempt is no longer editable. It must not be treated as an unsubmitted `expired` attempt.
+
+Lifecycle ownership is explicit:
+
+```text
+Stage 7 Homework execution: in_progress -> submitted
+Stage 9 Homework checking:  submitted -> waiting_for_teacher_review / checked
+Blitz:                       timed_out_finalized remains reserved for its own contract
+```
+
+For Homework, `submitted` means frozen Student work awaiting later checking; it does not imply explicit Student Submit or completed scoring. Only explicit Student Submit sets `submitted_at`.
 
 For an approved technical Blitz exception, the original affected attempt additionally needs explicit scoring-eligibility/exclusion metadata and a link/reason context sufficient for history.
 
@@ -2314,6 +2374,7 @@ The backend must calculate/decide:
 
 - Authorization
 - Fixed attempt availability
+- Homework Attempt editability and authoritative deadline reconciliation
 - Blitz attempt-exception eligibility
 - Deadline validity
 - Blitz availability
@@ -2354,6 +2415,10 @@ High-risk client mutations use one normative idempotency contract. `Idempotency-
 - Granting a Student-specific Blitz attempt exception
 
 A safe retry with the same key/request identity returns the same logical result. Other concurrent mutations such as manual review and result calculation use transactional state/version guards; they do not invent a second public idempotency contract unless `09-api-contracts.md` explicitly adds one.
+
+Homework Start and final Submit use durable PostgreSQL records, with operation codes `student.homework.attempt.start` and `student.homework.attempt.submit`; process/request/Flutter/cache-only timing state is insufficient. The lookup and unique scope is authenticated `institution_id + user_id + operation + idempotency_key`. A deterministic fingerprint covers the operation, authenticated Institution/User, route target UUIDs, and normalized semantic body fields, never secrets, Authorization tokens, or the key itself. Same scope/key/fingerprint replays the original logical resource and successful semantic HTTP status without a second mutation; different-fingerprint reuse returns `409 idempotency_key_reused` with no domain mutation. Authorization and tenant/assignment/ownership checks always remain mandatory. Completed records are not automatically expired or deleted in the MVP.
+
+A successful protected Homework Start/Submit and its completed claim/result commit atomically through conflict-safe PostgreSQL claiming. Neither a successful mutation without its result nor a deliberately incomplete claim may commit. When a new late Start/Submit discovers under locks that the Homework deadline is reached, required deadline reconciliation must still commit while the request returns the documented failure, normally `409 deadline_passed`; the operation leaves neither a new completed success record nor a new incomplete claim. Reconcile before acquiring a new claim, or remove only that newly acquired incomplete claim and surface failure after the reconciliation transaction commits. Never delete a previously completed record. A valid replay of a completed pre-deadline success may still return that prior success because it performs no new mutation.
 
 ---
 
@@ -3052,6 +3117,8 @@ Use:
 
 Exact implementation belongs in database/API contracts.
 
+For Homework, transactions acquire deterministic relevant row locks, then re-read lifecycle, authoritative time, assignment/ownership, and Attempt editability. Submit, deadline reconciliation/Scheduler, and Teacher close may yield exactly one transition from `in_progress`; the first valid semantic event preserves its reason/timestamps and later reconciliation is a no-op. At a reached deadline, `homework_deadline_auto_submit` with the exact deadline instant wins. Answer/file write versus freeze has only two outcomes: the mutation commits before freeze and is included, or freeze commits first and the mutation makes zero answer/file-domain changes. Application locking remains mandatory even where partial uniqueness protects the one-`in_progress` invariant.
+
 ---
 
 # 34. Performance Architecture
@@ -3372,7 +3439,7 @@ Unused infrastructure is not.
 
 ## Approved Decision-Dependent Architecture
 
-- Homework: exactly 3 normal attempts; highest valid completed score is official
+- Homework: Stage 7 executes/finalizes exactly 3 normal attempts; Stage 9 later selects the highest valid completed score as official
 - Blitz: 1 normal attempt; one Student-specific Teacher-approved exception attempt
 - Institution Blitz timer mode: synchronized or individual
 - Teacher-configured whole-Blitz duration
@@ -3386,25 +3453,29 @@ Unused infrastructure is not.
 
 The original ten architecture-affecting MVP business decisions and all post-audit clarifications are resolved. The final read-only cross-document consistency audit passed; this architecture is locked for MVP implementation.
 
-Post-audit architecture also fixes mandatory first-login password gating, incomplete institution-setting prerequisites, activation `total_possible_points > 0`, deterministic automatic Short Written normalization, earliest-attempt Homework tie-breaking, task-close auto-finalization, result-closure preconditions, idempotent institution lifecycle commands, and required idempotency headers for the five high-risk client mutations.
+Post-audit architecture also fixes mandatory first-login password gating, incomplete institution-setting prerequisites, activation `total_possible_points > 0`, deterministic automatic Short Written normalization, earliest-attempt Homework tie-breaking, task-close auto-finalization, result-closure preconditions, idempotent institution lifecycle commands, and required idempotency headers for the five high-risk client mutations. Stage 7 additionally locks the Homework execution/freeze boundary before Stage 9 checking/scoring without changing Blitz semantics.
 
 ---
 
 # 43A. Homework Deadline Finalization Architecture
 
-The `AttemptService` owns the authoritative Homework deadline transition. When backend time reaches a Homework deadline, it must atomically prevent new attempts and further Student answer writes, identify existing `in_progress` Homework Attempts, and finalize each from its saved answer state. Unanswered components receive zero, automatic components are checked normally, and answered manual-review components enter the normal review pipeline. No Attempt is fabricated for a Student who never started, and unused normal-attempt capacity is no longer available after the deadline.
+The `AttemptService` owns one authoritative reusable transition such as `FinalizeHomeworkAttemptsAtDeadline`. It is invoked for relevant Student Homework/Attempt reads, Attempt Start, typed/file answer mutation, final Submit, Teacher close when the deadline may have passed, and Laravel Scheduler. Every write independently enforces `server_now < deadline_at`; device time and Scheduler latency never extend eligibility.
 
-Use one idempotent application action such as `FinalizeHomeworkAttemptsAtDeadline`. The backend invokes/reconciles this action when expired Homework/Attempts are accessed or mutated, and the Laravel Scheduler invokes the same action server-side so finalization does not depend on Student/Teacher traffic. Exact write eligibility is always checked against authoritative server time, so scheduler execution latency can never extend the deadline.
+At `server_now >= deadline_at`, the action creates no Attempt for a never-started Student, makes unused capacity unavailable, and transitions only existing `in_progress` Homework Attempts from their already-committed saved state. It neither fabricates unanswered answer rows nor performs Stage 9 checking/scoring.
 
 The finalization metadata is:
 
 ```text
-finalized_at = authoritative Homework deadline/reconciliation instant
+status = submitted
+submitted_at = null
+finalized_at = exact homework_assignments.deadline_at
 finalization_reason = homework_deadline_auto_submit
-locked_at = finalized_at
+locked_at = exact homework_assignments.deadline_at
 ```
 
-`submitted_at` remains null for this path because the Student did not explicitly submit. The Attempt may then be `checked` or `waiting_for_teacher_review` according to checking readiness. Concurrency/state-precondition logic must ensure a Student submit arriving at the deadline boundary and the deadline finalizer cannot both finalize the Attempt; exactly one terminal transition wins, safe retries are idempotent, and later incompatible writes return the appropriate locked/late conflict.
+Transactions lock relevant Homework/Attempt rows deterministically, re-read state and authoritative time, transition only from `in_progress`, and preserve an already committed finalization reason/timestamps. A Student Submit validly committed before deadline remains `student_submit`; when the deadline is reached under the lock, `homework_deadline_auto_submit` wins; a valid pre-deadline Teacher close committed first remains `task_closed_auto_finalize`. Repeated reconciliation performs no write after finalization.
+
+The same lock boundary serializes answer/file mutation versus finalization: a mutation committed first is included in frozen history, while finalization committed first makes the later mutation return the lifecycle/deadline/editability conflict with zero answer/file-domain mutation. A late idempotency-protected Start/Submit must allow required deadline reconciliation to commit while returning its failure and leaving no new completed or incomplete claim, as defined in Section 23.4.
 
 ---
 

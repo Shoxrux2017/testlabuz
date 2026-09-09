@@ -235,6 +235,7 @@ The following tables should store `institution_id` directly:
 - `questions`
 - `assessment_attempts`
 - `attempt_answers`
+- `idempotency_records`
 - `official_task_scores`
 - `blitz_attempt_exceptions`
 - `topic_result_pairs`
@@ -537,6 +538,54 @@ Security rule:
 
 - Token records are technical authentication data.
 - Tokens must not determine role or institution authority independently of `users`.
+
+---
+
+## 5.3 Table: `idempotency_records`
+
+Purpose:
+
+Durably claims and records the logical result of high-risk client mutations. Stage 7 Homework uses operation codes:
+
+```text
+student.homework.attempt.start
+student.homework.attempt.submit
+```
+
+### Columns
+
+| Column | Type | Null | Notes |
+|---|---|---:|---|
+| `id` | uuid | no | Primary key |
+| `institution_id` | uuid | no | Authenticated Institution scope |
+| `user_id` | uuid | no | Authenticated user scope |
+| `operation` | varchar(80) | no | Stable operation code |
+| `idempotency_key` | uuid | no | Client-generated key |
+| `request_fingerprint` | char(64) | no | Deterministic semantic request fingerprint |
+| `result_resource_type` | varchar(80) | yes | Logical result resource type |
+| `result_resource_id` | uuid | yes | Logical result resource identifier |
+| `response_status` | smallint | yes | Original successful semantic HTTP status |
+| `completed_at` | timestamptz | yes | Transiently null only while a new claim is being resolved; no incomplete claim may remain deliberately committed |
+| `created_at` | timestamptz | no | |
+| `updated_at` | timestamptz | no | |
+
+### Foreign Keys
+
+```text
+institution_id -> institutions.id
+user_id        -> users.id
+```
+
+There is no generic foreign key for `result_resource_id`; `result_resource_type` identifies the logical resource category and the application resolves it safely inside the authenticated scope.
+
+### Unique and Index
+
+```text
+unique(institution_id, user_id, operation, idempotency_key)
+index(institution_id, user_id, operation, created_at)
+```
+
+Conflict-safe PostgreSQL claiming (`INSERT ... ON CONFLICT` or equivalent) is required. A successful protected mutation and its completed claim/result commit atomically; production workflows must not deliberately commit incomplete claims. Completed records are not automatically expired or deleted in the MVP.
 
 ---
 
@@ -1690,6 +1739,21 @@ checked
 
 `finalization_reason` preserves whether the immutable answer set came from explicit Student submission, authoritative Blitz timeout, Teacher task-close auto-finalization, or authoritative Homework deadline auto-finalization even if the status later moves to Teacher review/checked.
 
+Lifecycle ownership is explicit:
+
+```text
+Stage 7 Homework:
+  in_progress -> submitted
+
+Stage 9 Homework checking:
+  submitted -> waiting_for_teacher_review / checked
+
+Blitz:
+  timed_out_finalized remains reserved for its own contract
+```
+
+For Stage 7 Homework, `submitted` means frozen Student work ready for later checking. Only explicit Student Submit sets `submitted_at`; deadline and Teacher-close finalization leave it null. `timed_out_finalized` and `timeout_auto_submit` are not used for Homework.
+
 ### Constraints
 
 ```text
@@ -1739,7 +1803,10 @@ No Blitz attempt number greater than 2 is permitted.
 
 ```text
 unique(assessment_id, student_id, attempt_number)
+unique(assessment_id, student_id) where status = 'in_progress'
 ```
+
+The partial unique index is the database backstop for at most one current `in_progress` Attempt per Student/Homework. Application locking remains mandatory for concurrency-safe resume and next-attempt allocation.
 
 ### Indexes
 
@@ -1751,18 +1818,47 @@ index(status, finalized_at)
 index(institution_id, deadline_at, status)
 ```
 
+### Homework Explicit Submit Finalization Rule
+
+Explicit Student Submit captures one `finalizedAt = server_now` and transitions the owned editable Homework Attempt to:
+
+```text
+status = 'submitted'
+submitted_at = finalizedAt
+finalized_at = finalizedAt
+finalization_reason = 'student_submit'
+locked_at = finalizedAt
+```
+
+Saved answer rows remain pending for Stage 9 checking.
+
 ### Homework Deadline Auto-Finalization Rule
 
 Homework uses `homework_assignments.deadline_at` as the authoritative deadline; the Attempt-level `deadline_at` column remains reserved for effective Blitz deadlines. At Homework deadline reconciliation, every matching `in_progress` Homework Attempt is atomically finalized from saved answers. The transaction sets:
 
 ```text
-finalized_at = authoritative Homework deadline/current reconciliation time
-finalization_reason = 'homework_deadline_auto_submit'
-locked_at = finalized_at
+status = 'submitted'
 submitted_at = null
+finalized_at = homework_assignments.deadline_at
+finalization_reason = 'homework_deadline_auto_submit'
+locked_at = homework_assignments.deadline_at
 ```
 
-Unanswered components are persisted/evaluated as zero according to scoring rules, answered automatic components are checked, and answered manual-review components may move the Attempt to `waiting_for_teacher_review`; otherwise it may move directly to `checked`. No empty Attempt row is created for a Student who never started. After the Homework deadline, the remaining unused normal-attempt capacity is unavailable.
+Stage 7 neither creates an `attempt_answers` row for an unanswered Question nor checks/scores saved answers. Existing answer rows stay `pending`; the Stage 9 checking policy later treats missing answers as zero. No empty Attempt row is created for a Student who never started. After the Homework deadline, remaining unused normal-attempt capacity is unavailable. Reconciliation processing time never replaces the exact persisted deadline instant.
+
+### Homework Teacher-Close Finalization Rule
+
+Before the deadline, an authorized Teacher close captures one `closedAt = server_now`, locks the Homework and relevant Attempts, and transitions every still-`in_progress` Homework Attempt to:
+
+```text
+status = 'submitted'
+submitted_at = null
+finalized_at = closedAt
+finalization_reason = 'task_closed_auto_finalize'
+locked_at = closedAt
+```
+
+All Attempt transitions and the Homework close commit or roll back together, and unused normal-attempt capacity becomes unavailable. At or after the deadline, the transaction reconciles the deadline first and preserves `homework_deadline_auto_submit` with the exact `deadline_at`; repeated close/finalization must not rewrite an existing terminal reason or timestamp.
 
 ### Timeout Rule
 
@@ -1783,7 +1879,13 @@ and records the appropriate status based on whether Teacher review remains.
 
 ### Concurrency
 
-Starting a new Attempt uses a transaction/lock or equivalent guard so concurrent requests cannot create duplicate next attempt numbers or bypass fixed attempt limits.
+Starting any new Attempt uses a transaction/lock or equivalent guard so concurrent requests cannot create duplicate next attempt numbers or bypass the applicable fixed-attempt/Blitz-exception rules.
+
+Starting or resuming Homework uses deterministic relevant row locks plus the partial unique index. With no `in_progress` Attempt, the transaction allocates `max(existing attempt_number) + 1` up to 3; with one current `in_progress` Attempt, it returns that same row without consuming capacity. Concurrent starts cannot duplicate or skip attempt numbers because of a race.
+
+Student Submit, deadline reconciliation/Scheduler, and Teacher close lock and re-read state and authoritative time, then transition only from `in_progress`, yielding exactly one terminal transition and preserving the first valid reason/timestamps. Repeated reconciliation/close and idempotent replay perform no domain timestamp churn.
+
+Typed/file answer replacement uses the same relevant Homework/Attempt lock boundary and re-checks assignment, lifecycle, authoritative time, and editability after locking. If the Student mutation commits first it is included in the frozen Attempt; if finalization commits first, the Student request performs zero answer/file-domain mutation. No Student write may commit after freeze.
 
 ---
 
@@ -1860,7 +1962,7 @@ The invalidated Attempt remains in history and must not be deleted.
 
 Purpose:
 
-Stores one Student answer record per Question per Attempt.
+Stores at most one saved Student answer record per Question per Attempt. An unanswered Question may have no row.
 
 ### Columns
 
@@ -1887,6 +1989,18 @@ waiting_for_teacher_review
 teacher_checked
 ```
 
+Every Stage 7 Homework answer save/replace persists:
+
+```text
+checking_status = 'pending'
+awarded_points = null
+feedback = null
+checked_by_user_id = null
+checked_at = null
+```
+
+If a Student never saves a Question, no `attempt_answers` row is required. Submit/deadline/Teacher-close finalization freezes only existing committed rows and does not create or rewrite answer payloads, correct-answer configuration, checking fields, Teacher-review metadata, or points. Stage 9 later owns Homework checking/scoring and applies the approved missing-answer-as-zero policy without fabricating rows in Stage 7.
+
 ### Unique
 
 ```text
@@ -1903,7 +2017,9 @@ Upper-bound validation uses the related Question points and is enforced in domai
 
 ### Student Immutability
 
-After Attempt final submission/lock, Student-facing operations must not update answer content.
+After any Attempt final submission/lock, Student-facing operations must not update answer content.
+
+For Stage 7 Homework, Student-facing answer/file mutation is allowed only for an owned, assigned Attempt with `status = 'in_progress'`, `finalized_at = null`, and `locked_at = null` while lifecycle/deadline rules remain valid. Mutation and finalization serialize through the relevant Homework/Attempt locks and re-check editability after locking. After finalization/lock, Student-facing operations must make zero answer/file-domain changes.
 
 Teacher review may update only:
 
@@ -2086,11 +2202,15 @@ The file must belong to the same:
 - Student attempt
 - Question context
 
+Stage 7 Homework file replacement uses the same Attempt-lock/editability boundary as typed answers. If freeze commits first, a rejected replacement leaves the persisted `attempt_answers`, `answer_files`, and referenced `files` identity/content unchanged; transient upload cleanup belongs to the file implementation workflow. Existing Blitz file-answer behavior is not changed here.
+
 ---
 
 # 18. Automatic and Manual Scoring
 
 Scoring is persisted at Question/Attempt levels.
+
+For Homework, these fields are consumed by Stage 9 only after Stage 7 has frozen the Attempt as `submitted`. Stage 7 does not populate awarded points, Teacher-review metadata, Attempt scores, or official Homework scores.
 
 No separate duplicated “auto score” table is required.
 
@@ -2342,7 +2462,9 @@ locked_at IS NOT NULL
 
 The Teacher must designate only whole-group assessments. The first activated official whole-group task establishes the common cohort from its persisted `assessment_students` snapshot and sets `cohort_snapshotted_at`. If an already-active eligible whole-group Homework is designated before any Student Attempt, its existing persisted Group recipient snapshot becomes the official cohort. If only that official Homework exists, the backend does not create a Blitz Assessment or Blitz recipient rows. When the official Blitz is later designated or activated, its recipient snapshot must use exactly the established cohort; a conflicting existing snapshot is rejected rather than silently rewritten. Once snapshotted, later Group membership changes do not rewrite the official cohort. Before `locked_at`, an authorized Teacher may replace the official Homework only when the backend eligibility rules allow it and no existing Student work is reinterpreted.
 
-When the first relevant official Student Attempt begins, `locked_at` is set and the already-designated official task/cohort cannot be replaced or mutated. A valid staged row may have `homework_assessment_id`, `cohort_snapshotted_at`, and `locked_at` set while `blitz_assessment_id` remains null. Stage 8 may fill the null Blitz reference when the official-Blitz and cohort rules pass; this completes the pair and must not clear `locked_at`, replace the official Homework, or change the locked cohort.
+When creating the first Attempt for `topic_result_pairs.homework_assessment_id`, the same transaction locks the pair in the same Institution/Topic, requires non-null `cohort_snapshotted_at`, and requires the Student to belong to the persisted official Homework recipient cohort. It captures one `startedAt` for the new Attempt and, when pair `locked_at` is null, writes `locked_at = startedAt` and `updated_at = startedAt`; an existing non-null `locked_at` is preserved. A valid staged row may still have `blitz_assessment_id = null`. The operation never replaces official Homework/cohort identity or creates a Blitz, and structural pair/cohort inconsistency fails atomically without repair or resnapshot. Practice Homework does not mutate `topic_result_pairs`.
+
+Stage 8 may fill the null Blitz reference when the official-Blitz and cohort rules pass; this completes the pair and must not clear `locked_at`, replace the official Homework, or change the locked cohort.
 
 ---
 
@@ -2690,6 +2812,16 @@ not_completed
 
 `not_started` and `not_completed` should usually come from recipient/Attempt/task state rather than fake empty Attempt rows.
 
+Lifecycle ownership is:
+
+```text
+Stage 7 Homework:          in_progress -> submitted
+Stage 9 Homework checking: submitted -> waiting_for_teacher_review / checked
+Blitz:                     timed_out_finalized remains reserved for its own contract
+```
+
+For Stage 7 Homework, every finalization reason (`student_submit`, `task_closed_auto_finalize`, or `homework_deadline_auto_submit`) produces `status = submitted`; `submitted_at` is non-null only for explicit Student Submit. Saved answers remain `pending` until Stage 9.
+
 `finalization_reason` separately records:
 
 ```text
@@ -2699,7 +2831,7 @@ task_closed_auto_finalize
 homework_deadline_auto_submit
 ```
 
-so timeout and Teacher-close finalization remain distinguishable even if the Attempt later enters Teacher review or checked state.
+so Blitz timeout, Homework deadline, and Teacher-close finalization remain distinguishable even if a later owning stage moves an Attempt into Teacher review or checked state.
 
 ---
 
@@ -2842,6 +2974,12 @@ institution_understanding_categories.institution_id
 → institutions.id
 
 institution_understanding_categories.updated_by_user_id
+→ users.id
+
+idempotency_records.institution_id
+→ institutions.id
+
+idempotency_records.user_id
 → users.id
 ```
 
@@ -3118,6 +3256,10 @@ users.login_name
 ```
 
 ```text
+idempotency_records(institution_id, user_id, operation, idempotency_key)
+```
+
+```text
 group_teacher_memberships(group_id, teacher_id)
 WHERE ended_at IS NULL
 ```
@@ -3199,6 +3341,7 @@ PostgreSQL does not automatically create indexes for every foreign key.
 ```text
 users(institution_id, role, is_active)
 users(institution_id, full_name)
+idempotency_records(institution_id, user_id, operation, created_at)
 ```
 
 ---
@@ -3522,7 +3665,7 @@ The MVP includes:
 topic_result_pairs
 ```
 
-At most one row exists for each Topic. It first designates the whole-group official Homework and may keep a null Blitz reference until the whole-group official Blitz is added later. The first activated official task establishes the persisted `assessment_students` cohort, and the later official task must reuse it. Selected-Student tasks are practice-only. Relevant Student activity locks the existing official work/cohort but does not prevent one-time completion of the absent Blitz side.
+At most one row exists for each Topic. It first designates the whole-group official Homework and may keep a null Blitz reference until the whole-group official Blitz is added later. The first activated official task establishes the persisted `assessment_students` cohort, and the later official task must reuse it. Selected-Student tasks are practice-only. The first official Homework Attempt atomically locks the existing official work/cohort with its `startedAt`, but does not prevent one-time completion of the absent Blitz side.
 
 `topic_results(topic_id, student_id)` is uniquely constrained.
 
@@ -3531,7 +3674,7 @@ At most one row exists for each Topic. It first designates the whole-group offic
 ## 29.11 Post-Audit Database Clarifications
 
 - Administrator-created accounts persist `must_change_password = true` until authenticated password change clears it.
-- Institution lifecycle idempotency and HTTP idempotency-key semantics are API/application concerns; no duplicate educational domain rows may be created.
+- Institution lifecycle idempotency remains an application concern; high-risk HTTP idempotency semantics are application-owned and durably backed by `idempotency_records`, so no duplicate educational domain rows are created.
 - The first activated official whole-group task establishes the persisted official cohort; no missing official task or recipient rows are fabricated, and the later official task must use the same Student set.
 - `finalization_reason` distinguishes `student_submit`, `timeout_auto_submit`, `task_closed_auto_finalize`, and `homework_deadline_auto_submit`.
 - No schema supports Teacher-selected official Homework attempt; highest-score ties deterministically use the lowest attempt number.
@@ -3547,40 +3690,41 @@ Locked MVP tables:
 1. `institutions`
 2. `users`
 3. `personal_access_tokens`
-4. `institution_settings`
-5. `institution_understanding_categories`
-6. `groups`
-7. `group_teacher_memberships`
-8. `group_student_memberships`
-9. `parent_student_relationships`
-10. `topics`
-11. `files`
-12. `learning_materials`
-13. `assessments`
-14. `homework_assignments`
-15. `blitz_tasks`
-16. `assessment_students`
-17. `questions`
-18. `question_choice_options`
-19. `question_true_false_answers`
-20. `question_short_accepted_answers`
-21. `question_matching_items`
-22. `question_ordering_items`
-23. `question_fill_blanks`
-24. `question_fill_blank_accepted_answers`
-25. `assessment_attempts`
-26. `blitz_attempt_exceptions`
-27. `attempt_answers`
-28. `answer_choice_selections`
-29. `answer_text_values`
-30. `answer_boolean_values`
-31. `answer_matching_pairs`
-32. `answer_ordering_items`
-33. `answer_fill_blank_values`
-34. `answer_files`
-35. `official_task_scores`
-36. `topic_result_pairs`
-37. `topic_results`
+4. `idempotency_records`
+5. `institution_settings`
+6. `institution_understanding_categories`
+7. `groups`
+8. `group_teacher_memberships`
+9. `group_student_memberships`
+10. `parent_student_relationships`
+11. `topics`
+12. `files`
+13. `learning_materials`
+14. `assessments`
+15. `homework_assignments`
+16. `blitz_tasks`
+17. `assessment_students`
+18. `questions`
+19. `question_choice_options`
+20. `question_true_false_answers`
+21. `question_short_accepted_answers`
+22. `question_matching_items`
+23. `question_ordering_items`
+24. `question_fill_blanks`
+25. `question_fill_blank_accepted_answers`
+26. `assessment_attempts`
+27. `blitz_attempt_exceptions`
+28. `attempt_answers`
+29. `answer_choice_selections`
+30. `answer_text_values`
+31. `answer_boolean_values`
+32. `answer_matching_pairs`
+33. `answer_ordering_items`
+34. `answer_fill_blank_values`
+35. `answer_files`
+36. `official_task_scores`
+37. `topic_result_pairs`
+38. `topic_results`
 
 ---
 
@@ -3647,6 +3791,7 @@ Institution
 1 ─── * Files
 1 ─── * Assessments
 1 ─── * Attempts
+1 ─── * IdempotencyRecords
 1 ─── * Results
 1 ─── 1 InstitutionSettings
 ```
@@ -3812,7 +3957,7 @@ and stores all calculation, category, release-policy, and visibility snapshots r
 
 # 31A. Homework Deadline Persistence Decision — Resolved
 
-No new Attempt status is required solely for Homework deadline finalization. An in-progress Homework Attempt becomes immutable at the authoritative deadline, records `finalized_at`, `locked_at`, and `finalization_reason = 'homework_deadline_auto_submit'`, leaves `submitted_at = null`, and then uses the normal `checked` or `waiting_for_teacher_review` status according to scoring readiness. The official-score resolver may use the finalized Attempt once it is fully checked and otherwise eligible. Students who never started remain represented only by their recipient row; no empty Attempt is fabricated.
+No new Attempt status is required solely for Homework deadline finalization. At `server_now >= homework_assignments.deadline_at`, an `in_progress` Homework Attempt becomes immutable `submitted` with `submitted_at = null`, `finalized_at = locked_at = exact homework_assignments.deadline_at`, and `finalization_reason = 'homework_deadline_auto_submit'`. Stage 7 freezes only already-committed answers/files, leaves saved answer checking fields pending, creates no unanswered answer row, and performs no checking/scoring. Stage 9 later checks the frozen Attempt and may move it to `checked` or `waiting_for_teacher_review`; the official-score resolver may use it once fully checked and otherwise eligible. Students who never started remain represented only by their recipient row, and no empty Attempt is fabricated.
 
 ---
 
@@ -3858,6 +4003,7 @@ No new Attempt status is required solely for Homework deadline finalization. An 
 36. No database rule contradicts `07-architecture.md`.
 37. `09-api-contracts.md` can reference every required entity without inventing persistence behavior.
 38. Laravel migrations can be created directly from the synchronized table definitions.
+39. Durable `idempotency_records` persistence, ownership, uniqueness, lookup index, retention, and migration ordering are explicit.
 
 The original decision gates and both audit rounds are synchronized. No database business-decision gate remains open, and the final read-only consistency audit passed.
 
@@ -3872,49 +4018,52 @@ A practical migration dependency order is:
 
 02 users
 03 personal_access_tokens
+04 idempotency_records
 
-04 institution_settings
-05 institution_understanding_categories
+05 institution_settings
+06 institution_understanding_categories
 
-06 groups
-07 group_teacher_memberships
-08 group_student_memberships
-09 parent_student_relationships
+07 groups
+08 group_teacher_memberships
+09 group_student_memberships
+10 parent_student_relationships
 
-10 topics
+11 topics
 
-11 files
-12 learning_materials
+12 files
+13 learning_materials
 
-13 assessments
-14 homework_assignments
-15 blitz_tasks
-16 assessment_students
+14 assessments
+15 homework_assignments
+16 blitz_tasks
+17 assessment_students
 
-17 questions
-18 question_choice_options
-19 question_true_false_answers
-20 question_short_accepted_answers
-21 question_matching_items
-22 question_ordering_items
-23 question_fill_blanks
-24 question_fill_blank_accepted_answers
+18 questions
+19 question_choice_options
+20 question_true_false_answers
+21 question_short_accepted_answers
+22 question_matching_items
+23 question_ordering_items
+24 question_fill_blanks
+25 question_fill_blank_accepted_answers
 
-25 assessment_attempts
-26 blitz_attempt_exceptions
-27 attempt_answers
-28 answer_choice_selections
-29 answer_text_values
-30 answer_boolean_values
-31 answer_matching_pairs
-32 answer_ordering_items
-33 answer_fill_blank_values
-34 answer_files
+26 assessment_attempts
+27 blitz_attempt_exceptions
+28 attempt_answers
+29 answer_choice_selections
+30 answer_text_values
+31 answer_boolean_values
+32 answer_matching_pairs
+33 answer_ordering_items
+34 answer_fill_blank_values
+35 answer_files
 
-35 official_task_scores
-36 topic_result_pairs
-37 topic_results
+36 official_task_scores
+37 topic_result_pairs
+38 topic_results
 ```
+
+Create `idempotency_records` after `institutions` and `users` because its required ownership foreign keys reference both tables.
 
 Create `blitz_attempt_exceptions` after `assessment_attempts` because both `invalidated_attempt_id` and optional `replacement_attempt_id` reference Attempt rows.
 

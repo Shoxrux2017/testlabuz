@@ -351,7 +351,7 @@ The Student can access, when assigned and allowed:
 
 ### Homework attempts
 
-Each Student receives exactly **3 normal attempts** for an assigned Homework. If an authoritative Homework deadline arrives while one of the Student's Attempts is still `in_progress`, the backend automatically finalizes that Attempt from the saved answers, scores unanswered components as zero, and prevents any further attempts or edits after the deadline. A Student who never started does not receive a fabricated Attempt.
+Each Student receives exactly **3 normal attempts** for an assigned Homework. If the authoritative Homework deadline arrives while one of the Student's Attempts is still `in_progress`, the backend freezes only the already-committed saved work as an immutable `submitted` Attempt and prevents any further attempts or answer/file edits. Stage 7 performs no Homework checking or scoring: saved answers remain pending, an unanswered Question requires no fabricated answer row, and a Student who never started receives no fabricated Attempt. Stage 9 later checks and scores the frozen work and treats missing answers as zero under the approved policy.
 
 The Student should be able to see:
 
@@ -790,4 +790,5 @@ The main rule for the MVP is:
 - **Administrator-created users:** Institution Admins, Teachers, Students, and Parents must change their initial password at first login; normal application access is blocked until they do so.
 - **Teacher:** may create practice Homework/Blitz for selected Students, but official grading tasks must be whole-group and share one snapshotted Topic cohort. The Teacher may close a Student Topic Result only after that Student reaches a terminal calculated or definitive Not completed state.
 - **Student:** for Multiple-choice, may never select more options than the server-provided `max_selections`; no correct-answer identity is exposed.
-- **Teacher/Student task closure:** closing active Homework/Blitz auto-finalizes currently in-progress Student attempts from saved answers; Students who never started get no fabricated Attempt.
+- **Homework task closure:** closing an active Homework freezes currently in-progress Student Attempts from already-committed saved work as immutable `submitted` history. Stage 7 creates no fabricated Attempt or unanswered-answer row and performs no checking or scoring; Stage 9 later checks and scores the frozen work.
+- **Blitz task closure:** closing an active Blitz continues to auto-finalize currently in-progress Student attempts from saved answers; Students who never started receive no fabricated Attempt.

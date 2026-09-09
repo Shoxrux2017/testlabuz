@@ -353,7 +353,7 @@ For file-based assignments, the Student should be able to upload an answer file 
 
 For Homework, the Student should clearly see that exactly **3 normal attempts** are available, together with the current attempt number and remaining attempts. Each submitted attempt remains separate, and the highest valid completed Homework score becomes official.
 
-The Student should not be able to start a fourth normal Homework attempt, start a new attempt after the Homework deadline or closure, or modify a finalized/submitted attempt. If the authoritative Homework deadline arrives while an Attempt is still in progress, Laravel must automatically finalize the saved work, score unanswered components as zero, preserve manual-review answers for Teacher checking, and make any unused remaining Homework attempts unavailable.
+The Student should not be able to start a fourth normal Homework attempt, start a new attempt after the Homework deadline or closure, or modify a finalized/submitted attempt. If the authoritative Homework deadline arrives while an Attempt is still in progress, Laravel must freeze only its already-committed saved answer/file set as immutable `submitted` history, leave saved answers pending, and make any unused remaining Homework attempts unavailable. Stage 7 performs no checking, scoring, or Teacher review, creates no answer row for an unanswered Question, and creates no Attempt for a Student who never started. Stage 9 later checks and scores the frozen work and treats missing answers as zero under the approved policy.
 
 The student should be able to answer blitz tasks during class. A blitz task is short, focused, and connected to the same topic as the homework assignment.
 
@@ -686,13 +686,13 @@ Open written answers and file-based assignments require Teacher judgment in the 
 
 Each assignment should support points or score rules. The teacher should be able to define how many points each question is worth, or use a simple total score for the full assignment.
 
-The system should calculate the homework score after the student submits the assignment. If all questions can be checked automatically, the system can calculate the score immediately. If some answers require manual checking, the assignment result should remain pending until the teacher reviews it.
+Submitting or otherwise finalizing Homework in Stage 7 does not calculate a score. Stage 7 freezes only already-committed Student work as immutable `submitted` history; saved answers remain pending, with no awarded points, checking metadata, or Teacher review added. Stage 9 later performs automatic and manual checking, treats missing answers as zero under the approved policy, and calculates the Homework score.
 
 Each Homework gives every assigned Student exactly **3 normal attempts**. This limit is fixed in the MVP and is not configured by the Institution Admin or Teacher.
 
 Students should clearly see the current Homework attempt number and remaining attempts. The system stores all attempts separately and uses the **highest valid completed score** as the official Homework score after required checking is complete.
 
-The system should prevent students from submitting new answers after all attempts are used, after the assignment is closed, or after the deadline has passed according to the assignment rules.
+At the authoritative Homework deadline, the backend must freeze every existing `in_progress` Attempt's already-committed answer/file set as immutable `submitted` history and block all later Starts and Student answer/file/Submit writes. It creates no Attempt for a Student who never started and no answer row for an unanswered Question. Closing an active Homework before its deadline likewise freezes existing `in_progress` Attempts from committed saved work and blocks later Student mutation; neither Stage 7 finalization path performs checking or scoring.
 
 The Student should be able to view Homework instructions before starting. The instructions should explain what the Student needs to do, that **3 normal Homework attempts** are available, whether there is a deadline, and what type of answers are required.
 
@@ -724,6 +724,8 @@ The system should support clear submission statuses. In the MVP version, possibl
 
 These statuses help teachers, students, admins, and parents understand what happened with the assignment.
 
+For Homework, Stage 7 moves an `in_progress` Attempt only to `submitted`; that frozen state does not imply that the Student pressed Submit or that checking finished. The later `waiting for teacher review` and `checked` transitions belong to Stage 9 Homework checking.
+
 The teacher should be able to view assignment progress for a group. For example, the teacher should see which students have not started, which students are in progress, which students submitted, which submissions need manual checking, and which students did not complete the task.
 
 The teacher should be able to review submissions by student, by group, by topic, and by assignment. This helps the teacher quickly identify who completed the homework and who needs additional support.
@@ -738,7 +740,7 @@ Assignments should be protected by access rules. Teachers should only manage ass
 
 Assignments are also important because they are used together with blitz tasks. The homework assignment result shows how the student performed at home, while the blitz task result shows how the student performs in class. The system later compares both results to calculate the student’s real understanding level.
 
-In the MVP version, Assignment features should include:
+In the MVP version, Assignment features should include the following full-MVP capabilities. Stage 7 owns Student Homework execution, answer/file persistence, and immutable finalization; the checking, feedback, scoring, and official-attempt selection capabilities in this list belong to Stage 9 and operate on the frozen Stage 7 history.
 
 1. Create homework assignments
 2. Connect assignments to topics
@@ -2267,6 +2269,6 @@ The MVP feature contract also includes:
 5. **Official grading scope:** official Homework/Blitz are whole-group only; selected-Student tasks are practice-only; one cohort snapshot is shared by both official tasks.
 6. **New-institution setup:** safe timezone/upload defaults are initialized, while threshold/category/timer/release policies remain unconfigured until the Institution Admin selects them.
 7. **First-login password change:** all administrator-created non-platform accounts must change the initial password before normal use.
-8. **Task close finalization:** closing active Homework/Blitz auto-finalizes in-progress attempts and records the close-driven finalization reason.
+8. **Task close finalization:** closing an active Homework freezes existing in-progress Attempts from already-committed saved work as immutable `submitted` history with `task_closed_auto_finalize`, creates no fabricated Attempt or unanswered-answer row, and performs no Stage 7 checking or scoring. Closing an active Blitz continues to auto-finalize existing in-progress attempts, record its existing close-driven finalization reason, and create no fabricated Attempt for a Student who never started under the existing Blitz finalization, checking, and scoring rules.
 9. **Result closure:** only a terminal calculated or definitive Not completed Student+Topic result can be closed; release remains separate.
 10. **Homework tie:** an exact highest-score tie selects the earliest tied attempt reference.
