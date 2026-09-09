@@ -50,7 +50,7 @@ The Teacher creates a Topic and uploads learning materials in PDF, DOCX, PPT, or
 
 For the official result, the Topic uses one designated whole-group Homework and one designated whole-group Blitz as its result-bearing pair. Practice tasks may target the whole group or selected Students, but selected-Student tasks cannot become result-bearing. When the first official task becomes active, the system snapshots the current eligible Students in the Topic group and uses that same cohort for both official tasks. Once Student attempt activity begins, the official pair and cohort are locked.
 
-Each Student receives three normal Homework attempts. The system keeps every attempt and uses the highest valid completed Homework score as the official Homework score.
+Each Student receives three normal Homework attempts. During Stage 7, explicit Student Submit, the authoritative Homework deadline, or Teacher close freezes only already-committed Student work as an immutable `submitted` Attempt. A Student who never started receives no fabricated Attempt, and an unanswered Question requires no fabricated answer row. Stage 7 performs no Homework checking or scoring. Stage 9 later checks and scores the frozen history, treats missing answers as zero under the approved policy, and selects the highest valid completed Homework score as official.
 
 During approximately the first 5–10 minutes of the next lesson, the Teacher activates the designated Blitz. The Teacher defines the Blitz duration. The institution chooses one of two timer-start modes:
 
@@ -581,5 +581,6 @@ The MVP additionally fixes these behaviors:
 - Automatic Short Written checking uses deterministic normalized exact matching; it does not use fuzzy matching, spelling correction, synonym inference, or AI.
 - Draft Homework/Blitz may temporarily total zero points, but activation requires backend-recalculated total points greater than zero.
 - If top Homework attempts tie exactly, the earliest tied attempt is the official attempt reference.
-- Closing active Homework/Blitz auto-finalizes existing in-progress attempts from saved answers, gives zero to unanswered components, and creates no fake Attempt for Students who never started.
+- For Homework, the authoritative deadline or Teacher close freezes each existing in-progress Attempt from already-committed saved work as immutable `submitted` history. Stage 7 creates neither an Attempt for a Student who never started nor an answer row for an unanswered Question, and performs no checking or scoring; Stage 9 later checks and scores the frozen work and treats missing answers as zero under the approved policy.
+- Closing an active Blitz continues to auto-finalize existing in-progress attempts from saved answers, give zero to unanswered components, and create no fake Attempt for Students who never started.
 - A Student Topic Result can be closed only after a terminal calculated or definitive Not completed state; closure freezes scoring/result data but remains separate from result visibility/release.

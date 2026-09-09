@@ -1302,10 +1302,10 @@ Students should have both desktop and mobile access. The desktop version should 
 3. The Student dashboard opens.
 4. The Student views assigned Topics, active Homework, Teacher-activated Blitz tasks, and progress.
 5. The Student opens an assigned Topic and studies learning materials.
-6. The Student opens the assigned Homework and sees instructions, deadline, and the fixed **3 normal attempts**.
-7. The Student completes one or more Homework attempts.
-8. Each submitted attempt is stored separately.
-9. After required checking, the system uses the **highest valid completed Homework score** as official.
+6. The Student opens assigned active Homework and sees instructions, the server-authoritative deadline/availability, and the fixed **3 normal attempts**.
+7. The Student starts the next Attempt or resumes the existing `in_progress` Attempt, then saves typed/private file answers while it remains editable.
+8. Explicit Submit or deadline/Teacher close freezes already-committed work as a separate immutable `submitted` Attempt; Stage 7 performs no checking/scoring.
+9. Stage 9 later checks the frozen history and uses the **highest valid completed Homework score** as official.
 10. During class, the Student can access the Blitz only after Teacher activation.
 11. In synchronized mode, the Student receives the time remaining from Teacher activation.
 12. In individual mode, the Student receives the full duration starting when that Student starts.
@@ -1395,19 +1395,16 @@ The Student completes assigned Homework using the fixed MVP attempt model.
 
 1. The Student opens an assigned Topic.
 2. The Student selects an active Homework.
-3. The system shows instructions, question types, points, deadline if present, and **3 total normal attempts**.
+3. The system shows instructions, question types, points, the server-authoritative deadline/availability, and **3 total normal attempts**.
 4. The system shows the current attempt number and remaining attempts.
-5. The Student starts an available attempt.
-6. The Student answers the questions.
-7. For file-based questions, the Student uploads a supported file within the effective **15 MB** limit.
-8. The Student reviews answers if allowed.
-9. The Student submits.
-10. The backend validates assignment, deadline, attempt availability, institution scope, answers, and files.
-11. A valid submitted attempt is locked and stored separately.
-12. If attempts remain and the Homework is still active and before deadline, the Student may start another attempt.
-13. After three normal attempts, no fourth normal attempt is allowed.
-14. The system automatically checks objective parts and waits for Teacher review where required.
-15. The highest valid completed Homework score becomes official after required checking.
+5. Starting resumes the Student's existing `in_progress` Attempt without consuming another attempt, or creates the next numbered Attempt when no such Attempt exists and the rules still permit it.
+6. The Student saves or replaces typed answers and, for file-based questions, one private supported file within the effective **15 MB** limit.
+7. Saved answers remain pending and editable only while the Attempt remains `in_progress`; an unanswered Question needs no fabricated answer row.
+8. The Student explicitly submits, or the authoritative deadline/Teacher close freezes the already-committed work.
+9. Stage 7 stores the immutable Attempt as `submitted`; it does not check answers, award points, or create Teacher-review metadata.
+10. If attempts remain and the Homework is still active and before deadline, the Student may start another attempt.
+11. After three normal attempts, no fourth normal attempt is allowed.
+12. Stage 9 later checks the frozen answers, treats missing answers as zero under the approved scoring policy, performs required Teacher review, and selects the highest valid completed Homework score.
 
 Submission/review states remain separate from Homework lifecycle status.
 ### Assignment Type Answering Flow
@@ -1465,14 +1462,13 @@ The Student attempt flow is fixed by task type.
 
 #### Homework
 
-1. The Student opens the Homework.
-2. The system shows **3 total normal attempts**.
-3. The system shows the current attempt and remaining attempts.
-4. The Student submits an attempt.
-5. The system stores that attempt without overwriting earlier attempts.
-6. If another normal attempt remains and deadline/status rules allow it, the Student may try again.
-7. After attempt 3, the system blocks a fourth normal Homework attempt.
-8. The official Homework score becomes the highest valid completed score after required checking.
+1. The Student opens assigned active Homework and sees the server-authoritative deadline plus **3 total normal attempts**.
+2. Start resumes the existing `in_progress` Attempt without consuming capacity or creates the next numbered Attempt, up to attempt 3; at most one current Attempt exists per Student/Homework.
+3. The Student saves typed/private file answers while that Attempt remains editable.
+4. Explicit Submit or deadline/Teacher close freezes already-committed work as immutable `submitted` history without Stage 7 checking/scoring or fabricated answer rows.
+5. If another normal attempt remains and deadline/status rules allow it, the Student may start it as a separate record.
+6. After attempt 3, the system blocks a fourth normal Homework attempt.
+7. Stage 9 later checks the frozen history and selects the highest valid completed score as official.
 
 #### Blitz
 
@@ -1519,7 +1515,7 @@ The Student completes the Blitz during class.
 The device clock or timezone cannot create extra time.
 ### Automatic and Manual Checking Flow
 
-After Homework or Blitz finalization, the system and Teacher complete checking.
+For Homework, this checking flow begins only in Stage 9 and consumes immutable Stage 7 `submitted` history. Blitz checking continues under its separately approved lifecycle/timer/timeout contract.
 
 1. The system identifies the question type.
 2. Single-choice and true/false questions are scored all-or-nothing.
@@ -2192,16 +2188,14 @@ The Student never sees Topics or private task data outside their authorized scop
 After studying the materials, the Student completes the official Homework.
 
 1. The Student opens the Topic and official Homework.
-2. The system shows instructions, deadline, current attempt, and remaining attempts.
-3. The Student starts one of the 3 normal attempts.
-4. The Student answers and submits.
-5. The system stores the attempt separately.
-6. Automatic scoring is applied where possible.
-7. Manual answers wait for Teacher review.
-8. If attempts remain and the task/deadline still allow it, the Student may start another attempt.
-9. After required checking, the system compares valid completed attempt scores.
-10. The highest valid completed score becomes the official Homework score.
-11. No fourth normal Homework attempt is allowed.
+2. The system shows instructions, server-authoritative deadline/availability, current attempt, and remaining attempts.
+3. Start resumes the existing `in_progress` Attempt or creates the next of 3 normal Attempts; the first official Attempt atomically locks the persisted result-pair/cohort meaning.
+4. The Student saves/replaces typed or private file answers while the Attempt remains editable.
+5. Explicit Submit or deadline/Teacher close freezes already-committed work as a separate immutable `submitted` Attempt; Stage 7 leaves answers pending and creates no row for an unanswered Question.
+6. If attempts remain and the task/deadline still allow it, the Student may start another Attempt.
+7. No fourth normal Homework Attempt is allowed.
+8. Stage 9 later checks the frozen answers, treats missing answers as zero, performs required Teacher review, and compares valid completed Attempt scores.
+9. The highest valid completed score becomes the official Homework score.
 
 The official Homework score is only the first input to the Topic result and is not the final understanding result by itself.
 ### Blitz Task Connection Flow
@@ -2502,15 +2496,15 @@ In the MVP version, homework assignments should stay practical and focused. The 
 3. The Teacher may designate an eligible whole-group Homework as official.
 4. The official Blitz does not need to exist yet.
 5. If the official Homework activates first, its persisted recipient snapshot establishes the official cohort.
-6. Student Homework Attempt execution begins only in Stage 7.
-7. Once official Homework Student activity begins, the Homework designation/cohort cannot be meaning-changing replaced.
+6. Student Homework Attempt execution begins only in Stage 7. Creating the first Attempt on the official Homework atomically resolves and locks the same-Institution/Topic result pair, requires its persisted cohort snapshot and the Student's membership in that official cohort, and sets the pair's `locked_at` and `updated_at` to the same `startedAt` used for the Attempt when it was not already locked.
+7. An existing pair lock is preserved. Structural pair/cohort inconsistency fails the Attempt creation atomically; the flow neither repairs/resnapshots the pair nor creates a Blitz, and practice Homework does not mutate the pair.
 8. Stage 8 later designates and fills the official Blitz in the existing pair and reuses the same cohort. This completes the pair; it does not replace the locked Homework side.
 
 The final Topic comparison still uses exactly one official whole-group Homework and one official whole-group Blitz.
 
 ### Main Homework Assignment Flow
 
-The Homework Assignment Flow explains how Homework is created, assigned, attempted, submitted, checked, scored, and connected to the Topic result.
+The Homework Assignment Flow separates Stage 7 execution/finalization from Stage 9 checking/scoring and the later Topic result.
 
 The main Homework flow is:
 
@@ -2519,15 +2513,15 @@ The main Homework flow is:
 3. The system applies the fixed rule of **3 normal attempts per Student**.
 4. If a Topic contains multiple Homework tasks, exactly one is designated as the official result-bearing Homework before Student attempts begin.
 5. The Homework becomes active.
-6. The Student opens the Homework and sees 3 total attempts, current attempt, remaining attempts, and deadline.
-7. The Student completes and submits an attempt.
-8. The system stores each attempt separately.
-9. The system scores objective parts automatically using the approved scoring rules.
-10. Manual answers wait for Teacher review.
-11. The Student may use the remaining normal attempts while the task/deadline still allows it.
-12. After required checking, the system chooses the **highest valid completed attempt score** as the official Homework score.
-13. The Teacher views Homework progress and official score.
-14. Student/Parent result visibility follows the approved release rules.
+6. The Student opens assigned active Homework and sees the server-authoritative deadline/availability, 3 total attempts, the current attempt, and remaining attempts.
+7. Start resumes the existing `in_progress` Attempt or atomically creates the next numbered Attempt, up to attempt 3; at most one such Attempt may exist for the Student/Homework.
+8. Creation of the first official Homework Attempt atomically locks the staged official result-pair/cohort meaning as described above.
+9. The Student saves or replaces typed answers and one private file answer where required. Saved answers remain pending, and an unanswered Question needs no fabricated answer row.
+10. Explicit Submit freezes the already-committed work, or the authoritative deadline/Teacher close freezes it first.
+11. Every Stage 7 finalization stores an immutable `submitted` Attempt. Stage 7 does not check answers, award points, create review metadata, or select an official score.
+12. The Student may use the remaining normal attempts only while Homework lifecycle and server deadline rules still allow it.
+13. Stage 9 later checks the frozen Homework history, applies the approved missing-answer-zero policy without fabricating rows, performs required Teacher review, and chooses the **highest valid completed attempt score** as official.
+14. The Teacher views Homework progress and the later official score; Student/Parent result visibility follows the approved release rules.
 15. The official Homework score later participates in the Topic Homework–Blitz comparison.
 
 Homework remains evidence from home study; it is not the final Topic result by itself.
@@ -2598,11 +2592,12 @@ Flow:
 2. Draft Homework is not available for Student completion.
 3. The Teacher activates valid Homework.
 4. Assigned Students may start attempts while deadline and attempt rules permit.
-5. Closing the Homework blocks new attempts/submissions.
-6. Existing submitted attempts may still be checked.
-7. Archived Homework remains historical and accepts no new activity.
+5. A pre-deadline Teacher close captures one server close instant and, in the same transaction as closing the Homework, freezes every still-`in_progress` Attempt as `submitted` with `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`.
+6. If the deadline is already reached, close first performs the common deadline reconciliation and preserves `homework_deadline_auto_submit` plus the exact deadline timestamp; repeated close/finalization does not rewrite the committed reason or timestamps.
+7. Closing blocks new Starts and Student answer/file/Submit writes. Existing frozen Attempts may be checked only later in Stage 9.
+8. Archived Homework remains historical and accepts no new activity.
 
-`Waiting for Teacher review` and `Checked` must not be used as Homework lifecycle statuses.
+For Stage 7 Homework, `submitted` means frozen Student work ready for later checking. `Waiting for Teacher review` and `Checked` are Stage 9 submission/checking states and must not be used as Homework lifecycle statuses.
 ### Assignment Type Flow
 
 The teacher should be able to create homework using the supported MVP assignment types.
@@ -2651,16 +2646,14 @@ This allows teachers to check student understanding in different ways.
 
 Homework attempt count is fixed in the MVP.
 
-1. The Student opens active Homework.
-2. The system shows **3 total normal attempts**.
-3. The system shows current attempt number and remaining attempts.
-4. The Student starts attempt 1, 2, or 3 when allowed.
-5. Each submitted attempt is stored separately and cannot overwrite an earlier attempt.
-6. A submitted attempt is locked against Student edits.
-7. If another normal attempt remains and deadline/status rules allow it, the Student may start it.
-8. After attempt 3, the system blocks a fourth normal Homework attempt.
-9. After required automatic/manual checking is complete, the system compares valid completed attempt scores.
-10. The highest valid completed score becomes the official Homework score.
+1. The Student opens assigned active Homework and sees the server deadline, **3 total normal attempts**, current attempt, and remaining attempts.
+2. Start is concurrency-safe: if one `in_progress` Attempt already exists for this Student/Homework, the system returns and resumes it without consuming another attempt.
+3. Otherwise, when lifecycle/deadline/assignment rules permit, the system creates `max(existing attempt_number) + 1`, up to attempt 3. At most one `in_progress` Attempt may exist for the Student/Homework, even under concurrent Starts.
+4. Creating the first Attempt on the official Homework atomically locks the staged result-pair/cohort meaning; practice Homework does not mutate that pair.
+5. Each Stage 7 finalization stores the Attempt separately as immutable `submitted` history and cannot overwrite an earlier Attempt.
+6. If another normal attempt remains and deadline/status rules allow it, the Student may start it.
+7. After attempt 3, the system blocks a fourth normal Homework attempt.
+8. Stage 9 later checks frozen Attempts, compares valid completed scores, and makes the highest valid completed score official.
 
 Example:
 
@@ -2681,13 +2674,15 @@ The Teacher may add a Homework deadline.
 3. The backend interprets/converts the deadline to an authoritative UTC instant.
 4. Students see the deadline in institution local time.
 5. The backend compares server time with the stored deadline.
-6. At the authoritative deadline, the backend blocks new Attempts and further Student answer changes.
-7. Every existing `in_progress` Homework Attempt is automatically finalized using answers already saved on the server.
-8. Answered components are evaluated normally; unanswered components receive zero; answered manual-review components remain waiting for Teacher review.
-9. The backend records `homework_deadline_auto_submit`; `submitted_at` remains null because the Student did not explicitly submit.
+6. Relevant Student reads, Attempt Start, typed/file answer mutation, final Submit, Teacher close, and the Scheduler reuse one authoritative deadline reconciliation behavior.
+7. When `server_now >= deadline_at`, the backend blocks new Starts and Student answer/file/Submit writes and freezes every existing `in_progress` Homework Attempt using only answers already committed on the server.
+8. The frozen Attempt has `status = submitted`, `submitted_at = null`, `finalized_at = locked_at = deadline_at`, and `finalization_reason = homework_deadline_auto_submit`; reconciliation latency never replaces the historical deadline instant.
+9. Saved answers remain pending. Stage 7 neither checks/awards them nor fabricates an answer row for an unanswered Question; Stage 9 later applies the approved missing-answer-zero policy.
 10. Students who never started receive no fabricated Attempt, and unused remaining Homework attempts are no longer available.
-11. Device clock/timezone changes cannot extend the deadline.
-12. Changing the institution timezone later does not alter the historical absolute deadline instant.
+11. Answer/file mutation and finalization serialize through the Homework/Attempt lock boundary: a mutation committed first becomes part of the frozen Attempt; finalization committed first makes the mutation fail with zero answer/file-domain change.
+12. Submit, deadline reconciliation, and Teacher close produce exactly one terminal transition and never rewrite an already committed reason/timestamps.
+13. Device clock/timezone changes cannot extend the deadline.
+14. Changing the institution timezone later does not alter the historical absolute deadline instant.
 
 Advanced late penalties and complex approval workflows remain outside the MVP.
 ### Student Homework Access Flow
@@ -2720,17 +2715,16 @@ Students should not access:
 The Student completes active Homework.
 
 1. Open assigned Homework.
-2. Review instructions, deadline, current attempt, and remaining attempts.
-3. Start an available attempt.
-4. Answer each question.
-5. Upload a file when required, within the effective 15 MB limit.
-6. Review answers if allowed.
-7. Submit the attempt.
-8. The backend validates Student assignment, institution scope, task lifecycle, deadline, attempt number, answers, and files.
-9. A valid attempt is stored and locked.
-10. Automatic scoring starts where possible.
-11. Manual answers wait for Teacher review.
-12. If normal attempts remain, the Student may start another attempt while task/deadline rules permit.
+2. Review instructions, server-authoritative deadline/availability, current attempt, and remaining attempts.
+3. Start a new Attempt or resume the existing `in_progress` Attempt without spending another attempt.
+4. Save or replace typed answers; all supported answer types remain `checking_status = pending` in Stage 7.
+5. Save or replace one private file when required, within the effective 15 MB limit.
+6. Review answers if allowed; a Question the Student never saved needs no answer row.
+7. Explicitly Submit, or allow deadline/Teacher close to freeze the already-committed work.
+8. The backend validates Student assignment, institution scope, task lifecycle, authoritative deadline, attempt number/editability, answers, and files under the required lock boundary.
+9. The Stage 7 finalization stores immutable `submitted` history without checking or scoring it.
+10. If normal attempts remain, the Student may start another attempt while task/deadline rules permit.
+11. Stage 9 later checks/scores the frozen answers and performs required Teacher review.
 
 The interface should never imply that attempts are configurable; it should show the fixed 3-attempt rule.
 ### File-Based Homework Flow
@@ -2744,10 +2738,11 @@ For file-based Homework, the Student can upload PDF, DOCX, PPT, or PPTX.
 5. The backend authoritatively validates file type, size, ownership, attempt, task, and institution.
 6. Platform hard maximum: **15 MB per Student submission file**.
 7. A lower institution limit may apply.
-8. If valid, the file is attached to that specific attempt.
-9. The Student submits.
-10. The Teacher later reviews and assigns points.
-11. Failed, unsupported, or oversized uploads do not become valid answers.
+8. If valid and the Attempt is still editable after required locks and deadline re-check, the private file is saved or replaces the prior file answer on that specific Attempt and remains ungraded in Stage 7.
+9. If finalization wins first, replacement performs no answer/file-domain mutation and must not change the persisted file identity/content.
+10. The Student explicitly submits, or deadline/Teacher close freezes the already-saved file reference with the Attempt.
+11. The Teacher may review and assign points only later in Stage 9.
+12. Failed, unsupported, oversized, unauthorized, or late uploads do not become valid answers; download remains backend-authorized.
 
 Clear validation errors should explain the effective limit.
 ### Homework Submission Recording Flow
@@ -2756,19 +2751,13 @@ After the student submits homework, the system should record the submission.
 
 The submission recording flow is:
 
-1. The student submits the homework.
-2. The system validates the submission.
-3. The system records the student.
-4. The system records the assignment.
-5. The system records the topic.
-6. The system records the group.
-7. The system records the attempt number.
-8. The system records submitted answers.
-9. The system records uploaded files if available.
-10. The system records submission time.
-11. The system records checking status.
-12. The system records score if automatic checking is possible.
-13. The system records teacher feedback later if manual checking is needed.
+1. The Student explicitly submits the Homework.
+2. Under authoritative locks/time, the system validates assignment, ownership, lifecycle, deadline, and Attempt editability.
+3. Stage 7 atomically freezes the Attempt as `submitted` with one captured server instant for `submitted_at`, `finalized_at`, and `locked_at`, plus `finalization_reason = student_submit`.
+4. The system preserves the Student, Institution, Group, Topic, Homework, Attempt number, and already-committed typed/file answer state.
+5. Saved answer rows remain `checking_status = pending` with no awarded points, feedback, or checked metadata; an unanswered Question has no fabricated row.
+6. The frozen Attempt is immutable to the Student. Another normal Attempt may start only if capacity, lifecycle, assignment, and deadline rules still permit it.
+7. Stage 9 later records checking, points, Teacher feedback, the normalized Attempt score, and official Homework score selection.
 
 Submission information may include:
 
@@ -2781,15 +2770,14 @@ Submission information may include:
 - Submitted answers
 - Submitted file if applicable
 - Submission time
-- Score if available
-- Checking status
-- Teacher feedback if available
+- Stage 7 finalization reason/time and pending checking status
+- Stage 9 score/checking/feedback when later available
 
 This data is important for scoring, reports, progress tracking, and later comparison with the blitz result.
 
 ### Automatic Checking Flow
 
-Objective Homework answers are scored according to approved rules.
+Beginning in Stage 9, objective Homework answers from immutable Stage 7 `submitted` Attempts are scored according to approved rules.
 
 1. The Student submits an attempt.
 2. The system identifies each question type.
@@ -2807,7 +2795,7 @@ Objective Homework answers are scored according to approved rules.
 7. Attempt scores remain separate across all three Homework attempts.
 ### Manual Checking Flow
 
-Some Homework answers require Teacher review.
+In Stage 9, some frozen Homework answers require Teacher review.
 
 1. The system marks the relevant submission as waiting for Teacher review.
 2. The Teacher opens the immutable Student answer/file.
@@ -2941,22 +2929,24 @@ Homework follows the approved device model.
 Attempt, deadline, scoring, visibility, and access rules are identical across devices.
 ### Homework Flow Boundaries
 
-The MVP Homework flow supports:
+The Stage 7 Homework execution boundary supports:
 
 - Teacher-created Homework
 - Topic connection
 - Exactly one designated result-bearing Homework per Topic result
-- Fixed 3 normal attempts
-- Highest valid completed attempt as official score
+- Fixed 3 normal attempts with Start/resume and at most one `in_progress` Attempt per Student/Homework
+- First official Attempt lock of the persisted result-pair/cohort meaning
 - Optional institution-local deadline with UTC authoritative instant
 - Nine supported question types
-- Approved partial credit
-- Automatic and manual checking
+- Pending typed/file answer persistence with no fabricated row for unanswered Questions
+- Explicit Submit and deadline/Teacher-close finalization to immutable `submitted`
+- Deterministic terminal and answer/file write-vs-freeze races
 - 15 MB platform hard maximum for Student submission files
 - Separate lifecycle/submission/review states
-- Student/Parent visibility policies
 - Historical attempt preservation
 - Access protection
+
+Stage 9 later provides automatic/manual checking, approved partial credit, Teacher review, official Homework score selection, and Student/Parent score visibility. The later Topic result uses that official score.
 
 It does not include configurable attempt counts, advanced late-penalty workflows, AI grading, question banks, plagiarism detection, peer review, or complex grading workflows.
 ### MVP Homework Assignment Flow Summary
@@ -2966,21 +2956,15 @@ The MVP Homework Assignment Flow includes:
 1. Teacher creates Homework for a Topic.
 2. Homework is assigned to authorized Students.
 3. Exactly one Homework is designated as official for the Topic result before attempts begin.
-4. Student receives exactly 3 normal attempts.
-5. Each attempt is recorded separately.
-6. Student sees current and remaining attempts.
-7. Teacher may add an institution-local deadline.
-8. Backend enforces the authoritative UTC deadline instant.
-9. Student answers supported question types.
-10. Student file submissions respect the effective 15 MB limit.
-11. System applies approved automatic/partial-credit rules.
-12. Teacher completes required manual review.
-13. System selects the highest valid completed Homework attempt as official.
-14. Official score remains full precision internally and displays with one decimal place.
-15. Teacher views Homework progress.
-16. Student/Parent score visibility follows release policy.
-17. Official Homework score becomes the `H` input to Topic result calculation.
-18. Access and historical attempts are protected.
+4. Student sees server-authoritative deadline/availability and exactly 3 normal attempts.
+5. Start creates the next numbered Attempt or resumes the one current `in_progress` Attempt.
+6. The first official Homework Attempt atomically locks the persisted result-pair/cohort meaning.
+7. Student saves supported typed answers and private file answers within the effective 15 MB limit.
+8. Explicit Submit or deadline/Teacher close freezes already-committed work as immutable `submitted` history; unanswered Questions create no fake rows.
+9. Stage 7 leaves saved answers pending and performs no checking, points, review metadata, or official-score selection.
+10. Stage 9 later applies approved checking/partial-credit rules, treats missing answers as zero, completes required Teacher review, and selects the highest valid completed Homework attempt as official.
+11. Student/Parent score visibility follows release policy, and the later official Homework score becomes the `H` input to Topic result calculation.
+12. Access, tenant isolation, private files, and historical attempts remain protected.
 
 ## 9. Blitz Task Flow
 
@@ -4353,6 +4337,8 @@ The system should prevent unauthorized changes after:
 - The teacher completes checking
 - The system rules no longer allow editing
 
+For Stage 7 Homework, typed/file mutation and Submit/deadline/Teacher-close finalization must serialize through the same Homework/Attempt lock boundary and re-check lifecycle, authoritative time, and editability after locking. A mutation committed first becomes part of the frozen Attempt; finalization committed first causes zero answer/file-domain mutation, including no persisted file replacement. Blitz retains its separately approved timing/finalization write protection.
+
 ### File Access Protection Flow
 
 Uploaded learning materials and Student submission files are protected by the same ownership/scope checks as their records.
@@ -4719,9 +4705,9 @@ The end-to-end MVP flow is:
 4. Teacher creates a Topic.
 5. Teacher uploads supported learning materials within the effective 25 MB limit.
 6. Teacher creates one or more Homework tasks. Practice Homework may target the whole group or selected Students, but the official result-bearing Homework must target the whole group.
-7. When the first task in the official pair becomes active, the system snapshots the current eligible Topic-group Students as the official cohort; Student studies materials and receives exactly 3 normal Homework attempts.
-8. System/Teacher checks Homework attempts using approved scoring rules.
-9. Highest valid completed Homework score becomes official.
+7. When the first task in the official pair becomes active, the system snapshots the current eligible Topic-group Students as the official cohort; the Student studies materials and receives exactly 3 normal Homework attempts, with the first official Attempt atomically locking that pair/cohort meaning.
+8. In Stage 7, the Student starts/resumes one current Attempt, saves typed/private file answers, and explicitly submits or has already-committed work frozen by deadline/Teacher close as immutable `submitted` history without checking/scoring.
+9. In Stage 9, the system/Teacher checks frozen Homework attempts, applies the approved missing-answer-zero policy, and selects the highest valid completed Homework score as official.
 10. Teacher creates one or more Blitz tasks. Practice Blitz may target selected Students, but the official result-bearing Blitz must target the whole group and reuse the same official Topic cohort.
 11. Teacher sets whole-Blitz duration and activates the official Blitz during class.
 12. Institution synchronized/individual timer-start mode applies.
@@ -4803,7 +4789,7 @@ The MVP Teacher flow includes:
 5. Apply fixed 3 Homework attempts.
 6. Set optional institution-local Homework deadline.
 7. Designate one official Homework before attempts begin.
-8. Review Homework attempts and manual answers.
+8. Review frozen Homework attempts and, in Stage 9, manual answers.
 9. Create manual Blitz.
 10. Set whole-Blitz duration.
 11. Designate one official Blitz before attempts begin.
@@ -4827,10 +4813,10 @@ The MVP Student flow includes:
 2. View assigned Topics/materials.
 3. View Homework deadline in institution local time.
 4. Receive exactly 3 normal Homework attempts.
-5. Submit separate Homework attempts, or have an in-progress Attempt auto-finalized from saved work at the authoritative Homework deadline.
-6. Receive zero for unanswered Homework components when deadline auto-finalization occurs; any unused remaining Homework attempts become unavailable.
-7. Upload supported answer files within effective 15 MB limit.
-8. Have highest valid completed Homework score selected as official.
+5. Start the next Homework Attempt or resume the one current `in_progress` Attempt without consuming another attempt.
+6. Save supported typed answers and private answer files within the effective 15 MB limit while the Attempt is editable.
+7. Explicitly submit, or have already-committed work frozen at deadline/Teacher close as immutable `submitted` history with no fabricated answer/Attempt row and no Stage 7 checking/scoring; unused capacity becomes unavailable after deadline/close.
+8. In Stage 9, have frozen answers checked, missing answers treated as zero, required Teacher review completed, and the highest valid completed Homework score selected as official.
 9. Access Blitz only after Teacher activation.
 10. Follow synchronized/individual timer-start behavior.
 11. Receive one normal Blitz attempt.
@@ -4898,22 +4884,18 @@ The MVP learning-material flow includes:
 Audio/video, collaborative editing, AI summaries, and external cloud-storage integration remain outside MVP.
 ### MVP Homework Assignment Flow Scope
 
-The MVP Homework flow includes:
+The MVP Homework flow separates these stage boundaries:
 
-1. Teacher creates Homework for Topic.
-2. Designate one official result-bearing Homework before attempts begin.
-3. Apply exactly 3 normal attempts per Student.
-4. Show current/remaining attempts.
-5. Store each attempt separately.
-6. Set optional institution-local deadline with UTC authoritative enforcement.
-7. Support nine question types.
-8. Apply approved objective/partial-credit scoring.
-9. Support Teacher manual review.
-10. Support Student files up to effective 15 MB limit.
-11. Select highest valid completed attempt as official.
-12. Preserve full internal score precision and display one decimal.
-13. Feed official score into Topic result.
-14. Protect access/history.
+1. Teacher creates Homework for Topic and designates one official result-bearing Homework before attempts begin.
+2. Stage 7 shows server deadline/availability and exactly 3 normal attempts.
+3. Stage 7 Start creates the next numbered Attempt or resumes the one current `in_progress` Attempt.
+4. The first official Homework Attempt atomically locks the persisted result-pair/cohort meaning.
+5. Stage 7 saves/replaces answers across all nine supported types, including one private file answer per file Question within the effective 15 MB limit, while the Attempt is editable.
+6. Explicit Submit, authoritative deadline, or Teacher close freezes only committed work as immutable `submitted` history; saved answers remain pending and unanswered Questions create no fake rows.
+7. Request-path/Scheduler deadline reconciliation, terminal races, and answer/file write-vs-freeze races preserve one authoritative finalization.
+8. Stage 9 later applies approved objective/partial-credit scoring, missing-answer-zero policy, and Teacher manual review.
+9. Stage 9 selects the highest valid completed Attempt as official and preserves full internal score precision for later display/result use.
+10. Tenant/Student ownership, file privacy, access, and history remain protected.
 ### MVP Blitz Task Flow Scope
 
 The MVP Blitz flow includes:
@@ -5640,11 +5622,12 @@ The following flow rules are mandatory in every affected role flow:
 
 - **Institution setup:** creation initializes `Asia/Tashkent` and platform-max upload limits; threshold, category ranges, Blitz timer mode, Student release mode, and Parent visibility mode remain unconfigured until Institution Admin setup. A missing setting blocks only its dependent operation.
 - **First login:** every administrator-created Institution Admin/Teacher/Student/Parent logs in with the initial password, is routed to Change Password, supplies the current initial password plus the new password/confirmation, and cannot use normal endpoints until the change succeeds.
-- **Official Topic assessment:** only whole-group Homework/Blitz may become official. The official Homework may be designated before the official Blitz exists. The first official task activation persists the current group cohort, and the later official task reuses it; later Group membership changes do not alter that Topic cohort. Student activity locks the already-designated task/cohort, while attaching the previously absent official Blitz completes rather than replaces the pair.
+- **Official Topic assessment:** only whole-group Homework/Blitz may become official. The official Homework may be designated before the official Blitz exists. The first official task activation persists the current group cohort, and the later official task reuses it; later Group membership changes do not alter that Topic cohort. Creating the first official Homework Attempt atomically requires that snapshot and Student membership, locks the same-Institution/Topic pair with the Attempt's `startedAt` if not already locked, preserves an existing lock, and neither repairs inconsistency nor creates a Blitz. Attaching the previously absent official Blitz later completes rather than replaces the pair.
 - **Multiple-choice:** Student sees `max_selections`; choosing above that limit is blocked by Flutter and rejected by Laravel. Score = correct selections / total correct options; empty answer = zero.
 - **Short Written automatic checking:** both accepted and Student text follow the same deterministic normalization pipeline; no fuzzy or AI interpretation occurs.
 - **Activation:** server recalculates total points and blocks activation when total possible points is zero.
-- **Task closure:** Teacher close immediately blocks writes and auto-finalizes all existing in-progress attempts from saved answers with `task_closed_auto_finalize`; unanswered components receive zero; never-started Students receive no fake Attempt.
+- **Homework closure:** before deadline, Teacher close atomically freezes existing `in_progress` Attempts as `submitted` from already-committed pending work at captured `closedAt` with `task_closed_auto_finalize`, blocks further writes, and creates no fake Attempt/answer row. At/after deadline it preserves `homework_deadline_auto_submit` and exact `deadline_at`; Stage 9 later checks/scores the frozen work.
+- **Blitz closure:** preserve the existing Blitz close/finalization, unanswered-zero, checking/scoring, timer, timeout, and exception semantics with `task_closed_auto_finalize`.
 - **Result closure:** Teacher may close only a calculated terminal result or a definitive Not completed result. Waiting states, in-progress official attempts, pending Blitz replacement attempts, or incomplete manual review block closure. Release may occur before or after closure according to policy.
 - **Category assignment:** final calculation remains unrounded; the category resolver uses integer `category_score` with `.0`–`.5` down and `>.5` up.
 - **Homework highest-score tie:** earliest tied attempt becomes the official attempt reference.

@@ -2808,20 +2808,24 @@ When supplied, it must be RFC 3339 with explicit offset corresponding to the ins
 
 ### Homework Deadline Runtime Contract
 
+The backend uses one authoritative reusable behavior such as `FinalizeHomeworkAttemptsAtDeadline` for relevant Student Homework/Attempt reads, Attempt Start, typed/file answer mutation, final Submit, Teacher close when the deadline may have passed, and Laravel Scheduler. Every write independently applies:
+
+```text
+server_now < deadline_at  => may continue if all other rules pass
+server_now >= deadline_at => deadline passed
+```
+
 At the authoritative Homework deadline:
 
-1. New Homework attempts are rejected with `409 deadline_passed`.
-2. Further answer writes are rejected after the server deadline transition.
-3. Every existing `in_progress` Homework Attempt is automatically finalized from answers already saved on the server.
-4. Unanswered Questions/components receive zero.
-5. Answered automatic Questions are checked normally.
-6. Answered manual-review Questions remain `waiting_for_teacher_review`.
-7. The backend sets `finalized_at` and `finalization_reason = homework_deadline_auto_submit`; `submitted_at` remains `null`.
-8. Students who never started receive no fabricated Attempt.
-9. Any unused remaining normal Homework attempts become unavailable.
-10. A Student submit racing with deadline finalization must produce exactly one finalization; safe retries return the same logical result and later incompatible writes/submits return a locked/late conflict.
-11. The backend reconciles deadline state before returning/mutating relevant Homework Attempt resources, and the Laravel Scheduler invokes the same idempotent deadline-finalization action server-side. Scheduler delay must never make a post-deadline write valid.
-12. Once fully checked, a deadline-auto-finalized Homework Attempt is eligible for the normal highest-valid-completed official-score policy unless another approved validity rule excludes it.
+1. New Homework Starts return `409 deadline_passed`; unused normal-attempt capacity becomes unavailable.
+2. Student answer/file writes and a new late final Submit cannot alter the frozen Attempt.
+3. Every existing `in_progress` Homework Attempt becomes immutable `submitted` from work already committed on the server.
+4. The backend sets `submitted_at = null`, `finalized_at = locked_at = exact homework_assignments.deadline_at`, and `finalization_reason = homework_deadline_auto_submit`.
+5. No Attempt is created for a Student who never started, and no `attempt_answers` row is fabricated for an unanswered Question.
+6. Saved answers remain `checking_status = pending`; Stage 7 performs no checking, Teacher review, awarded-points write, Attempt scoring, or official-score selection.
+7. Stage 9 later checks/scores the frozen work and applies the approved missing-answer-as-zero policy.
+8. Request-path reconciliation and Scheduler use exactly the same behavior; Scheduler delay never changes write eligibility or the historical finalization instant.
+9. Submit/deadline/Teacher-close and answer/file-write races serialize through the relevant locks, produce exactly one finalization, and never permit a Student mutation after freeze.
 
 ### Deadline-Finalized Attempt Example
 
@@ -2830,16 +2834,16 @@ At the authoritative Homework deadline:
   "data": {
     "id": "attempt-uuid",
     "attempt_number": 2,
-    "status": "checked",
+    "status": "submitted",
     "submitted_at": null,
     "finalized_at": "2026-08-10T13:00:00Z",
+    "locked_at": "2026-08-10T13:00:00Z",
     "finalization_reason": "homework_deadline_auto_submit",
     "checking": {
-      "requires_teacher_review": false,
-      "completed": true
+      "completed": false
     },
     "score": {
-      "normalized_score": 72.5,
+      "normalized_score": null,
       "visible_to_student": false
     }
   }
@@ -2896,21 +2900,20 @@ POST /api/v1/teacher/homework/{homework}/activate
 POST /api/v1/teacher/homework/{homework}/close
 ```
 
-### Stage 6 Close Boundary
+### Authoritative Stage 7 Behavior
 
-The final MVP contract still requires automatic finalization of `in_progress` Attempts when Homework is closed. Until Stage 7 exposes public Homework Attempt execution and saved-answer persistence, Stage 6 must not fabricate answer finalization. If a structural `in_progress` Attempt exists in Stage 6 test/fixture state, Homework close returns `409 business_conflict`. Stage 7 replaces this temporary safety guard with the approved atomic auto-finalization behavior before public Attempt start is enabled.
+Before the deadline, the backend captures one `closedAt = server_now` and, in one transaction, closes the Homework and freezes every still-`in_progress` Attempt from already-committed Student work:
 
-### Stage 7+ Behavior
+```text
+status = submitted
+submitted_at = null
+finalized_at = locked_at = closedAt
+finalization_reason = task_closed_auto_finalize
+```
 
-In one authoritative operation the backend:
+The Homework close and all Attempt transitions commit or roll back together. New Starts and Student answer/file writes are blocked, unused normal-attempt capacity becomes unavailable, no Attempt or unanswered answer row is fabricated, saved answers remain pending, and Stage 7 performs no checking/scoring.
 
-1. Changes the Homework to closed.
-2. Blocks new attempts and further Student answer writes.
-3. Auto-finalizes every existing `in_progress` Attempt from answers saved before closure.
-4. Sets `finalization_reason = task_closed_auto_finalize`.
-5. Gives zero to unanswered components and routes answered manual-review questions to Teacher review.
-6. Creates no Attempt for Students who never started.
-7. Makes unused Homework attempt capacity unavailable because the task is closed.
+At or after the deadline, Teacher close first invokes the shared deadline reconciliation. Attempts finalized by the deadline retain `homework_deadline_auto_submit` and the exact `deadline_at`; close may use `task_closed_auto_finalize` only for an Attempt still `in_progress` under a valid pre-deadline close. Repeated close or delayed Scheduler work never rewrites a frozen reason/timestamp.
 
 ---
 
@@ -3263,13 +3266,15 @@ awarded_points = question.points * ratio
 
 # 17. Student Homework Attempt APIs
 
+Stage 7 owns Student Homework execution, saved typed/file answers, and immutable finalization. Every frozen Homework Attempt remains `submitted`; Homework checking, awarded points, Teacher review, Attempt scoring, and official Homework score selection/reselection are unavailable until Stage 9.
+
 All endpoints require:
 
 ```text
 role = student
 ```
 
-and assessment assignment to authenticated Student.
+and active account/Institution middleware plus assessment assignment and ownership for the authenticated Student inside the authenticated Institution. Direct UUID possession never grants access. Relevant reads reconcile an already-reached Homework deadline through the same authoritative behavior used by writes and Scheduler.
 
 ---
 
@@ -3353,6 +3358,8 @@ Idempotency-Key: <client-generated-uuid>
 
 If missing, return `422 validation_failed`. A safe retry with the same key and request identity returns the same logical Attempt.
 
+Malformed/non-UUID keys also return `422 validation_failed`. This operation uses durable DB-backed idempotency code `student.homework.attempt.start` and all Section 34 rules.
+
 ### Success — 201
 
 ```json
@@ -3386,6 +3393,12 @@ If missing, return `422 validation_failed`. A safe retry with the same key and r
 }
 ```
 
+`201 Created` is returned only when this call creates the next Attempt.
+
+### Resume — 200
+
+If one `in_progress` Attempt already exists for this Student/Homework, return that same logical Attempt with `200 OK`; do not create another row, increment `attempt_number`, or consume capacity. A replay preserves the original successful semantic status (`201` for a created result or `200` for a resumed result).
+
 ### Conflicts
 
 - `409 assessment_not_assigned`
@@ -3397,9 +3410,26 @@ If missing, return `422 validation_failed`. A safe retry with the same key and r
 
 - Attempt numbers are limited to `1`, `2`, and `3`.
 - A fourth normal Homework attempt is never created.
+- At most one Attempt is `in_progress` for one Student/Homework; database partial uniqueness and application locking are both required.
+- With no `in_progress` Attempt, the backend atomically allocates `max(existing attempt_number) + 1`; if Attempts 1, 2, and 3 already exist, it returns `409 attempts_exhausted`.
+- Concurrent same-key Starts return one logical result. Concurrent different-key Starts still create at most one `in_progress` Attempt; a later valid Start resumes it. Attempt numbers cannot duplicate or skip because of a race.
 - Each attempt is a separate immutable historical resource after final submission.
-- The backend always resolves the current official Homework score as the highest fully scored, valid, eligible completed attempt. If a later eligible attempt produces a higher score before result closure, the official Homework score and any open dependent Topic result are recalculated.
-- If multiple attempts tie exactly for the highest normalized score, the attempt with the **lowest `attempt_number`** is the official attempt reference; Flutter must not choose it.
+- Stage 9 later resolves the official Homework score as the highest fully scored, valid, eligible completed attempt. If a later eligible attempt produces a higher score before result closure, Stage 9 recalculates the official Homework score and any open dependent Topic result.
+- In Stage 9, if multiple attempts tie exactly for the highest normalized score, the attempt with the **lowest `attempt_number`** is the official attempt reference; Flutter must not choose it.
+
+### First Official Homework Activity Lock
+
+When creating the first Attempt for the Homework referenced by `topic_result_pairs.homework_assessment_id`, the same transaction must:
+
+- resolve and lock the pair in the authenticated Institution and same Topic;
+- require non-null `cohort_snapshotted_at` and the Student's membership in the persisted official Homework recipient cohort;
+- use one captured `startedAt` for the new Attempt and, if pair `locked_at` is null, set `locked_at = startedAt` and `updated_at = startedAt`;
+- preserve an already non-null pair `locked_at`;
+- allow `blitz_assessment_id = null` without creating a Blitz;
+- never replace official Homework/cohort identity; and
+- fail atomically on structural pair/cohort inconsistency rather than repairing or resnapshotting it.
+
+Practice Homework Start does not mutate `topic_result_pairs`.
 
 ---
 
@@ -3411,6 +3441,8 @@ GET /api/v1/student/attempts/{attempt}
 
 Student may view only own Attempt.
 
+An owned Stage 7 frozen Homework Attempt is returned with `status = submitted`, immutable saved answers, `checking.completed = false`, and null/non-visible score state until Stage 9. The read first reconciles a reached deadline when necessary and never exposes correct-answer/checking configuration.
+
 ---
 
 ## 17.5 Save/Replace One Answer While In Progress
@@ -3420,6 +3452,22 @@ PUT /api/v1/student/attempts/{attempt}/answers/{question}
 ```
 
 Only while Attempt is editable.
+
+For a Stage 7 Homework request on this shared Attempt route, the authenticated Student must own the Attempt and frozen recipient assignment, the Attempt must belong to the same assigned Homework, and the Question and every supplied option/item/pair/blank child ID must belong to that same Assessment/Question/Institution. The Homework must remain active, `server_now < deadline_at` when a deadline exists, and the Attempt must still have `status = in_progress`, `finalized_at = null`, and `locked_at = null` after the relevant Homework/Attempt locks are acquired.
+
+Every Stage 7 save/replace leaves:
+
+```text
+checking_status = pending
+awarded_points = null
+feedback = null
+checked_by_user_id = null
+checked_at = null
+```
+
+No `Idempotency-Key` is required for ordinary answer/file writes. If the Student never saves a Question, no answer row is fabricated. Save/replace responses and Student Question resources never expose answer keys or checking configuration.
+
+Answer/file mutation versus Submit/deadline/Teacher-close finalization serializes through deterministic relevant locks and re-checks lifecycle, authoritative time, and editability after locking. If mutation commits first, its committed state is included in the frozen Attempt. If finalization commits first, the later mutation performs zero answer/file-domain changes and returns the documented lifecycle/deadline/editability conflict; no Student mutation may commit after freeze.
 
 ---
 
@@ -3462,7 +3510,7 @@ The response never exposes which options are correct. Answer request:
 }
 ```
 
-Laravel requires `selected_option_ids.length <= max_selections`. Exceeding the cap returns `422 selection_limit_exceeded`. An empty array is valid and scores zero.
+Laravel requires `selected_option_ids.length <= max_selections`. Exceeding the cap returns `422 selection_limit_exceeded`. An empty array is a valid saved Stage 7 answer; Stage 9 later applies the approved zero-score policy.
 
 ---
 
@@ -3560,8 +3608,10 @@ POST /api/v1/student/attempts/{attempt}/submit
 For high-risk final submission:
 
 ```http
-Idempotency-Key: <uuid>
+Idempotency-Key: <client-generated-uuid>
 ```
+
+Missing or malformed keys return `422 validation_failed`. This operation uses durable DB-backed idempotency code `student.homework.attempt.submit` and all Section 34 rules.
 
 ### Success — 200
 
@@ -3570,14 +3620,15 @@ Idempotency-Key: <uuid>
   "data": {
     "id": "attempt-uuid",
     "attempt_number": 1,
-    "status": "checked",
-    "submitted_at": "2026-08-07T15:10:00Z",
+    "status": "submitted",
+    "submitted_at": "2026-09-08T12:00:00Z",
+    "finalized_at": "2026-09-08T12:00:00Z",
+    "finalization_reason": "student_submit",
     "checking": {
-      "requires_teacher_review": false,
-      "completed": true
+      "completed": false
     },
     "score": {
-      "normalized_score": 84.5,
+      "normalized_score": null,
       "visible_to_student": false
     }
   },
@@ -3585,35 +3636,18 @@ Idempotency-Key: <uuid>
 }
 ```
 
-If manual review exists:
-
-```json
-{
-  "data": {
-    "id": "attempt-uuid",
-    "status": "waiting_for_teacher_review",
-    "submitted_at": "2026-08-07T15:10:00Z",
-    "checking": {
-      "requires_teacher_review": true,
-      "completed": false
-    },
-    "score": {
-      "normalized_score": null,
-      "visible_to_student": false
-    }
-  }
-}
-```
-
 ### Rules
 
 After success:
 
-- Attempt answers are locked from Student editing.
-- Automatically checkable answers are checked.
-- Manual answers enter review queue.
+- One server instant is stored as `submitted_at = finalized_at = locked_at`, `status = submitted`, and `finalization_reason = student_submit`.
+- Attempt answers/files are immutable to Student editing.
+- Saved answers remain `checking_status = pending`; Stage 7 does not check answers, award points, create Teacher-review metadata, compute an Attempt score, or select an official Homework score.
+- An unanswered Question requires no fabricated answer row.
 - A new attempt, while fewer than 3 normal attempts have been used and other rules allow it, is a separate resource.
-- Official Homework score selection is server-authoritative and uses `highest_valid_completed`.
+- Stage 9 later performs checking/review/scoring and server-authoritative `highest_valid_completed` official Homework score selection.
+
+Submit locks and re-reads the Attempt, Homework lifecycle, assignment/ownership, and authoritative time. If the deadline is already reached, required deadline reconciliation commits and the new late Submit normally returns `409 deadline_passed`; it cannot alter the already frozen Attempt. Submit racing with deadline reconciliation or Teacher close produces exactly one terminal transition and never rewrites a committed reason/timestamp.
 
 ---
 
@@ -4342,6 +4376,10 @@ file
 - Same institution.
 - One active file answer per file-based Answer in MVP.
 
+For a Stage 7 Homework file answer, the Attempt also belongs to the same frozen recipient assignment/Homework and authenticated Institution, and remains `in_progress` with null `finalized_at`/`locked_at` after the relevant locks and authoritative deadline/lifecycle re-check. The file answer remains private and `checking_status = pending`; Stage 7 does not grade it or expose checking/answer-key configuration. Save/replace versus Submit/deadline/Teacher-close freeze follows Section 17.5: either the replacement commits first and is frozen, or finalization commits first and the request changes no persisted answer/file identity or content.
+
+Another Student's or cross-Institution Attempt/File returns a privacy-safe scoped error without disclosing existence or content. Protected download remains backend-authorized.
+
 ### Success
 
 ```json
@@ -4460,7 +4498,7 @@ revealing internal storage paths or provider details.
 
 # 23. Automatic and Manual Checking APIs
 
-Automatic checking is internal server behavior triggered by submission.
+Automatic checking is internal server behavior. For Homework, it belongs to Stage 9 and consumes the immutable `submitted` history produced by Stage 7; Stage 7 Submit/deadline/Teacher close does not trigger immediate checking, Teacher review, awarded points, Attempt scoring, or official-score selection. Existing Blitz checking/timing/finalization semantics remain unchanged.
 
 There is no public endpoint such as:
 
@@ -4561,6 +4599,8 @@ If closed:
 # 24. Official Task Score APIs
 
 Official task score is server-authoritative.
+
+For Homework, this endpoint group and official score persistence are Stage 9+ concerns; Stage 7 execution resources expose no completed Homework score.
 
 There is **no Teacher endpoint for manually selecting an official attempt** in the MVP.
 
@@ -5695,6 +5735,8 @@ Student attempts require:
 - Required Student-specific Blitz exception exists for Blitz Attempt #2
 - Deadline/time is valid
 
+For Student Homework/Attempt/Answer/File requests, the persisted `assessment_students` recipient is the frozen assignment/history authority; current Group membership must not silently replace it. The Attempt must belong to that same Student and Assessment inside the authenticated Institution, and Question/answer child IDs, options, items, and blanks must belong to the same Assessment/Question/Institution. The backend scopes by authenticated Institution and Student before resolving resource UUIDs. Another Student's or cross-Institution Attempt/File must not leak existence or content, and no Student answering payload exposes correct-answer/checking configuration. These Homework-specific requirements do not change the Blitz contract.
+
 ---
 
 ## 33.6 Parent Scope
@@ -5737,9 +5779,36 @@ Idempotency-Key: <client-generated-uuid>
 - Blitz Activate
 - Blitz attempt exception grant
 
-Missing header → `422 validation_failed`. The same key with the same request identity returns the same logical result. Reusing the same key with a materially different request returns `409 idempotency_key_reused`. Manual review, result-pair updates, result calculation, and release use their documented transactional/state guards and do not require this header in the MVP.
+Missing header → `422 validation_failed`. For protected Stage 7 Homework Start/Submit, a malformed/non-UUID header also returns `422 validation_failed`. For every listed operation, the same key and same request identity returns the same logical result without a second mutation; materially different reuse returns `409 idempotency_key_reused`. Existing Blitz idempotency semantics remain unchanged. Manual review, result-pair updates, result calculation, ordinary answer/file mutations, and release use their documented transactional/state guards and do not require this header in the MVP.
 
-The persistence mechanism is internal infrastructure and must not change this public contract.
+For protected Homework Start/Submit, use durable PostgreSQL `idempotency_records`, never process/request/Flutter/cache-only/timing state. Operation codes are:
+
+```text
+student.homework.attempt.start
+student.homework.attempt.submit
+```
+
+Completed records are not automatically expired or deleted in the MVP.
+
+Lookup/uniqueness scope is authenticated:
+
+```text
+institution_id + user_id + operation + idempotency_key
+```
+
+Idempotency never bypasses authentication, active-account/password-change middleware, Student role, Institution isolation, assignment, or ownership checks; the backend must never find a key globally and authorize afterward.
+
+`request_fingerprint` deterministically includes operation, authenticated Institution, authenticated User, route target UUID(s), and normalized semantic body fields, if any. It excludes secrets, Authorization tokens, and the idempotency key itself.
+
+- Same scope/key/fingerprint returns the same logical resource with the original successful semantic HTTP status and no second domain mutation; current safe serialization is allowed.
+- Same scope/key with a different fingerprint returns `409 idempotency_key_reused` with zero domain mutation.
+- Successful protected Start/Submit and the completed idempotency claim/result commit atomically using conflict-safe PostgreSQL claiming (`INSERT ... ON CONFLICT` or equivalent). A successful mutation with a missing/incomplete result and a deliberately committed incomplete claim are forbidden.
+
+### Late protected Homework request
+
+If a new protected Start/Submit discovers under authoritative locks/time re-check that the deadline is already reached, required deadline reconciliation must commit even though the late operation returns failure, normally `409 deadline_passed`. The operation creates no new completed idempotency success record and leaves no new incomplete claim committed.
+
+The implementation either reconciles before acquiring a new claim, or removes/abandons only that newly acquired incomplete claim, commits reconciliation, and surfaces the failure after commit. It must never throw inside the reconciliation transaction in a way that rolls back required finalization, and must never delete a previously completed idempotency record. A valid replay of a previously committed pre-deadline success may still return that prior success after deadline because replay performs no new domain mutation.
 
 ---
 
@@ -5747,8 +5816,10 @@ The persistence mechanism is internal infrastructure and must not change this pu
 
 If the same Attempt is already submitted:
 
-- Same idempotency key → return original successful result
-- Different new request after lock → `409 submission_locked`
+- Same idempotency scope/key/fingerprint → return original successful result/status with no timestamp churn
+- Different new incompatible request after lock → `409 submission_locked`
+
+For Homework only, a new request that first discovers the authoritative Homework deadline follows Section 34.1 late-request reconciliation and normally returns `409 deadline_passed`. This does not change the Blitz timeout/replay contract in Section 20.5.
 
 ---
 
@@ -5770,9 +5841,34 @@ Two simultaneous requests must not create duplicate:
 assessment_id + student_id + attempt_number
 ```
 
+For Homework, the same transaction resumes an existing `in_progress` Attempt or allocates `max(existing attempt_number) + 1` up to 3. Application locks plus a partial unique index on `(assessment_id, student_id) WHERE status = 'in_progress'` ensure same-key and different-key concurrency still yields at most one current Attempt and never duplicates/skips an attempt number because of a race.
+
 ---
 
-## 34.5 Review Concurrency
+## 34.5 Homework Terminal Transition Race
+
+Student Submit, `FinalizeHomeworkAttemptsAtDeadline` from request/Scheduler, and Teacher close acquire deterministic relevant row locks, re-read state and authoritative time, and transition only from `in_progress`. Exactly one result is committed:
+
+- a valid Submit committed first before deadline/close preserves `student_submit`;
+- a reached deadline when locked state is evaluated preserves `homework_deadline_auto_submit` with exact `deadline_at`; or
+- a valid pre-deadline Teacher close committed first preserves `task_closed_auto_finalize` with captured close instant.
+
+Repeated reconciliation/close is a no-op after finalization and never rewrites frozen timestamps/reason.
+
+---
+
+## 34.6 Homework Answer/File Write Versus Freeze
+
+Answer/file save/replace and finalization serialize through the relevant Homework/Attempt lock boundary with lifecycle, authoritative-time, and editability re-check after locking. Only these outcomes are valid:
+
+- Student mutation commits first, so that committed state is part of the frozen Attempt; or
+- finalization commits first, so the later Student mutation performs zero answer/file-domain mutation and returns the documented lifecycle/deadline/editability conflict.
+
+A rejected file replacement leaves persisted answer/file identity and content unchanged. No Student answer/file mutation may commit after freeze.
+
+---
+
+## 34.7 Review Concurrency
 
 Manual review update must validate current state.
 
@@ -5938,6 +6034,7 @@ Once Student activity locks the pair, replacement is rejected.
 - Homework highest-score ties select the lowest `attempt_number`.
 - Teacher task close auto-finalizes in-progress Attempts with `task_closed_auto_finalize`.
 - Homework deadline auto-finalizes in-progress Homework Attempts with `homework_deadline_auto_submit`.
+- Stage 7 Homework finalization always freezes as `submitted`; Stage 9 later owns checking/review/scoring and official-score selection.
 - Topic Result close enforces terminal-state preconditions.
 - Institution activate/deactivate are idempotent and do not use already-active/inactive conflicts.
 - High-risk idempotency headers are required exactly where Section 34.1 specifies.
@@ -6027,7 +6124,7 @@ Do not create MVP endpoints for:
 
 # 36A. Homework Deadline API Decision — Resolved
 
-The public API now has one deterministic Homework deadline contract. An already `in_progress` Homework Attempt is auto-finalized from saved server state at the authoritative deadline. The resource records `finalized_at`, `finalization_reason = homework_deadline_auto_submit`, and `submitted_at = null`; unanswered components receive zero, manual-review components remain pending, and no empty Attempt is created for a never-started Student. After the deadline, new attempts return `409 deadline_passed`, late answer/final-submit mutations are rejected, and concurrent/retried finalization is protected so only one logical finalization occurs.
+The public API has one deterministic Homework deadline contract shared by relevant request paths and Scheduler. At `server_now >= deadline_at`, each existing `in_progress` Homework Attempt becomes immutable `submitted` from already-committed server state with `submitted_at = null`, `finalized_at = locked_at = exact deadline_at`, and `finalization_reason = homework_deadline_auto_submit`. No Attempt or unanswered answer row is fabricated; saved answers remain pending and Stage 7 performs no checking/scoring. New Starts return `409 deadline_passed`, late answer/file writes cannot mutate the frozen Attempt, and Submit/deadline/Teacher-close plus write/freeze races serialize to one deterministic outcome. A failed late idempotency-protected Start/Submit still commits required deadline reconciliation and leaves no new completed success or incomplete claim; replay of a previously completed pre-deadline success remains valid without a new mutation.
 
 ---
 
