@@ -5,21 +5,21 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 7 — Student Homework and Submission Flow` |
-| Stage status | `Planning package delivered — implementation not started` |
+| Stage status | `Documentation delivered — backend implementation not started` |
 | Verification model | `Workflow v3 — Lean Verification + Integration Harness Preflight discipline` |
 | Decomposition status | `Approved` |
 | Planning baseline `origin/main` | `294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline `origin/main` | `a538e1fd02722316ea12a688b1d3f044b96f4129` |
+| Current review baseline `origin/main` | `0a5f7adb8c259b1cc5ba790f13d7d6798c4bfd66` |
 | Previous Stage | `Stage 6 — Closed / PASS` |
 | GitHub source of truth | `Current main must be re-checked before every executable task` |
-| Documentation contract | `S07-DOC-001 — corrected/revalidated PASS; contract delivered to main; implementation not started` |
-| Backend implementation | `Not started — contracts are being revalidated sequentially before execution` |
+| Documentation contract | `S07-DOC-001 — Accepted / Delivered via PR #187` |
+| Backend implementation | `Not started — S07-BE-001 is the next executable task; S07-BE-001…004 contracts corrected/revalidated PASS` |
 | Backend checkpoint | `S07-BE-PHASE-2 — prepared, not executed` |
 | Frontend implementation | `Not started` |
 | Frontend checkpoint | `S07-FE-PHASE-2 — prepared, not executed` |
 | Integration | `S07-INT-001 — prepared, not executed` |
 | Closure | `STAGE_07_CLOSURE_REVIEW — prepared, not executed` |
-| Next permitted executable gate | `S07-DOC-001 after Project Owner Git preflight/local-main synchronization` |
+| Next permitted executable gate | `S07-BE-001 after Project Owner Git preflight and ChatGPT current-main recheck` |
 
 This index is the authoritative Stage 7 orchestration map. The planning package
 has already been delivered to `origin/main`; the current review baseline above
@@ -205,11 +205,11 @@ implement. Codex receives the current self-contained implementation contract.
 
 | Order | Task ID | Area | Short outcome | Depends on | Planning-package contract status | Current readiness revalidation | Delivery/execution status | Contract file |
 |---:|---|---|---|---|---|---|---|---|
-| 0 | `S07-DOC-001` | Documentation | Align Stage 7 execution vs Stage 9 checking/scoring contracts | Stage 6 closed + Stage 7 decomposition approved | `Approved` | `PASS — corrected/revalidated on current review baseline` | `Contract delivered; implementation not started` | `tasks/S07-DOC-001-stage-07-student-homework-execution-contract-alignment.md` |
-| 1 | `S07-BE-001` | Backend | Student answer/submission persistence + idempotency foundation | DOC-001 Accepted / Delivered | `Approved` | `FIX REQUIRED — current review found P2 issues; not executable yet` | `Not started` | `tasks/backend/stage-07/S07-BE-001-student-answer-submission-persistence-foundation.md` |
-| 2 | `S07-BE-002` | Backend | Homework finalization/deadline engine + Teacher close integration | BE-001 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-002-homework-attempt-finalization-deadline-engine.md` |
-| 3 | `S07-BE-003` | Backend | Student Homework read API | BE-001 + BE-002 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-003-student-homework-read-api.md` |
-| 4 | `S07-BE-004` | Backend | Idempotent Attempt start/resume + official pair lock | BE-001 + BE-002 + BE-003 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-004-idempotent-homework-attempt-start-resume.md` |
+| 0 | `S07-DOC-001` | Documentation | Align Stage 7 execution vs Stage 9 checking/scoring contracts | Stage 6 closed + Stage 7 decomposition approved | `Approved` | `PASS — corrected/revalidated and implemented` | `Accepted / Delivered — PR #187, merge 6529ae4b4a114828d0636baec597d10c03ef3164` | `tasks/S07-DOC-001-stage-07-student-homework-execution-contract-alignment.md` |
+| 1 | `S07-BE-001` | Backend | Student answer/submission persistence + idempotency foundation | DOC-001 Accepted / Delivered | `Approved` | `PASS — corrected/revalidated` | `Not started — next executable task` | `tasks/backend/stage-07/S07-BE-001-student-answer-submission-persistence-foundation.md` |
+| 2 | `S07-BE-002` | Backend | Homework finalization/deadline engine + Teacher close integration | BE-001 | `Approved` | `PASS — corrected/revalidated` | `Not started — blocked by BE-001 Accepted / Delivered` | `tasks/backend/stage-07/S07-BE-002-homework-attempt-finalization-deadline-engine.md` |
+| 3 | `S07-BE-003` | Backend | Student Homework read API | BE-001 + BE-002 | `Approved` | `PASS — corrected/revalidated` | `Not started — blocked by dependencies` | `tasks/backend/stage-07/S07-BE-003-student-homework-read-api.md` |
+| 4 | `S07-BE-004` | Backend | Idempotent Attempt start/resume + official pair lock | BE-001 + BE-002 + BE-003 | `Approved` | `PASS — corrected/revalidated` | `Not started — blocked by dependencies` | `tasks/backend/stage-07/S07-BE-004-idempotent-homework-attempt-start-resume.md` |
 | 5 | `S07-BE-005` | Backend | Eight non-file typed answer save/replace | BE-004 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-005-typed-student-answer-save-replace.md` |
 | 6 | `S07-BE-006` | Backend | File-based answer upload/replace/protected Student download | BE-005 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-006-file-based-student-answer-flow.md` |
 | 7 | `S07-BE-007` | Backend | Idempotent final Homework Submit | BE-002 + BE-005 + BE-006 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/backend/stage-07/S07-BE-007-idempotent-final-homework-submit.md` |
@@ -317,35 +317,50 @@ auto-finalizing it.
 
 ---
 
-## 7. Stage Entry Gate Before S07-DOC-001
+## 7. Stage Entry and Documentation Gate — Completed
 
-Before executable Stage 7 work:
+Stage entry and mandatory documentation alignment are complete:
 
-- [x] Stage 6 is explicitly `Closed / PASS`.
-- [x] Stage 7 roadmap scope was analyzed.
-- [x] Stage 7 decomposition was approved.
-- [x] DOC/Backend/Frontend/Integration/Closure planning contracts were prepared.
-- [x] Planning baseline was recorded.
-- [x] Stage 7 planning package was delivered to `origin/main` (PR #184 merge `19d90f23ffc02d7341d78433cc825d4403da89f4`).
-- [x] Corrected/revalidated `S07-DOC-001` contract was delivered to `origin/main` (PR #185 merge/current review baseline `a538e1fd02722316ea12a688b1d3f044b96f4129`).
-- [x] ChatGPT re-checked current `origin/main`.
-- [x] ChatGPT confirmed corrected `S07-DOC-001` is the next permitted executable task.
-- [ ] Project Owner performs normal Git preflight: fetch, clean working tree, expected remote, local `main == origin/main`, ahead/behind `0/0`, then creates the focused task branch.
+- [x] Stage 6 is `Closed / PASS`.
+- [x] Stage 7 decomposition/planning package was delivered.
+- [x] `S07-DOC-001` contract was corrected/revalidated.
+- [x] `S07-DOC-001` implementation passed ChatGPT read-only acceptance review.
+- [x] PR #187 was merged to `main`.
+- [x] `S07-DOC-001 = Accepted / Delivered`.
+- [x] `S07-BE-001…004` contracts were corrected/revalidated `PASS`.
+- [x] Corrected `S07-BE-001…004` contracts were delivered through PR #188.
+- [x] Current `origin/main` was re-checked at `0a5f7adb8c259b1cc5ba790f13d7d6798c4bfd66`.
 
-Current-main readiness of later tasks is **not** assumed from planning-package
-approval. ChatGPT revalidates them sequentially before execution.
+The next executable task is:
 
-`S07-DOC-001` implementation may begin once the remaining Project Owner Git
-preflight item passes.
+```text
+S07-BE-001
+```
+
+Before Codex starts, Project Owner must perform a fresh Git preflight and ChatGPT
+must re-check the current `origin/main` implementation baseline and dependency
+state.
+
+Later tasks still require their dependencies to become `Accepted / Delivered`
+before execution.
 
 ---
 
 ## 8. Documentation Gate
 
-`S07-DOC-001` is mandatory before backend production implementation.
+Status:
 
-It aligns live `docs/01–09` so Stage 7 execution/finalization no longer implies
-that Stage 7 immediately:
+```text
+PASS — S07-DOC-001 Accepted / Delivered
+PR #187
+merge = 6529ae4b4a114828d0636baec597d10c03ef3164
+```
+
+This gate is satisfied. Backend implementation may proceed sequentially from
+`S07-BE-001`.
+
+`S07-DOC-001` aligned live `docs/01–09` so Stage 7 execution/finalization no longer
+implies that Stage 7 immediately:
 
 ```text
 checks answers
@@ -371,8 +386,8 @@ advance review/checking/scoring state
 choose official Homework score later
 ```
 
-`docs/FINAL_AUDIT_REPORT.md` remains historical audit evidence and is not edited
-by S07-DOC-001.
+`docs/FINAL_AUDIT_REPORT.md` remains historical audit evidence and was not edited
+by `S07-DOC-001`.
 
 ---
 
