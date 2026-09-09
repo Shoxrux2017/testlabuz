@@ -884,7 +884,7 @@ If completed same-fingerprint record exists:
     student_id = authenticated Student
   ```
 - validate the referenced Attempt itself against the Homework Attempt history
-  invariants in Section 14.7;
+  invariants in Section 14.8;
 - return that logical result immediately;
 - do not re-run current lifecycle/deadline/capacity allocation;
 - do not change any Attempt/pair/idempotency timestamps.
