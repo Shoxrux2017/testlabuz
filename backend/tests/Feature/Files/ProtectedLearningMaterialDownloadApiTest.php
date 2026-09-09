@@ -290,6 +290,11 @@ class ProtectedLearningMaterialDownloadApiTest extends TestCase
     {
         $institution = Institution::factory()->create();
         $student = $this->student($institution);
+        File::factory()->create([
+            'id' => self::FILE_ID,
+            'institution_id' => $institution->id,
+            'uploaded_by_user_id' => $student->id,
+        ]);
         $cases = [
             ["report\r\nX-Evil: injected.pdf", 'reportX-Evil: injected.pdf'],
             ["\r\n\0\x7F", 'download.pdf'],

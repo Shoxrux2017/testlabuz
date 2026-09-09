@@ -2,6 +2,8 @@
 
 namespace App\Support\Student;
 
+use App\Enums\AssessmentAttemptFinalizationReason;
+use App\Enums\AssessmentAttemptStatus;
 use App\Enums\AssessmentType;
 use App\Enums\HomeworkStatus;
 use App\Exceptions\Student\StudentAssessmentNotAssignedException;
@@ -15,6 +17,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
+use LogicException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class StudentHomeworkAttemptAccess
@@ -167,5 +170,25 @@ final class StudentHomeworkAttemptAccess
                 ->where('institution_id', $student->institution_id)
                 ->where('student_id', $student->id)
                 ->whereColumn('assessment_students.assessment_id', 'assessment_attempts.assessment_id'));
+    }
+
+    public function assertValidAnswerAttempt(User $student, Assessment $assessment, AssessmentAttempt $attempt): void
+    {
+        $recipient = AssessmentStudent::query()
+            ->where('institution_id', $student->institution_id)
+            ->where('assessment_id', $assessment->id)
+            ->where('student_id', $student->id)->first(['id']);
+
+        if ($attempt->institution_id !== $student->institution_id || $attempt->student_id !== $student->id
+            || $attempt->assessment_id !== $assessment->id || $recipient === null
+            || $attempt->assessment_student_id !== $recipient->id || $attempt->deadline_at !== null
+            || ! in_array($attempt->status, [AssessmentAttemptStatus::InProgress, AssessmentAttemptStatus::Submitted,
+                AssessmentAttemptStatus::WaitingForTeacherReview, AssessmentAttemptStatus::Checked], true)
+            || $attempt->finalization_reason === AssessmentAttemptFinalizationReason::TimeoutAutoSubmit
+            || ($attempt->status === AssessmentAttemptStatus::InProgress
+                && ($attempt->submitted_at !== null || $attempt->finalized_at !== null
+                    || $attempt->locked_at !== null || $attempt->finalization_reason !== null))) {
+            throw new LogicException('Locked Homework Attempt has an invalid structural state.');
+        }
     }
 }

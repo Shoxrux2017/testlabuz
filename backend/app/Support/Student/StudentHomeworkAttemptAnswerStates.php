@@ -24,7 +24,7 @@ final class StudentHomeworkAttemptAnswerStates
         $this->answerValues->loadQuestions($questions, $institutionId);
         // Scope by the authorized Attempt, but do not hide corrupt Answer ownership or Question IDs.
         $answers = $attempt->answers()->get();
-        $this->answerIntegrity->load($answers);
+        $this->answerIntegrity->load($answers, $institutionId);
         $questionsById = $questions->keyBy('id');
 
         foreach ($answers as $answer) {
