@@ -289,19 +289,6 @@ final class ApiErrorResponse
         );
     }
 
-    public static function homeworkHasInProgressAttempt(Request $request): ?JsonResponse
-    {
-        if (! self::isApiRequest($request)) {
-            return null;
-        }
-
-        return self::json(
-            'Homework cannot be closed while student work is still in progress.',
-            self::CODE_BUSINESS_CONFLICT,
-            Response::HTTP_CONFLICT,
-        );
-    }
-
     public static function resultPairLocked(Request $request): ?JsonResponse
     {
         if (! self::isApiRequest($request)) {

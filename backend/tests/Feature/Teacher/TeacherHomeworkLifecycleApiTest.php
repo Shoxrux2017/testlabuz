@@ -9,9 +9,11 @@ use App\Enums\AssessmentAttemptStatus;
 use App\Enums\GroupStatus;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
+use App\Models\AnswerTextValue;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
+use App\Models\AttemptAnswer;
 use App\Models\Question;
 use App\Models\QuestionChoiceOption;
 use App\Models\QuestionShortAcceptedAnswer;
@@ -22,6 +24,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Teacher\Concerns\BuildsTeacherHomeworkContext;
 use Tests\TestCase;
 
@@ -346,7 +349,7 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
         }
     }
 
-    public function test_close_matrix_attempt_guard_history_and_idempotency_are_exact(): void
+    public function test_close_matrix_attempt_finalization_history_and_idempotency_are_exact(): void
     {
         [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
         $student = $this->eligibleStudent($institution, $admin, $group);
@@ -367,18 +370,13 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
             'The task is archived.',
         );
 
-        $blocked = $this->persistedHomework($institution, $teacher, $topic, status: HomeworkStatus::Active);
-        $this->scoreableQuestion($blocked);
-        $blockedAttempt = $this->attempt($teacher, $student, $blocked);
-        $blockedBefore = $this->aggregateState($blocked);
-        $attemptBefore = $blockedAttempt->fresh()?->getAttributes();
-        $this->assertConflictPayload(
-            $this->lifecycle($teacher, $blocked, 'close'),
-            'business_conflict',
-            'Homework cannot be closed while student work is still in progress.',
-        );
-        $this->assertSame($blockedBefore, $this->aggregateState($blocked));
-        $this->assertSame($attemptBefore, $blockedAttempt->fresh()?->getAttributes());
+        $active = $this->persistedHomework($institution, $teacher, $topic, status: HomeworkStatus::Active);
+        $this->scoreableQuestion($active);
+        $activeAttempt = $this->attempt($teacher, $student, $active);
+        $this->lifecycle($teacher, $active, 'close')->assertOk()->assertJsonPath('data.status', 'closed');
+        $this->assertSame(AssessmentAttemptStatus::Submitted, $activeAttempt->fresh()->status);
+        $this->assertNull($activeAttempt->fresh()->submitted_at);
+        $this->assertSame(AssessmentAttemptFinalizationReason::TaskClosedAutoFinalize, $activeAttempt->fresh()->finalization_reason);
 
         $closable = $this->persistedHomework($institution, $teacher, $topic, status: HomeworkStatus::Active);
         $this->scoreableQuestion($closable);
@@ -413,6 +411,96 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
         }
         $this->assertSame($closedState, $this->aggregateState($closable));
         $this->assertDatabaseCount('assessment_attempts', 3);
+    }
+
+    #[DataProvider('automaticCloseDeadlines')]
+    public function test_close_uses_deadline_precedence_preserves_saved_work_and_is_write_free_on_retry(?int $deadlineOffset): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-09 09:00:00 UTC'));
+        [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
+        $student = $this->eligibleStudent($institution, $admin, $group);
+        $transitionedAt = now()->addHour();
+        $deadline = $deadlineOffset === null ? null : $transitionedAt->copy()->addSeconds($deadlineOffset);
+        $assessment = $this->persistedHomework($institution, $teacher, $topic,
+            status: HomeworkStatus::Active,
+            homeworkAttributes: ['deadline_at' => $deadline],
+        );
+        $question = $this->scoreableQuestion($assessment);
+        $attempt = $this->attempt($teacher, $student, $assessment);
+        $answer = AttemptAnswer::factory()->create(['attempt_id' => $attempt, 'question_id' => $question]);
+        $payload = AnswerTextValue::factory()->create(['answer_id' => $answer, 'text_value' => 'Saved work.']);
+        $terminal = AssessmentAttempt::factory()->create([
+            'assessment_student_id' => $attempt->assessment_student_id,
+            'attempt_number' => 2,
+            'status' => AssessmentAttemptStatus::Submitted,
+            'submitted_at' => now(),
+            'finalized_at' => now(),
+            'locked_at' => now(),
+            'finalization_reason' => AssessmentAttemptFinalizationReason::StudentSubmit,
+        ]);
+        $neverStarted = AssessmentStudent::factory()->create(['assessment_id' => $assessment]);
+        $snapshots = [$answer->fresh()->getAttributes(), $payload->fresh()->getAttributes(), $terminal->fresh()->getAttributes()];
+        $attemptBefore = $attempt->fresh()->getAttributes();
+
+        $this->travelTo($transitionedAt);
+        $this->lifecycle($teacher, $assessment, 'close')->assertOk()->assertJsonPath('data.status', 'closed');
+
+        $attempt->refresh();
+        $homework = $assessment->homeworkAssignment()->firstOrFail();
+        $deadlineWins = $deadline !== null && $deadline->lte($transitionedAt);
+        $finalizedAt = $deadlineWins ? $deadline : $transitionedAt;
+        $this->assertSame(AssessmentAttemptStatus::Submitted, $attempt->status);
+        $this->assertNull($attempt->submitted_at);
+        $this->assertSame($deadlineWins ? AssessmentAttemptFinalizationReason::HomeworkDeadlineAutoSubmit
+            : AssessmentAttemptFinalizationReason::TaskClosedAutoFinalize, $attempt->finalization_reason);
+        $this->assertTrue($finalizedAt->equalTo($attempt->finalized_at));
+        $this->assertTrue($finalizedAt->equalTo($attempt->locked_at));
+        $this->assertTrue($transitionedAt->equalTo($homework->closed_at));
+        $this->assertTrue($transitionedAt->equalTo($homework->updated_at));
+        $this->assertTrue($transitionedAt->equalTo($assessment->fresh()->updated_at));
+        $this->assertSame(
+            collect($attemptBefore)->except(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at'])->all(),
+            collect($attempt->getAttributes())->except(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at'])->all(),
+        );
+        $this->assertSame($snapshots, [$answer->fresh()->getAttributes(), $payload->fresh()->getAttributes(), $terminal->fresh()->getAttributes()]);
+        $this->assertDatabaseMissing('assessment_attempts', ['assessment_student_id' => $neverStarted->id]);
+        $this->assertDatabaseCount('assessment_attempts', 2);
+        $this->assertDatabaseCount('attempt_answers', 1);
+        $closedState = $this->aggregateState($assessment);
+        $attemptState = $attempt->getAttributes();
+
+        $this->travelTo(now()->addHour());
+        $this->lifecycle($teacher, $assessment, 'close')->assertOk();
+        $this->assertSame($closedState, $this->aggregateState($assessment));
+        $this->assertSame($attemptState, $attempt->fresh()->getAttributes());
+    }
+
+    public static function automaticCloseDeadlines(): array
+    {
+        return ['no deadline' => [null], 'before deadline' => [1], 'exact deadline' => [0], 'after deadline' => [-180]];
+    }
+
+    #[DataProvider('inconsistentCloseFields')]
+    public function test_close_rolls_back_all_attempts_and_homework_on_an_internal_invariant(string $field): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-09 09:00:00 UTC'));
+        [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
+        $student = $this->eligibleStudent($institution, $admin, $group);
+        $assessment = $this->persistedHomework($institution, $teacher, $topic, status: HomeworkStatus::Active);
+        $valid = $this->attempt($teacher, $student, $assessment);
+        $inconsistent = $this->attempt($teacher, $this->eligibleStudent($institution, $admin, $group), $assessment);
+        $inconsistent->update([$field => $field === 'finalization_reason'
+            ? AssessmentAttemptFinalizationReason::StudentSubmit : now()]);
+        $before = [$valid->fresh()->getAttributes(), $inconsistent->fresh()->getAttributes(), $this->aggregateState($assessment)];
+
+        $this->travelTo(now()->addHour());
+        $this->lifecycle($teacher, $assessment, 'close')->assertStatus(500)->assertJsonPath('code', 'server_error');
+        $this->assertSame($before, [$valid->fresh()->getAttributes(), $inconsistent->fresh()->getAttributes(), $this->aggregateState($assessment)]);
+    }
+
+    public static function inconsistentCloseFields(): array
+    {
+        return array_map(fn ($field) => [$field], ['submitted_at', 'finalized_at', 'locked_at', 'finalization_reason']);
     }
 
     public function test_close_preserves_a_complete_checked_attempt_without_creating_another_attempt(): void

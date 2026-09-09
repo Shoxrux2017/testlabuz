@@ -2,16 +2,15 @@
 
 namespace App\Actions\Teacher;
 
-use App\Enums\AssessmentAttemptStatus;
+use App\Actions\Homework\FinalizeHomeworkAttemptsAtDeadline;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
-use App\Exceptions\Teacher\HomeworkHasInProgressAttemptException;
 use App\Exceptions\Teacher\TaskArchivedException;
 use App\Exceptions\Teacher\TaskNotActiveException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Assessment;
-use App\Models\AssessmentAttempt;
 use App\Models\User;
+use App\Support\Assessment\HomeworkAttemptFinalizer;
 use App\Support\Teacher\TeacherHomeworkLifecycleAccess;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +19,8 @@ final class CloseTeacherHomework
     public function __construct(
         private readonly TeacherHomeworkLifecycleAccess $access,
         private readonly ShowTeacherHomework $showTeacherHomework,
+        private readonly FinalizeHomeworkAttemptsAtDeadline $finalizeAtDeadline,
+        private readonly HomeworkAttemptFinalizer $finalizer,
     ) {}
 
     public function __invoke(User $teacher, string $homeworkId): Assessment
@@ -52,13 +53,14 @@ final class CloseTeacherHomework
             $this->access->lockResultPair($teacher, $topic, $assessment);
             $attempts = $this->access->lockAttempts($teacher, $assessment);
 
-            if ($attempts->contains(
-                fn (AssessmentAttempt $attempt): bool => $attempt->status === AssessmentAttemptStatus::InProgress,
-            )) {
-                throw new HomeworkHasInProgressAttemptException;
+            $transitionedAt = now();
+
+            if ($this->finalizeAtDeadline->finalizeLocked($homework, $attempts, $transitionedAt) === null) {
+                foreach ($attempts as $attempt) {
+                    $this->finalizer->finalizeAtClose($attempt, $transitionedAt);
+                }
             }
 
-            $transitionedAt = now();
             $homework->status = HomeworkStatus::Closed;
             $homework->closed_at = $transitionedAt;
             $homework->updated_at = $transitionedAt;
