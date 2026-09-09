@@ -57,4 +57,9 @@ class File extends Model
     {
         return $this->hasOne(LearningMaterial::class);
     }
+
+    public function answerFile(): HasOne
+    {
+        return $this->hasOne(AnswerFile::class);
+    }
 }

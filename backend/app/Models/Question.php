@@ -78,4 +78,9 @@ class Question extends Model
     {
         return $this->hasMany(QuestionFillBlank::class);
     }
+
+    public function attemptAnswers(): HasMany
+    {
+        return $this->hasMany(AttemptAnswer::class);
+    }
 }

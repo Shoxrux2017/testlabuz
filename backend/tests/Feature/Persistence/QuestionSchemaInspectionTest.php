@@ -33,7 +33,7 @@ class QuestionSchemaInspectionTest extends TestCase
             $this->assertFalse(Schema::hasColumn('questions', $column));
         }
 
-        foreach (['question_answers', 'student_answers', 'attempt_answers', 'question_scores'] as $table) {
+        foreach (['question_answers', 'student_answers', 'question_scores'] as $table) {
             $this->assertFalse(Schema::hasTable($table));
         }
     }

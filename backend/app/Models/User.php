@@ -118,4 +118,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(TopicResultPair::class, 'designated_by_user_id');
     }
+
+    public function idempotencyRecords(): HasMany
+    {
+        return $this->hasMany(IdempotencyRecord::class);
+    }
 }
