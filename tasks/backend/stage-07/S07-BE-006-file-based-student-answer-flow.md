@@ -11,8 +11,9 @@
 | Implementation type | `Private Student submission upload/replace/read/download for file_based Homework Questions` |
 | Depends on | `S07-BE-001…005` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current review baseline | `origin/main @ f6cbcba055de75c32242dfbfd06fbd3d1b8c86ee` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependencies above |
+| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-001…005 = Accepted / Delivered` |
 | Verification | focused Student file-answer/storage/download/concurrency verification only |
 | Delivery | Project Owner |
 | Backend block checkpoint | Stage 7 Backend Phase 2 after `S07-BE-001…007` |
@@ -37,7 +38,8 @@ Codex may read only:
    - learning-material upload/replace actions and tests;
    - protected file download controller/action/access and tests;
 6. current `File`, `FileCategory`, `FileExtension`, `InstitutionSetting`;
-7. current Student Attempt answer request/action/resource/access from BE-005.
+7. current Institution settings update locking pattern;
+8. current Student Attempt answer request/action/resource/access from BE-005.
 
 Do not read roadmap/product/architecture/database/API docs, previous task files, Stage history/indexes/closure reviews, frontend, or unrelated modules to determine requirements.
 
@@ -261,10 +263,19 @@ Rules:
 type required string exactly file_based
 file required valid uploaded file
 file size > 0
-original client filename length <= 500 characters
+original client filename length <= 500 Unicode code points
 ```
 
 Reject unknown multipart fields.
+
+Filename length is measured as Unicode code points, not UTF-8 byte length:
+
+```text
+mb_strlen(original_name, 'UTF-8') <= 500
+```
+
+Do not use `strlen()` as the authoritative 500-character validation for this
+Student submission contract.
 
 Do not accept JSON `file_based`.
 
@@ -320,10 +331,17 @@ Before inspecting/storing the blob:
 3. inaccessible/malformed IDs:
    - `404 resource_not_found`;
 4. read current Institution setting;
-5. inspect upload;
-6. apply early effective-size check.
+5. read the server-observed `UploadedFile` size and apply the early effective-size
+   check before expensive binary inspection;
+6. inspect only an upload that passed the early size gate;
+7. require the inspector's `sizeBytes` to equal the server-observed upload size
+   and apply the same effective-size policy to inspected metadata before storage.
 
-Do not write a storage blob for a target that already fails preliminary authorization.
+If `UploadedFile::getSize()` is unavailable/non-positive after request validation,
+treat the upload as `422 validation_failed`; do not run the binary inspector.
+
+Do not write a storage blob for a target that already fails preliminary authorization
+or the early size gate.
 
 Current Group membership is not required.
 
@@ -363,8 +381,10 @@ Sequence:
 
 ```text
 preliminary authorization
--> inspect
--> early size check
+-> preliminary InstitutionSetting read
+-> early server-observed size check
+-> inspect allowed-size upload
+-> verify inspected size / effective limit
 -> store new private blob
 -> DB transaction with final locks/checks
 ```
@@ -394,9 +414,9 @@ No persistent DB record may reference a failed/rolled-back new blob.
 
 ---
 
-# 11. Locked Mutation Order
+# 11. Locked Mutation Order and Lock Modes
 
-Inside one DB transaction lock using the BE-005 Student answer chain:
+Inside one DB transaction acquire rows in the BE-005 Student answer order:
 
 ```text
 Topic
@@ -410,11 +430,64 @@ Topic
 -> InstitutionSetting
 ```
 
-Do not lock Group/current membership.
+The order and lock modes are fixed:
 
-Use deterministic scoped queries.
+```text
+Topic                              -> shared/read row lock
+Assessment                         -> shared/read row lock
+HomeworkAssignment                 -> shared/read row lock
+authenticated Student Attempt      -> FOR UPDATE
+Question                           -> shared/read row lock
+existing AttemptAnswer, if present -> FOR UPDATE
+existing AnswerFile, if present    -> FOR UPDATE
+existing File, if present          -> FOR UPDATE
+InstitutionSetting                 -> shared/read row lock
+```
+
+Use the repository/Laravel PostgreSQL equivalent of a shared row lock
+(`FOR SHARE` / established `sharedLock()` pattern).
+
+Do not blindly reuse a delivered BE-005/BE-004 helper if that helper would take
+exclusive locks on the shared Topic/Assessment/Homework/Question rows. Reuse the
+tenant-safe resolution/order and add only the focused access method needed to
+preserve the lock modes defined here.
+
+Rationale:
+
+```text
+Attempt FOR UPDATE = answer/file mutation vs finalization serialization boundary
+shared parent rows  = lifecycle/deadline snapshot protection
+shared Question     = typed Question stability
+File FOR UPDATE     = stable replacement identity / download conflict boundary
+shared Setting      = stable effective upload limit without serializing all uploads
+```
+
+The Institution Admin settings update path uses an exclusive lock. Therefore
+multiple Student uploads may share the current setting concurrently, while a
+concurrent Admin limit change serializes against them. If the Admin update
+commits before this upload obtains the shared Setting lock, the final size check
+must observe the new limit.
+
+Two different Students with different Attempt rows must not serialize merely
+because they share the same Topic/Assessment/Homework/Question/InstitutionSetting.
+
+Do not acquire:
+
+```text
+Group/current-membership lock
+result-pair lock
+exclusive lock on shared Topic/Assessment/Homework/Question/InstitutionSetting
+```
+
+for a normal file-answer save.
+
+Use deterministic tenant-scoped queries.
 
 Do not query File globally before tenant/answer ownership is established.
+
+If delivered dependency code cannot provide these semantics without a material
+architecture conflict, return `BLOCKED` with exact evidence rather than falling
+back to coarse exclusive locking.
 
 ---
 
@@ -487,13 +560,16 @@ New blob is cleaned up.
 
 # 13. Final Locked Size Check
 
-Lock:
+Acquire a shared/read row lock on:
 
 ```text
 institution_settings
 ```
 
 for the authenticated Student Institution.
+
+Do not use an exclusive `FOR UPDATE` lock for normal Student upload; the Admin
+settings mutation path owns the conflicting exclusive lock.
 
 If missing:
 
@@ -978,6 +1054,7 @@ files:
   institution_id = student.institution_id
   id = requested file
   category = student_submission
+  uploaded_by_user_id = authenticated Student
   removed_at IS NULL
 
 answer_files:
@@ -1022,7 +1099,8 @@ This lets a Student download their own historical submitted file after later mem
 
 ## 23.3 Privacy
 
-Malformed UUID, another Student, foreign Institution, Teacher direct ID, wrong category, unlinked File, removed File:
+Malformed UUID, another Student, foreign Institution, Teacher direct ID, wrong category,
+uploader mismatch, unlinked File, removed File:
 
 ```text
 404 resource_not_found
@@ -1036,28 +1114,40 @@ No existence disclosure.
 
 `ProtectedStudentSubmissionAccess` preliminary resolution may use a scoped join.
 
-Before opening the stream, lock the same tenant File row:
+Before opening the stream, acquire a shared/read row lock on the same
+tenant-owned File row:
 
 ```text
-FOR UPDATE
+FOR SHARE / sharedLock()
 ```
 
 and re-verify it is still:
 
 ```text
 category = student_submission
+uploaded_by_user_id = authenticated Student
 removed_at = null
 ```
 
 and still linked through the same authorized answer chain.
 
-The download path does not need to lock parent Homework/Attempt rows; it performs no domain mutation.
+Do not use `FOR UPDATE` for download. The download path is read-only and multiple
+concurrent downloads of the same file must be able to coexist.
 
-This avoids reverse lock dependencies.
+The download path does not need to lock parent Homework/Attempt rows; it performs
+no domain mutation. This avoids reverse lock dependencies.
 
-A concurrent replacement updates the same File row and therefore serializes with download stream opening.
+Replacement owns `FOR UPDATE` on the same File row, so:
 
-Once the stream is opened, the existing controller owns/finishes that stream even if later replacement cleans the old blob.
+```text
+download + download     -> may proceed concurrently
+download + replacement  -> serialize before stream opening
+```
+
+The stream must be opened while the shared File lock is still held. After the
+stream is successfully opened and the transaction releases the row lock, the
+existing controller owns/finishes that already-open stream even if a later
+replacement commits and cleans the old blob.
 
 ---
 
@@ -1098,7 +1188,7 @@ size_bytes
 The original client filename:
 
 - is display metadata only;
-- max length 500;
+- max length = 500 Unicode code points (`mb_strlen(..., 'UTF-8')`);
 - must have extension matching inspected binary format;
 - is never used as storage key;
 - may contain Unicode;
@@ -1234,6 +1324,27 @@ Concurrent uploads for same Attempt/Question:
 
 Final DB/File metadata corresponds to one complete committed replacement, never mixed fields.
 
+## Different Students same Homework
+
+Different Students with different Attempt rows must not serialize through
+exclusive shared-parent/Question/InstitutionSetting locks.
+
+Their shared aggregate/Question/Setting locks may coexist while each Student
+holds `FOR UPDATE` only on their own Attempt/file-answer graph.
+
+## Download vs replacement
+
+Download acquires a shared File lock before opening the stream; replacement
+requires `FOR UPDATE` on the same stable File row.
+
+Required serialized outcomes:
+
+- download opens old stream first -> download may finish from that opened stream,
+  then replacement commits and old-blob cleanup occurs after commit;
+- replacement commits first -> later download opens the new authoritative blob.
+
+Never open a storage key that was selected from a stale/unlocked File row.
+
 ## Upload vs Teacher close
 
 If upload mutation commits first:
@@ -1364,7 +1475,9 @@ Reject:
 - missing/wrong type;
 - unknown field;
 - query parameter;
-- original name >500.
+- original name >500 Unicode code points;
+- multibyte Unicode filename <=500 code points remains valid even when UTF-8 byte
+  length exceeds 500.
 
 ## Wrong Question
 
@@ -1382,6 +1495,9 @@ institution limit < 15 MB
 is enforced.
 
 Also verify platform cap remains 15 MB.
+
+Verify an upload whose server-observed size already exceeds the effective limit
+is rejected before `LearningMaterialFileInspector` performs binary inspection.
 
 Use controlled metadata/file fixtures without allocating pathological memory.
 
@@ -1538,6 +1654,23 @@ Teacher direct Student submission File UUID in Stage 7:
 
 Do not add Teacher submission access.
 
+## Uploader mismatch integrity
+
+Construct a same-Institution persisted graph where the Attempt/Answer belongs to
+Student A but the linked `student_submission` File has:
+
+```text
+uploaded_by_user_id = Student B
+```
+
+Direct download as Student A:
+
+```text
+404
+```
+
+Do not treat the Attempt link alone as sufficient ownership.
+
 ## Unlinked File
 
 A `student_submission` File row not linked through AnswerFile/Attempt ownership:
@@ -1598,6 +1731,32 @@ no score fields
 Superseded blobs must have cleanup attempted according to commit order.
 
 If cross-process storage fake cannot faithfully verify cleanup, use a deterministic local private disk fixture for this test only.
+
+Also prove two lock-scope regressions with real PostgreSQL lock evidence where
+practical:
+
+### Different Students / same Homework
+
+- Student A and Student B own different Attempts for the same Homework;
+- worker A holds its own Attempt lock after shared aggregate/Question/Setting
+  locks;
+- worker B must be able to acquire its own Attempt lock without waiting on A's
+  shared rows;
+- both uploads persist independent coherent answers.
+
+### Download / replacement
+
+- existing file answer A;
+- download worker obtains shared File lock and opens A's read stream while
+  holding that lock;
+- replacement worker attempting `FOR UPDATE` on the same File must wait until
+  the download transaction releases the shared File lock;
+- after release, replacement may commit B;
+- the already-open download stream yields A coherently;
+- a later download yields B.
+
+If cross-process storage fake cannot prove already-open stream behavior
+faithfully, use the deterministic local private disk fixture for this race.
 
 Do not use arbitrary sleeps as synchronization.
 
@@ -1675,14 +1834,25 @@ Do not run full backend suite.
 
 # 37. Verification
 
-Use the repository's normal Docker/Sail backend command wrapper.
+Run from the repository root.
 
-Run required formatter/static check for changed PHP files.
+## 37.1 PHP formatting
 
-Then exactly:
+Exactly:
 
 ```bash
-php artisan test \
+docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app ./vendor/bin/pint --test
+```
+
+The repository currently has no separate PHPStan/Psalm task-level static
+analyzer requirement for this change. Do not invent one.
+
+## 37.2 Focused BE-006 + directly affected regressions
+
+Exactly:
+
+```bash
+docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app php artisan test \
   tests/Feature/Student/StudentHomeworkFileAnswerApiTest.php \
   tests/Feature/Student/StudentHomeworkFileAnswerLifecycleTest.php \
   tests/Feature/Student/StudentHomeworkFileAnswerConcurrencyTest.php \
@@ -1698,13 +1868,19 @@ php artisan test \
   tests/Feature/Files/ProtectedLearningMaterialDownloadApiTest.php
 ```
 
-Then from repository root:
+Narrow diagnostic reruns of one failing test are allowed only to diagnose or
+confirm a concrete failure.
+
+## 37.3 Diff hygiene
+
+Exactly:
 
 ```bash
 git diff --check
 ```
 
-and focused diff/scope self-review.
+Then perform the focused diff/scope self-review required by root/backend
+`AGENTS.md`.
 
 Do not run:
 
@@ -1723,9 +1899,14 @@ PASS only if all are true.
 - existing answer PUT supports `file_based` only through strict multipart;
 - PDF/DOCX/PPT/PPTX only;
 - existing binary inspector reused;
+- oversized upload is rejected from server-observed size before expensive binary
+  inspection;
+- inspected size equals server-observed upload size;
 - filename extension matches inspected binary;
+- original filename limit is 500 Unicode code points, not 500 UTF-8 bytes;
 - canonical MIME/checksum/size persisted;
-- effective institution/platform 15 MB cap enforced twice;
+- effective institution/platform 15 MB cap enforced before inspection/storage and
+  again from the final shared-locked setting;
 - storage key is server generated/private.
 
 ## Persistence
@@ -1763,13 +1944,23 @@ PASS only if all are true.
 - existing `/files/{file}/download` route remains protected;
 - learning material download behavior unchanged;
 - Student can download only own linked submission;
+- linked File uploader must also equal the authenticated Student;
 - historical own file remains available after finalization/membership change;
-- other Student/cross-tenant/Teacher submission download is 404 in Stage 7;
+- other Student/cross-tenant/Teacher/uploader-mismatch submission download is
+  404 in Stage 7;
+- download uses a shared File lock before stream opening;
+- concurrent downloads may coexist while replacement conflicts on File
+  `FOR UPDATE`;
 - private/no-store/nosniff headers preserved.
 
 ## Concurrency
 
-- concurrent replacements serialize on PostgreSQL Attempt lock;
+- concurrent replacements serialize on PostgreSQL Attempt/File locks;
+- different Students on the same Homework can upload concurrently through
+  different Attempt locks and are not serialized by exclusive shared aggregate,
+  Question, or InstitutionSetting locks;
+- download shared File lock serializes correctly against replacement
+  `FOR UPDATE` without serializing download-vs-download;
 - final DB has one coherent Answer/File graph;
 - superseded blob cleanup is attempted.
 
@@ -1784,9 +1975,9 @@ PASS only if all are true.
 
 ## Verification
 
-- focused tests pass;
-- named regressions pass;
-- formatter/static check passes;
+- exact Pint command passes;
+- exact focused/named regression test command passes;
+- no uncontracted broad suite/static tool is run;
 - `git diff --check` passes;
 - focused self-review passes.
 
@@ -1806,6 +1997,8 @@ binary inspection = existing LearningMaterialFileInspector
 client MIME = untrusted
 platform max = 15_728_640 bytes
 effective max = min(platform, institution setting)
+early size gate = server-observed upload size before binary inspection
+filename max = 500 Unicode code points
 physical storage = existing PrivateFileStorage
 storage key = server-generated student-submissions/... UUID path
 File.category = student_submission
@@ -1813,8 +2006,12 @@ File.uploaded_by_user_id = Student
 replacement preserves File ID
 old blob deletion = afterCommit best effort
 new blob compensation = rollback/rejection best effort
+Attempt/File replacement locks = FOR UPDATE
+Topic/Assessment/Homework/Question/InstitutionSetting upload locks = shared/read
+download File lock = shared/read before stream opening
+different Students/different Attempts = concurrent uploads allowed
 no file clear in Stage 7
-Student owns protected download
+Student protected download requires Attempt ownership + matching File uploader
 Teacher Student-submission download = Stage 9, not BE-006
 current Group membership = not required for historical own submission
 ```
@@ -1828,6 +2025,13 @@ Codex must not substitute:
 - trusting filename/MIME alone;
 - creating a new File row on every replacement;
 - deleting old blob before DB commit;
+- exclusive `FOR UPDATE` on shared Topic/Assessment/Homework/Question/
+  InstitutionSetting as the normal Student upload strategy;
+- `FOR UPDATE` for read-only Student submission download;
+- treating Attempt linkage as sufficient download ownership when File uploader
+  differs from the authenticated Student;
+- validating the 500-character filename limit with UTF-8 byte length;
+- running expensive binary inspection before the early effective-size gate;
 - Teacher access pulled forward;
 - scoring/file-content inspection for grading.
 

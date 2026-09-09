@@ -10,8 +10,9 @@
 | Review mode | `Read-only` |
 | Status | `Pending — execute only after S07-BE-001…007 are Accepted and Delivered` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current contract review baseline | `origin/main @ 943596fbac4bcac0e0226b5f0650d4843288e8c2` |
 | Audited `origin/main` | `Resolve at checkpoint execution time` |
-| Backend block diff base | `Resolve as the commit immediately before the first delivered S07-BE-001 production change` |
+| Backend block diff base | `First parent of S07-BE-001 production merge 86067f9a61864a4d313b7ec8b59ee1217218b612` |
 | Review owner | `ChatGPT` |
 | Verification executor | `Project Owner or approved CI` |
 | Codex role | `None during read-only review; focused fixes only if ChatGPT later issues a fix contract` |
@@ -105,6 +106,7 @@ At checkpoint execution ChatGPT must re-read from current GitHub `main`:
 AGENTS.md
 backend/AGENTS.md
 tasks/README.md
+tasks/STAGE_07_TASK_INDEX.md
 ```
 
 and the relevant locked Stage 7 product/technical inputs:
@@ -536,7 +538,28 @@ locked_at = close instant
 reason = task_closed_auto_finalize
 ```
 
-## 12.5 Forbidden Stage 7 Homework terminal use
+## 12.5 Explicit Submit structural integrity
+
+For a new-key Submit:
+
+```text
+status != in_progress
+=> 409 attempt_not_editable
+```
+
+But an inconsistent row:
+
+```text
+status = in_progress
+AND any finalization field is non-null
+```
+
+is a persisted invariant failure, not a normal `attempt_not_editable` outcome.
+
+The Student finalizer must preserve the delivered BE-002 structural semantics:
+terminal status returns false; corrupt `in_progress` state fails safely.
+
+## 12.6 Forbidden Stage 7 Homework terminal use
 
 Verify automatic Homework paths do not use:
 
@@ -782,6 +805,16 @@ Real JSON boolean only.
 
 Exact Student text preserved.
 
+Verify the delivered BE-005 raw-JSON boundary:
+
+```text
+raw application/json object = authoritative Student answer payload
+JSON "" remains an empty String and performs contracted clear behavior
+non-empty leading/trailing whitespace is preserved exactly
+semantic-empty detection uses the contracted Unicode-whitespace helper only
+middleware-normalized request input is not authoritative for stored text
+```
+
 Scoring normalization not run in Stage 7.
 
 ## Matching
@@ -831,7 +864,12 @@ private configured disk
 min(15 MB platform, Institution student_submission_max_mb)
 ```
 
-Rechecked under final locked Institution setting.
+Verify:
+
+- server-observed oversized upload is rejected before expensive binary inspection;
+- inspected size agrees with server-observed upload size;
+- final effective limit is rechecked under a **shared/read** InstitutionSetting lock;
+- Student uploads are not serialized by an exclusive InstitutionSetting lock.
 
 ## Replacement
 
@@ -858,9 +896,33 @@ Verify:
 
 Stage 7 permits only the Student owner to download their linked Student submission.
 
+Verify the complete ownership invariant includes:
+
+```text
+File.category = student_submission
+File.uploaded_by_user_id = authenticated Student
+Attempt/AssessmentStudent chain = authenticated Student
+```
+
+A linked File whose uploader differs from the Attempt owner must remain
+privacy-safe `404`.
+
+Verify protected Student-submission download acquires a **shared/read File lock**
+before opening the stream:
+
+```text
+download + download    = may coexist
+download + replacement = serialize against replacement File FOR UPDATE
+```
+
+The download path must not acquire a parent Homework/Attempt lock after the File
+lock.
+
 Teacher review/download remains Stage 9.
 
 Historical own file survives Attempt finalization/current Group membership loss.
+
+The original filename limit is 500 Unicode code points, not 500 UTF-8 bytes.
 
 ---
 
@@ -888,14 +950,97 @@ Required principles:
 ```text
 tenant scope before lock
 fresh state under lock
-deterministic Attempt ordering
+deterministic Attempt ordering where an operation genuinely locks multiple Attempts
 Student never acquires Group after Topic
-answer mutation locks Attempt before Question
-Submit/deadline/close serialize on Homework/Attempts
-file download locks File without later parent lock acquisition
+
+BE-005 non-file answer:
+  Topic/Assessment/Homework/Question = shared/read
+  own Attempt = FOR UPDATE
+  existing AttemptAnswer = FOR UPDATE
+
+BE-006 file answer:
+  Topic/Assessment/Homework/Question/InstitutionSetting = shared/read
+  own Attempt + existing Answer/File graph = FOR UPDATE
+
+BE-007 explicit Submit:
+  Topic/Assessment/Homework = shared/read
+  own route Attempt = FOR UPDATE
+  no ordinary class-wide/all-Attempt lock
+
+deadline reconciliation / Teacher close:
+  authoritative conflicting aggregate/finalization locks
+
+late Submit:
+  abandon claim + release local Submit transaction
+  -> public BE-002 deadline reconciliation
+
+protected Student-submission download:
+  File = shared/read before stream opening
+  no later parent lock acquisition
+```
+
+Verify no corrected Student mutation path falls back to coarse exclusive shared
+aggregate locks merely for convenience.
+
+Also verify the intended non-blocking behavior:
+
+```text
+different Students + different Attempts + same Homework
+=> ordinary answer/file/Submit operations must not serialize solely because the
+   aggregate/Question/InstitutionSetting is shared
 ```
 
 Review actual SQL/test behavior, not only intended comments.
+
+---
+
+# 20A. Corrected Task-Contract Invariant Review
+
+These checks reflect the hardened current contracts and must not regress back to
+the original planning-package wording.
+
+## BE-005
+
+Verify:
+
+```text
+raw JSON = authoritative answer payload
+empty JSON String remains String
+exact non-empty Student whitespace preserved
+explicit Unicode-whitespace semantic-empty helper
+shared parent/Question locks
+own Attempt FOR UPDATE
+```
+
+## BE-006
+
+Verify:
+
+```text
+early size gate before binary inspection
+filename max = 500 Unicode code points
+shared InstitutionSetting upload lock
+different Students/different Attempts may upload concurrently
+File uploader must match Student owner
+download File lock = shared/read
+replacement File lock = FOR UPDATE
+```
+
+## BE-007
+
+Verify:
+
+```text
+shared Topic/Assessment/Homework locks
+own route Attempt FOR UPDATE
+no ordinary all-Attempt Submit lock
+late Submit releases local transaction before public BE-002 reconciliation
+Homework lifecycle precedence matches BE-005/006
+corrupt in_progress finalization state = server invariant failure
+```
+
+Any delivered implementation that follows the superseded coarse-lock behavior
+instead of these hardened contracts is a checkpoint finding.
 
 ---
 
@@ -998,7 +1143,20 @@ Official path may lock all Homework Attempts because pair/fairness correctness r
 
 ## Submit
 
-Locking all Assessment Attempts is intentional for exact deadline/close serialization; confirm no unrelated Institution scope.
+Ordinary explicit Submit must **not** lock all Assessment Attempts.
+
+Verify the normal path is bounded to:
+
+```text
+shared Topic/Assessment/Homework
++ exact authenticated Student Attempt FOR UPDATE
+```
+
+Late deadline reconciliation belongs to the public BE-002 action after the local
+Submit transaction releases its locks.
+
+Any class-wide/all-Attempt lock in ordinary Submit is a material scalability/
+concurrency regression.
 
 ## Resources
 
@@ -1097,6 +1255,10 @@ At review execution populate evidence.
 | Teacher-close auto-finalization | BE-002 | `<tests>` | Pending |
 | No scoring/checking in Stage 7 | BE-002/005/006/007 | `<review/tests>` | Pending |
 | Cross-tenant/ownership privacy | BE-003…007 | `<tests>` | Pending |
+| Raw JSON / exact Student text boundary | BE-005 | `<tests/code>` | Pending |
+| File uploader/download integrity + shared download lock | BE-006 | `<tests/code>` | Pending |
+| Cross-Student ordinary-write non-blocking lock scope | BE-005/006/007 | `<pgsql tests>` | Pending |
+| Submit structural invariant + local lock scope | BE-007 | `<tests/code>` | Pending |
 | Concurrency exact-once | BE-002/004/005/006/007 | `<pgsql tests>` | Pending |
 
 No required row may remain `Not verified` for `PASS`.
@@ -1184,9 +1346,19 @@ The repository currently has no separate PHPStan/Psalm dependency in the reviewe
 
 If that remains true at checkpoint execution, do not invent a new static-analysis dependency.
 
-Run a repository-native PHP syntax check over Stage 7 changed PHP production/test files or an equivalent existing backend lint command.
+Run exactly:
 
-If a static analyzer has been added legitimately before the checkpoint, use the repository's actual configured command and record it.
+```bash
+docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app sh -lc \
+  'set -eu; find app bootstrap config database public routes tests -type f -name "*.php" -print0 | xargs -0 -n1 php -l'
+```
+
+Record exact result/exit code.
+
+If a static analyzer has been legitimately added and configured in the repository
+before checkpoint execution, ChatGPT must re-review this checkpoint command
+before execution rather than letting the executor silently substitute a
+different tool.
 
 ## 27.5 Migration/schema verification
 
@@ -1208,14 +1380,14 @@ Do not edit schema during review.
 
 ## 27.6 Stage-wide diff hygiene
 
-Let:
+Resolve exactly:
 
-```text
-BACKEND_BLOCK_BASE=<commit immediately before S07-BE-001 production delivery>
-AUDITED_MAIN=<current origin/main>
+```bash
+BACKEND_BLOCK_BASE="$(git rev-parse 86067f9a61864a4d313b7ec8b59ee1217218b612^1)"
+AUDITED_MAIN="$(git rev-parse origin/main)"
 ```
 
-Run:
+Then run:
 
 ```bash
 git diff --check "${BACKEND_BLOCK_BASE}...${AUDITED_MAIN}"
@@ -1246,6 +1418,7 @@ current membership removed but historical snapshot preserved
 unauthorized read cannot trigger foreign deadline mutation
 Teacher cannot download Student submission in Stage 7
 Student cannot download another Student submission
+linked Student-submission File with mismatched uploaded_by_user_id is 404
 ```
 
 Any missing critical tenant/security evidence blocks PASS.
@@ -1258,15 +1431,29 @@ Confirm real PostgreSQL concurrency tests pass for the delivered surfaces:
 
 ```text
 deadline reconciliation vs Teacher close
+
 Start same idempotency key
 Start different keys
-answer replacement
-file replacement
+
+same-Attempt answer replacement
+different Students / same Homework answer-save non-blocking
+
+same-Attempt file replacement
+different Students / same Homework file-upload non-blocking
+Student-submission download shared File lock vs replacement FOR UPDATE
+
 Submit same idempotency key
 Submit different keys
+different Students / same Homework Submit non-blocking
+Submit vs non-file answer save
+Submit vs file replacement
+Submit vs Teacher close
+Submit vs deadline reconciliation
 ```
 
-At least the contracted tests must prove actual lock wait rather than sequential simulation.
+At least the contracted tests must prove actual lock wait (or explicit absence of
+a shared-row blocking dependency for the non-blocking regressions), rather than
+sequential simulation.
 
 Also review existing Stage 6 concurrency regressions affected by first public Attempt creation.
 

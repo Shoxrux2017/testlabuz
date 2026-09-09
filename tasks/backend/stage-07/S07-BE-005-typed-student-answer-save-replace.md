@@ -11,8 +11,9 @@
 | Implementation type | `Laravel typed Student Homework answer save/replace + resume answer read state` |
 | Depends on | `S07-BE-001…004` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current review baseline | `origin/main @ f6cbcba055de75c32242dfbfd06fbd3d1b8c86ee` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependencies above |
+| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-002…004 = Accepted / Delivered` |
 | Verification | focused Student answer/API/persistence/concurrency verification only |
 | Delivery | Project Owner |
 | Backend block checkpoint | Stage 7 Backend Phase 2 after `S07-BE-001…007` |
@@ -33,7 +34,8 @@ Codex may read only:
 4. delivered `S07-BE-001…004` source/tests directly required here;
 5. current Question/typed Question Models and `QuestionAuthoringLimits`;
 6. current Student Attempt controller/resource/access patterns;
-7. current API error infrastructure needed for the two new error mappings below.
+7. current strict raw-JSON Form Request pattern and request middleware behavior needed to preserve exact Student text;
+8. current API error infrastructure needed for the two new error mappings below.
 
 Do not read roadmap/product/architecture/database/API docs, previous task files, Stage history/indexes/closure reviews, frontend, or unrelated modules to determine requirements.
 
@@ -192,6 +194,50 @@ All failures use:
 ```
 
 unless Section 13 explicitly defines `selection_limit_exceeded`.
+
+The Form Request must treat the **raw `application/json` object** as the
+authoritative answer payload. Follow the repository's existing strict raw-JSON
+request pattern (decode from `getContent()`/equivalent before using validated
+answer values).
+
+Do **not** use middleware-normalized request input as the authoritative source
+for Student answer strings.
+
+Required preservation semantics:
+
+```text
+JSON "" remains the empty string
+non-empty leading/trailing whitespace remains unchanged
+no trim/case-fold/Unicode normalization occurs before persistence
+```
+
+This is required because the application globally converts ordinary empty-string
+request input to `null`; that middleware behavior must not change the BE-005
+wire contract.
+
+For semantic-empty checks in Short Written, Open Written, and Fill Blank,
+"whitespace-only" is one locked cross-stack semantic. The BE-005 helper returns
+empty only when the String is empty or every code point belongs to this set,
+matching the frontend `String.trim().isEmpty` contract used by Stage 7:
+
+```text
+U+0009..U+000D
+U+0020
+U+0085
+U+00A0
+U+1680
+U+2000..U+200A
+U+2028
+U+2029
+U+202F
+U+205F
+U+3000
+U+FEFF
+```
+
+Do not treat any other non-whitespace code point as semantic empty. The helper
+is only for deciding empty-vs-non-empty; it must never rewrite the stored
+non-empty Student text.
 
 Do not accept:
 
@@ -673,7 +719,7 @@ Current Group membership is not required.
 
 ---
 
-# 10. Mutation Lock Order
+# 10. Mutation Lock Order and Lock Modes
 
 Create:
 
@@ -689,7 +735,7 @@ After preliminary privacy-safe resolution, enter:
 DB::transaction(...)
 ```
 
-Lock in this order:
+Acquire rows in this order:
 
 ```text
 Topic
@@ -700,13 +746,57 @@ Topic
 -> existing AttemptAnswer for Attempt+Question, if any
 ```
 
-The parent lock path must be the delivered BE-004 Student-safe path.
+The order is fixed, but **the lock modes are also fixed**.
 
-Do not acquire a Group lock.
+Use:
 
-Do not acquire a result-pair lock; answer content does not mutate pair meaning.
+```text
+Topic                              -> shared/read row lock
+Assessment                         -> shared/read row lock
+HomeworkAssignment                 -> shared/read row lock
+authenticated Student Attempt      -> FOR UPDATE
+Question                           -> shared/read row lock
+existing AttemptAnswer, if present -> FOR UPDATE
+```
 
-This ordering is compatible with Teacher Question mutation:
+Use the repository/Laravel PostgreSQL equivalent of a shared row lock
+(`FOR SHARE` / established `sharedLock()` pattern) for the three parent rows and
+the Question.
+
+Do **not** blindly reuse a BE-004 parent helper if that helper takes exclusive
+`FOR UPDATE` locks on shared Homework aggregate rows. BE-005 may add one focused
+Student access method that preserves BE-004 tenant-safe resolution/order while
+using the lock modes defined here.
+
+Rationale/invariant:
+
+```text
+Attempt row = answer-mutation/finalization serialization boundary
+shared parent rows = lifecycle/deadline snapshot protection
+shared Question row = authoring-configuration stability
+```
+
+Two different Students answering the same Homework must not serialize merely
+because they share the same Topic/Assessment/Homework/Question. They may proceed
+concurrently when they own different Attempt rows.
+
+The shared Question lock intentionally conflicts with Teacher Question mutation,
+whose authoritative path obtains an exclusive Question lock before changing
+typed Question configuration. Therefore Student validation may safely read the
+current typed configuration without taking exclusive locks on option/item/blank
+rows.
+
+Do not acquire:
+
+```text
+Group lock
+result-pair lock
+exclusive lock on shared Topic/Assessment/Homework/Question rows
+```
+
+for a normal answer save.
+
+This order remains compatible with Teacher Question mutation:
 
 ```text
 ... Homework
@@ -715,7 +805,13 @@ This ordering is compatible with Teacher Question mutation:
 -> Questions
 ```
 
-because Student never holds Question before Attempt.
+because Student never holds Question before Attempt, and Teacher lifecycle/
+Question mutation cannot pass the shared parent/Question locks while changing
+those rows.
+
+If delivered dependency code cannot provide these lock semantics without a
+material architecture conflict, return `BLOCKED` with exact evidence rather
+than falling back to coarse exclusive parent locking.
 
 ---
 
@@ -815,12 +911,18 @@ Load/lock only the current Question's needed typed rows.
 
 ## Choice
 
-Lock all options ordered:
+After the shared Question lock is held, read this Question's options ordered:
 
 ```text
 position
 id
 ```
+
+Select only fields required for validation/serialization plus `is_correct` when
+deriving the Multiple Choice cap.
+
+Do not take exclusive row locks on the option rows for Student save; the shared
+Question lock is the authoring-stability barrier.
 
 Validate requested option IDs against this set.
 
@@ -846,7 +948,7 @@ question_short_accepted_answers
 
 ## Matching
 
-Lock:
+After the shared Question lock is held, read:
 
 ```text
 question_matching_items
@@ -861,19 +963,23 @@ id
 side
 ```
 
+Do not take exclusive row locks on these items for Student save.
+
 Do not use `match_key`.
 
 ## Ordering
 
-Lock Question ordering items.
+After the shared Question lock is held, read Question ordering items.
 
 Use only IDs/count for request validation.
+
+Do not take exclusive row locks on these items for Student save.
 
 Do not use `correct_position`.
 
 ## Fill Blank
 
-Lock Question blanks.
+After the shared Question lock is held, read Question blanks.
 
 Use:
 
@@ -881,6 +987,8 @@ Use:
 id
 position
 ```
+
+Do not take exclusive row locks on these blanks for Student save.
 
 Do not load accepted answers.
 
@@ -1584,14 +1692,25 @@ They may serialize on the Attempt lock.
 
 Correctness is preferred over per-question write parallelism in MVP.
 
-## 26.3 Save vs Teacher close
+## 26.3 Different Students same Homework
+
+Different Students with different Attempt rows must not be serialized by an
+exclusive lock on shared Topic/Assessment/Homework/Question rows.
+
+The shared parent/Question locks may coexist, while each Student holds
+`FOR UPDATE` only on their own Attempt (and own existing AttemptAnswer).
+
+This preserves classroom-scale parallel answer saving while still excluding
+Teacher lifecycle/Question mutation that requires conflicting exclusive locks.
+
+## 26.4 Save vs Teacher close
 
 Because both ultimately lock the same parent/Attempt chain:
 
 - save commits first → close may then preserve and auto-finalize it;
 - close commits first → save sees closed/non-editable state and writes nothing.
 
-## 26.4 Save vs deadline
+## 26.5 Save vs deadline
 
 A save may commit only if its locked `observedAt` is strictly before deadline.
 
@@ -1764,7 +1883,12 @@ Reject non-boolean.
 
 - non-string;
 - Short >1000 chars;
-- Open >20000 chars.
+- Open >20000 chars;
+- raw JSON `""` remains a String and performs the defined clear behavior;
+- non-empty `"  DNS  "` preserves the exact decoded JSON String value after
+  validation and persistence;
+- whitespace-only semantic-empty detection uses the BE-005 Unicode-whitespace
+  helper without rewriting non-empty text.
 
 ## Matching
 
@@ -1917,6 +2041,18 @@ no score fields
 
 No arbitrary sleep as synchronization.
 
+Also prove the lock-scope regression with two different Students on the same
+Homework (prefer the same Question type/Question):
+
+- each owns a different `AssessmentAttempt`;
+- first worker holds its own Attempt lock after shared parent/Question locks;
+- second worker must be able to reach and hold its own Attempt lock without
+  waiting on the first Student's shared aggregate/Question locks;
+- both complete with coherent independent persisted answers.
+
+This test must fail if BE-005 accidentally uses exclusive `FOR UPDATE` on the
+shared Topic/Assessment/Homework/Question path.
+
 Do not add broad Submit concurrency here; BE-007 owns Submit races.
 
 ---
@@ -1976,14 +2112,25 @@ Do not run full backend suite.
 
 # 34. Verification
 
-Use the repository's normal Docker/Sail backend command wrapper.
+Run from the repository root.
 
-Run required formatter/static check for changed PHP files.
+## 34.1 PHP formatting
 
-Then exactly:
+Exactly:
 
 ```bash
-php artisan test \
+docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app ./vendor/bin/pint --test
+```
+
+The repository currently has no separate PHPStan/Psalm task-level static
+analyzer requirement for this change. Do not invent one.
+
+## 34.2 Focused BE-005 + directly affected regressions
+
+Exactly:
+
+```bash
+docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app php artisan test \
   tests/Feature/Student/StudentHomeworkAnswerSaveApiTest.php \
   tests/Feature/Student/StudentHomeworkAnswerValidationTest.php \
   tests/Feature/Student/StudentHomeworkAnswerLifecycleTest.php \
@@ -1997,13 +2144,19 @@ php artisan test \
   tests/Feature/Persistence/StudentAnswerSubmissionFactoryModelTest.php
 ```
 
-Then repository root:
+Narrow diagnostic reruns of one failing test are allowed only to diagnose or
+confirm a concrete failure.
+
+## 34.3 Diff hygiene
+
+Exactly:
 
 ```bash
 git diff --check
 ```
 
-and focused diff/scope self-review.
+Then perform the focused diff/scope self-review required by root/backend
+`AGENTS.md`.
 
 Do not run:
 
@@ -2036,6 +2189,11 @@ PASS only if all are true.
 ## Validation
 
 - exact typed shapes;
+- raw JSON object is authoritative for answer values;
+- `""` is not silently middleware-normalized to `null`;
+- exact non-empty Student whitespace is preserved;
+- semantic-empty detection uses one explicit Unicode-whitespace helper without
+  rewriting non-empty text;
 - child IDs scoped to current Question/Institution;
 - Matching sides enforced without match-key usage;
 - Ordering submitted positions validated without correct-position usage;
@@ -2068,7 +2226,11 @@ PASS only if all are true.
 
 ## Concurrency
 
-- real PostgreSQL same-answer replacement race serializes;
+- real PostgreSQL same-answer replacement race serializes on the Attempt;
+- different Students on the same Homework can save concurrently through
+  different Attempt locks and are not serialized by exclusive shared-parent or
+  Question locks;
+- Teacher lifecycle/Question mutation remains excluded by conflicting lock mode;
 - final payload is coherent, never mixed/duplicated.
 
 ## Scope
@@ -2082,9 +2244,9 @@ PASS only if all are true.
 
 ## Verification
 
-- focused tests pass;
-- named regressions pass;
-- formatter/static check passes;
+- exact Pint command passes;
+- exact focused/named regression test command passes;
+- no uncontracted broad suite/static tool is run;
 - `git diff --check` passes;
 - focused self-review passes.
 
@@ -2112,10 +2274,14 @@ Fill partial = allowed
 Written semantic empty = trim(text)=='' => clear
 clear = no AttemptAnswer row
 same semantic state = write-free 200 no-op
-exact Student text = preserved
+exact Student text = preserved from authoritative raw JSON
+empty JSON string remains String; middleware-normalized input is not authoritative
+semantic-empty helper = explicit Unicode-whitespace decision only; never storage normalization
 deadline save gate = server observedAt < deadline
 deadline rejection = reconcile through BE-002 then 409
-Attempt lock = serialization boundary
+Attempt FOR UPDATE lock = mutation/finalization serialization boundary
+Topic/Assessment/Homework/Question = shared/read locks for BE-005
+different Students/different Attempts = concurrent answer saves allowed
 file_based = BE-006 only
 ```
 
@@ -2128,6 +2294,9 @@ Codex must not substitute:
 - `correct_position` comparison;
 - current Group membership authorization;
 - client/device deadline authority;
+- exclusive `FOR UPDATE` on shared Topic/Assessment/Homework/Question as the
+  normal BE-005 save strategy;
+- middleware-normalized answer strings as the authoritative payload;
 - delete-and-recreate parent Answer on every replace;
 - timestamp-changing no-op writes.
 
