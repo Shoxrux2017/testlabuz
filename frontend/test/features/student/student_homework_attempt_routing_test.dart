@@ -14,6 +14,7 @@ import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/student/domain/student_answer_mutation.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
@@ -21,6 +22,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_attemp
 import 'package:testlabuz_client/features/student/domain/student_homework_list.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_list_query.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
+import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_attempt_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_detail_screen.dart';
 
@@ -355,6 +357,13 @@ Future<ProviderContainer> _pump(
 }
 
 class _AttemptRepository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentAttemptAnswerMutationResult> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  ) => throw StateError('This regression must not save answers.');
+
   final readIds = <String>[];
   var startCalls = 0;
 

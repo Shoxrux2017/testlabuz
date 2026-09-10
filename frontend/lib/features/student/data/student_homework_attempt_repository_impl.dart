@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/student_answer_mutation.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_repository.dart';
+import '../domain/student_question.dart';
 import 'student_homework_attempt_remote_data_source.dart';
 
 final studentHomeworkAttemptRepositoryProvider =
@@ -33,5 +35,18 @@ class StudentHomeworkAttemptRepositoryImpl
   @override
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) async {
     return (await remoteDataSource.fetchAttempt(attemptId)).toDomain();
+  }
+
+  @override
+  Future<StudentAttemptAnswerMutationResult> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  ) async {
+    return (await remoteDataSource.saveAnswer(
+      attemptId,
+      question,
+      mutation,
+    )).toDomain();
   }
 }

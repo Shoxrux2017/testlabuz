@@ -1,4 +1,6 @@
+import 'student_answer_mutation.dart';
 import 'student_homework_attempt.dart';
+import 'student_question.dart';
 
 abstract interface class StudentHomeworkAttemptRepository {
   Future<StudentHomeworkAttemptStartResult> startAttempt(
@@ -7,4 +9,10 @@ abstract interface class StudentHomeworkAttemptRepository {
   );
 
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId);
+
+  Future<StudentAttemptAnswerMutationResult> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  );
 }

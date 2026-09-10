@@ -5,7 +5,10 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
+import '../domain/student_answer_mutation.dart';
 import '../domain/student_homework_attempt.dart';
+import '../domain/student_question.dart';
+import 'dto/student_attempt_answer_mutation_dto.dart';
 import 'dto/student_dto_parse.dart';
 import 'dto/student_homework_attempt_dto.dart';
 
@@ -94,6 +97,34 @@ class StudentHomeworkAttemptRemoteDataSource {
         ),
       );
     }
+  }
+
+  Future<StudentAttemptAnswerMutationDto> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  ) {
+    _validateUuid(attemptId, 'attemptId');
+    _validateUuid(question.id, 'question.id');
+    if (question.type != mutation.type) {
+      throw ArgumentError('Mutation type does not match its Question.');
+    }
+    return _mapFailures(() async {
+      final response = await dio.put<Object?>(
+        '/student/attempts/${Uri.encodeComponent(attemptId)}/answers/'
+        '${Uri.encodeComponent(question.id)}',
+        data: mutation.toJson(),
+        options: Options(followRedirects: false),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException('Answer save success status must be 200.');
+      }
+      return StudentAttemptAnswerMutationDto.fromJson(
+        response.data,
+        question: question,
+        requestedType: mutation.type,
+      );
+    });
   }
 }
 

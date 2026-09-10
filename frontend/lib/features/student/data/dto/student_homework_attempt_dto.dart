@@ -221,14 +221,14 @@ StudentAttemptAnswerState _readAnswer(
   return StudentAttemptAnswerState(
     questionId: questionId,
     type: type,
-    value: _readAnswerValue(map['answer'], question),
+    value: parseStudentAttemptAnswerValue(map['answer'], question.toDomain()),
     updatedAt: _requiredTimestamp(map, 'updated_at'),
   );
 }
 
-StudentAttemptAnswerValue _readAnswerValue(
+StudentAttemptAnswerValue parseStudentAttemptAnswerValue(
   Object? json,
-  StudentQuestionDto question,
+  StudentQuestion question,
 ) => switch (question.type) {
   StudentQuestionType.singleChoice ||
   StudentQuestionType.multipleChoice => _readChoice(json, question),
@@ -250,10 +250,7 @@ StudentAttemptAnswerValue _readAnswerValue(
   StudentQuestionType.fileBased => _readFile(json),
 };
 
-StudentChoiceAnswerValue _readChoice(
-  Object? json,
-  StudentQuestionDto question,
-) {
+StudentChoiceAnswerValue _readChoice(Object? json, StudentQuestion question) {
   final map = readExactStudentMap(
     json,
     context: 'Student saved choice',

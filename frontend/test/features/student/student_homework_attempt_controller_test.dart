@@ -14,6 +14,7 @@ import 'package:testlabuz_client/features/student/application/student_homework_l
 import 'package:testlabuz_client/features/student/application/student_homework_list_state.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
+import 'package:testlabuz_client/features/student/domain/student_answer_mutation.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
@@ -22,6 +23,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_list.d
 import 'package:testlabuz_client/features/student/domain/student_homework_list_query.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
+import 'package:testlabuz_client/features/student/domain/student_question.dart';
 
 import 'student_test_support.dart';
 
@@ -359,6 +361,13 @@ class _Surface extends Notifier<AppDeviceSurface> {
 }
 
 class _Repository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentAttemptAnswerMutationResult> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  ) => throw StateError('This regression must not save answers.');
+
   final requests = <_Request>[];
   @override
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) {

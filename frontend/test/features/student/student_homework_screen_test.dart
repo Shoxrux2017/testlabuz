@@ -17,6 +17,7 @@ import 'package:testlabuz_client/features/student/application/student_homework_a
 import 'package:testlabuz_client/features/student/data/student_homework_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/student/domain/student_answer_mutation.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
@@ -1303,6 +1304,13 @@ class _FixedHomeworkController extends StudentHomeworkDetailController {
 }
 
 class _StartRepository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentAttemptAnswerMutationResult> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  ) => throw StateError('This regression must not save answers.');
+
   _StartRepository({this.onStart});
   final Future<StudentHomeworkAttemptStartResult> Function(String, String)?
   onStart;
