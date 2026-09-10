@@ -150,6 +150,7 @@ class _StudentHomeworkAttemptScreenState
       attemptController.refresh();
     }
 
+    final terminalAttempt = editorState.terminalAttempt;
     Widget body;
     if (homeworkState.status == StudentHomeworkDetailStatus.notFound) {
       body = _AttemptNotice(
@@ -163,6 +164,25 @@ class _StudentHomeworkAttemptScreenState
         title: 'Attempt unavailable',
         actionLabel: 'Back to Homework',
         onAction: backToHomework,
+      );
+    } else if (sessionKey != null &&
+        homeworkState.status == StudentHomeworkDetailStatus.data &&
+        homeworkState.homework != null &&
+        homeworkState.homework!.id.toLowerCase() == target.homeworkId &&
+        homeworkState.homework!.topic.id.toLowerCase() == target.topicId &&
+        terminalAttempt != null &&
+        terminalAttempt.id.toLowerCase() == target.attemptId &&
+        terminalAttempt.assessmentId.toLowerCase() == target.homeworkId &&
+        (attemptState.status == StudentHomeworkAttemptLoadStatus.data ||
+            attemptState.status ==
+                StudentHomeworkAttemptLoadStatus.refreshing ||
+            attemptState.status == StudentHomeworkAttemptLoadStatus.error)) {
+      body = _AttemptContent(
+        homework: homeworkState.homework!,
+        attempt: terminalAttempt,
+        timezone: timezone,
+        editorState: editorState,
+        editorController: editorController,
       );
     } else if (homeworkState.status == StudentHomeworkDetailStatus.error ||
         attemptState.status == StudentHomeworkAttemptLoadStatus.error) {
@@ -180,10 +200,7 @@ class _StudentHomeworkAttemptScreenState
       );
     } else if (homeworkState.status == StudentHomeworkDetailStatus.data &&
         homeworkState.homework != null &&
-        (attemptState.status == StudentHomeworkAttemptLoadStatus.data ||
-            (attemptState.status ==
-                    StudentHomeworkAttemptLoadStatus.refreshing &&
-                editorState.terminalAttempt != null)) &&
+        attemptState.status == StudentHomeworkAttemptLoadStatus.data &&
         attemptState.attempt != null &&
         homeworkState.homework!.id.toLowerCase() == target.homeworkId &&
         homeworkState.homework!.topic.id.toLowerCase() == target.topicId &&
@@ -191,7 +208,7 @@ class _StudentHomeworkAttemptScreenState
         attemptState.attempt!.assessmentId.toLowerCase() == target.homeworkId) {
       body = _AttemptContent(
         homework: homeworkState.homework!,
-        attempt: editorState.terminalAttempt ?? attemptState.attempt!,
+        attempt: attemptState.attempt!,
         timezone: timezone,
         editorState: editorState,
         editorController: editorController,

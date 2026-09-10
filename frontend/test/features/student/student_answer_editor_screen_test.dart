@@ -466,6 +466,12 @@ void main() {
       await tester.pump();
       _expectNoSaveEnabled(tester);
       expect(harness.repository.saves, isEmpty);
+      if (status == StudentHomeworkAttemptLoadStatus.error) {
+        expect(harness.editorState.terminalAttempt, isNull);
+        expect(find.text('Unable to load Attempt'), findsOneWidget);
+        expect(find.text('Retry'), findsOneWidget);
+        expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
+      }
       harness.parent.publish(_attempt());
       await tester.pumpAndSettle();
       expect(
@@ -512,6 +518,70 @@ void main() {
     expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
     expect(harness.repository.saves, isEmpty);
   });
+
+  testWidgets(
+    'confirmed terminal Attempt survives refresh failure with stale in-progress data',
+    (tester) async {
+      final harness = await _pump(tester);
+      final retainedAttempt = harness.container
+          .read(studentHomeworkAttemptControllerProvider(_target))
+          .attempt!;
+      expect(retainedAttempt.status, StudentHomeworkAttemptStatus.inProgress);
+      expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(8));
+      await _enter(tester, _inside(4, find.byType(TextField)), 'unsaved draft');
+      expect(harness.editorState.hasDirtyDrafts, isTrue);
+      expect(tester.widget<FilledButton>(_save(4)).onPressed, isNotNull);
+
+      final terminalAttempt = _attempt(
+        status: StudentHomeworkAttemptStatus.submitted,
+        answers: [_textAnswer('confirmed terminal server answer')],
+      );
+      harness.parent.publish(terminalAttempt);
+      await tester.pumpAndSettle();
+
+      void expectTerminalReadOnly() {
+        expect(harness.editorState.terminalAttempt, same(terminalAttempt));
+        expect(find.text('confirmed terminal server answer'), findsOneWidget);
+        expect(
+          tester
+              .widget<Text>(
+                find.byKey(const Key('studentHomeworkAttemptStatus')),
+              )
+              .data,
+          'Submitted',
+        );
+        expect(find.byType(StudentAttemptAnswerReadView), findsNWidgets(9));
+        expect(find.text('Unable to load Attempt'), findsNothing);
+        expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
+        expect(find.text('Save answer'), findsNothing);
+        expect(find.text('unsaved draft'), findsNothing);
+        expect(harness.editorState.hasDirtyDrafts, isFalse);
+        expect(harness.editorState.hasUncertainMutation, isFalse);
+        expect(harness.editorState.canEdit(_questionId(4)), isFalse);
+        expect(harness.editorState.canSave(_questionId(4)), isFalse);
+        expect(harness.repository.saves, isEmpty);
+      }
+
+      expectTerminalReadOnly();
+      for (final status in [
+        StudentHomeworkAttemptLoadStatus.data,
+        StudentHomeworkAttemptLoadStatus.refreshing,
+        StudentHomeworkAttemptLoadStatus.error,
+      ]) {
+        harness.parent.publishState(
+          StudentHomeworkAttemptState(
+            status: status,
+            attempt: retainedAttempt,
+            failure: status == StudentHomeworkAttemptLoadStatus.error
+                ? studentLocalFailure(ApiFailureKind.connection).failure
+                : null,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expectTerminalReadOnly();
+      }
+    },
+  );
 
   for (final uncertain in [false, true]) {
     testWidgets(
