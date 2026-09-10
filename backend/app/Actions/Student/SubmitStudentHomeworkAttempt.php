@@ -57,13 +57,13 @@ final class SubmitStudentHomeworkAttempt
             $replay = $this->idempotency->completedReplay($student, $operation, $idempotencyKey, $fingerprint);
 
             if ($replay !== null) {
-                return $this->replay($attempt, $replay);
+                return $this->replay($student, $assessment, $attempt, $replay);
             }
 
             $claim = $this->idempotency->claim($student, $operation, $idempotencyKey, $fingerprint);
 
             if (! $claim->new) {
-                return $this->replay($attempt, $claim->record);
+                return $this->replay($student, $assessment, $attempt, $claim->record);
             }
 
             // Eligibility and all explicit finalization fields use the instant after every lock wait.
@@ -85,6 +85,8 @@ final class SubmitStudentHomeworkAttempt
 
                 return ['institutionId' => $student->institution_id, 'assessmentId' => $assessment->id];
             }
+
+            $this->access->assertValidAnswerAttempt($student, $assessment, $attempt);
 
             if ($attempt->status !== AssessmentAttemptStatus::InProgress) {
                 throw new AttemptNotEditableException;
@@ -118,8 +120,10 @@ final class SubmitStudentHomeworkAttempt
         return $result;
     }
 
-    private function replay(AssessmentAttempt $attempt, IdempotencyRecord $record): StudentHomeworkAttemptSubmitResult
+    private function replay(User $student, Assessment $assessment, AssessmentAttempt $attempt, IdempotencyRecord $record): StudentHomeworkAttemptSubmitResult
     {
+        $this->access->assertValidAnswerAttempt($student, $assessment, $attempt);
+
         if ($record->result_resource_type !== 'assessment_attempt'
             || $record->result_resource_id !== $attempt->id
             || $record->response_status !== 200) {

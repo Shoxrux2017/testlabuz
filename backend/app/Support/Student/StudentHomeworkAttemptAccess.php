@@ -86,8 +86,6 @@ final class StudentHomeworkAttemptAccess
             throw new LogicException('Authorized Homework Attempt disappeared during locked re-resolution.');
         }
 
-        $this->assertValidAnswerAttempt($student, $homeworkRows['assessment'], $attempt);
-
         return [...$homeworkRows, 'attempt' => $attempt];
     }
 

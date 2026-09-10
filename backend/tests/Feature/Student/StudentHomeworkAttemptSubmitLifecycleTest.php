@@ -174,6 +174,83 @@ class StudentHomeworkAttemptSubmitLifecycleTest extends TestCase
         $this->assertDatabaseCount('idempotency_records', 0);
     }
 
+    #[DataProvider('lifecycleBeforeStructuralValidation')]
+    public function test_lifecycle_and_topic_conflicts_precede_structural_validation_without_submit_mutation(
+        string $homeworkState,
+        bool $closeTopic,
+        string $code,
+    ): void {
+        [$student, $homework, $attempt, $question] = $this->fixture(homeworkState: $homeworkState);
+        $homework->update(['deadline_at' => now()]);
+        if ($closeTopic) {
+            $homework->assessment->topic->update(['status' => TopicStatus::Closed, 'closed_at' => now()]);
+        }
+        $attempt->update(['deadline_at' => now()->addHour(), 'submitted_at' => now()]);
+        $this->savedText($attempt, $question);
+        $before = $this->persistentState();
+
+        $this->submit($student, $attempt->id)->assertConflict()->assertJsonPath('code', $code);
+
+        $this->assertSame($before, $this->persistentState());
+        $this->assertDatabaseCount('idempotency_records', 0);
+    }
+
+    public static function lifecycleBeforeStructuralValidation(): array
+    {
+        return [
+            'closed Homework with corrupt Attempt' => ['closed', false, 'task_closed'],
+            'archived Homework with corrupt Attempt' => ['archivedAfterClose', false, 'task_archived'],
+            'inactive Topic with corrupt Attempt' => ['active', true, 'task_not_active'],
+        ];
+    }
+
+    public function test_post_authorization_draft_homework_precedes_structural_validation_without_submit_mutation(): void
+    {
+        [$student, $homework, $attempt, $question] = $this->fixture();
+        $attempt->update(['deadline_at' => now()->addHour(), 'submitted_at' => now()]);
+        $this->savedText($attempt, $question);
+        $before = $this->persistentState();
+
+        $this->afterPreliminaryAuthorization($student, $attempt->id, function () use ($homework): void {
+            $homework->update(['status' => 'draft', 'activated_at' => null]);
+        })->assertConflict()->assertJsonPath('code', 'task_not_active');
+
+        $this->assertSame($before, $this->persistentState());
+        $this->assertDatabaseCount('idempotency_records', 0);
+    }
+
+    #[DataProvider('invalidTerminalAttemptsAtDeadline')]
+    public function test_due_homework_precedes_structural_validation_of_terminal_attempt_without_submit_mutation(
+        string $status,
+        bool $hasAttemptDeadline,
+        string $reason,
+    ): void {
+        [$student, $homework, $attempt, $question] = $this->fixture();
+        $homework->update(['deadline_at' => now()]);
+        $attempt->update([
+            'status' => $status, 'submitted_at' => null, 'finalized_at' => now(), 'locked_at' => now(),
+            'finalization_reason' => $reason, 'deadline_at' => $hasAttemptDeadline ? now() : null,
+        ]);
+        $this->savedText($attempt, $question);
+        $before = $this->persistentState();
+
+        $this->submit($student, $attempt->id)->assertConflict()->assertJsonPath('code', 'deadline_passed');
+
+        $this->assertSame($before, $this->persistentState());
+        $this->assertDatabaseCount('idempotency_records', 0);
+        $this->assertDatabaseMissing('assessment_attempts', ['id' => $attempt->id, 'finalization_reason' => 'student_submit']);
+    }
+
+    public static function invalidTerminalAttemptsAtDeadline(): array
+    {
+        return [
+            'submitted with Attempt deadline' => ['submitted', true, 'homework_deadline_auto_submit'],
+            'waiting for review with Blitz reason' => ['waiting_for_teacher_review', false, 'timeout_auto_submit'],
+            'checked with Attempt deadline' => ['checked', true, 'homework_deadline_auto_submit'],
+            'Blitz-only terminal status' => ['timed_out_finalized', false, 'timeout_auto_submit'],
+        ];
+    }
+
     #[DataProvider('terminalStatuses')]
     public function test_new_key_on_every_structurally_valid_terminal_status_preserves_timestamps_and_pending_answers(string $status): void
     {

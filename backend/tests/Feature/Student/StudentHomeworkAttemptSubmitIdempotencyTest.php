@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Feature\Student\Concerns\BuildsStudentHomeworkFileAnswerContext;
@@ -260,6 +261,48 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
             'wrong result Attempt' => ['result_resource_id', '329e8380-e177-4f68-a105-daf70716da80'],
             'wrong success status' => ['response_status', 201],
         ];
+    }
+
+    #[DataProvider('corruptReplayAttemptStates')]
+    public function test_completed_replay_checks_locked_attempt_invariants_after_lifecycle_changes_and_preserves_historical_metadata(string $corruption): void
+    {
+        [$student, $homework, $attempt] = $this->savedAnswerContext();
+        $key = (string) Str::uuid();
+        $this->submit($student, $attempt, $key)->assertOk();
+        $record = $this->assertCompletedRecord($student, $attempt, $key);
+        $recordBefore = $record->getAttributes();
+        $homework->update(['status' => 'closed', 'closed_at' => now()]);
+        $this->travelTo($homework->deadline_at->copy()->addMinute());
+
+        $attempt->refresh()->update(match ($corruption) {
+            'Attempt deadline' => ['deadline_at' => now()],
+            'Blitz status' => ['status' => 'timed_out_finalized'],
+            'Blitz reason' => ['finalization_reason' => 'timeout_auto_submit'],
+            default => array_replace([
+                'status' => 'in_progress', 'submitted_at' => null, 'finalized_at' => null,
+                'locked_at' => null, 'finalization_reason' => null,
+            ], [$corruption => $corruption === 'finalization_reason' ? 'student_submit' : now()]),
+        });
+        $attemptBefore = $attempt->fresh()->getAttributes();
+        $answersBefore = $this->savedState();
+
+        try {
+            app(SubmitStudentHomeworkAttempt::class)($student, $attempt->id, $key);
+            $this->fail('Completed replay must validate the locked Attempt before returning action success.');
+        } catch (LogicException) {
+            $this->assertSame($attemptBefore, $attempt->fresh()->getAttributes());
+            $this->assertSame($recordBefore, $record->fresh()->getAttributes());
+            $this->assertSame($answersBefore, $this->savedState());
+        }
+        $this->assertDatabaseCount('idempotency_records', 1);
+    }
+
+    public static function corruptReplayAttemptStates(): array
+    {
+        $states = ['Attempt deadline', 'Blitz status', 'Blitz reason',
+            'submitted_at', 'finalized_at', 'locked_at', 'finalization_reason'];
+
+        return array_combine($states, array_map(fn (string $state): array => [$state], $states));
     }
 
     public function test_completion_failure_rolls_back_explicit_finalization_and_new_claim_while_preserving_answers_and_result_pair(): void
