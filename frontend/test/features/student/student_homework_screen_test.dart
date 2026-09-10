@@ -3,13 +3,23 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
+import 'package:testlabuz_client/app/router/app_route_paths.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_detail_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_detail_state.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_attempt_start_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_attempt_start_state.dart';
+import 'package:testlabuz_client/features/student/data/student_homework_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_attempt.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_list.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_list_query.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
@@ -26,6 +36,349 @@ const _homeworkId = '40000000-0000-0000-0000-000000000001';
 const _questionPrefix = '50000000-0000-0000-0000-';
 
 void main() {
+  for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
+    testWidgets(
+      '${surface.name} confirmed current Attempt resumes by exact route with no POST',
+      (tester) async {
+        final repository = _StartRepository();
+        final (router, _) = await _pumpStartDetail(
+          tester,
+          surface: surface,
+          starts: repository,
+        );
+        final semantics = tester.ensureSemantics();
+        try {
+          await tester.pump();
+          expect(find.text('Resume Attempt 1'), findsOneWidget);
+          expect(
+            find.byKey(const Key('studentHomeworkStartAttemptButton')),
+            findsNothing,
+          );
+          expect(find.bySemanticsLabel('Resume Attempt 1'), findsOneWidget);
+          await tester.tap(
+            find.byKey(const Key('studentHomeworkResumeAttemptButton')),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            router.routeInformationProvider.value.uri.path,
+            AppRoutePaths.studentHomeworkAttemptLocation(
+              studentTopicId,
+              _homeworkId,
+              _startedAttemptId,
+            ),
+          );
+          expect(repository.keys, isEmpty);
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+
+    testWidgets(
+      '${surface.name} Start is busy, uncertain Retry is keyboard accessible and keeps counts',
+      (tester) async {
+        final first = Completer<StudentHomeworkAttemptStartResult>();
+        final second = Completer<StudentHomeworkAttemptStartResult>();
+        var calls = 0;
+        final repository = _StartRepository(
+          onStart: (_, _) => ++calls == 1 ? first.future : second.future,
+        );
+        final (router, _) = await _pumpStartDetail(
+          tester,
+          surface: surface,
+          starts: repository,
+          homework: _HomeworkRepository(
+            onDetail: (_) async => _detail(inProgress: false),
+          ),
+        );
+        final semantics = tester.ensureSemantics();
+        try {
+          await tester.pump();
+          expect(find.bySemanticsLabel('Start Attempt'), findsOneWidget);
+          await tester.tap(
+            find.byKey(const Key('studentHomeworkStartAttemptButton')),
+          );
+          await tester.pump();
+          expect(
+            _button(tester, 'studentHomeworkStartAttemptButton').onPressed,
+            isNull,
+          );
+          expect(
+            tester
+                .getSemantics(
+                  find.byKey(const Key('studentHomeworkStartAttemptButton')),
+                )
+                .label,
+            contains('Starting Attempt, please wait'),
+          );
+          first.completeError(studentLocalFailure(ApiFailureKind.timeout));
+          await tester.pumpAndSettle();
+          expect(find.text('Retry Start'), findsOneWidget);
+          expect(
+            find.byKey(const Key('studentHomeworkStartAttemptButton')),
+            findsNothing,
+          );
+          expect(
+            find.textContaining(
+              'We could not confirm whether the attempt started.',
+            ),
+            findsOneWidget,
+          );
+          expect(find.text('Remaining'), findsOneWidget);
+          expect(find.text('1'), findsNWidgets(2));
+          final retry = find.byKey(
+            const Key('studentHomeworkRetryStartButton'),
+          );
+          Focus.of(
+            tester.element(
+              find.descendant(of: retry, matching: find.text('Retry Start')),
+            ),
+          ).requestFocus();
+          await tester.pump();
+          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+          await tester.pump();
+          expect(repository.keys, hasLength(2));
+          expect(repository.keys[1], repository.keys[0]);
+          second.complete(_startResult());
+          await tester.pumpAndSettle();
+          expect(
+            router.routeInformationProvider.value.uri.path,
+            AppRoutePaths.studentHomeworkAttemptLocation(
+              studentTopicId,
+              _homeworkId,
+              _startedAttemptId,
+            ),
+          );
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+
+    testWidgets(
+      '${surface.name} deterministic rejection shows safe feedback and no optimistic counts',
+      (tester) async {
+        final repository = _StartRepository(
+          onStart: (_, _) async => throw studentServerFailure(
+            ApiErrorCodes.attemptsExhausted,
+            statusCode: 409,
+          ),
+        );
+        await _pumpStartDetail(
+          tester,
+          surface: surface,
+          starts: repository,
+          homework: _HomeworkRepository(
+            onDetail: (_) async => _detail(inProgress: false),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const Key('studentHomeworkStartAttemptButton')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('No Homework attempts remain.'), findsOneWidget);
+        expect(find.textContaining('Raw server failure'), findsNothing);
+        expect(find.text('1'), findsNWidgets(2));
+        expect(find.text('Remaining'), findsOneWidget);
+        expect(repository.keys, hasLength(1));
+      },
+    );
+  }
+
+  for (final status in StudentHomeworkDetailStatus.values.where(
+    (status) => status != StudentHomeworkDetailStatus.data,
+  )) {
+    testWidgets(
+      '${status.name} detail cannot offer new Start even with retained eligibility',
+      (tester) async {
+        await _pumpStartDetail(
+          tester,
+          parentState: StudentHomeworkDetailState(
+            status: status,
+            homework: _detail(inProgress: false),
+            failure: status == StudentHomeworkDetailStatus.error
+                ? studentLocalFailure(ApiFailureKind.connection).failure
+                : null,
+          ),
+          settle: false,
+        );
+        expect(
+          find.byKey(const Key('studentHomeworkStartAttemptButton')),
+          findsNothing,
+        );
+      },
+    );
+  }
+  testWidgets('null confirmed Homework cannot authorize Start', (tester) async {
+    await _pumpStartDetail(
+      tester,
+      parentState: const StudentHomeworkDetailState(
+        status: StudentHomeworkDetailStatus.data,
+      ),
+      settle: false,
+    );
+    expect(
+      find.byKey(const Key('studentHomeworkStartAttemptButton')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+  for (final status in [
+    StudentHomeworkStatus.closed,
+    StudentHomeworkStatus.archived,
+  ]) {
+    testWidgets('${status.name} Homework has no new Start action', (
+      tester,
+    ) async {
+      await _pumpStartDetail(
+        tester,
+        homework: _HomeworkRepository(
+          onDetail: (_) async => _detail(inProgress: false, status: status),
+        ),
+      );
+      expect(
+        find.byKey(const Key('studentHomeworkStartAttemptButton')),
+        findsNothing,
+      );
+    });
+  }
+  testWidgets('zero remaining Attempts has no new Start action', (
+    tester,
+  ) async {
+    await _pumpStartDetail(
+      tester,
+      homework: _HomeworkRepository(
+        onDetail: (_) async => _detail(inProgress: false, remaining: 0),
+      ),
+    );
+    expect(
+      find.byKey(const Key('studentHomeworkStartAttemptButton')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'confirmed 200 race Resume navigates once and consumes completion',
+    (tester) async {
+      final (router, container) = await _pumpStartDetail(
+        tester,
+        starts: _StartRepository(
+          onStart: (_, _) async =>
+              _startResult(kind: StudentHomeworkAttemptStartResultKind.resumed),
+        ),
+        homework: _HomeworkRepository(
+          onDetail: (_) async => _detail(inProgress: false),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const Key('studentHomeworkStartAttemptButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Attempt destination'), findsOneWidget);
+      router.go(
+        AppRoutePaths.studentHomeworkDetailLocation(
+          studentTopicId,
+          _homeworkId,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('studentHomeworkDetailScreen')),
+        findsOneWidget,
+      );
+      expect(
+        container
+            .read(studentHomeworkAttemptStartControllerProvider(_startTarget))
+            .status,
+        StudentHomeworkAttemptStartStatus.idle,
+      );
+    },
+  );
+
+  testWidgets(
+    'pending Start completion on an offstage detail cannot navigate or remain completed',
+    (tester) async {
+      final pending = Completer<StudentHomeworkAttemptStartResult>();
+      final (router, container) = await _pumpStartDetail(
+        tester,
+        starts: _StartRepository(onStart: (_, _) => pending.future),
+        homework: _HomeworkRepository(
+          onDetail: (_) async => _detail(inProgress: false),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const Key('studentHomeworkStartAttemptButton')),
+      );
+      await tester.pump();
+      unawaited(router.push<void>('/other'));
+      await tester.pumpAndSettle();
+      pending.complete(_startResult());
+      await tester.pumpAndSettle();
+      expect(find.text('Other destination'), findsOneWidget);
+      expect(find.text('Attempt destination'), findsNothing);
+      expect(
+        ModalRoute.of(
+          tester.element(find.text('Other destination')),
+        )!.isCurrent,
+        isTrue,
+      );
+      expect(
+        container
+            .read(studentHomeworkAttemptStartControllerProvider(_startTarget))
+            .status,
+        StudentHomeworkAttemptStartStatus.idle,
+      );
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('studentHomeworkStartAttemptButton')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Start from uppercase canonical Homework path navigates to returned Attempt',
+    (tester) async {
+      final target = StudentHomeworkRouteTarget(
+        topicId: 'a0000000-0000-0000-0000-000000000001',
+        homeworkId: 'b0000000-0000-0000-0000-000000000001',
+      );
+      final location = AppRoutePaths.studentHomeworkDetailLocation(
+        target.topicId.toUpperCase(),
+        target.homeworkId.toUpperCase(),
+      );
+      final (router, _) = await _pumpStartDetail(
+        tester,
+        routeTarget: target,
+        initialLocation: location,
+        homework: _HomeworkRepository(
+          onDetail: (_) async => _detail(
+            id: target.homeworkId.toUpperCase(),
+            topicId: target.topicId.toUpperCase(),
+            inProgress: false,
+          ),
+        ),
+        starts: _StartRepository(
+          onStart: (_, _) async =>
+              _startResult(assessmentId: target.homeworkId.toUpperCase()),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const Key('studentHomeworkStartAttemptButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.studentHomeworkAttemptLocation(
+          target.topicId,
+          target.homeworkId,
+          _startedAttemptId,
+        ),
+      );
+    },
+  );
+
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
     final label = surface.name;
 
@@ -680,10 +1033,11 @@ void _expectReadOnly(WidgetTester tester) {
 StudentHomeworkAttemptSummary _attempts({
   bool detail = false,
   bool inProgress = true,
+  int remaining = 1,
 }) => StudentHomeworkAttemptSummary(
   allowed: 3,
   used: 1,
-  remaining: 1,
+  remaining: remaining,
   officialScorePolicy: 'highest_valid_completed',
   inProgressAttempt: detail && inProgress
       ? StudentInProgressHomeworkAttempt(
@@ -727,22 +1081,27 @@ StudentHomeworkList _page({
 );
 
 StudentHomeworkDetail _detail({
+  String id = _homeworkId,
+  String topicId = studentTopicId,
   String title = 'Homework 1',
   List<StudentQuestion> questions = const [],
   bool inProgress = true,
+  StudentHomeworkStatus status = StudentHomeworkStatus.active,
+  int remaining = 1,
 }) => StudentHomeworkDetail(
-  id: _homeworkId,
-  topic: const StudentHomeworkTopicSummary(
-    id: studentTopicId,
-    title: 'Internet Basics',
-  ),
+  id: id,
+  topic: StudentHomeworkTopicSummary(id: topicId, title: 'Internet Basics'),
   title: title,
   description: 'Homework description',
   studentInstructions: 'Read every prompt carefully.',
-  status: StudentHomeworkStatus.active,
+  status: status,
   deadlineAt: DateTime.utc(2020, 9, 10, 13),
   totalPossiblePoints: 13.5,
-  attempts: _attempts(detail: true, inProgress: inProgress),
+  attempts: _attempts(
+    detail: true,
+    inProgress: inProgress,
+    remaining: remaining,
+  ),
   myStatus: inProgress
       ? StudentHomeworkMyStatus.inProgress
       : StudentHomeworkMyStatus.submitted,
@@ -856,3 +1215,130 @@ class _HomeworkRepository implements StudentHomeworkRepository {
   Future<StudentHomeworkDetail> fetchHomeworkDetail(String homeworkId) =>
       onDetail?.call(homeworkId) ?? Future.value(_detail());
 }
+
+const _startedAttemptId = '60000000-0000-0000-0000-000000000001';
+final _startTarget = StudentHomeworkRouteTarget(
+  topicId: studentTopicId,
+  homeworkId: _homeworkId,
+);
+
+Future<(GoRouter, ProviderContainer)> _pumpStartDetail(
+  WidgetTester tester, {
+  AppDeviceSurface surface = AppDeviceSurface.desktop,
+  _StartRepository? starts,
+  _HomeworkRepository? homework,
+  StudentHomeworkDetailState? parentState,
+  bool settle = true,
+  StudentHomeworkRouteTarget? routeTarget,
+  String? initialLocation,
+}) async {
+  final target = routeTarget ?? _startTarget;
+  final router = GoRouter(
+    initialLocation:
+        initialLocation ??
+        AppRoutePaths.studentHomeworkDetailLocation(
+          target.topicId,
+          target.homeworkId,
+        ),
+    routes: [
+      GoRoute(
+        path: AppRoutePaths.studentHomeworkDetail,
+        builder: (_, _) => StudentHomeworkDetailScreen(target: target),
+      ),
+      GoRoute(
+        path: AppRoutePaths.studentHomeworkAttempt,
+        builder: (_, _) => const Scaffold(body: Text('Attempt destination')),
+      ),
+      GoRoute(
+        path: '/other',
+        builder: (_, _) => const Scaffold(body: Text('Other destination')),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
+  await tester.binding.setSurfaceSize(
+    surface == AppDeviceSurface.mobile
+        ? const Size(390, 900)
+        : const Size(1100, 900),
+  );
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    ProviderScope(
+      key: UniqueKey(),
+      overrides: [
+        appDeviceSurfaceProvider.overrideWithValue(surface),
+        authSessionControllerProvider.overrideWith(
+          () => FakeStudentAuthSessionController.authenticated(
+            studentUser('student-a'),
+          ),
+        ),
+        studentHomeworkRepositoryProvider.overrideWithValue(
+          homework ?? _HomeworkRepository(),
+        ),
+        studentHomeworkAttemptRepositoryProvider.overrideWithValue(
+          starts ?? _StartRepository(),
+        ),
+        if (parentState != null)
+          studentHomeworkDetailControllerProvider(
+            _startTarget,
+          ).overrideWith(() => _FixedHomeworkController(parentState)),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+  if (settle) await tester.pumpAndSettle();
+  return (
+    router,
+    ProviderScope.containerOf(tester.element(find.byType(MaterialApp))),
+  );
+}
+
+class _FixedHomeworkController extends StudentHomeworkDetailController {
+  _FixedHomeworkController(this.initial) : super(_startTarget);
+  final StudentHomeworkDetailState initial;
+  @override
+  StudentHomeworkDetailState build() => initial;
+}
+
+class _StartRepository implements StudentHomeworkAttemptRepository {
+  _StartRepository({this.onStart});
+  final Future<StudentHomeworkAttemptStartResult> Function(String, String)?
+  onStart;
+  final keys = <String>[];
+  @override
+  Future<StudentHomeworkAttemptStartResult> startAttempt(
+    String homeworkId,
+    String idempotencyKey,
+  ) {
+    keys.add(idempotencyKey);
+    return onStart?.call(homeworkId, idempotencyKey) ??
+        Future.value(_startResult());
+  }
+
+  @override
+  Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) =>
+      throw StateError('Homework detail does not load the Attempt.');
+}
+
+StudentHomeworkAttemptStartResult _startResult({
+  String assessmentId = _homeworkId,
+  StudentHomeworkAttemptStartResultKind kind =
+      StudentHomeworkAttemptStartResultKind.created,
+}) => StudentHomeworkAttemptStartResult(
+  resultKind: kind,
+  attempt: StudentHomeworkAttempt(
+    id: _startedAttemptId,
+    assessmentId: assessmentId,
+    attemptNumber: 2,
+    status: StudentHomeworkAttemptStatus.inProgress,
+    startedAt: DateTime.utc(2026, 9, 8, 12),
+    deadlineAt: null,
+    submittedAt: null,
+    finalizedAt: null,
+    finalizationReason: null,
+    questions: const [],
+    answers: const [],
+  ),
+);

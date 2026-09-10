@@ -1,0 +1,284 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/router/app_route_paths.dart';
+import '../../auth/application/auth_session_controller.dart';
+import '../application/student_homework_attempt_controller.dart';
+import '../application/student_homework_attempt_state.dart';
+import '../application/student_homework_detail_controller.dart';
+import '../application/student_homework_detail_state.dart';
+import '../domain/student_homework.dart';
+import '../domain/student_homework_attempt.dart';
+import '../domain/student_homework_attempt_route_target.dart';
+import '../domain/student_homework_route_target.dart';
+import 'student_attempt_answer_read_view.dart';
+import 'student_homework_formatters.dart';
+import 'student_question_read_view.dart';
+import 'student_topic_formatters.dart';
+
+class StudentHomeworkAttemptScreen extends ConsumerWidget {
+  const StudentHomeworkAttemptScreen({required this.target, super.key});
+
+  final StudentHomeworkAttemptRouteTarget target;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final homeworkTarget = StudentHomeworkRouteTarget(
+      topicId: target.topicId,
+      homeworkId: target.homeworkId,
+    );
+    final homeworkProvider = studentHomeworkDetailControllerProvider(
+      homeworkTarget,
+    );
+    final attemptProvider = studentHomeworkAttemptControllerProvider(target);
+    final homeworkState = ref.watch(homeworkProvider);
+    final attemptState = ref.watch(attemptProvider);
+    final homeworkController = ref.read(homeworkProvider.notifier);
+    final attemptController = ref.read(attemptProvider.notifier);
+    final timezone =
+        ref.watch(authSessionControllerProvider).user?.institution?.timezone ??
+        '';
+    void backToHomework() => context.go(
+      AppRoutePaths.studentHomeworkDetailLocation(
+        target.topicId,
+        target.homeworkId,
+      ),
+    );
+    void backToTopic() =>
+        context.go(AppRoutePaths.studentTopicDetailLocation(target.topicId));
+    void refresh() {
+      homeworkController.refresh();
+      attemptController.refresh();
+    }
+
+    Widget body;
+    if (homeworkState.status == StudentHomeworkDetailStatus.notFound) {
+      body = _AttemptNotice(
+        title: 'Homework unavailable',
+        actionLabel: 'Back to Topic',
+        onAction: backToTopic,
+      );
+    } else if (attemptState.status ==
+        StudentHomeworkAttemptLoadStatus.notFound) {
+      body = _AttemptNotice(
+        title: 'Attempt unavailable',
+        actionLabel: 'Back to Homework',
+        onAction: backToHomework,
+      );
+    } else if (homeworkState.status == StudentHomeworkDetailStatus.error ||
+        attemptState.status == StudentHomeworkAttemptLoadStatus.error) {
+      final parentFailure =
+          homeworkState.status == StudentHomeworkDetailStatus.error;
+      body = _AttemptNotice(
+        title: parentFailure
+            ? 'Unable to load Homework'
+            : 'Unable to load Attempt',
+        message: parentFailure
+            ? studentHomeworkFailureMessage(homeworkState.failure!)
+            : studentHomeworkAttemptFailureMessage(attemptState.failure!),
+        actionLabel: 'Retry',
+        onAction: refresh,
+      );
+    } else if (homeworkState.status == StudentHomeworkDetailStatus.data &&
+        homeworkState.homework != null &&
+        attemptState.status == StudentHomeworkAttemptLoadStatus.data &&
+        attemptState.attempt != null &&
+        homeworkState.homework!.id.toLowerCase() == target.homeworkId &&
+        homeworkState.homework!.topic.id.toLowerCase() == target.topicId &&
+        attemptState.attempt!.id.toLowerCase() == target.attemptId &&
+        attemptState.attempt!.assessmentId.toLowerCase() == target.homeworkId) {
+      body = _AttemptContent(
+        homework: homeworkState.homework!,
+        attempt: attemptState.attempt!,
+        timezone: timezone,
+      );
+    } else {
+      final refreshing =
+          homeworkState.status == StudentHomeworkDetailStatus.refreshing ||
+          attemptState.status == StudentHomeworkAttemptLoadStatus.refreshing;
+      body = Center(
+        child: CircularProgressIndicator(
+          key: Key(
+            refreshing
+                ? 'studentHomeworkAttemptRefreshing'
+                : 'studentHomeworkAttemptLoading',
+          ),
+          semanticsLabel: refreshing ? 'Refreshing Attempt' : 'Loading Attempt',
+        ),
+      );
+    }
+
+    return Scaffold(
+      key: const Key('studentHomeworkAttemptScreen'),
+      appBar: AppBar(
+        title: const Text('Homework Attempt'),
+        leading: IconButton(
+          key: const Key('studentHomeworkAttemptBackButton'),
+          tooltip: 'Back to Homework',
+          onPressed: backToHomework,
+          icon: const Icon(Icons.arrow_back),
+        ),
+        actions: [
+          IconButton(
+            key: const Key('studentHomeworkAttemptRefreshButton'),
+            tooltip: 'Refresh Attempt',
+            onPressed:
+                homeworkState.isRequestInFlight ||
+                    attemptState.isRequestInFlight
+                ? null
+                : refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: SafeArea(child: body),
+    );
+  }
+}
+
+class _AttemptContent extends StatelessWidget {
+  const _AttemptContent({
+    required this.homework,
+    required this.attempt,
+    required this.timezone,
+  });
+
+  final StudentHomeworkDetail homework;
+  final StudentHomeworkAttempt attempt;
+  final String timezone;
+
+  String instant(DateTime value) =>
+      formatStudentInstitutionInstant(value, timezone) ??
+      'Institution timezone unavailable';
+
+  @override
+  Widget build(BuildContext context) {
+    final answers = {
+      for (final answer in attempt.answers)
+        answer.questionId.toLowerCase(): answer,
+    };
+    final timing = <(String, String)>[
+      ('Started', instant(attempt.startedAt)),
+      if (attempt.deadlineAt case final value?) ('Deadline', instant(value)),
+      if (attempt.submittedAt case final value?) ('Submitted', instant(value)),
+      if (attempt.finalizedAt case final value?) ('Finalized', instant(value)),
+      if (attempt.finalizationReason case final reason?)
+        (
+          'Finalization reason',
+          studentHomeworkAttemptFinalizationLabel(reason),
+        ),
+    ];
+    return SingleChildScrollView(
+      key: const Key('studentHomeworkAttemptScroll'),
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: FocusTraversalGroup(
+            policy: WidgetOrderTraversalPolicy(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            homework.title,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Attempt ${attempt.attemptNumber}',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Semantics(
+                          container: true,
+                          liveRegion: true,
+                          child: Text(
+                            studentHomeworkAttemptStatusLabel(attempt.status),
+                            key: const Key('studentHomeworkAttemptStatus'),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        for (final row in timing) ...[
+                          Text(
+                            row.$1,
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          SelectableText(row.$2),
+                          const SizedBox(height: 10),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'Questions',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final question in attempt.questions) ...[
+                  StudentQuestionReadView(question: question),
+                  StudentAttemptAnswerReadView(
+                    question: question,
+                    answer: answers[question.id.toLowerCase()],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttemptNotice extends StatelessWidget {
+  const _AttemptNotice({
+    required this.title,
+    required this.actionLabel,
+    required this.onAction,
+    this.message,
+  });
+
+  final String title;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge,
+            textAlign: TextAlign.center,
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 8),
+            Text(message!, textAlign: TextAlign.center),
+          ],
+          const SizedBox(height: 16),
+          FilledButton(onPressed: onAction, child: Text(actionLabel)),
+        ],
+      ),
+    ),
+  );
+}

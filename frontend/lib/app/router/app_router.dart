@@ -26,7 +26,9 @@ import '../../features/platform_admin/presentation/platform_owner_institution_ed
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
 import '../../features/student/application/student_session_key.dart';
+import '../../features/student/domain/student_homework_attempt_route_target.dart';
 import '../../features/student/domain/student_homework_route_target.dart';
+import '../../features/student/presentation/student_homework_attempt_screen.dart';
 import '../../features/student/presentation/student_homework_detail_screen.dart';
 import '../../features/student/presentation/student_learning_workspace_screen.dart';
 import '../../features/student/presentation/student_topic_detail_screen.dart';
@@ -449,6 +451,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
                   );
                 },
+                routes: [
+                  GoRoute(
+                    name: AppRouteNames.studentHomeworkAttempt,
+                    path:
+                        '${AppRoutePaths.studentHomeworkAttemptsSegment}/:${AppRoutePaths.studentHomeworkAttemptIdParameter}',
+                    builder: (context, state) {
+                      final target = StudentHomeworkAttemptRouteTarget(
+                        topicId:
+                            state.pathParameters[AppRoutePaths
+                                .studentTopicIdParameter]!,
+                        homeworkId:
+                            state.pathParameters[AppRoutePaths
+                                .studentHomeworkIdParameter]!,
+                        attemptId:
+                            state.pathParameters[AppRoutePaths
+                                .studentHomeworkAttemptIdParameter]!,
+                      );
+                      return _buildStudentDestination(
+                        StudentHomeworkAttemptScreen(
+                          key: ValueKey<StudentHomeworkAttemptRouteTarget>(
+                            target,
+                          ),
+                          target: target,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -741,7 +771,8 @@ bool _keepsLocationDuringBootstrap(
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       ((AppRoutePaths.isStudentTopicDetailPath(location) ||
-              AppRoutePaths.isStudentHomeworkDetailPath(location)) &&
+              AppRoutePaths.isStudentHomeworkDetailPath(location) ||
+              AppRoutePaths.isStudentHomeworkAttemptPath(location)) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       (surface == AppDeviceSurface.desktop &&
