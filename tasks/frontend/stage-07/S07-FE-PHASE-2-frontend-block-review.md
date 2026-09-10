@@ -11,6 +11,8 @@
 | Review mode | `Read-only` |
 | Depends on | `S07-BE-PHASE-2 = PASS`; `S07-FE-001…005 = Accepted / Delivered` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current contract review baseline | `origin/main @ ad40fc2bbca1efd348b8da25651bc3d6e5e9d8f7` |
+| Contract readiness | `PASS — corrected/revalidated`; checkpoint execution remains `Pending` |
 | Audited `origin/main` | `Resolve at checkpoint execution time` |
 | Frontend implementation base | `Resolve as the commit immediately before the first delivered S07-FE-001 production change` |
 | Flutter toolchain | `Repository-pinned FVM Flutter 3.44.7 unless current main changes it legitimately before execution` |
@@ -58,14 +60,16 @@ Primary review areas:
 - Attempt read shell;
 - eight non-file answer editors;
 - explicit per-Question Save semantics;
-- uncertain answer mutation reconciliation;
+- uncertain answer mutation reconciliation without blind PUT replay;
 - file picker/upload/replace;
-- uncertain file upload handling;
+- uncertain file upload reconciliation without blind PUT replay;
 - protected Student submission Open/Save As;
 - unsaved-work navigation guards;
 - final Submit readiness/confirmation;
 - same-key uncertain Submit retry;
-- route-level Submit operation gate;
+- symmetric route-level Submit operation gate;
+- owned Check-current Submit reconciliation;
+- `completed` vs `reconciledTerminal` Submit semantics;
 - deadline/Teacher-close terminal reconciliation;
 - desktop/mobile behavior;
 - accessibility/responsiveness;
@@ -228,8 +232,9 @@ Examples:
 - one of the eight non-file editors sends wrong payload;
 - file upload sends wrong multipart contract;
 - Start 200 resume race treated as failure;
-- timeout retry creates a new idempotency key;
-- Submit allowed while unsaved/uncertain local work exists;
+- uncertain idempotent Start/Submit retry creates a new idempotency key;
+- ordinary answer/file PUT blindly replays an uncertain mutation and can overwrite a newer intervening server state;
+- Submit allowed while unsaved/uncertain/local-state-mismatched work exists;
 - Submit incorrectly requires all Questions answered;
 - GET Attempt hierarchy validation is missing;
 - device time controls authoritative eligibility;
@@ -501,7 +506,7 @@ PASS requires:
 
 # 15. Domain / DTO Strictness Review
 
-Audit all Stage 7 frontend DTOs.
+Audit all Stage 7 frontend DTOs and their request-context validation.
 
 Verify exact parsing for:
 
@@ -515,19 +520,162 @@ file mutation response
 Submit response
 ```
 
-Required:
+Baseline requirements:
 
-- exact keys;
+- exact keys and exact nullability;
 - canonical UUIDs;
 - strict enums;
-- UTC timestamps;
 - finite numeric parsing;
-- attempt policy invariants;
-- Answer-to-Question cross-reference validation;
-- file metadata constraints;
-- malformed success => `invalidResponse`.
+- malformed success => `ApiFailureKind.invalidResponse`;
+- no raw transport map becomes application/presentation authority.
 
-No raw transport map may become application/presentation authority.
+## Stage 7 timestamp contract
+
+Every Homework/Attempt/answer mutation timestamp owned by the Stage 7 Student
+Homework transport must use exact whole-second UTC:
+
+```text
+YYYY-MM-DDTHH:MM:SSZ
+```
+
+Reject fractional seconds, omitted seconds, non-`Z` offsets and invalid dates.
+
+Do not silently reuse an older permissive Student Topic timestamp parser where
+the Stage 7 contract is stricter.
+
+## Homework list/detail invariants
+
+Verify list DTO/parser enforces at minimum:
+
+```text
+response page/per_page match requested query
+every row.topicId == requested topicId
+Homework IDs unique
+pagination totals/last_page internally coherent
+```
+
+Verify the one-shot out-of-range correction remains:
+
+```text
+target = total == 0 ? 1 : max(1, min(lastPage, requestedPage - 1))
+```
+
+with no correction loop and no false empty publication before correction.
+
+## Safe Question collection invariants
+
+Verify:
+
+```text
+Question IDs unique
+positions unique
+positions exactly 1..N
+response order ascending by position
+```
+
+For typed children:
+
+- choice option IDs are unique and safe;
+- Multiple Choice has valid positive `maxSelections`;
+- Ordering item IDs are unique/non-empty;
+- Matching/fill child IDs are unique within their safe collections.
+
+## Attempt lifecycle invariants
+
+For every Attempt require coherent `startedAt`, `submittedAt`, `finalizedAt`,
+`deadlineAt` and finalization reason.
+
+At minimum:
+
+```text
+startedAt <= submittedAt when submittedAt != null
+startedAt <= finalizedAt when finalizedAt != null
+```
+
+`in_progress` requires:
+
+```text
+submittedAt = null
+finalizedAt = null
+finalizationReason = null
+```
+
+`student_submit` requires:
+
+```text
+submittedAt != null
+submittedAt == finalizedAt
+if deadlineAt != null => finalizedAt < deadlineAt
+```
+
+`homework_deadline_auto_submit` requires:
+
+```text
+deadlineAt != null
+submittedAt = null
+finalizedAt == deadlineAt
+```
+
+`task_closed_auto_finalize` requires:
+
+```text
+submittedAt = null
+if deadlineAt != null => finalizedAt < deadlineAt
+```
+
+At/effectively after deadline, deadline semantics must win.
+
+## Saved-answer cross-collection invariants
+
+Verify:
+
+- answer `questionId` unique;
+- answer type equals referenced safe Question type;
+- choice IDs belong to Question options;
+- Multiple Choice count does not exceed `maxSelections`;
+- matching left/right IDs belong to the corresponding safe side sets;
+- ordering item IDs belong to Question items;
+- ordering submitted positions are unique and within `1..Question.items.length`;
+- fill blank IDs belong to Question blanks;
+- persisted written/fill text is semantically non-empty while exact non-empty
+  text is preserved.
+
+## File metadata invariants
+
+Verify safe saved-file metadata:
+
+- canonical file UUID;
+- supported canonical extension;
+- non-empty original filename;
+- original filename max `500` Unicode code points/runes;
+- original filename extension matches canonical extension case-insensitively;
+- `sizeBytes > 0` and within the Stage 7 platform hard bound;
+- no storage disk/key/checksum/owner/tenant internals enter Student domain.
+
+## Mutation-response request-context validation
+
+Answer/file mutation response parsing must validate against the **current safe
+`StudentQuestion`**, not only a route Question ID/type string.
+
+Verify current-safe-Question bounds for Multiple/Matching/Ordering/Fill and file
+policy metadata.
+
+## Submit-response semantic validation
+
+A valid Submit/replay `200` must prove:
+
+```text
+Attempt hierarchy matches route target
+status in submitted / waiting_for_teacher_review / checked
+finalizationReason = studentSubmit
+submittedAt != null
+finalizedAt == submittedAt
+```
+
+A `200` carrying deadline/close finalization is malformed success and therefore
+uncertain, not confirmed Submit success.
+
+No score/checking/answer-key field may be accepted by Stage 7 Student DTOs.
 
 ---
 
@@ -585,14 +733,32 @@ Verify FE-001:
 - Topic detail still works if Homework list fails;
 - Homework list uses backend `topic_id`;
 - status filter works;
-- pagination is server-authoritative;
+- pagination is server-authoritative and one-shot correction follows the
+  contract from Section 15;
+- list DTO validates requested query/page/per-page/topic and duplicate IDs;
 - no client search/sort behavior outside contract;
 - detail route is canonical;
+- direct historical Homework detail can load from:
+  ```text
+  GET /student/homework/{homeworkId}
+  ```
+  without requiring successful `GET /student/topics/{topicId}` or current Group
+  membership;
+- direct Homework success validates returned Topic/Homework hierarchy against
+  the route target;
+- authoritative Homework `404` invalidates the corresponding Topic Homework
+  list;
 - Homework status/my-status/attempt counts come from backend;
+- Start is offered only from confirmed-current/non-stale Homework detail data;
+- no Start action is authorized by retained loading/refreshing/stale/error/
+  notFound state;
 - no score displayed;
 - `score_visible=false` enforced;
 - deadline formatting uses Institution timezone;
-- device time does not recalculate remaining attempts.
+- device time does not recalculate eligibility or remaining attempts.
+
+Historical persisted assignment state, not current Group membership, remains the
+Student read/execution basis.
 
 ---
 
@@ -610,18 +776,50 @@ Expected Stage 7 Student routes:
 /student/topics/:topicId/homework/:homeworkId/attempts/:attemptId
 ```
 
+Verify the route classifiers remain mutually exclusive:
+
+```text
+isStudentTopicDetailPath
+  = exact Topic route only
+
+isStudentHomeworkDetailPath
+  = exact Homework route only
+
+isStudentHomeworkAttemptPath
+  = exact Attempt route only
+```
+
+Extractor semantics:
+
+```text
+studentTopicIdFromPath
+  = Topic ID from exact Topic/Homework/Attempt
+
+studentHomeworkIdFromPath
+  = Homework ID from exact Homework/Attempt only
+
+studentAttemptIdFromPath
+  = Attempt ID from exact Attempt route only
+```
+
 Verify:
 
 - no competing flat frontend Attempt route;
 - all UUID path parsers are exact;
-- extra segments rejected;
+- extra/malformed segments are rejected;
+- query/fragment behavior follows the existing exact Student route semantics;
+- `isStudentApprovedLocation` accepts only Student root or the three exact route
+  shapes above;
 - direct entry is guarded;
-- Student desktop/mobile both supported;
-- Topic ID extraction works at nested Homework/Attempt routes;
-- Homework ID extraction works at Attempt route;
-- Attempt ID extraction works only at Attempt route;
+- valid Homework and Attempt deep-links are preserved through auth bootstrap on
+  desktop and mobile;
+- Attempt deep-link hierarchy is validated through Student Homework detail +
+  Attempt GET, not current Topic membership;
 - wrong/ineligible session cannot transiently render protected Student content;
 - Teacher/Institution Admin/Parent routing remains unchanged.
+
+A broader ID extractor must never be used to make a parent route classifier
+match its nested descendants.
 
 ---
 
@@ -638,10 +836,12 @@ Homework route target
 Attempt route target
 Question ID
 File ID
+parent Attempt publication/generation
 operation generation
 read generation
-active mutation identity
+active mutation/reconciliation identity
 idempotency logical operation identity
+Submit resolution/check generation
 ```
 
 Verify stale completion cannot:
@@ -653,9 +853,16 @@ Verify stale completion cannot:
 - navigate after target change;
 - show stale SnackBar;
 - apply a stale answer save;
+- resolve an answer uncertainty from an unrelated normal parent refresh;
 - apply a stale file upload;
+- resolve a file uncertainty from metadata-only unrelated refresh;
 - open/save an old file after replacement;
-- adopt a Submit result into a newer route/session.
+- restore editor/file mutation state after authoritative terminal publication;
+- adopt a Submit result into a newer route/session;
+- let an older Check-current GET overwrite a newer same-key Submit Retry result.
+
+Terminal Attempt publication must invalidate obsolete answer/file mutation and
+reconciliation generations.
 
 `context.mounted` alone is insufficient for controller-owned async work.
 
@@ -692,13 +899,32 @@ Verify FE-002 exact behavior.
 
 ## Confirmed existing in-progress Attempt
 
+From confirmed-current FE-001 Homework detail:
+
 ```text
-Resume
--> direct navigation
+inProgressAttempt != null
+-> Resume
+-> direct nested Attempt navigation
 -> no Start POST
 ```
 
+The execution-route GET remains authoritative.
+
 ## New Start
+
+A new Start mutation may be exposed only when the FE-001 Homework detail is
+confirmed-current/non-stale `data`:
+
+```text
+status = active
+remaining > 0
+inProgressAttempt = null
+no active Start operation
+```
+
+No Start from loading/refreshing/stale/error/notFound retained data.
+
+Request:
 
 ```text
 POST /student/homework/{homework}/attempts
@@ -713,14 +939,30 @@ Map:
 200 = backend race-resume
 ```
 
-Both success cases navigate to returned Attempt.
+Both valid success cases navigate to the returned Attempt after hierarchy
+validation.
 
 No optimistic:
 
 ```text
 used++
 remaining--
+myStatus patch
 ```
+
+Session/account failures:
+
+```text
+authentication_required
+password_change_required
+user_inactive
+institution_inactive
+```
+
+must clear Start key/ownership and use existing Student auth/session
+reconciliation rather than ordinary feature failure UX.
+
+No device-time deadline authority.
 
 ---
 
@@ -772,13 +1014,28 @@ Verify strict hierarchy composition:
 
 ```text
 route topicId
--> Homework detail confirms topicId/homeworkId
+-> Student Homework detail confirms topicId/homeworkId
 
 route attemptId
 -> Attempt confirms assessmentId == homeworkId
 ```
 
-Frontend route hierarchy mismatch must not render a valid resource under a wrong parent path.
+The direct Attempt route must not depend on successful current Topic detail/current
+Group membership.
+
+Execution content/editability may render only after both required parent pieces
+are confirmed-current for the route:
+
+```text
+Homework detail = current data
+Attempt = current data
+```
+
+Retained refreshing/stale parent data is not sufficient to authorize a new
+mutation.
+
+Frontend route hierarchy mismatch must not render a valid resource under a
+wrong parent path.
 
 Backend remains authorization authority.
 
@@ -804,14 +1061,24 @@ file_based
 
 Cross-collection checks:
 
+- Question IDs/positions satisfy Section 15 exact collection invariants;
+- answer `question_id` is unique;
+- answer type matches the referenced Question type;
 - choice option IDs belong to Question;
-- matching IDs belong to left/right safe sets;
+- Multiple Choice count <= referenced `maxSelections`;
+- matching IDs belong to left/right safe sets and remain unique;
 - ordering IDs belong to safe items;
-- fill IDs belong to safe blanks;
-- answer type matches Question type;
-- no duplicate saved answer per Question.
+- ordering submitted positions are unique, `>=1` and
+  `<= Question.items.length`; partial/non-contiguous values remain valid;
+- fill IDs belong to safe blanks and remain unique;
+- written/fill persisted text is semantically non-empty, but exact non-empty
+  text is preserved without trim/normalization;
+- file answer exposes only canonical safe metadata.
 
-No checking/score fields.
+Attempt/answer timestamps use the exact Stage 7 whole-second UTC `...Z` format
+from Section 15.
+
+No checking/score/storage/internal fields.
 
 ---
 
@@ -847,12 +1114,19 @@ no autosave
 
 Verify:
 
+- Save is authorized only from confirmed-current/non-stale in-progress Attempt
+  data;
+- loading/refreshing/stale/error/notFound parent state cannot send a PUT;
 - Save disabled when semantic no-op;
 - dirty state compares semantic canonical answer vs confirmed server answer;
 - no debounce/timer autosave;
 - no route-pop autosave;
-- server mutation response becomes confirmed base;
-- parent Attempt refresh is reconciliation only.
+- mutation response is validated against the current safe `StudentQuestion`;
+- malformed/mismatched `200` becomes uncertain;
+- valid server mutation response becomes confirmed base;
+- parent Attempt refresh is reconciliation only;
+- terminal parent publication invalidates obsolete save/reconciliation
+  generations and makes the shell read-only.
 
 ---
 
@@ -965,7 +1239,12 @@ Verify no lowercase/apostrophe/whitespace scoring normalization is implemented i
 
 # 32. Non-File Mutation Uncertainty Review
 
-PUT answer has no idempotency key.
+Ordinary answer PUT has:
+
+```text
+no Idempotency-Key
+no version/ETag compare-and-swap precondition
+```
 
 Verify uncertain result:
 
@@ -978,39 +1257,79 @@ unknown
 5xx/unknown server
 ```
 
-retains the exact canonical mutation snapshot.
+retains the exact canonical `pendingMutationSnapshot` but **does not blindly
+repeat the PUT**.
 
-Retry:
+Required recovery:
 
 ```text
-same attempt
-same question
-same payload
+uncertain
+-> owned authoritative GET Attempt reconciliation
 ```
 
-GET reconciliation:
+Only the explicitly owned reconciliation GET may resolve that uncertainty.
 
-- exact server answer equal to pending mutation => confirmed saved;
-- different + in-progress => pending attempted value becomes dirty local draft;
-- terminal => server state wins.
+Outcomes:
 
-No false success.
+```text
+GET server answer semantically equals pending snapshot
+  => confirmed saved
+
+GET differs + Attempt still confirmed-current in_progress
+  => refreshed server answer becomes base
+  => pending snapshot becomes local dirty intent
+  => later Student Save is a new explicit mutation
+
+GET terminal
+  => authoritative server state wins
+  => no further mutation
+
+GET reconciliation itself fails non-authoritatively
+  => uncertainty/snapshot remain
+```
+
+An ordinary parent refresh must not silently resolve the uncertain Question.
+
+No blind `Retry save` action/path is allowed.
+
+A newer intervening server answer must never be overwritten automatically by the
+old uncertain snapshot.
 
 ---
 
-# 33. One Active Non-File Save Review
+# 33. One Active Non-File Save / Reconciliation Review
 
-Verify FE-003 permits at most:
+Verify FE-003 permits at most one authoritative answer-state operation per
+Attempt at a time:
 
 ```text
-one active answer save/uncertain operation per Attempt
+one active PUT Save
+OR
+one active uncertain-outcome GET reconciliation
 ```
 
-Other drafts may remain editable.
+Other local drafts may remain editable when allowed, but no second Save starts.
 
-No second save request starts.
+Save entry must synchronously:
 
-This keeps server Attempt-row serialization and client state coherent.
+```text
+check route Submit gate == idle
+-> claim FE-003 saving ownership
+-> only then first await / PUT
+```
+
+Uncertainty reconciliation is likewise generation/session/target/question-bound.
+
+An ordinary in-progress parent refresh must not resolve an uncertain Question.
+
+A confirmed terminal parent refresh must:
+
+- invalidate active save/reconciliation generation;
+- clear unsavable dirty/uncertain state;
+- ignore late obsolete PUT/GET completions;
+- show server read-only state.
+
+This keeps the server Attempt-row serialization and client state coherent.
 
 ---
 
@@ -1020,16 +1339,25 @@ Verify FE-004:
 
 - existing `file_picker` reused;
 - no new package;
-- safe extensions come from Question;
+- safe extensions come from the current safe Question;
+- picker can begin only from confirmed-current/non-stale in-progress Attempt
+  state and idle Submit gate;
+- loading/refreshing/stale/error/notFound parent state cannot start picker/upload;
 - picker cancel is neutral;
 - extension revalidated after pick;
 - `length > 0`;
-- `length <= max_size_bytes`;
-- filename validated;
+- `length <= current Question.answerUi.maxSizeBytes`;
+- filename is non-empty, not `.`/`..`, has a final extension and satisfies:
+  ```text
+  name.runes.length <= 500
+  ```
+  matching the backend 500-Unicode-code-point boundary;
+- UTF-8 byte length is not substituted as the filename acceptance limit;
 - no local binary signature parser;
 - no local MIME authority.
 
-Backend remains authoritative for content inspection.
+Backend remains authoritative for content inspection and the final effective
+upload limit.
 
 ---
 
@@ -1051,7 +1379,14 @@ Verify:
 - no Idempotency-Key;
 - filename preserved;
 - no public/storage path;
-- upload progress is transport-only, not success proof.
+- upload progress is transport-only, not success proof;
+- upload begins only from confirmed-current/non-stale in-progress Attempt state;
+- mutation response is parsed against the current safe file Question;
+- response extension/size/name match the selected upload;
+- response extension is permitted by current safe Question policy;
+- replacement preserves previous server `File.id`;
+- response `updatedAt` uses exact whole-second UTC Stage 7 format;
+- malformed/mismatched `200` is uncertain, not success.
 
 ---
 
@@ -1074,22 +1409,25 @@ No metadata-only client no-op detection.
 
 This is a major Stage 7 reliability surface.
 
+File PUT has no idempotency key/version precondition.
+
 Verify:
 
 ```text
-timeout/connection/unknown/invalid success
-=> selected file retained
+timeout/connection/cancelled/unknown/invalid success/unknown 5xx
+=> selected file retained as local intent
 => outcome uncertain
+=> NO blind multipart PUT replay
 ```
 
-Retry:
+Required recovery:
 
 ```text
-same selected file
-same target
+uncertain
+-> owned authoritative GET Attempt reconciliation
 ```
 
-A GET Attempt showing same:
+A GET showing matching:
 
 ```text
 filename
@@ -1097,17 +1435,32 @@ size
 extension
 ```
 
-must **not** automatically prove exact bytes committed.
+does **not** prove exact selected bytes committed because checksum is intentionally
+not exposed.
 
-The only in-place confirmation is:
+After owned reconciliation:
 
 ```text
-Retry upload -> valid 200
+terminal Attempt
+  => server state wins; selected local file/uncertainty cleared
+
+in_progress Attempt
+  => refreshed serverFile becomes current base
+  => retained selected file is revalidated against refreshed safe Question policy
+  => if valid, it becomes local `ready` unsaved intent
+  => a later Upload is a NEW explicit Student mutation decision
+
+non-authoritative GET failure
+  => uncertainty remains
 ```
 
-or later user re-enters and treats the server state as current without claiming the earlier uncertain operation specifically succeeded.
+No blind `Retry upload` for uncertain outcome.
 
-No false exact-byte inference.
+The only same-file Retry that remains valid is the separately confirmed
+`file_upload_failed` case in Section 38.
+
+Terminal parent publication invalidates upload/reconciliation generations and
+late obsolete picker/PUT/GET completions.
 
 ---
 
@@ -1121,6 +1474,7 @@ file_too_large
 file_upload_failed
 deadline_passed
 attempt_not_editable
+task_not_active
 task_closed
 task_archived
 business_conflict
@@ -1134,7 +1488,22 @@ Specifically:
 file_upload_failed
 ```
 
-is a confirmed storage failure and may retry the same local selected file.
+is an explicit confirmed storage-write failure. The selected local file may be
+retained and `Retry upload` may be offered only as a **new explicit action**
+after rechecking:
+
+```text
+confirmed-current in_progress Attempt
+current safe file Question
+route Submit gate idle
+selected-file local validation
+```
+
+This confirmed-failure Retry is not the blind uncertain replay forbidden by
+Section 37.
+
+Unsupported/too-large and lifecycle outcomes follow the corrected FE-004
+selection-clearing/reconciliation rules.
 
 No false success.
 
@@ -1156,6 +1525,21 @@ ProtectedLearningMaterialTransfer
 
 rather than a duplicate transport.
 
+A new Open/Save As transfer may begin only when the current FE-002 Attempt
+controller has confirmed-current `data` proving the requested:
+
+```text
+route target
+questionId
+fileId
+```
+
+still identifies the current saved file answer. The Attempt may be in-progress
+or terminal because transfer is read-only.
+
+Do not start a transfer from loading/refreshing/stale/error/notFound parent
+state.
+
 Shared protected parser must still enforce:
 
 - status 200;
@@ -1165,6 +1549,9 @@ Shared protected parser must still enforce:
 - `X-Content-Type-Options: nosniff`;
 - non-empty bytes;
 - bounded bytes.
+
+After download and before local Open/Save, re-check the same current saved-file
+target and operation generation.
 
 ---
 
@@ -1206,7 +1593,18 @@ Verify:
   Save submitted answer
   ```
 - local Open behavior remains unchanged;
+- `LocalFilePlatformAdapter` signature compatibility is updated for every
+  affected implementation/fake, including:
+  ```text
+  test/core/network/protected_learning_material_transfer_test.dart
+  test/features/student/student_topic_detail_transfer_controller_test.dart
+  test/features/teacher/teacher_material_transfer_controller_test.dart
+  integration_test/stage5_e2e_support.dart
+  ```
 - Stage 5 file-transfer tests remain green;
+- `flutter analyze --no-pub` covers the integration helper compile compatibility;
+- no Stage 5 E2E rerun is required solely by that helper signature touch unless a
+  later material behavior change invalidates it;
 - no broad shared file refactor entered the task.
 
 ---
@@ -1219,11 +1617,19 @@ Expected priority:
 
 ```text
 1. submitting
-2. submit uncertain
-3. answer/file mutation uncertain
+2. Submit checking / submitUncertain
+3. answer/file mutation uncertainty/reconciliation
 4. dirty non-file / selected local file
 5. clean leave
 ```
+
+For active `submitting`, route leave is blocked with Stay-only behavior.
+
+For Submit uncertain/checking state, explicit Leave may discard the current
+Submit replay/reconciliation context only after warning.
+
+For answer/file uncertainty, leave warning must describe loss of local
+uncertainty/reconciliation state; it must not imply a blind PUT retry contract.
 
 No stacked multiple dialogs for one Back action.
 
@@ -1235,19 +1641,52 @@ Clean/terminal route leaves normally.
 
 # 43. Submit Readiness Review
 
-Submit may run only when:
+Submit may run only when all current state belongs to the same:
 
 ```text
-Attempt confirmed in_progress
-Attempt not refreshing
+StudentSessionKey
+StudentHomeworkAttemptRouteTarget
+confirmed Attempt publication/generation
+Question set
+```
+
+Required:
+
+```text
+Attempt controller = exact confirmed-current/non-stale data
+Attempt.status = in_progress
+FE-003 editor state initialized/current for same publication
+FE-004 file state initialized/current for same publication
 no dirty non-file drafts
-no non-file save active
+no non-file save/reconciliation active
 no non-file uncertain save
 no pending selected file
-no file picker/upload active
+no file picker/upload/reconciliation active
 no file uncertain upload
-route operation gate idle
+route operation gate = idle
 ```
+
+Block Submit for:
+
+```text
+loading
+refreshing
+stale/retained-only
+error
+notFound
+session/account reconciliation
+uninitialized FE-003/004 state
+older editor/file Attempt publication
+Question-set/state ownership mismatch
+```
+
+The typed blocker:
+
+```text
+localStateUnavailable
+```
+
+must cover local ownership/publication states that cannot be proven current.
 
 Verify Submit is **not** blocked merely because Questions are unanswered.
 
@@ -1257,7 +1696,9 @@ Zero-answer Attempt:
 must remain submittable
 ```
 
-when locally clean.
+when all current local state is clean and aligned.
+
+No device-time lifecycle authority.
 
 ---
 
@@ -1271,17 +1712,40 @@ confirmedAnsweredCount
 unansweredCount
 ```
 
-Count must merge latest confirmed:
+Count may merge latest confirmed:
 
-- Attempt GET answers;
-- FE-003 confirmed answer mutation results;
-- FE-004 confirmed file results.
+- current FE-002 Attempt GET answers;
+- FE-003 confirmed non-file mutation result not yet incorporated into parent GET;
+- FE-004 confirmed file mutation result not yet incorporated into parent GET.
+
+Every overlay must prove it belongs to the same current:
+
+```text
+StudentSessionKey
+Attempt route target
+Question ID
+```
+
+and is newer than/not yet incorporated into the current Attempt publication.
+
+After a newer authoritative Attempt GET has synchronized/rebased FE-003/004
+state, stale mutation overlays must not be re-applied over it.
 
 Do not count:
 
 - dirty drafts;
 - selected but unuploaded file;
-- uncertain mutation snapshot.
+- uncertain answer mutation snapshot;
+- uncertain file selection/snapshot;
+- stale/unowned editor/file overlay.
+
+If overlay ownership/publication freshness cannot be proven:
+
+```text
+localStateUnavailable
+```
+
+rather than inventing an answer count.
 
 No fake completeness rule.
 
@@ -1315,7 +1779,7 @@ After dialog returns true, session/target/readiness are rechecked before request
 
 ---
 
-# 46. Submit Transport Review
+# 46. Submit Transport / Success Contract Review
 
 Exact:
 
@@ -1326,22 +1790,46 @@ body = {}
 no query
 ```
 
-Success:
+Success transport:
 
 ```text
 200
 ```
 
-Strict response:
+Strict top-level response:
 
 ```text
 data
 message
 ```
 
-Attempt parser reused.
+with exact success message and the delivered strict Attempt parser reused.
+
+A valid Submit/replay `200` additionally requires:
+
+```text
+returned Attempt.id == route attemptId
+returned Attempt.assessmentId == route homeworkId
+status in submitted / waiting_for_teacher_review / checked
+finalizationReason = studentSubmit
+submittedAt != null
+finalizedAt == submittedAt
+```
+
+Later `waiting_for_teacher_review` / `checked` is allowed only as progression of
+the same original `student_submit`.
+
+A `200` carrying deadline/close finalization or other semantic contradiction is:
+
+```text
+invalidResponse
+=> uncertain
+=> SAME Submit Idempotency-Key retained
+```
 
 No duplicate Submit DTO lifecycle parser.
+
+No score/checking fields.
 
 ---
 
@@ -1384,24 +1872,40 @@ No duplicate submit call while submitting/uncertain.
 Verify FE-005 synchronously claims:
 
 ```text
-submitting
+gate = submitting
 ```
 
-before first async wait/request after final readiness check.
+after final synchronous readiness re-check and before its first async
+wait/request.
 
-FE-003 and FE-004 mutation controllers must refuse new:
-
-- answer Save;
-- file picker/upload/retry;
-
-when gate is:
+FE-003 and FE-004 mutation entry points must symmetrically operate as:
 
 ```text
-submitting
-submitUncertain
+check route gate == idle
+-> synchronously claim own saving/selecting/uploading operation state
+-> only then first await / PUT / picker
 ```
 
+Correct race outcomes:
+
+```text
+answer/file operation claims first
+=> Submit sees active blocker
+=> no Submit POST / no gate claim
+
+Submit claims gate first
+=> FE-003 Save and FE-004 picker/upload/confirmed-file_upload_failed Retry refuse
+=> no PUT/picker
+```
+
+The corrected FE-003/004 uncertain PUT flows do not have blind mutation Retry
+entry points.
+
+Verify both ordering directions with controlled completers/no arbitrary sleeps.
+
 This must exist in application logic, not only disabled Widgets.
+
+No broad global mutation manager/provider cycle.
 
 ---
 
@@ -1423,7 +1927,7 @@ Required state:
 ```text
 submitUncertain
 same key retained
-editors frozen
+editors/file mutations frozen
 ```
 
 Actions:
@@ -1433,45 +1937,130 @@ Retry submission
 Check current Attempt
 ```
 
+Same-key `Retry submission` is safe because Submit has durable backend
+idempotency.
+
+However, exactly **one Submit resolution operation** may run at a time:
+
+```text
+Retry active => Check disabled
+Check active => Retry disabled
+duplicate Retry/Check suppressed
+```
+
+`Check current Attempt` may expose a typed `checking` state while the route gate
+remains `submitUncertain`.
+
 No normal Submit/new key.
+
+A stale older Check/Retry completion must not overwrite a newer resolution.
 
 ---
 
-# 50. Check Current Attempt Review
+# 50. Owned Check Current Attempt Review
 
-During uncertain Submit:
+During uncertain Submit, `Check current Attempt` must be an explicitly owned
+reconciliation operation bound to at least:
+
+```text
+StudentSessionKey
+Attempt route target
+pending Submit Idempotency-Key
+logical Submit generation
+check generation
+```
+
+Only that owned GET completion may resolve Submit state.
+
+A late Check completion must be ignored after:
+
+- valid same-key Retry `200`;
+- deterministic Submit resolution;
+- explicit uncertain-route Leave;
+- session change;
+- route target change;
+- disposal/newer Check generation.
 
 ## GET terminal `student_submit`
 
-Desired explicit Submit outcome is confirmed.
+The GET proves that the Attempt is explicitly submitted, but **does not prove**
+that this current pending client logical operation/key caused the terminal state;
+another device/request may have won first.
+
+Required:
+
+```text
+clear key/gate
+state = reconciledTerminal
+typed reason = studentSubmitAlreadyTerminal
+neutral notice such as "This Attempt is already submitted."
+```
+
+Do not show current-operation:
+
+```text
+Attempt submitted successfully.
+```
+
+The finalization summary may still show `Submitted by you` because that label
+describes authoritative server reason, not provenance of this client call.
 
 ## GET terminal deadline/close
 
-Authoritative auto-finalization is accepted.
+Required:
 
-Do not show explicit Submit success.
+```text
+state = reconciledTerminal
+clear key/gate
+adopt authoritative terminal Attempt
+show deadline/close finalization reason
+no explicit Submit success
+```
 
-## GET still in_progress
+## GET still `in_progress`
 
-Uncertainty remains.
+Required:
+
+```text
+state returns to uncertain
+same key retained
+gate remains submitUncertain
+```
 
 Do not conclude failure.
 
-Same key remains for Retry.
+Same-key Retry remains available after Check completes.
+
+## Check GET fails non-authoritatively
+
+Remain uncertain with the same key/gate.
+
+An ordinary unrelated Attempt refresh must not resolve the Submit logical state.
 
 ---
 
 # 51. Submit Success Adoption Review
 
-On valid 200:
+On a valid Submit/replay `200` satisfying Section 46:
 
 - returned Attempt hierarchy checked;
-- returned Attempt is terminal, not `in_progress`;
-- current Attempt controller adopts authoritative returned Attempt immediately;
+- terminal status is allowed;
+- `finalizationReason = studentSubmit`;
+- explicit submit timestamps are coherent;
+- current Attempt controller adopts authoritative returned Attempt immediately
+  through a focused route/session-safe adoption path;
+- Submit state = `completed`;
 - editors become terminal/read-only immediately;
 - pending local editor/file state reconciles;
 - Homework detail/list invalidated or marked stale;
-- no optimistic local attempt-count patch.
+- no optimistic local attempt-count patch;
+- obsolete Check/retry generations are invalidated.
+
+A terminal Attempt discovered only by Check-current uses the separate
+`reconciledTerminal` path from Section 50 and must not be promoted to
+current-operation `completed`.
+
+No generic arbitrary model injection API.
 
 No forced immediate navigation away.
 
@@ -1604,32 +2193,62 @@ No raw URL/token/SQL/server exception shown.
 
 # 57. Mutation Uncertainty Model Consistency Review
 
-Review three independent mutation categories:
+Review three distinct mutation categories and verify their recovery strategies
+are **not** conflated.
 
 ## Start
 
 High-risk idempotent POST.
 
 ```text
-uncertain => retry same Idempotency-Key
+uncertain
+=> retain SAME Idempotency-Key
+=> explicit Retry may resend same Start request
 ```
 
-## Answer/file PUT
+## Ordinary non-file answer PUT
 
-No idempotency key.
+No idempotency/version precondition.
 
 ```text
-uncertain => retry same semantic payload/file
+uncertain
+=> retain pending mutation snapshot
+=> NO blind PUT retry
+=> owned authoritative GET reconciliation
+=> if server differs/in_progress, snapshot becomes local dirty intent
+=> later Save is a new explicit mutation
 ```
 
-with operation-specific reconciliation.
+## File PUT
+
+No idempotency/version precondition and checksum is not exposed to Student.
+
+```text
+uncertain
+=> retain selected file as local intent
+=> NO blind PUT retry
+=> owned authoritative GET reconciliation
+=> metadata equality is not exact-byte proof
+=> later Upload is a new explicit mutation
+```
+
+Exception:
+
+```text
+file_upload_failed
+```
+
+is a confirmed storage-write failure and may expose a new explicit same-file
+Retry after current preconditions are revalidated.
 
 ## Submit
 
-High-risk idempotent POST.
+High-risk durable-idempotent POST.
 
 ```text
-uncertain => retry same Idempotency-Key
+uncertain
+=> retain SAME Idempotency-Key
+=> explicit Retry may resend same Submit request
 ```
 
 Verify no controller accidentally shares the wrong uncertainty strategy.
@@ -1696,10 +2315,16 @@ Verify:
 - Start success invalidates Homework read state;
 - answer save refreshes Attempt only;
 - file upload refreshes Attempt only;
-- Submit invalidates Homework detail/list;
+- answer/file uncertainty reconciliation does not falsely mark unrelated parent
+  refresh as success;
+- newer authoritative Attempt GET rebases/supersedes stale FE-003/004 confirmed
+  overlays;
+- Submit success invalidates Homework detail/list;
+- Submit Check-current terminal reconciliation adopts current Attempt without
+  optimistic Homework counts;
 - no optimistic list pagination/count mutation.
 
-Avoid broad unrelated Student feature invalidation.
+Avoid broad unrelated Student feature invalidation and invalidation loops.
 
 ---
 
@@ -1816,9 +2441,10 @@ Because FE-004 touches `LocalFileActions`, verify:
 ProtectedLearningMaterialTransfer tests
 Student Stage 5 topic transfer tests
 Teacher material transfer tests
+LocalFilePlatformAdapter fakes/helpers
 ```
 
-remain green.
+remain compile-safe/green.
 
 Learning Material Save As still uses:
 
@@ -1832,7 +2458,12 @@ Student submission Save As uses:
 Save submitted answer
 ```
 
+Confirm `integration_test/stage5_e2e_support.dart` was updated only as needed for
+the adapter signature and remains analyzer-clean.
+
 No MIME/header regression.
+
+No broad protected-file transport rewrite.
 
 ---
 
@@ -1868,26 +2499,34 @@ Populate during execution.
 
 | Criterion | Primary task(s) | Evidence | Result |
 |---|---|---|---|
-| Student Homework Topic section | FE-001 | `<tests/code>` | Pending |
-| Safe Student Question DTOs | FE-001 | `<tests/code>` | Pending |
-| Canonical Homework detail route | FE-001 | `<tests/router>` | Pending |
-| Start create/resume UX | FE-002 | `<tests>` | Pending |
+| Student Homework Topic section + failure isolation | FE-001 | `<tests/code>` | Pending |
+| Strict Homework list/query/pagination invariants | FE-001 | `<tests/code>` | Pending |
+| Historical direct Homework detail independent of current Topic membership | FE-001 | `<tests/code>` | Pending |
+| Safe Student Question DTOs + exact positions/timestamps | FE-001 | `<tests/code>` | Pending |
+| Mutually exclusive canonical Topic/Homework route classifiers | FE-001 | `<tests/router>` | Pending |
+| Start create/resume UX from confirmed-current detail only | FE-002 | `<tests>` | Pending |
 | Secure UUID v4 generator | FE-002 | `<tests>` | Pending |
 | Same-key uncertain Start retry | FE-002 | `<tests>` | Pending |
-| Canonical Attempt route | FE-002 | `<tests/router>` | Pending |
-| Strict Attempt/saved-answer read | FE-002 | `<tests>` | Pending |
+| Canonical Attempt route + bootstrap deep-link preservation | FE-002 | `<tests/router>` | Pending |
+| Strict Attempt lifecycle/saved-answer read | FE-002 | `<tests>` | Pending |
 | Eight non-file editors | FE-003 | `<tests>` | Pending |
 | Semantic no-op/clear | FE-003 | `<tests>` | Pending |
-| Uncertain answer save reconciliation | FE-003 | `<tests>` | Pending |
+| Uncertain answer GET reconciliation / no blind PUT retry | FE-003 | `<tests>` | Pending |
+| Terminal generation invalidation for answer editor | FE-003 | `<tests>` | Pending |
 | Unsaved draft leave guard | FE-003 | `<tests>` | Pending |
-| File picker/local validation | FE-004 | `<tests>` | Pending |
-| Multipart upload/replacement | FE-004 | `<tests>` | Pending |
-| Uncertain file upload handling | FE-004 | `<tests>` | Pending |
-| Own protected submission Open/Save As | FE-004 | `<tests>` | Pending |
-| Submit readiness/confirmation | FE-005 | `<tests>` | Pending |
+| File picker + 500-rune filename/current-policy validation | FE-004 | `<tests>` | Pending |
+| Multipart upload/replacement + stable File ID | FE-004 | `<tests>` | Pending |
+| Uncertain file GET reconciliation / no blind PUT retry | FE-004 | `<tests>` | Pending |
+| `file_upload_failed` confirmed-failure retry distinction | FE-004 | `<tests>` | Pending |
+| Own protected submission Open/Save As from current target | FE-004 | `<tests>` | Pending |
+| LocalFileActions/Stage 5 compatibility | FE-004 | `<tests/analyze>` | Pending |
+| Submit readiness + local-state publication ownership | FE-005 | `<tests>` | Pending |
 | Zero-answer Submit allowed | FE-005 | `<tests>` | Pending |
+| Strict `student_submit` proof for valid Submit `200` | FE-005 | `<tests>` | Pending |
 | Same-key uncertain Submit retry | FE-005 | `<tests>` | Pending |
-| Submit route operation gate | FE-005 | `<tests>` | Pending |
+| Symmetric Submit route-operation gate | FE-005 | `<tests>` | Pending |
+| Owned Check-current resolution / no Retry race | FE-005 | `<tests>` | Pending |
+| `completed` vs `reconciledTerminal` semantics | FE-005 | `<tests>` | Pending |
 | Deadline/close terminal reconciliation | FE-005 | `<tests>` | Pending |
 | Desktop/mobile support | FE-001…005 | `<tests>` | Pending |
 | No score/checking UI | FE-001…005 | `<review/tests>` | Pending |
@@ -1903,8 +2542,10 @@ Confirm focused tests/evidence cover:
 ```text
 Teacher correctness fields rejected
 wrong Student/foreign Attempt 404 handling
+historical assigned Homework/Attempt does not depend on current Group membership
 resource-not-found reconciliation
 session switch stale completion
+terminal publication invalidates obsolete answer/file operations
 another file ID cannot be acted on as current
 protected download requires current saved file target
 wrong role Student route gating
@@ -1912,7 +2553,9 @@ inactive user/Institution session reconciliation
 password-change-required reconciliation
 ```
 
-Frontend is not backend authorization, but it must not accidentally reuse stale/foreign identifiers after server denial.
+Frontend is not backend authorization, but it must not accidentally reuse stale/
+foreign identifiers after server denial or make current Group membership a
+frontend authorization substitute for the persisted assignment snapshot.
 
 ---
 
@@ -1925,20 +2568,29 @@ Confirm tests prove:
 ```text
 timeout -> same key retry
 5xx -> same key retry
+invalid success -> same key retained
 201 create
 200 resume
+session/account gate failure -> key/ownership cleared
 ```
 
 ## Submit
 
 ```text
 timeout -> same key retry
+5xx -> same key retry
 invalid success -> same key retained
-Check current student_submit terminal -> confirmed
-Check current in_progress -> remains uncertain
+valid 200 requires terminal student_submit proof
+HTTP 200 carrying deadline/close reason -> invalidResponse/uncertain + same key
+Check current student_submit terminal -> reconciledTerminal/already submitted
+Check current deadline/close terminal -> reconciledTerminal/no explicit success
+Check current in_progress -> remains uncertain with same key
 ```
 
-No new key is generated automatically in either uncertain flow.
+No new key is generated automatically in either idempotent uncertain flow.
+
+Only Start and Submit use same-key mutation replay; ordinary answer/file PUT do
+not.
 
 ---
 
@@ -1949,21 +2601,31 @@ Confirm tests prove:
 ## Answer PUT
 
 ```text
-uncertain -> same mutation snapshot
-GET equal -> confirmed
-GET different/in_progress -> dirty retry state
-GET terminal -> server state wins
+uncertain -> exact mutation snapshot retained
+uncertain -> NO blind PUT retry
+owned GET equal -> confirmed saved
+owned GET different/in_progress -> refreshed server base + old intent dirty
+owned GET terminal -> server state wins
+ordinary parent refresh -> does not silently resolve uncertainty
+terminal parent -> active generations invalidated
+malformed 200/current-Question mismatch -> uncertain
 ```
 
 ## File PUT
 
 ```text
-uncertain -> same selected file
-GET metadata alone != exact-byte confirmation
-retry -> valid 200 confirmation
+uncertain -> same selected file retained as local intent
+uncertain -> NO blind PUT retry
+owned GET metadata equality != exact-byte confirmation
+owned GET in_progress -> refreshed serverFile base + selected file revalidated
+owned GET terminal -> server state wins
+file_upload_failed -> confirmed failure; explicit same-file Retry allowed only
+                      after current preconditions are revalidated
+terminal parent -> picker/upload/reconciliation generations invalidated
 ```
 
-No false success.
+No false success and no automatic overwrite of an intervening newer server
+answer/file.
 
 ---
 
@@ -1974,15 +2636,38 @@ Confirm tests prove:
 ```text
 dirty draft -> no POST
 pending file -> no POST
-active answer save -> no POST
+active/reconciling answer state -> no POST
 uncertain answer -> no POST
-active file upload -> no POST
+active/reconciling file state -> no POST
 uncertain file -> no POST
-Attempt refreshing -> no POST
-0 answers clean -> POST allowed
+Attempt loading/refreshing/stale/error/notFound -> no POST
+FE-003/004 local state uninitialized/older/mismatched -> no POST
+0 answers clean/current/aligned -> POST allowed
 ```
 
-Also prove FE-005 claims route operation gate before answer/file mutation can start.
+Also prove symmetric operation entry:
+
+```text
+Submit claims route gate first
+=> FE-003 Save / FE-004 picker-upload sends nothing
+
+FE-003 Save claims saving first
+=> Submit does not claim gate / no POST
+
+FE-004 picker/upload claims operation first
+=> Submit does not claim gate / no POST
+```
+
+For uncertain Submit:
+
+```text
+Retry active => Check disabled
+Check active => Retry disabled
+stale Check cannot overwrite newer valid Retry success
+Leave/session/target invalidates Check/Retry generation
+```
+
+Use controlled completers; no arbitrary sleeps as synchronization evidence.
 
 ---
 
@@ -2001,6 +2686,16 @@ workaround
 
 where relevant.
 
+Also search/review for stale contract patterns such as:
+
+```text
+blind Retry save after uncertain answer PUT
+blind Retry upload after uncertain file PUT
+UTF-8 byte-count filename <= 500
+Submit success accepting deadline/close reason under HTTP 200
+Check-current student_submit treated as current-operation success
+```
+
 Confirm:
 
 - no hidden scoring/checking UI;
@@ -2010,7 +2705,8 @@ Confirm:
 - no speculative offline engine;
 - no large generic framework;
 - no duplicate file stack;
-- no test weakening.
+- no test weakening;
+- no unsafe uncertainty strategy inherited from an older task draft.
 
 ---
 
@@ -2018,12 +2714,19 @@ Confirm:
 
 The frontend checkpoint does not run real-stack Stage 7 E2E.
 
-Before PASS, verify the production frontend exposes stable testable surfaces needed by S07-INT-001:
+Before PASS, verify the production frontend exposes stable testable surfaces
+needed by S07-INT-001:
 
 - canonical routes;
+- bootstrap-preserved Homework/Attempt deep-links;
 - stable meaningful widget keys/semantics where integration tests require them;
 - deterministic status/action labels;
-- injectable file picker/idempotency generator where test harness requires deterministic inputs;
+- explicit uncertainty recovery labels:
+  - answer/file `Reload attempt`;
+  - Submit `Retry submission` / `Check current Attempt`;
+- deterministic `completed` vs terminal-reconciled presentation;
+- injectable file picker/idempotency generator where test harness requires
+  deterministic inputs;
 - no test-only production branch;
 - no arbitrary client sleeps required for correctness.
 
@@ -2092,6 +2795,7 @@ NOT ACCEPTED
 
 - all entry conditions satisfied;
 - FE-001…005 on audited `main`;
+- all corrected/revalidated FE-001…005 implementation contracts satisfied;
 - full frontend suite PASS;
 - `flutter analyze --no-pub` PASS;
 - full format check PASS;
@@ -2101,6 +2805,10 @@ NOT ACCEPTED
 - `P1 = 0`;
 - `P2 = 0`;
 - no unresolved privacy/session/routing/idempotency/mutation/file/Submit conflict;
+- no blind uncertain answer/file PUT replay;
+- exact Stage 7 DTO/timestamp/lifecycle invariants verified;
+- historical Homework/Attempt direct-route behavior verified;
+- Submit `completed` vs `reconciledTerminal` semantics verified;
 - required Stage 7 frontend acceptance criteria verified;
 - previous Stage shared regressions remain green.
 
@@ -2114,7 +2822,8 @@ P3 = 0
 
 # 78. Evidence Validity After a Focused Fix
 
-If initial review finds a defect and a later focused fix is delivered, ChatGPT decides which prior evidence remains valid.
+If initial review finds a defect and a later focused fix is delivered, ChatGPT
+decides which prior evidence remains valid.
 
 Default examples:
 
@@ -2137,7 +2846,7 @@ Full suite/build may remain valid if ChatGPT determines runtime surface risk is 
 Normally invalidates broader:
 
 - full frontend test suite;
-- router/session regression surface;
+- router/session/deep-link regression surface;
 - relevant build/checkpoint evidence.
 
 ## DTO/API/repository change
@@ -2146,7 +2855,18 @@ Normally invalidates:
 
 - full frontend suite;
 - affected strict DTO/data tests;
+- cross-collection/timestamp/lifecycle review;
 - integration contract surface.
+
+## Answer/file uncertainty-model fix
+
+Normally invalidates:
+
+- FE-003/004 controller tests;
+- parent refresh/generation regressions;
+- navigation-guard tests;
+- Submit readiness coordination;
+- full suite when shared state ownership changed materially.
 
 ## Shared `LocalFileActions`/protected transfer change
 
@@ -2154,19 +2874,22 @@ Invalidates:
 
 - Stage 5 shared-file regressions;
 - file transfer tests;
+- adapter/helper compile compatibility;
 - relevant build/static evidence.
 
-## Submit gate/idempotency fix
+## Submit gate/idempotency/reconciliation fix
 
 Invalidates:
 
 - FE-003/004 mutation coordination regressions;
 - Submit tests;
+- Check-current race tests;
 - full suite where cross-task state coordination changed materially.
 
 Any previously failing mandatory command must eventually pass.
 
-Do not rerun everything by habit, and do not preserve evidence that a later change materially invalidates.
+Do not rerun everything by habit, and do not preserve evidence that a later
+change materially invalidates.
 
 ---
 
@@ -2275,21 +2998,26 @@ git diff --check: <PASS/FAIL>
 
 Read-only integrated review:
 Architecture: <PASS/FAIL>
-Strict DTO/API: <PASS/FAIL>
+Strict DTO/API/timestamps/lifecycle: <PASS/FAIL>
 Question privacy: <PASS/FAIL>
+Historical Homework/Attempt read authority: <PASS/FAIL>
 Session/stale completion: <PASS/FAIL>
-Routing: <PASS/FAIL>
-Start idempotency: <PASS/FAIL>
-Attempt hierarchy: <PASS/FAIL>
+Routing/deep-link bootstrap: <PASS/FAIL>
+Start idempotency/current-data gate: <PASS/FAIL>
+Attempt hierarchy/saved-answer integrity: <PASS/FAIL>
 Eight non-file editors: <PASS/FAIL>
-Answer uncertainty: <PASS/FAIL>
+Answer uncertainty/no-blind-retry: <PASS/FAIL>
+File picker/500-rune validation: <PASS/FAIL>
 File upload/replacement: <PASS/FAIL>
-File uncertainty: <PASS/FAIL>
+File uncertainty/no-blind-retry: <PASS/FAIL>
 Protected submission transfer: <PASS/FAIL>
+LocalFileActions previous-stage compatibility: <PASS/FAIL>
 Unsaved navigation: <PASS/FAIL>
-Submit readiness: <PASS/FAIL>
-Submit idempotency: <PASS/FAIL>
-Submit operation gate: <PASS/FAIL>
+Submit readiness/local-state ownership: <PASS/FAIL>
+Submit idempotency/strict student_submit 200: <PASS/FAIL>
+Submit symmetric operation gate: <PASS/FAIL>
+Submit Check-current ownership: <PASS/FAIL>
+Submit completed-vs-reconciledTerminal: <PASS/FAIL>
 Deadline/close reconciliation: <PASS/FAIL>
 Desktop/mobile: <PASS/FAIL>
 Accessibility/responsiveness: <PASS/FAIL>
@@ -2309,3 +3037,4 @@ Next permitted gate:
 ```
 
 This checkpoint performs no implementation.
+

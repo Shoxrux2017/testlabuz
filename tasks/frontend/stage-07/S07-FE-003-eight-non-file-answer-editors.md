@@ -11,8 +11,9 @@
 | Implementation type | `Flutter typed drafts + explicit save/replace/clear UX for eight non-file Student Homework Question types` |
 | Depends on | `S07-FE-002 = Accepted / Delivered`; Stage 7 Backend Phase 2 remains `PASS` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current review baseline | `origin/main @ 8277667c75beeb0d9e49cf2f0374e1ca2711ebc6` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependencies above |
+| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-PHASE-2 = PASS` and `S07-FE-002 = Accepted / Delivered` |
 | Supported surfaces | `Student desktop + mobile` |
 | Verification | focused frontend tests + format/analyze + diff check |
 | Delivery | Project Owner |
@@ -46,7 +47,7 @@ This contract resolves:
 - semantic dirty/no-op behavior;
 - clear behavior;
 - explicit save semantics;
-- uncertain PUT result/retry/reconciliation;
+- uncertain PUT result + authoritative GET reconciliation;
 - lifecycle/error reconciliation;
 - parent Attempt synchronization;
 - navigation protection for unsaved/uncertain work;
@@ -244,7 +245,7 @@ This controller owns only:
 - confirmed server answer bases;
 - local validation;
 - one active answer mutation;
-- uncertain mutation retry/reconciliation;
+- uncertain mutation snapshot + authoritative GET reconciliation ownership;
 - dirty state;
 - discard/reset state.
 
@@ -989,7 +990,7 @@ Values in blank-position order.
 This ensures:
 
 - deterministic tests;
-- stable uncertain retry payload;
+- stable pending-mutation comparison during uncertain reconciliation;
 - no accidental semantic differences due Dart map/set iteration.
 
 Do not include null/extra fields.
@@ -1024,11 +1025,34 @@ Require:
 ```text
 question_id = requested Question ID
 type = requested Question type
+type = current safe StudentQuestion.type
 ```
 
-When `answer != null`, reuse the delivered FE-002 saved-answer typed parser.
+The mutation-response parser must receive the current validated safe
+`StudentQuestion` as request context, not only the two route/type strings.
+
+When `answer != null`, reuse the delivered FE-002 saved-answer typed parser and
+apply the same cross-collection constraints against that safe Question:
+
+```text
+single/multiple choice IDs belong to Question options
+multiple choice count <= Question.maxSelections
+matching left/right IDs belong to the corresponding safe side sets
+ordering item IDs belong to Question items
+ordering 1 <= position <= Question.items.length
+fill blank IDs belong to Question blanks
+written/fill persisted text is semantically non-empty when present
+```
 
 Do not duplicate parsing logic.
+
+Any response target/type/child-integrity mismatch is:
+
+```text
+ApiFailureKind.invalidResponse
+```
+
+and is **not** a confirmed save.
 
 ---
 
@@ -1063,13 +1087,21 @@ true_false
 
 a successful `answer = null` is an invalid response.
 
-When answer is non-null require:
+Require the exact nullability pair:
 
 ```text
-updated_at != null
+answer = null     <=> updated_at = null
+answer != null    <=> updated_at != null
 ```
 
-and valid UTC timestamp.
+Any non-null `updated_at` must use the corrected FE-001/002 Stage 7 Homework
+timestamp parser exactly:
+
+```text
+YYYY-MM-DDTHH:MM:SSZ
+```
+
+Do not fall back to the older permissive Student Topic timestamp syntax.
 
 No:
 
@@ -1096,7 +1128,7 @@ Add:
 ```text
 Future<StudentAttemptAnswerMutationDto> saveAnswer(
   String attemptId,
-  String questionId,
+  StudentQuestion question,
   StudentAnswerMutation mutation,
 )
 ```
@@ -1106,7 +1138,7 @@ HTTP exactly:
 ```dart
 dio.put<Object?>(
   '/student/attempts/${Uri.encodeComponent(attemptId)}/answers/'
-  '${Uri.encodeComponent(questionId)}',
+  '${Uri.encodeComponent(question.id)}',
   data: mutation.toJson(),
   options: Options(followRedirects: false),
 )
@@ -1146,7 +1178,7 @@ Add:
 ```text
 Future<StudentAttemptAnswerMutationResult> saveAnswer(
   String attemptId,
-  String questionId,
+  StudentQuestion question,
   StudentAnswerMutation mutation,
 )
 ```
@@ -1215,34 +1247,37 @@ No timer is required to clear `saved`.
 
 ---
 
-# 28. One Active Answer Mutation per Attempt
+# 28. One Active Answer Mutation / Reconciliation per Attempt
 
-FE-003 permits at most:
+FE-003 permits at most one operation that can change or reconcile authoritative
+answer state per Attempt at a time:
 
 ```text
-one active save/retry operation per Attempt
+one active PUT save
+OR
+one active uncertain-outcome GET reconciliation
 ```
-
-at a time.
 
 Reason:
 
 - backend serializes answer writes through the Attempt row;
-- simpler uncertain-outcome ownership;
+- one explicit uncertainty owner avoids ambiguous server-base rebasing;
 - clearer Student feedback;
-- no functional need for concurrent per-question PUTs.
+- no functional need for concurrent per-question mutations.
 
 While one Question is:
 
 ```text
 saving
 or
-uncertain
+uncertain/reconciling
 ```
 
-other Questions may retain/edit local drafts, but their Save buttons are disabled.
+other Questions may retain/edit local drafts, but all Save buttons are disabled.
 
 Do not discard those drafts.
+
+There is **no blind PUT retry operation** in FE-003.
 
 ---
 
@@ -1251,13 +1286,30 @@ Do not discard those drafts.
 A Question Save is enabled only when all are true:
 
 ```text
-Attempt status = in_progress
+FE-002 Attempt controller status = data
+Attempt data is confirmed current/non-stale for this target
+Attempt.status = in_progress
 Question type is one of FE-003 eight
 draft locally valid
 draft is semantically dirty
-no active save/uncertain operation for another Question
+no active save/uncertain reconciliation operation for this Attempt
 current Student session/route target is eligible/current
 ```
+
+Do not send a PUT while the parent Attempt view is:
+
+```text
+initial
+loading
+refreshing
+stale/retained-only
+error
+notFound
+```
+
+Local drafts may remain visible/editable where the delivered FE-002 retained
+presentation permits it, but Save is disabled until a new confirmed-current
+`data` Attempt establishes editability again.
 
 For Single/True:
 
@@ -1330,9 +1382,12 @@ Do not validate correctness.
 
 # 31. Confirmed Save Success
 
-On 200 valid mutation result:
+A transport `200` is confirmed success only after the mutation response passes
+all strict DTO + current-safe-Question validation from Sections 23–24.
 
-1. verify response target/type matches current Question;
+On a valid confirmed mutation result:
+
+1. verify response target/type/current Question + child IDs/ranges;
 2. set `serverAnswer` to returned answer/null;
 3. reset current draft from the confirmed returned server state;
 4. set:
@@ -1342,6 +1397,18 @@ On 200 valid mutation result:
    ```
 5. clear active mutation snapshot;
 6. request a non-blocking FE-002 Attempt refresh for whole-resource reconciliation.
+
+If the HTTP request returned `200` but the success payload is malformed,
+mismatched or violates current safe Question constraints:
+
+```text
+ApiFailureKind.invalidResponse
+=> uncertain
+=> retain the exact sent pendingMutationSnapshot
+=> do not rebase draft/serverAnswer
+=> do not claim Saved
+=> require authoritative GET Attempt reconciliation
+```
 
 Do not optimistically infer server result from sent payload when the response supplies an authoritative state.
 
@@ -1375,21 +1442,29 @@ Do not patch Homework attempt counts; answer save does not change them.
 
 # 33. Parent Attempt State Synchronization
 
-When the FE-002 Attempt controller publishes a newer confirmed Attempt:
+When the FE-002 Attempt controller publishes a newer **confirmed** Attempt,
+distinguish ordinary parent refresh from the editor's explicit uncertainty
+reconciliation operation.
 
 ## If Attempt is terminal
 
+Terminal confirmed server state always wins.
+
 Immediately:
 
+- invalidate the editor mutation/reconciliation generation;
 - stop editing;
-- clear any non-active dirty drafts;
-- clear uncertain retry state;
-- rebuild editor bases from server answers;
+- clear the active save ownership;
+- clear any pending uncertain snapshot/reconciliation state;
+- clear dirty drafts that can no longer be written;
+- rebuild editor bases from terminal server answers;
 - show terminal/read-only shell.
 
-Server state is authoritative because no further Student write is allowed.
+Any late completion from a PUT or reconciliation GET that belonged to the prior
+editable generation must be ignored and must not publish `saved`, failure,
+feedback, or re-enable editing.
 
-## If Attempt remains `in_progress`
+## If Attempt remains `in_progress` and no Question is uncertain
 
 For each Question:
 
@@ -1408,6 +1483,23 @@ isDirty
 ```
 
 This allows a Student's unsaved local work to survive a normal parent refresh.
+
+## If one Question is uncertain
+
+An **ordinary** parent refresh must not silently resolve that uncertainty.
+
+For the uncertain Question:
+
+- keep `pendingMutationSnapshot`;
+- keep `saveStatus = uncertain` (or explicit reconciling substate);
+- do not compare ordinary refresh data to the pending snapshot as proof;
+- do not rebase the uncertain draft/serverAnswer from that ordinary refresh.
+
+Other non-uncertain Questions may synchronize normally.
+
+Only the completion of the explicitly owned uncertainty-reconciliation GET from
+Section 37 may compare server state with the pending snapshot and resolve the
+uncertainty.
 
 Do not silently overwrite dirty local input.
 
@@ -1467,65 +1559,87 @@ For the affected Question:
   ```text
   We could not confirm whether this answer was saved.
   ```
-- show:
+- show exactly one recovery action:
   ```text
-  Retry save
   Reload attempt
   ```
+
+Do **not** show a blind `Reload attempt` action.
 
 While uncertainty exists:
 
 - all Question Save buttons are disabled;
 - other local drafts remain intact/editable;
-- no new answer mutation starts.
+- no new answer mutation starts;
+- only the owned authoritative GET reconciliation may resolve uncertainty.
 
 ---
 
-# 36. Retry Save Semantics
+# 36. No Blind PUT Retry After Uncertain Outcome
 
-`Retry save` sends exactly the stored:
+FE-003 ordinary answer PUT has:
 
 ```text
+no Idempotency-Key
+no ETag/version precondition
+no compare-and-swap token
+```
+
+Therefore a repeated PUT after an uncertain response is **not** automatically
+safe: another device/request for the same Student may have saved a newer answer
+between the lost response and the retry.
+
+Forbidden recovery:
+
+```text
+uncertain
+-> resend pendingMutationSnapshot automatically/on Retry
+```
+
+because it could overwrite a newer intervening server answer.
+
+The exact `pendingMutationSnapshot` is retained only for:
+
+- comparison against an authoritative GET Attempt result;
+- restoring the Student's intended value as a local dirty draft when the server
+  differs and the Attempt remains editable.
+
+After reconciliation shows a differing server answer, a later Student-initiated
+`Save answer` is a **new explicit mutation decision** built from the current
+dirty draft/current safe Question/current confirmed Attempt state.
+
+Do not add an idempotency header to ordinary answer PUT in FE-003.
+
+---
+
+# 37. Authoritative Uncertain-Outcome Reconciliation
+
+`Reload attempt` starts one explicit editor-owned reconciliation operation using
+the FE-002 authoritative GET Attempt boundary.
+
+The editor records a reconciliation generation/token bound to:
+
+```text
+StudentSessionKey
+StudentHomeworkAttemptRouteTarget
+questionId
 pendingMutationSnapshot
 ```
 
-to the same:
+Only that owned GET completion may resolve the uncertainty.
 
-```text
-attemptId
-questionId
-```
+While reconciliation is in flight:
 
-No new mutation is rebuilt from current Widget input.
+- no PUT may start;
+- the uncertain Question remains input-disabled;
+- other local drafts remain intact;
+- duplicate Reload taps are suppressed.
 
-No `Idempotency-Key`.
-
-This is safe because the backend PUT is complete replace by target + payload and semantically idempotent.
-
-If Retry returns 200:
-
-- apply confirmed success.
-
-If deterministic failure:
-
-- clear uncertainty;
-- follow error behavior.
-
-If uncertain again:
-
-- keep same snapshot.
-
----
-
-# 37. Reload Attempt Reconciliation
-
-`Reload attempt` triggers FE-002 authoritative GET Attempt.
-
-After refresh for the uncertain Question:
+After the owned confirmed GET completion:
 
 ## Server answer semantically equals pending mutation result
 
-Treat mutation as confirmed saved:
+Treat the earlier PUT as proven saved:
 
 ```text
 saveStatus = saved
@@ -1533,22 +1647,45 @@ serverAnswer = refreshed answer
 draft = refreshed answer
 isDirty = false
 clear pending snapshot
+clear reconciliation ownership
 ```
 
-## Server answer differs and Attempt remains in_progress
+## Server answer differs and Attempt remains `in_progress`
 
-Treat prior mutation as unconfirmed/not present:
+Do **not** overwrite the newer/different server answer automatically.
 
-- clear uncertainty;
-- update `serverAnswer` from GET;
-- preserve the Student's attempted mutation as local dirty draft;
-- allow a new explicit Save.
+Instead:
+
+- clear uncertainty/reconciliation ownership;
+- set `serverAnswer` from GET;
+- restore the exact `pendingMutationSnapshot` as the local draft intent;
+- recompute it against the refreshed safe Question;
+- if still locally valid and semantically different, expose it as dirty;
+- if the refreshed Question changed so the pending intent is locally invalid,
+  keep the draft visible with validation error and require Student correction;
+- allow a **new explicit Save** only after the parent Attempt is confirmed-current
+  `data`.
 
 ## Attempt is terminal
 
-- clear uncertainty;
-- show refreshed read-only server state;
-- unsaved attempted value is no longer writable.
+- clear uncertainty/reconciliation ownership;
+- terminal server state wins;
+- show refreshed read-only server answers;
+- pending attempted value is discarded because it is no longer writable.
+
+## GET reconciliation is itself uncertain/fails non-authoritatively
+
+Keep:
+
+```text
+saveStatus = uncertain
+pendingMutationSnapshot unchanged
+```
+
+and allow another `Reload attempt` later.
+
+Session/target loss invalidates reconciliation ownership and clears local editor
+state under Section 39.
 
 Do not fabricate success.
 
@@ -1556,7 +1693,8 @@ Do not fabricate success.
 
 # 38. Deterministic Save Errors
 
-A structured 4xx response is deterministic.
+After excluding the session/account failures in Section 39, a structured
+confirmed feature-level 4xx response is deterministic.
 
 ## `selection_limit_exceeded`
 
@@ -1633,13 +1771,18 @@ user_inactive
 institution_inactive
 ```
 
-clear editor operation ownership.
+clear editor operation/reconciliation ownership and invalidate its generation.
+
+Clear all local drafts/pending mutation snapshots for this Student/target.
 
 Unsaved local drafts must not carry into a future/new Student session.
 
 Do not persist them globally.
 
 Trigger auth bootstrap according to existing convention.
+
+Late PUT/GET completions from the old session must not publish feedback, saved
+state, validation, or navigation.
 
 ---
 
@@ -1763,7 +1906,7 @@ Confirm separately or with priority:
 
 ```text
 A save result is still unconfirmed.
-Leaving will discard the retry state. Re-opening the attempt will reload server data.
+Leaving will discard the local uncertainty/reconciliation state. Re-opening the attempt will reload server data.
 ```
 
 Actions:
@@ -1806,18 +1949,26 @@ Modify delivered:
 student_homework_attempt_screen.dart
 ```
 
-When Attempt:
+When the FE-002 Attempt controller has confirmed current:
 
 ```text
-status = in_progress
+status = data
+attempt.status = in_progress
 ```
 
-render editors for the eight non-file types.
+render editors for the eight non-file types with Save eligibility from
+Section 29.
 
-When Attempt is terminal:
+During retained `refreshing`/stale presentation of a previously in-progress
+Attempt, local drafts may remain visible according to the delivered FE-002
+presentation, but all mutation Save actions are disabled until confirmed current
+`data` returns.
+
+When a confirmed Attempt is terminal:
 
 - retain FE-002 read-only answer views;
-- render no editing controls.
+- render no editing controls;
+- terminal synchronization rules from Section 33 apply.
 
 For `file_based` even during in-progress:
 
@@ -2205,10 +2356,16 @@ Response parsing:
 
 - non-null typed answer;
 - null clear response;
+- exact `answer <=> updated_at` nullability;
+- exact whole-second UTC `YYYY-MM-DDTHH:MM:SSZ`;
 - question/type mismatch rejected;
+- child ID outside the requested safe Question rejected;
+- Multiple response above safe `maxSelections` rejected;
+- Ordering response position outside Question item count rejected;
+- written/fill semantically-empty persisted response rejected;
 - unexpected keys rejected;
 - invalid null for Single/True rejected;
-- malformed updated_at rejected;
+- malformed/permissive/fractional `updated_at` rejected;
 - score/checking fields rejected.
 
 Malformed success:
@@ -2252,17 +2409,27 @@ File Question excluded from editor map.
 
 ## Save
 
-- valid dirty sends exact mutation;
+- valid dirty sends exact mutation only from confirmed-current `data`
+  in-progress Attempt;
 - clean does not send;
-- only one active save per Attempt;
+- refreshing/stale/error/notFound parent cannot send;
+- only one active save/reconciliation per Attempt;
 - saving current Question disables further save.
 
 ## Success
 
+- response is validated against the current safe Question;
 - response becomes base;
 - draft rebased;
 - dirty false;
 - parent Attempt refresh requested.
+
+## Malformed 200
+
+- invalid response becomes uncertain;
+- exact sent mutation snapshot retained;
+- no `saved` state;
+- no blind PUT retry.
 
 ## Deterministic failure
 
@@ -2273,19 +2440,28 @@ File Question excluded from editor map.
 ## Uncertain
 
 - exact mutation snapshot retained;
-- retry sends same snapshot;
+- no Retry-save control/path exists;
 - other save blocked;
-- same uncertainty can repeat.
+- Reload Attempt is the only recovery action.
 
 ## Reload reconciliation
 
-- refreshed server answer equals snapshot => saved;
-- differs => snapshot restored as dirty local draft;
-- terminal => read-only/server state wins.
+- owned reconciliation completion with refreshed server answer == snapshot => saved;
+- differs while in-progress => refreshed server becomes base and exact snapshot
+  returns as dirty local draft;
+- differing/newer server state is never automatically overwritten;
+- terminal => read-only/server state wins;
+- reconciliation GET failure keeps uncertainty/snapshot.
+
+## Parent refresh ownership
+
+- ordinary in-progress parent refresh does not resolve an uncertain Question;
+- terminal parent refresh invalidates active PUT/reconciliation generation;
+- late PUT/GET completion after terminal publish is ignored.
 
 ## Session/target/dispose
 
-Stale mutation completion cannot publish.
+Stale mutation/reconciliation completion cannot publish.
 
 ---
 
@@ -2351,11 +2527,12 @@ No picker/upload in FE-003.
 ## Common
 
 - Save disabled when clean;
+- Save disabled while parent Attempt is refreshing/stale/non-current;
 - Saving busy;
 - Saved state;
 - deterministic error;
-- uncertain Retry/Reload;
-- other Save buttons blocked during active mutation.
+- uncertain state shows `Reload attempt` and no `Reload attempt`;
+- other Save buttons blocked during active mutation/reconciliation.
 
 No score/correctness UI.
 
@@ -2371,11 +2548,14 @@ in_progress
 submitted
 ```
 
-while local drafts exist:
+while local drafts and/or an active/uncertain operation exist:
 
+- editor mutation/reconciliation generation is invalidated;
 - all editors disappear/become read-only;
 - dirty drafts no longer appear as savable;
+- pending uncertainty is cleared;
 - server saved answers are shown;
+- late PUT/GET completion cannot publish over terminal state;
 - no automatic PUT is sent;
 - no score is shown.
 
@@ -2405,9 +2585,10 @@ Confirmation appears.
 
 Unconfirmed-outcome warning appears.
 
-Leave clears retry state.
+Leave clears the local pending mutation/reconciliation state.
 
-Re-entering is expected to GET Attempt through FE-002; FE-003 does not preserve uncertain operation globally.
+Re-entering is expected to GET Attempt through FE-002; FE-003 does not preserve
+uncertain operation globally and does not auto-resend the old PUT.
 
 ## Clean
 
@@ -2433,7 +2614,9 @@ test/features/student/student_homework_screen_test.dart
 test/features/student/student_homework_routing_test.dart
 ```
 
-Use actual delivered filenames if FE-001/002 naming differs slightly and report the exact mapping.
+If delivered FE-001/002 materially do not contain these approved boundaries,
+return `BLOCKED` for dependency-contract mismatch instead of silently remapping
+verification.
 
 Do not run the full frontend suite in this task.
 
@@ -2441,13 +2624,15 @@ Do not run the full frontend suite in this task.
 
 # 65. Verification
 
-From:
+Run from:
 
 ```text
 frontend/
 ```
 
-Run:
+## 65.1 Focused FE-003 + directly affected FE-002/FE-001 regressions
+
+Exactly:
 
 ```bash
 flutter test \
@@ -2465,25 +2650,62 @@ flutter test \
   test/features/student/student_homework_routing_test.dart
 ```
 
-Run format over changed task-owned Dart files:
+Narrow single-test diagnostic reruns are allowed only to diagnose/confirm a
+concrete failure.
+
+## 65.2 Exact Dart format check
+
+Exactly:
 
 ```bash
-dart format --output=none --set-exit-if-changed <changed Dart files>
+dart format --output=none --set-exit-if-changed \
+  lib/features/student/domain/student_answer_draft.dart \
+  lib/features/student/domain/student_answer_mutation.dart \
+  lib/features/student/domain/student_homework_attempt_repository.dart \
+  lib/features/student/data/dto/student_attempt_answer_mutation_dto.dart \
+  lib/features/student/data/student_homework_attempt_remote_data_source.dart \
+  lib/features/student/data/student_homework_attempt_repository_impl.dart \
+  lib/features/student/application/student_attempt_answer_editor_state.dart \
+  lib/features/student/application/student_attempt_answer_editor_controller.dart \
+  lib/features/student/presentation/student_question_answer_editor.dart \
+  lib/features/student/presentation/student_choice_answer_editor.dart \
+  lib/features/student/presentation/student_written_answer_editor.dart \
+  lib/features/student/presentation/student_matching_answer_editor.dart \
+  lib/features/student/presentation/student_ordering_answer_editor.dart \
+  lib/features/student/presentation/student_fill_blank_answer_editor.dart \
+  lib/features/student/presentation/student_homework_attempt_screen.dart \
+  lib/features/student/presentation/student_homework_formatters.dart \
+  lib/core/network/api_error_codes.dart \
+  test/features/student/student_answer_mutation_test.dart \
+  test/features/student/student_answer_mutation_data_test.dart \
+  test/features/student/student_answer_editor_controller_test.dart \
+  test/features/student/student_answer_editor_screen_test.dart
 ```
 
-Run:
+If exposing the delivered FE-002 saved-answer parser requires editing its
+existing DTO/domain file, add that **exact delivered changed file** to this
+format invocation during ChatGPT implementation-baseline revalidation before
+Codex starts. Codex must not choose an unreviewed parser refactor/file on its
+own.
+
+## 65.3 Static analysis
+
+Exactly:
 
 ```bash
 flutter analyze
 ```
 
-Then repository root:
+## 65.4 Diff hygiene
+
+From repository root exactly:
 
 ```bash
 git diff --check
 ```
 
-and focused diff/scope self-review.
+Then perform the focused diff/scope self-review required by root/frontend
+`AGENTS.md`.
 
 Do not run:
 
@@ -2515,6 +2737,8 @@ PASS only if all are true.
 - no raw answer Maps in application/presentation;
 - typed drafts/mutations;
 - FE-002 saved-answer parser reused;
+- mutation response is validated against the current safe `StudentQuestion`;
+- mutation timestamps reuse exact Stage 7 whole-second UTC parser;
 - repository/data source own transport.
 
 ## Save semantics
@@ -2529,17 +2753,23 @@ PASS only if all are true.
 
 ## Reliability
 
-- one active answer mutation per Attempt;
-- uncertain PUT retains exact mutation;
-- Retry resends same payload;
-- Reload reconciles safely;
+- one active answer mutation/reconciliation per Attempt;
+- uncertain PUT retains the exact mutation only for GET comparison/local draft
+  restoration;
+- no blind PUT Retry exists after an uncertain outcome;
+- authoritative Reload reconciles safely without overwriting an intervening
+  newer server answer;
+- ordinary parent refresh cannot silently resolve an uncertain Question;
+- terminal parent refresh invalidates active operation generations;
 - deterministic lifecycle errors refresh authoritative state;
-- stale session/target completion cannot publish.
+- stale session/target/terminal-obsolete completion cannot publish.
 
 ## Lifecycle
 
-- editing only for confirmed in-progress Attempt;
-- terminal refresh removes editors;
+- editing/Save authority requires confirmed-current FE-002 `data` +
+  `in_progress`;
+- refreshing/stale/error/notFound parent state cannot send PUT;
+- terminal refresh removes editors and invalidates active save/reconciliation;
 - no device-time eligibility;
 - no post-finalization optimistic state.
 
@@ -2566,9 +2796,9 @@ PASS only if all are true.
 
 ## Verification
 
-- focused tests pass;
-- named regressions pass;
-- format passes;
+- exact focused test command passes;
+- exact named regressions pass;
+- exact Dart format command passes;
 - `flutter analyze` passes;
 - `git diff --check` passes;
 - focused self-review passes.
@@ -2587,8 +2817,10 @@ file_based = FE-004
 final Submit = FE-005
 ordinary answer PUT = no Idempotency-Key
 semantic clean state = no request
-one active save/uncertain operation per Attempt
-uncertain retry = exact same mutation payload
+one active save/reconciliation operation per Attempt
+uncertain PUT = no blind PUT retry
+uncertain recovery = authoritative GET Attempt reconciliation
+pending mutation snapshot = comparison + local dirty-intent restoration only
 clearable = multiple, short, open, matching, ordering, fill
 not clearable = single, true_false
 Short max = 1000 Unicode scalars
@@ -2597,16 +2829,22 @@ Fill value max = 1000 Unicode scalars
 matching partial = allowed
 ordering partial = allowed
 fill partial = allowed
-server Attempt status = editability authority
+server Attempt confirmed-current data/status = editability authority
+refreshing/stale parent Attempt = no PUT
 device time = never editability authority
+mutation response = validate against current safe Question
+mutation updatedAt = exact YYYY-MM-DDTHH:MM:SSZ
 dirty local draft survives normal in-progress parent refresh
-terminal parent state discards unsavable dirty drafts and shows server state
+ordinary parent refresh does not resolve uncertain Question
+terminal parent state invalidates active operations, discards unsavable dirty drafts and shows server state
 ```
 
 Codex must not substitute:
 
 - autosave/debounce;
 - one idempotency UUID per answer;
+- blind resend of uncertain PUT snapshot;
+- treating complete-replace PUT as safe against an intervening newer write;
 - generic JSON answer state;
 - drag-only full Ordering that removes partial support;
 - index-based Matching;
@@ -2639,8 +2877,8 @@ with:
 3. exact focused test results;
 4. eight-type payload/editor evidence;
 5. semantic no-op/clear evidence;
-6. uncertain PUT retry/reconciliation evidence;
-7. lifecycle/session/stale-completion evidence;
+6. uncertain PUT GET-reconciliation/no-blind-retry evidence;
+7. lifecycle/session/parent-refresh/stale-completion evidence;
 8. unsaved-navigation evidence;
 9. desktop/mobile/accessibility evidence;
 10. directly affected regressions;

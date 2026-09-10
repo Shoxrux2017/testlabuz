@@ -11,8 +11,9 @@
 | Implementation type | `Flutter typed Student Homework list/detail read layer + Topic section + canonical routing` |
 | Depends on | `S07-BE-PHASE-2 = PASS` and delivered Stage 7 backend read contract |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current review baseline | `origin/main @ 943596fbac4bcac0e0226b5f0650d4843288e8c2` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on backend Phase 2 PASS |
+| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-PHASE-2 = PASS` |
 | Supported surfaces | `Student desktop + mobile` |
 | Verification | focused frontend tests + format/analyze + diff check |
 | Delivery | Project Owner |
@@ -69,12 +70,20 @@ GET /api/v1/student/homework/{homework}
 
 The Student can:
 
-- see assigned Homework inside an existing Topic detail;
+- see assigned Homework inside an existing currently visible Topic detail;
 - refresh/filter/paginate that Topic's Homework list;
 - open one Homework detail;
+- enter a canonical Homework detail deep-link without requiring a successful
+  Student Topic API read/current Group membership;
 - see lifecycle/deadline/attempt summary;
 - see all nine Question types in the exact safe Student projection;
 - see whether an in-progress Attempt exists.
+
+Primary discoverable UI entry for currently visible Topics remains the Topic
+detail Homework section. The Homework detail route itself is a standalone
+Stage 7 assignment/read boundary because backend Homework authorization is based
+on the persisted `assessment_students` snapshot rather than current Topic
+membership.
 
 This task is read-only.
 
@@ -396,6 +405,32 @@ used + remaining <= 3
 officialScorePolicy == highest_valid_completed
 ```
 
+Also enforce the backend summary consistency:
+
+```text
+used == 0
+<=> myStatus == not_started
+
+myStatus == in_progress
+<=> detail.inProgressAttempt != null
+
+terminal myStatus
+(submitted / waiting_for_teacher_review / checked)
+=> detail.inProgressAttempt == null
+=> used >= 1
+
+detail.inProgressAttempt != null
+=> 1 <= attemptNumber <= used
+```
+
+For list summaries, where `in_progress_attempt` is intentionally absent, still
+enforce:
+
+```text
+myStatus == not_started => used == 0
+myStatus != not_started => used >= 1
+```
+
 Do not locally recompute `remaining`.
 
 The backend is authoritative.
@@ -518,6 +553,18 @@ correct answer
 
 in the Student domain.
 
+For one Homework detail Question collection require:
+
+```text
+Question IDs are unique
+Question positions are unique
+positions are exactly 1..N
+collection order is ascending by position
+```
+
+These are transport-integrity checks only; Flutter does not author/reorder
+Questions in FE-001.
+
 ---
 
 # 13. Student `answer_ui` Domain
@@ -551,12 +598,20 @@ StudentChoiceAnswerUi:
   maxSelections = null
 ```
 
+Require at least two options and unique option IDs.
+
 ## Multiple Choice
 
 ```text
 StudentChoiceAnswerUi:
   options
   maxSelections = required positive int
+```
+
+Require at least two options, unique option IDs and:
+
+```text
+1 <= maxSelections <= options.length
 ```
 
 ## True / Short / Open
@@ -629,6 +684,8 @@ items:
   id
   text
 ```
+
+Require a non-empty item collection and unique item IDs.
 
 Do not add an initial/correct position field.
 
@@ -800,15 +857,32 @@ Do not pass malformed data to application state.
 
 # 19. Timestamp Parsing
 
-Backend timestamps are UTC RFC3339 with literal `Z`.
+Backend Stage 7 Homework read timestamps are UTC RFC3339 with literal `Z` and
+whole-second precision.
 
-Require:
+Require exactly:
 
 ```text
 YYYY-MM-DDTHH:MM:SSZ
 ```
 
-according to the existing project's timestamp helper conventions.
+Conceptual validation regex:
+
+```text
+^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+```
+
+Then parse and validate the represented calendar/time fields as a real UTC
+instant.
+
+The current shared Student timestamp helper is more permissive for earlier
+Student Topic contracts (for example optional seconds/fractional seconds).
+Do **not** reuse that permissive behavior unchanged for FE-001 Homework
+timestamps.
+
+Implementation may add one focused exact-whole-second helper to
+`student_dto_parse.dart`, but must not silently tighten prior Stage 5 Topic
+parsing semantics.
 
 Store as UTC `DateTime`.
 
@@ -893,6 +967,28 @@ total
 last_page
 ```
 
+`StudentHomeworkListDto.fromJson(...)` must receive the exact
+`requestedQuery` used for transport and reject a success payload unless:
+
+```text
+pagination.page == requestedQuery.page
+pagination.per_page == requestedQuery.perPage
+every row.topic.id == requestedQuery.topicId
+Homework IDs are unique across returned rows
+```
+
+The `topic_id` equality check is case-insensitive only after both IDs have
+already passed canonical UUID validation.
+
+For pagination also require the same established Student list consistency:
+
+```text
+last_page == (total == 0 ? 1 : ceil(total / per_page))
+rowCount <= per_page
+rowCount <= total
+page > last_page is allowed only when rowCount == 0
+```
+
 ---
 
 # 22. Detail DTO Exact Shapes
@@ -965,7 +1061,7 @@ id
 text
 ```
 
-Require at least two options.
+Require at least two options and unique option IDs.
 
 ## Multiple Choice
 
@@ -979,6 +1075,8 @@ max_selections
 Require:
 
 ```text
+options.length >= 2
+option IDs unique
 1 <= max_selections <= options.length
 ```
 
@@ -1028,6 +1126,13 @@ Each item exact:
 ```text
 id
 text
+```
+
+Require:
+
+```text
+items non-empty
+item IDs unique
 ```
 
 ## Fill
@@ -1084,6 +1189,17 @@ Require success status:
 ```text
 200
 ```
+
+Parse with the exact request identity:
+
+```text
+StudentHomeworkListDto.fromJson(
+  response.data,
+  requestedQuery: query,
+)
+```
+
+so Topic/pagination integrity is validated at the transport boundary.
 
 ## Detail request
 
@@ -1263,6 +1379,36 @@ Do not add client-side sort UI in this task.
 
 Pagination buttons use server metadata only.
 
+Use the existing Student Topic one-shot out-of-range page correction semantics.
+
+After a successful list response:
+
+```text
+if items are non-empty
+or requested page <= 1
+or correction already used
+=> publish normally
+
+otherwise:
+  target =
+    total == 0
+      ? 1
+      : max(1, min(lastPage, requestedPage - 1))
+
+  if target != requestedPage
+    => issue exactly one corrected request under the same
+       session/topic/generation logical operation
+```
+
+The corrected request becomes the current query identity. Stale completion
+guards still apply.
+
+Never:
+
+- display an out-of-range empty page as "No Homework assigned" when `total > 0`;
+- recurse correction more than once;
+- use device/local item counts to invent pagination metadata.
+
 Prevent duplicate same-target in-flight calls where existing controller conventions do so.
 
 ---
@@ -1404,6 +1550,51 @@ A stale completion from:
 must not publish.
 
 Follow current Student Topic Detail controller conventions.
+
+---
+
+# 33A. Direct Homework Route Independence
+
+The canonical Homework detail route must be able to load its Homework directly
+from:
+
+```text
+GET /student/homework/{homeworkId}
+```
+
+without requiring a successful:
+
+```text
+GET /student/topics/{topicId}
+```
+
+request and without using current Topic/Group membership as a frontend
+eligibility gate.
+
+This is required for the Stage 7 historical frozen-assignment case:
+
+```text
+assessment_students still assigns Student
+current group_student_membership ended
+Student Topic API may be unavailable
+Student Homework API remains authorized
+```
+
+Required behavior:
+
+- direct Homework deep-link may render valid Homework detail even if the parent
+  Student Topic read would be `404`;
+- the Homework detail controller does not call the Topic repository/API as an
+  authorization precondition;
+- the router/Student destination gate uses only authenticated eligible Student
+  session + canonical route syntax;
+- returned Homework `topic.id` must still equal the route `topicId`;
+- no Stage 5 Topic authorization rule is widened.
+
+The `Back to Topic` action remains the canonical Topic location. If that Topic is
+no longer currently visible, the existing Topic unavailable flow may safely
+lead the Student back to the Student workspace; this does not invalidate the
+already-authorized Homework detail read.
 
 ---
 
@@ -1641,39 +1832,43 @@ Validate both canonical UUIDs before constructing.
 
 # 40. Route Recognition
 
-Update Student path helpers so:
+Update Student path helpers with non-overlapping route classification.
+
+Exact semantics:
 
 ```text
-isStudentApprovedLocation(...)
+isStudentTopicDetailPath(path)
+  = true only for /student/topics/{canonicalTopicId}
+
+isStudentHomeworkDetailPath(path)
+  = true only for
+    /student/topics/{canonicalTopicId}/homework/{canonicalHomeworkId}
+
+studentTopicIdFromPath(path)
+  = Topic ID for exact Topic detail OR exact Homework detail
+  = null otherwise
+
+studentHomeworkIdFromPath(path)
+  = Homework ID for exact Homework detail
+  = null otherwise
+
+isStudentApprovedLocation(path)
+  = /student
+    OR exact Topic detail
+    OR exact Homework detail
 ```
 
-accepts:
+Do **not** implement `isStudentTopicDetailPath()` merely as:
 
 ```text
-/student
-/student/topics/{topicId}
-/student/topics/{topicId}/homework/{homeworkId}
+studentTopicIdFromPath(path) != null
 ```
 
-Update:
+after expanding `studentTopicIdFromPath()` to nested Homework paths.
 
-```text
-studentTopicIdFromPath(...)
-```
-
-so it returns the Topic ID for both:
-
-```text
-Topic detail
-Homework detail
-```
-
-Add:
-
-```text
-studentHomeworkIdFromPath(...)
-isStudentHomeworkDetailPath(...)
-```
+Update router bootstrap location preservation so the exact Student Homework
+detail route is preserved on supported desktop/mobile surfaces during session
+bootstrap, just like the existing Student Topic detail route.
 
 Do not allow:
 
@@ -1693,7 +1888,9 @@ Create:
 frontend/lib/features/student/presentation/student_homework_detail_screen.dart
 ```
 
-Router nested under Student Topic route.
+Router may remain structurally nested under the Student Topic route for canonical
+URL composition/navigation, but the Homework child screen/data load must remain
+independent of parent Topic API success/current Topic membership.
 
 Construct one target:
 
@@ -2068,7 +2265,12 @@ The Homework section has independent failure state.
 
 A Homework list failure must not make the whole Topic detail unavailable.
 
-A Topic failure means the Homework section is naturally not displayed because Topic content is unavailable.
+A Topic failure means the embedded Homework section is naturally not displayed
+because that current Topic content is unavailable.
+
+This does **not** make Topic success/current membership a prerequisite for a
+direct canonical Homework detail route that the backend still authorizes from
+the frozen assignment snapshot.
 
 ---
 
@@ -2176,18 +2378,31 @@ Reject:
 - score_visible true;
 - allowed != 3;
 - used/remaining out of range;
+- contradictory `used` / `my_status`;
 - wrong policy;
 - malformed UUID;
-- invalid timestamp;
+- timestamp without whole seconds;
+- fractional-second timestamp;
+- non-UTC/non-`Z` timestamp;
 - unexpected key;
-- missing key.
+- missing key;
+- duplicate Homework IDs in one list page;
+- any returned row whose `topic.id` differs from `requestedQuery.topicId`;
+- contradictory pagination/request identity.
 
 ## Detail
 
 - null/non-null in-progress Attempt;
+- `my_status = in_progress` iff `in_progress_attempt != null`;
+- terminal/not-started status consistency with used count/in-progress identity;
+- in-progress `attempt_number <= used`;
 - route-relevant topic ID;
 - finite non-negative points;
-- exact Question collection.
+- exact Question collection;
+- duplicate Question IDs;
+- duplicate Question positions;
+- non-contiguous/non-`1..N` positions;
+- Question collection not ordered by ascending position.
 
 ---
 
@@ -2212,12 +2427,12 @@ client_key
 
 Verify:
 
-- Single option IDs unique;
-- Multiple `max_selections` range;
+- Single option count >=2 and IDs unique;
+- Multiple option count >=2, IDs unique and `max_selections` range;
 - true/short/open require `{}`;
 - File exact extensions/max bytes;
 - Matching side IDs unique/no overlap;
-- Ordering no correct position accepted;
+- Ordering item IDs unique and no correct position accepted;
 - Fill blank unique ID/key/position.
 
 A protected answer-key-shaped payload must become invalid response, not valid domain data.
@@ -2284,6 +2499,8 @@ No raw Map escapes repository.
 - ineligible session no load;
 - status filter resets page;
 - pagination uses backend metadata;
+- out-of-range empty page performs one bounded correction request;
+- correction does not loop and stale prior page completion cannot publish;
 - refresh retains data when appropriate;
 - failure state;
 - session invalidation;
@@ -2297,6 +2514,8 @@ No raw Map escapes repository.
 - refresh;
 - 404 => notFound;
 - route Topic/Homework mismatch => notFound;
+- valid direct Homework detail publishes even when a separately configured
+  parent Student Topic repository/API would return `404`;
 - session failure clearing/bootstrap behavior;
 - stale target/session completion ignored;
 - list invalidated/marked stale on authoritative notFound.
@@ -2367,13 +2586,20 @@ Test:
 
 - helper constructs correct path;
 - invalid Topic/Homework UUID helper throws;
-- approved-location matcher accepts detail;
-- `studentTopicIdFromPath` works for Homework route;
-- `studentHomeworkIdFromPath` works;
+- approved-location matcher accepts exact detail;
+- `isStudentTopicDetailPath` is false for Homework detail;
+- `isStudentHomeworkDetailPath` is true only for exact Homework detail;
+- `studentTopicIdFromPath` works for both Topic detail and Homework detail;
+- `studentHomeworkIdFromPath` works only for Homework detail;
 - extra segments rejected;
 - malformed IDs rejected;
 - direct route enters `StudentHomeworkDetailScreen`;
+- direct route does not require successful Topic-detail repository/API state;
+- historical frozen-assignment direct route remains renderable when Topic read
+  would be unavailable;
 - Student destination gate applies;
+- bootstrap preserves the canonical Homework detail location on desktop/mobile;
+- query/fragment is rejected by existing Student redirect behavior;
 - wrong/ineligible session falls to existing technical-root behavior;
 - back action returns to canonical Topic detail.
 
@@ -2383,16 +2609,23 @@ Do not create an Attempt route yet.
 
 # 59. Directly Affected Regression Tests
 
-Run FE-001 tests plus existing directly affected:
+Run FE-001 tests plus these exact current-main directly affected regressions:
 
 ```text
 test/features/student/student_workspace_screen_test.dart
-test/features/student/student_topic_controller_test.dart
-test/features/student/student_topic_data_test.dart
+test/features/student/student_query_dto_test.dart
 test/router_bootstrap_test.dart
 ```
 
-If actual filenames differ slightly on the delivered implementation baseline, use the existing tests that own exactly these boundaries and report the mapping.
+Rationale:
+
+- `student_workspace_screen_test.dart` currently owns Student Topic detail
+  presentation/Learning Materials and intentionally asserts Homework absent;
+- `student_query_dto_test.dart` protects the existing shared Student strict DTO
+  helpers if FE-001 adds an exact timestamp helper;
+- `router_bootstrap_test.dart` owns Student route classification/bootstrap guards.
+
+Do not substitute nonexistent historical filenames.
 
 Do not run the full frontend test suite in this individual task.
 
@@ -2400,13 +2633,15 @@ Do not run the full frontend test suite in this individual task.
 
 # 60. Verification
 
-From:
+Run from:
 
 ```text
 frontend/
 ```
 
-Run focused tests:
+## 60.1 Focused FE-001 + directly affected regressions
+
+Exactly:
 
 ```bash
 flutter test \
@@ -2416,37 +2651,73 @@ flutter test \
   test/features/student/student_homework_screen_test.dart \
   test/features/student/student_homework_routing_test.dart \
   test/features/student/student_workspace_screen_test.dart \
-  test/features/student/student_topic_controller_test.dart \
-  test/features/student/student_topic_data_test.dart \
+  test/features/student/student_query_dto_test.dart \
   test/router_bootstrap_test.dart
 ```
 
-Run formatting check on task-owned Dart files, for example:
+Narrow single-test diagnostic reruns are allowed only to diagnose/confirm a
+concrete failure.
+
+## 60.2 Exact Dart format check
+
+Exactly:
 
 ```bash
 dart format --output=none --set-exit-if-changed \
-  lib/features/student \
+  lib/features/student/domain/student_homework.dart \
+  lib/features/student/domain/student_question.dart \
+  lib/features/student/domain/student_homework_list.dart \
+  lib/features/student/domain/student_homework_list_query.dart \
+  lib/features/student/domain/student_homework_repository.dart \
+  lib/features/student/domain/student_homework_route_target.dart \
+  lib/features/student/data/dto/student_homework_dto.dart \
+  lib/features/student/data/dto/student_homework_list_dto.dart \
+  lib/features/student/data/dto/student_question_dto.dart \
+  lib/features/student/data/dto/student_dto_parse.dart \
+  lib/features/student/data/student_homework_remote_data_source.dart \
+  lib/features/student/data/student_homework_repository_impl.dart \
+  lib/features/student/application/student_homework_list_state.dart \
+  lib/features/student/application/student_homework_list_controller.dart \
+  lib/features/student/application/student_homework_detail_state.dart \
+  lib/features/student/application/student_homework_detail_controller.dart \
+  lib/features/student/presentation/student_homework_section.dart \
+  lib/features/student/presentation/student_homework_detail_screen.dart \
+  lib/features/student/presentation/student_homework_formatters.dart \
+  lib/features/student/presentation/student_question_read_view.dart \
+  lib/features/student/presentation/student_topic_detail_screen.dart \
   lib/app/router/app_route_paths.dart \
   lib/app/router/app_router.dart \
-  test/features/student \
+  test/features/student/student_homework_dto_test.dart \
+  test/features/student/student_homework_data_test.dart \
+  test/features/student/student_homework_controller_test.dart \
+  test/features/student/student_homework_screen_test.dart \
+  test/features/student/student_homework_routing_test.dart \
+  test/features/student/student_workspace_screen_test.dart \
+  test/features/student/student_query_dto_test.dart \
   test/router_bootstrap_test.dart
 ```
 
-If formatting that entire Student directory would touch unrelated pre-existing files, run the same command only over task-changed Dart files.
+`student_dto_parse.dart` is included even if no change was ultimately needed;
+the check is read-only and protects the shared parser boundary.
 
-Run:
+## 60.3 Static analysis
+
+Exactly:
 
 ```bash
 flutter analyze
 ```
 
-Then repository root:
+## 60.4 Diff hygiene
+
+From repository root exactly:
 
 ```bash
 git diff --check
 ```
 
-and focused diff/scope self-review.
+Then perform the focused diff/scope self-review required by root/frontend
+`AGENTS.md`.
 
 Do not run:
 
@@ -2468,7 +2739,15 @@ PASS only if all are true.
 - Student Homework has separate typed domain;
 - Student Question domain never contains Teacher correctness fields;
 - list/detail exact backend contracts parse strictly;
-- all nine safe Question projections parse;
+- list rows are unique and every returned `topic.id` matches requested
+  `topicId`;
+- pagination is validated against the exact requested query;
+- attempt summary/my-status/in-progress identity cross-fields are coherent;
+- Homework timestamps require exact whole-second UTC `Z` format without
+  changing prior Topic timestamp semantics;
+- Question IDs/positions are unique, exact `1..N`, and returned in ascending
+  position order;
+- all nine safe Question projections parse with child-ID uniqueness;
 - malformed/protected success payload is rejected;
 - backend attempts/remaining/status remain authoritative.
 
@@ -2483,12 +2762,19 @@ PASS only if all are true.
 
 - list/detail Riverpod controllers are session/target-safe;
 - stale completions cannot publish;
+- out-of-range empty pagination performs at most one bounded correction;
 - independent Homework list failure does not break Topic detail;
-- detail hierarchy verifies returned Topic ID.
+- detail hierarchy verifies returned Topic ID;
+- direct Homework detail does not require successful Topic API/current Group
+  membership.
 
 ## Routing
 
 - canonical nested Homework detail route exists;
+- Topic-detail and Homework-detail path classifiers are non-overlapping;
+- `studentTopicIdFromPath` extracts the Topic from both exact route forms;
+- bootstrap preserves canonical Homework deep-link on desktop/mobile;
+- direct Homework route is independently loadable from frozen assignment;
 - current Student route guards remain;
 - no Attempt/execution route added early.
 
@@ -2515,9 +2801,9 @@ PASS only if all are true.
 
 ## Verification
 
-- focused tests pass;
-- named regressions pass;
-- format check passes;
+- exact focused test command passes;
+- exact directly affected regressions pass;
+- exact Dart format command passes;
 - `flutter analyze` passes;
 - `git diff --check` passes;
 - focused scope/diff review passes.
@@ -2529,15 +2815,23 @@ PASS only if all are true.
 These are decisions, not suggestions:
 
 ```text
-Student Homework UI entry = independent section inside Student Topic Detail
+Primary current-Topic Homework UI entry = independent section inside Student Topic Detail
 canonical detail route = /student/topics/:topicId/homework/:homeworkId
+direct Homework detail route = independent of successful Topic API/current membership
+historical frozen-assignment deep-link = allowed when backend Homework API authorizes
+isStudentTopicDetailPath = exact Topic route only
+isStudentHomeworkDetailPath = exact Homework detail route only
 Student desktop + mobile = supported
 FE-001 = read-only
 Start/Resume = FE-002
 Student Question domain = separate from Teacher Question domain
 raw Teacher configuration = never parsed by Student
+list row topic.id = requested topicId
+Question IDs/positions = unique; positions exact 1..N ascending
+Homework timestamps = exact whole-second UTC Z
 server attempts.remaining = authoritative
 server my_status = authoritative
+out-of-range pagination = one bounded correction using server metadata
 device time = presentation only, never eligibility authority
 score_visible must be false in Stage 7 FE-001
 Homework list ordering in FE-001 = created_at desc
@@ -2549,6 +2843,13 @@ no client-side sorting
 Codex must not substitute:
 
 - embedding Homework into existing Student Topic DTO placeholder;
+- making Topic API/current Group membership an authorization prerequisite for
+  direct Homework detail;
+- broadening `isStudentTopicDetailPath` to match Homework-detail paths;
+- accepting list rows from another Topic than the requested Topic;
+- silently treating an out-of-range empty page as a genuine empty Homework list;
+- reusing the more permissive prior Student timestamp parser unchanged for
+  FE-001 Homework timestamps;
 - Teacher Question model reuse;
 - local deadline eligibility computation;
 - optimistic Attempt state;
@@ -2577,9 +2878,9 @@ with:
 1. implementation summary;
 2. changed files and purpose;
 3. exact focused test results;
-4. strict DTO/privacy evidence;
-5. session/stale-completion evidence;
-6. routing evidence;
+4. strict DTO/topic/pagination/privacy evidence;
+5. session/stale-completion + bounded page-correction evidence;
+6. routing/direct historical-assignment deep-link evidence;
 7. desktop/mobile widget evidence;
 8. directly affected regression results;
 9. format/analyze results;
