@@ -96,3 +96,41 @@ DateTime? readStudentNullableUtcTimestamp(
 final _utcTimestampPattern = RegExp(
   r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:[.,]\d+)?)?Z$',
 );
+
+DateTime? readStudentNullableWholeSecondUtcTimestamp(
+  Map<String, Object?> map,
+  String key,
+) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! String || !_wholeSecondUtcTimestampPattern.hasMatch(value)) {
+    throw FormatException('$key must be a whole-second UTC timestamp.');
+  }
+
+  // Keep earlier Topic timestamp syntax unchanged; reuse only calendar checks.
+  return readStudentNullableUtcTimestamp(map, key);
+}
+
+double readStudentNonNegativeNumber(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! num || !value.isFinite || value < 0) {
+    throw FormatException('$key must be a finite non-negative number.');
+  }
+  final parsed = value.toDouble();
+  if (!parsed.isFinite) {
+    throw FormatException('$key must be a finite non-negative number.');
+  }
+  return parsed;
+}
+
+List<Object?> readStudentList(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! List) {
+    throw FormatException('$key must be an array.');
+  }
+  return List<Object?>.unmodifiable(value);
+}
+
+final _wholeSecondUtcTimestampPattern = RegExp(
+  r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$',
+);

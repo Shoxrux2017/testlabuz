@@ -31,6 +31,7 @@ abstract final class AppRouteNames {
   static const teacherHomeworkQuestions = 'teacher-homework-questions';
   static const student = 'student';
   static const studentTopicDetail = 'student-topic-detail';
+  static const studentHomeworkDetail = 'student-homework-detail';
   static const parent = 'parent';
   static const unsupportedDevice = 'unsupported-device';
 }
@@ -111,8 +112,12 @@ abstract final class AppRoutePaths {
   static const student = '/student';
   static const studentTopicsSegment = 'topics';
   static const studentTopicIdParameter = 'topicId';
+  static const studentHomeworkSegment = 'homework';
+  static const studentHomeworkIdParameter = 'homeworkId';
   static const studentTopicDetail =
       '$student/$studentTopicsSegment/:$studentTopicIdParameter';
+  static const studentHomeworkDetail =
+      '$studentTopicDetail/$studentHomeworkSegment/:$studentHomeworkIdParameter';
   static const parent = '/parent';
   static const unsupportedDevice = '/unsupported-device';
 
@@ -174,6 +179,9 @@ abstract final class AppRoutePaths {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _studentTopicIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _studentHomeworkIdPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
@@ -512,20 +520,39 @@ abstract final class AppRoutePaths {
   }
 
   static bool isStudentTopicDetailPath(String path) {
-    return studentTopicIdFromPath(path) != null;
+    const prefix = '$student/$studentTopicsSegment/';
+    return path.startsWith(prefix) &&
+        _studentTopicIdPattern.hasMatch(path.substring(prefix.length));
+  }
+
+  static bool isStudentHomeworkDetailPath(String path) {
+    const prefix = '$student/$studentTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 3 &&
+        _studentTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == studentHomeworkSegment &&
+        _studentHomeworkIdPattern.hasMatch(segments[2]);
   }
 
   static bool isStudentApprovedLocation(String path) {
-    return path == student || isStudentTopicDetailPath(path);
+    return path == student ||
+        isStudentTopicDetailPath(path) ||
+        isStudentHomeworkDetailPath(path);
   }
 
   static String? studentTopicIdFromPath(String path) {
     const prefix = '$student/$studentTopicsSegment/';
-    if (!path.startsWith(prefix)) {
+    if (!isStudentTopicDetailPath(path) && !isStudentHomeworkDetailPath(path)) {
       return null;
     }
-    final topicId = path.substring(prefix.length);
-    return _studentTopicIdPattern.hasMatch(topicId) ? topicId : null;
+    return path.substring(prefix.length).split('/').first;
+  }
+
+  static String? studentHomeworkIdFromPath(String path) {
+    return isStudentHomeworkDetailPath(path) ? path.split('/').last : null;
   }
 
   static String studentTopicDetailLocation(String topicId) {
@@ -538,5 +565,20 @@ abstract final class AppRoutePaths {
     }
 
     return '$student/$studentTopicsSegment/${Uri.encodeComponent(topicId)}';
+  }
+
+  static String studentHomeworkDetailLocation(
+    String topicId,
+    String homeworkId,
+  ) {
+    if (!_studentHomeworkIdPattern.hasMatch(homeworkId)) {
+      throw ArgumentError.value(
+        homeworkId,
+        'homeworkId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+    return '${studentTopicDetailLocation(topicId)}/$studentHomeworkSegment/'
+        '${Uri.encodeComponent(homeworkId)}';
   }
 }

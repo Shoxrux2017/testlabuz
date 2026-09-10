@@ -7,7 +7,12 @@ import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
+import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_list.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_list_query.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list.dart';
 import 'package:testlabuz_client/features/student/presentation/student_learning_workspace_screen.dart';
@@ -96,7 +101,7 @@ void main() {
     expect(find.text('Retry'), findsOneWidget);
   });
 
-  testWidgets('detail projects Student fields and ordered Materials only', (
+  testWidgets('detail adds Homework after ordered Learning Materials', (
     tester,
   ) async {
     await _pumpDetail(
@@ -130,7 +135,11 @@ void main() {
     expect(find.text('PDF · 2.0 KiB'), findsOneWidget);
     expect(find.text('Open'), findsNWidgets(2));
     expect(find.text('Save as…'), findsNWidgets(2));
-    expect(find.text('Homework'), findsNothing);
+    expect(find.text('Homework'), findsOneWidget);
+    expect(
+      find.text('No Homework is assigned for this Topic.'),
+      findsOneWidget,
+    );
     expect(find.text('Blitz'), findsNothing);
     expect(find.text('Result'), findsNothing);
     expect(find.text('Upload material'), findsNothing);
@@ -256,6 +265,9 @@ Future<void> _pumpDetailWithRepository(
         ),
         appDeviceSurfaceProvider.overrideWithValue(surface),
         studentTopicRepositoryProvider.overrideWithValue(repository),
+        studentHomeworkRepositoryProvider.overrideWithValue(
+          _EmptyStudentHomeworkRepository(),
+        ),
       ],
       child: const MaterialApp(
         home: StudentTopicDetailScreen(topicId: studentTopicId),
@@ -264,4 +276,24 @@ Future<void> _pumpDetailWithRepository(
   );
   await tester.pump();
   await tester.pump();
+}
+
+class _EmptyStudentHomeworkRepository implements StudentHomeworkRepository {
+  @override
+  Future<StudentHomeworkList> fetchHomework(
+    StudentHomeworkListQuery query,
+  ) async {
+    return StudentHomeworkList(
+      items: const [],
+      page: query.page,
+      perPage: query.perPage,
+      total: 0,
+      lastPage: 1,
+    );
+  }
+
+  @override
+  Future<StudentHomeworkDetail> fetchHomeworkDetail(String homeworkId) {
+    throw StateError('Topic screen does not request Homework detail.');
+  }
 }

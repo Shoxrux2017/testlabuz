@@ -27,7 +27,12 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboa
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
+import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_list.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_list_query.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list_query.dart';
@@ -912,6 +917,9 @@ Future<void> _pumpApp(
         studentTopicRepositoryProvider.overrideWithValue(
           studentTopics ?? FakeStudentTopicRepository(),
         ),
+        studentHomeworkRepositoryProvider.overrideWithValue(
+          _EmptyStudentHomeworkRepository(),
+        ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
       ],
@@ -950,6 +958,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       studentTopicRepositoryProvider.overrideWithValue(
         FakeStudentTopicRepository(),
+      ),
+      studentHomeworkRepositoryProvider.overrideWithValue(
+        _EmptyStudentHomeworkRepository(),
       ),
     ],
   );
@@ -1249,5 +1260,25 @@ class FakeStudentTopicRepository implements StudentTopicRepository {
       status: StudentTopicStatus.active,
       materials: const [],
     );
+  }
+}
+
+class _EmptyStudentHomeworkRepository implements StudentHomeworkRepository {
+  @override
+  Future<StudentHomeworkList> fetchHomework(
+    StudentHomeworkListQuery query,
+  ) async {
+    return StudentHomeworkList(
+      items: const [],
+      page: query.page,
+      perPage: query.perPage,
+      total: 0,
+      lastPage: 1,
+    );
+  }
+
+  @override
+  Future<StudentHomeworkDetail> fetchHomeworkDetail(String homeworkId) {
+    throw StateError('Topic routing does not request Homework detail.');
   }
 }

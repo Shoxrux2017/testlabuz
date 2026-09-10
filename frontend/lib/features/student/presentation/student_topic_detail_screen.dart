@@ -10,6 +10,7 @@ import '../application/student_material_transfer_state.dart';
 import '../application/student_topic_detail_controller.dart';
 import '../application/student_topic_detail_state.dart';
 import '../domain/student_topic.dart';
+import 'student_homework_section.dart';
 import 'student_topic_formatters.dart';
 
 class StudentTopicDetailScreen extends ConsumerWidget {
@@ -209,6 +210,8 @@ class _StudentTopicDetailContent extends StatelessWidget {
                 onOpen: onOpen,
                 onSaveAs: onSaveAs,
               ),
+              const SizedBox(height: 12),
+              StudentHomeworkSection(topicId: topic.id),
             ],
           ),
         ),
