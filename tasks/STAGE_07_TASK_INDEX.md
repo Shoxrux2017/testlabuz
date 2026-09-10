@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 7 — Student Homework and Submission Flow` |
-| Stage status | `Backend implementation complete; Backend Phase 2 PASS; frontend implementation in progress — S07-FE-001 Accepted / Delivered` |
+| Stage status | `Backend implementation complete; Backend Phase 2 PASS; frontend implementation in progress — S07-FE-001…002 Accepted / Delivered` |
 | Verification model | `Workflow v3 — Lean Verification + Integration Harness Preflight discipline` |
 | Decomposition status | `Approved` |
 | Planning baseline `origin/main` | `294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current bookkeeping baseline `origin/main` | `252e67b1c43aa21885eb83379d5c0c618d092ca9` |
+| Current bookkeeping baseline `origin/main` | `ad2bc12f328cd76797b13655eee030528c3c764e` |
 | Backend Phase 2 audited revision | `4780c56d36816ac0f7b1ab381c28c7387a2804c6` |
 | Previous Stage | `Stage 6 — Closed / PASS` |
 | GitHub source of truth | `Current main must be re-checked before every executable task` |
@@ -17,17 +17,17 @@
 | Backend implementation | `Complete — S07-BE-001…007 Accepted / Delivered` |
 | Backend Phase 2 | `PASS` |
 | Backend checkpoint findings | `P1 = 0; P2 = 0; P3 = 0` |
-| Frontend implementation | `In progress — S07-FE-001 Accepted / Delivered` |
+| Frontend implementation | `In progress — S07-FE-001…002 Accepted / Delivered` |
 | Frontend Phase 2 | `Prepared / not executed` |
 | Integration | `Not executed` |
 | Closure | `Not executed` |
-| Next permitted executable gate | `S07-FE-002 current-main Implementation Readiness review by ChatGPT` |
+| Next permitted executable gate | `S07-FE-003 current-main Implementation Readiness review by ChatGPT` |
 
 This index is the authoritative Stage 7 orchestration map. The planning package
 has already been delivered to `origin/main`. The current bookkeeping baseline
 above is distinct from the revision audited by Backend Phase 2. Checkpoint
 evidence applies to `4780c56d36816ac0f7b1ab381c28c7387a2804c6`; later frontend
-contract and FE-001 implementation deliveries were not part of its runtime
+contract and FE-001/002 implementation deliveries were not part of its runtime
 verification (Section 9).
 
 The planning package originally marked implementation contracts as `Approved`.
@@ -60,8 +60,8 @@ closed
 
 Stage 7 backend implementation is complete. S07-BE-001…007 are Accepted / Delivered,
 and S07-BE-PHASE-2 is PASS. Frontend implementation is in progress:
-S07-FE-001 is Accepted / Delivered. Frontend Phase 2 is prepared / not executed;
-integration and closure are not executed. The next permitted gate is S07-FE-002
+S07-FE-001…002 are Accepted / Delivered. Frontend Phase 2 is prepared / not executed;
+integration and closure are not executed. The next permitted gate is S07-FE-003
 current-main Implementation Readiness review by ChatGPT.
 
 ---
@@ -224,7 +224,7 @@ implement. Codex receives the current self-contained implementation contract.
 | 7 | `S07-BE-007` | Backend | Idempotent final Homework Submit | BE-002 + BE-005 + BE-006 | `Approved` | `PASS — implemented and accepted` | `Accepted / Delivered — PR #207, merge 22c03f4e9aec8a421bd0edbe02756e557f943d60` | `tasks/backend/stage-07/S07-BE-007-idempotent-final-homework-submit.md` |
 | 8 | `S07-BE-PHASE-2` | Backend review | Complete Stage 7 backend read-only block review + full backend regression | BE-001…007 | `Prepared` | `PASS — checkpoint executed at audited revision` | `PASS — audited main 4780c56d36816ac0f7b1ab381c28c7387a2804c6; P1 = 0, P2 = 0, P3 = 0` | `tasks/backend/stage-07/S07-BE-PHASE-2-backend-block-review.md` |
 | 9 | `S07-FE-001` | Frontend | Student Homework read foundation | Backend Phase 2 PASS | `Approved` | `PASS — implemented and accepted` | `Accepted / Delivered — PR #212, implementation f3f9c6ce9696da60d8113a06e98cef8b447e0485, merge 252e67b1c43aa21885eb83379d5c0c618d092ca9` | `tasks/frontend/stage-07/S07-FE-001-student-homework-read-foundation.md` |
-| 10 | `S07-FE-002` | Frontend | Attempt Start/Resume shell | FE-001 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/frontend/stage-07/S07-FE-002-attempt-start-resume-shell.md` |
+| 10 | `S07-FE-002` | Frontend | Attempt Start/Resume shell | FE-001 | `Approved` | `PASS — implemented and accepted` | `Accepted / Delivered — PR #215, implementation 3985f94b7eca8a7aa02e09213074471ad5374945, merge ad2bc12f328cd76797b13655eee030528c3c764e` | `tasks/frontend/stage-07/S07-FE-002-attempt-start-resume-shell.md` |
 | 11 | `S07-FE-003` | Frontend | Eight non-file answer editors | FE-002 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/frontend/stage-07/S07-FE-003-eight-non-file-answer-editors.md` |
 | 12 | `S07-FE-004` | Frontend | File answer UX | FE-002 + FE-003 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/frontend/stage-07/S07-FE-004-file-answer-ux.md` |
 | 13 | `S07-FE-005` | Frontend | Submit/finalization UX | FE-002…004 | `Approved` | `Pending sequential current-main review` | `Not started` | `tasks/frontend/stage-07/S07-FE-005-submit-finalization-ux.md` |
@@ -370,18 +370,20 @@ Stage entry and mandatory documentation alignment are complete:
 - [x] Backend checkpoint findings: `P1 = 0`, `P2 = 0`, `P3 = 0`.
 - [x] `S07-FE-001` implementation passed ChatGPT acceptance review: `PASS`; findings `P1 = 0`, `P2 = 0`, `P3 = 0`.
 - [x] `S07-FE-001 = Accepted / Delivered` via PR #212, implementation `f3f9c6ce9696da60d8113a06e98cef8b447e0485`, merge `252e67b1c43aa21885eb83379d5c0c618d092ca9`.
-- [x] Current bookkeeping baseline is `252e67b1c43aa21885eb83379d5c0c618d092ca9`; later frontend contract and FE-001 implementation deliveries preserve the historical backend checkpoint evidence without constituting Frontend Phase 2 verification.
+- [x] `S07-FE-002` implementation passed ChatGPT acceptance review: `PASS`; findings `P1 = 0`, `P2 = 0`, `P3 = 0`.
+- [x] `S07-FE-002 = Accepted / Delivered` via PR #215, implementation `3985f94b7eca8a7aa02e09213074471ad5374945`, merge `ad2bc12f328cd76797b13655eee030528c3c764e`.
+- [x] Current bookkeeping baseline is `ad2bc12f328cd76797b13655eee030528c3c764e`; later frontend contract and FE-001/002 implementation deliveries preserve the historical backend checkpoint evidence without constituting Frontend Phase 2 verification.
 
 The next review gate is:
 
 ```text
-S07-FE-002 current-main Implementation Readiness review by ChatGPT
+S07-FE-003 current-main Implementation Readiness review by ChatGPT
 ```
 
 The backend implementation block is complete: `S07-BE-001…007 = Accepted / Delivered`.
 `S07-BE-PHASE-2 = PASS` satisfies the backend checkpoint dependency. Frontend
-implementation is in progress, with `S07-FE-001 = Accepted / Delivered` through
-individual implementation acceptance only. ChatGPT must revalidate `S07-FE-002`
+implementation is in progress, with `S07-FE-001…002 = Accepted / Delivered` through
+individual implementation acceptance only. ChatGPT must revalidate `S07-FE-003`
 against current main before handing it to Codex. Frontend Phase 2 remains
 prepared / not executed.
 
@@ -402,7 +404,7 @@ merge = 6529ae4b4a114828d0636baec597d10c03ef3164
 
 This gate is satisfied. The backend implementation block is complete:
 `S07-BE-001…007 = Accepted / Delivered`, and `S07-BE-PHASE-2 = PASS`.
-The next permitted gate is `S07-FE-002 current-main Implementation Readiness
+The next permitted gate is `S07-FE-003 current-main Implementation Readiness
 review by ChatGPT`.
 
 `S07-DOC-001` aligned live `docs/01–09` so Stage 7 execution/finalization no longer
@@ -490,19 +492,19 @@ following reviews and Project Owner/CI verification:
 - Stage-wide `git diff --check`.
 
 Backend Phase 2 evidence remains valid at the current bookkeeping baseline
-`252e67b1c43aa21885eb83379d5c0c618d092ca9`. Later deliveries cover Stage 7 frontend
-task/checkpoint contracts, bookkeeping, and the accepted FE-001 implementation.
+`ad2bc12f328cd76797b13655eee030528c3c764e`. Later deliveries cover Stage 7 frontend
+task/checkpoint contracts, bookkeeping, and the accepted FE-001/002 implementations.
 They did not change
 backend production code, backend tests, migrations, configuration, routes, or
 backend dependencies. Those later deliveries were not part of Backend Phase 2
-runtime verification; FE-001 acceptance does not constitute Frontend Phase 2 PASS.
+runtime verification; FE-001/002 acceptance does not constitute Frontend Phase 2 PASS.
 
 The backend checkpoint dependency is satisfied. Frontend implementation is in
-progress with `S07-FE-001 = Accepted / Delivered`, and the next permitted executable
+progress with `S07-FE-001…002 = Accepted / Delivered`, and the next permitted executable
 gate is:
 
 ```text
-S07-FE-002 current-main Implementation Readiness review by ChatGPT
+S07-FE-003 current-main Implementation Readiness review by ChatGPT
 ```
 
 ---
@@ -512,11 +514,12 @@ S07-FE-002 current-main Implementation Readiness review by ChatGPT
 Frontend tasks execute after backend checkpoint PASS.
 
 That dependency is satisfied by the recorded `S07-BE-PHASE-2 = PASS`.
-Frontend implementation is in progress: `S07-FE-001 = Accepted / Delivered`
-through PR #212 after individual implementation acceptance `PASS` with
-`P1 = 0`, `P2 = 0`, `P3 = 0`. `S07-FE-002…005` remain `Not started`;
-`S07-FE-002` requires ChatGPT current-main Implementation Readiness review next.
-Frontend Phase 2 remains prepared / not executed; FE-001 acceptance is not a
+Frontend implementation is in progress: `S07-FE-001…002 = Accepted / Delivered`
+through PR #212 and PR #215, respectively, each after individual implementation
+acceptance `PASS` with `P1 = 0`, `P2 = 0`, `P3 = 0`.
+`S07-FE-003…005` remain `Not started`;
+`S07-FE-003` requires ChatGPT current-main Implementation Readiness review next.
+Frontend Phase 2 remains prepared / not executed; FE-001/002 acceptance is not a
 Frontend Phase 2 verdict. Integration and closure remain not executed.
 
 Required sequence:
