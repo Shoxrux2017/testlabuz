@@ -95,8 +95,8 @@ All instructions to populate evidence or replace `Pending` fields apply to the
 **ChatGPT final Phase 2 review report**, not to editing this contract during the
 checkpoint. Production, tests, migrations, and contracts remain unchanged.
 
-If findings exist, Phase 2 returns `NOT ACCEPTED` and ChatGPT creates a separate
-focused fix task:
+If findings block PASS under Section 32, Phase 2 returns `NOT ACCEPTED` and
+ChatGPT creates a separate focused fix task:
 
 1. record `NOT ACCEPTED`;
 2. preserve the review evidence;
@@ -1768,7 +1768,7 @@ Material functional/architecture/lifecycle defect, including:
 
 ## P3
 
-Lower-severity maintainability/test clarity issue that does not break Stage contract.
+Non-blocking maintainability/test clarity issue that does not break Stage contract.
 
 Record findings:
 
@@ -1819,8 +1819,12 @@ NOT ACCEPTED
   LogicException/class/SQL/path/internal metadata leaks;
 - required Stage 7 backend criteria have evidence.
 
-If any findings remain, including P3 findings, return `NOT ACCEPTED` and create a
-separate focused fix task. Findings are never corrected during this checkpoint.
+P3 findings alone do not automatically block PASS, but must be recorded.
+Any P1 or P2 finding blocks PASS.
+A P3 may still require a focused correction if ChatGPT determines it creates
+material Stage risk, but P3 severity itself is not an automatic checkpoint blocker.
+
+Findings are never corrected during this checkpoint.
 
 ---
 
@@ -1843,7 +1847,7 @@ Lint/static-equivalent: <result>
 git diff --check: PASS
 P1=0
 P2=0
-P3=0
+P3=<count>
 ```
 
 Then:
@@ -1990,6 +1994,6 @@ Next permitted gate:
 ```
 
 This checkpoint itself performs no implementation, production/test/contract
-edits, or commit/push/PR delivery. Findings produce `NOT ACCEPTED` and
-separate focused fix tasks under Section 34; fixes are never applied during the
-checkpoint itself.
+edits, or commit/push/PR delivery. Findings that block PASS under Section 32
+produce `NOT ACCEPTED` and separate focused fix tasks under Section 34; fixes
+are never applied during the checkpoint itself.
