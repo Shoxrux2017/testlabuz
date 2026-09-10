@@ -11,14 +11,14 @@
 | Implementation type | `Laravel idempotent explicit Student Homework Attempt final submission/freeze` |
 | Depends on | `S07-BE-001…006` — all `Accepted / Delivered` before implementation |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline | `origin/main @ 1a7e86d3d08902feab3f004b21754aa7e2f1f98a` |
+| Current review baseline | `origin/main @ c4814a02122b13b99ed2c3fd5229a07309bbe4b8` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until all dependencies above are `Accepted / Delivered` |
+| Readiness Gate | Pending ChatGPT current-main revalidation after contract correction; implementation is not authorized until PASS |
 | Verification | focused Submit/idempotency/lifecycle/concurrency verification only |
-| Delivery | Project Owner |
+| Delivery | Codex = commit/push/create PR after all task verification passes; Project Owner = merge only after ChatGPT acceptance |
 | Backend block checkpoint | Stage 7 Backend Phase 2 immediately after this task block |
 
-Start only after all dependencies are delivered, the implementation baseline is re-checked, and Git preflight is safe.
+Start only after all dependencies are delivered, ChatGPT current-main revalidation is PASS, the implementation baseline is re-checked, and Git preflight is safe.
 
 Do not create a duplicate `CODEX-PROMPT`.
 
@@ -38,7 +38,8 @@ Codex may read only:
    - `FinalizeHomeworkAttemptsAtDeadline`;
    - Student Attempt access/controller/resource;
    - `IdempotencyGuard`, fingerprint and operation enum;
-   - answer/file persistence used only to prove preservation;
+   - `StudentHomeworkAttemptAnswerStates` -> `StudentHomeworkAnswerIntegrity`, also used by `ShowStudentHomeworkAttempt`;
+   - answer/file persistence used only for the shared read-only integrity gate and preservation evidence;
 7. current Teacher Homework close/deadline tests only where directly needed for race regression.
 
 Do not read roadmap/product/architecture/database/API docs, previous task files, Stage history/indexes/closure reviews, frontend, or unrelated modules to determine requirements.
@@ -432,7 +433,9 @@ Do not include:
 - current answers;
 - Idempotency-Key itself.
 
-Thus a safe retry remains the same semantic request even after the Attempt later changes to a Stage 9 status.
+Thus a retry remains the same semantic request after later Attempt status changes.
+This fingerprint stability does not extend the Stage-7 Student-safe answer
+projection to genuine Stage-9 checked Answers (Sections 16 and 25).
 
 ---
 
@@ -580,7 +583,7 @@ Flow:
 1. preliminary privacy-safe own-Attempt resolution;
 2. build Submit fingerprint;
 3. enter one DB transaction;
-4. acquire shared parent locks + `FOR UPDATE` on only the authenticated Student's route Attempt;
+4. acquire shared parent locks + `FOR UPDATE` on only the authenticated Student's route Attempt and re-verify the complete delivered structural invariant in Section 15;
 5. handle completed replay;
 6. claim idempotency for a new logical request;
 7. capture authoritative `submittedAt` after lock/idempotency waits;
@@ -588,14 +591,20 @@ Flow:
 9. if deadline is reached:
    - abandon the new incomplete claim;
    - return an internal deadline marker with zero Submit-domain writes;
-10. validate Attempt editability/invariants;
-11. freeze the own Attempt with `student_submit`;
-12. complete idempotency record;
-13. commit;
-14. if the transaction returned a deadline marker:
+10. require the structurally valid Attempt to be `in_progress` under Section 21;
+11. load current Assessment Questions read-only in deterministic position/ID order and invoke delivered `StudentHomeworkAttemptAnswerStates` for the locked Attempt solely as the persisted-answer integrity gate in Section 22;
+12. only after that gate succeeds, freeze the own Attempt with `student_submit`;
+13. complete idempotency record;
+14. commit;
+15. if the transaction returned a deadline marker:
    - invoke delivered public `FinalizeHomeworkAttemptsAtDeadline(student.institution_id, assessment.id)`;
    - after reconciliation returns, throw `409 deadline_passed`;
-15. otherwise return success.
+16. otherwise return success.
+
+Structural Attempt or saved Answer corruption throws `LogicException`, maps to
+safe `500 server_error`, and rolls back the new Submit transaction/claim with
+zero Submit mutation and no completed/incomplete Submit idempotency record.
+An already completed historical record is never deleted or rewritten.
 
 Do not perform all-Student deadline reconciliation inside the normal Submit transaction.
 
@@ -651,7 +660,7 @@ Do not blindly reuse an access helper if it acquires exclusive shared-parent loc
 or all Assessment Attempts. Add only one focused Student Submit lock/reload method
 if needed to preserve these exact semantics.
 
-Do not acquire:
+Do not acquire row locks on:
 
 ```text
 Group
@@ -663,7 +672,10 @@ File rows
 other Students' Attempts
 ```
 
-during Submit.
+during Submit. The read-only Question/Answer/File reads needed by Section 22's
+delivered shared integrity path are required; they must not add `FOR UPDATE`
+locks. The own Attempt `FOR UPDATE` remains the Student answer/file mutation
+barrier.
 
 The official Topic result pair was already locked at first Attempt Start in BE-004
 and Submit does not change its meaning.
@@ -676,24 +688,51 @@ back to coarse aggregate/all-Attempt locking.
 
 # 15. Re-Verify Locked Attempt
 
-After shared parent locks and the exact route Attempt `FOR UPDATE` lock, the
-Attempt must still satisfy:
+After shared parent locks and the exact route Attempt `FOR UPDATE` lock,
+re-resolve the previously authorized exact Attempt and require the complete
+Homework Attempt structural invariant already delivered by BE-005/006:
 
 ```text
-id = preliminary authorized Attempt
-institution_id = Student Institution
-student_id = authenticated Student
-assessment_id = locked Homework Assessment
-assessment_student_id still points to this Student/Assessment assignment
+attempt.id = preliminary authorized Attempt
+attempt.institution_id = authenticated Student Institution
+attempt.student_id = authenticated Student
+attempt.assessment_id = locked Homework Assessment
+attempt.assessment_student_id = authoritative persisted AssessmentStudent
+attempt.deadline_at = null
+
+status in:
+- in_progress
+- submitted
+- waiting_for_teacher_review
+- checked
+
+finalization_reason != timeout_auto_submit
 ```
 
-If it disappeared/became inconsistent after preliminary resolution:
+For `in_progress`, also require:
 
 ```text
-404 resource_not_found
+submitted_at = null
+finalized_at = null
+locked_at = null
+finalization_reason = null
 ```
 
-No mutation.
+`timed_out_finalized` / `timeout_auto_submit` remain Blitz-only. They are
+structural corruption on a Homework Attempt, not ordinary non-editability.
+
+If the previously authorized exact Attempt disappears from or fails locked
+structural re-resolution, including identity/assignment drift:
+
+```text
+LogicException / safe 500 server_error
+zero Submit mutation
+no Submit idempotency completion
+```
+
+Do not map this post-authorization corruption to ordinary `404`; Section 9's
+privacy-safe `404` applies to unsuccessful preliminary authorization. Roll back
+any new Submit claim and preserve any historical completed record unchanged.
 
 Do not substitute another in-progress Attempt.
 
@@ -715,7 +754,9 @@ result_resource_id = this same Attempt ID
 response_status = 200
 ```
 
-Then return replay success immediately.
+Then return the successful action result immediately. The complete locked
+Attempt structural invariant in Section 15 still applies; terminal status alone
+does not invalidate a historical success.
 
 Do not re-run:
 
@@ -723,17 +764,32 @@ Do not re-run:
 Homework lifecycle
 deadline gate
 Attempt editability
-answer validation
+the new in-progress Submit persisted-answer integrity gate
 ```
 
-This permits safe replay after:
+With saved Answers still valid for the delivered Stage-7 Student-safe projection,
+this permits endpoint replay after:
 
 - later Homework close/archive;
 - deadline;
-- Stage 9 review/checking;
+- later Attempt terminal status progression;
 - another later normal Attempt.
 
-Do not rewrite idempotency timestamps.
+BE-007 guarantees durable Submit/idempotency replay semantics. It may test later
+Attempt terminal status progression while saved Answers remain valid Stage-7
+pending state. It does not implement or validate genuine Stage-9 checked-answer
+projection.
+
+The HTTP response still uses `ShowStudentHomeworkAttempt` and its delivered
+shared integrity path (Section 25). If current persisted corruption prevents a
+Student-safe representation, safe `500 server_error` is allowed; the historical
+completed record must remain unchanged. Do not delete/rewrite that record or its
+timestamps because response projection fails.
+
+Stage 9 must extend the Student-safe read/integrity projection for legitimate
+later checking states while preserving the completed BE-007 Submit idempotency
+record and replay semantics. BE-007 must not relax Stage-7 Answer integrity to
+accept checked/scored Answers.
 
 If completed metadata is inconsistent:
 
@@ -936,14 +992,17 @@ class-wide lock.
 
 # 21. Attempt Editability / Structural Integrity
 
-After active/pre-deadline checks:
+For a new logical Submit after active/pre-deadline checks, use the complete
+locked structural invariant from Section 15 before deciding editability. Never
+reduce it to a status-only check.
 
-## Terminal/non-editable status
+## Structurally valid terminal/non-editable status
 
 If:
 
 ```text
-attempt.status != in_progress
+the complete Section 15 invariant holds
+attempt.status in submitted / waiting_for_teacher_review / checked
 ```
 
 return:
@@ -952,7 +1011,8 @@ return:
 409 attempt_not_editable
 ```
 
-No completed idempotency record.
+Zero Submit mutation; roll back the new claim so no completed/incomplete Submit
+idempotency record remains.
 
 Examples:
 
@@ -979,46 +1039,92 @@ attempt.finalization_reason = null
 Any violation is a persisted invariant failure:
 
 ```text
-LogicException / server invariant failure
+LogicException / safe 500 server_error
+zero Submit mutation
+no Submit idempotency completion
 ```
 
 Do not map this corrupt `in_progress` shape to `attempt_not_editable`.
+
+Identity/assignment drift, disappearance after preliminary authorization,
+non-null Attempt `deadline_at`, disallowed status, and `timeout_auto_submit` are
+also structural corruption under Section 15, even on an otherwise terminal row.
+They must not become `404` or `409 attempt_not_editable`.
+
+A structurally valid `in_progress` Attempt may proceed to the persisted-answer
+integrity gate; only after that gate succeeds may it Submit.
 
 Do not reinterpret an already terminal Attempt as another successful Submit
 unless the same completed idempotency key/fingerprint is replayed.
 
 ---
 
-# 22. Answer Snapshot Integrity
+# 22. Pre-Finalization Persisted-Answer Integrity Gate
 
-Submit does **not** require answers to exist.
+For a **new valid in-progress Submit**, after lifecycle/deadline/Attempt
+structural validation and before `finalizeByStudentSubmit()`:
 
-It must not mutate answers.
+1. load current Assessment Questions read-only in deterministic position/ID order;
+2. invoke delivered `StudentHomeworkAttemptAnswerStates` for the locked Attempt;
+3. use it only as a persisted-answer integrity gate.
 
-Before finalization, lock/read no typed answer rows merely to count completeness.
+Reuse the delivered BE-006 path also used by `ShowStudentHomeworkAttempt`:
 
-The Attempt row lock is the mutation barrier because all BE-005/006 Student answer writes lock the same Attempt first.
+```text
+StudentHomeworkAttemptAnswerStates
+-> StudentHomeworkAnswerIntegrity
+```
+
+Do not introduce a second Submit-specific Answer validator or N+1 validation.
+Keep the delivered Stage-7 integrity requirements for every existing Answer:
+
+```text
+checking_status = pending
+awarded_points = null
+feedback = null
+checked_by_user_id = null
+checked_at = null
+```
+
+Submit does **not** require all Questions answered or any saved Answers to exist.
+Do not fabricate, score/check, repair, or mutate Answers/Files. Do not acquire
+Answer/File `FOR UPDATE` or Question row locks for this gate.
+
+The Attempt row lock remains the mutation barrier because all BE-005/006 Student
+answer/file writes lock the same Attempt first.
 
 Therefore:
 
 ```text
 Submit acquires Attempt lock
 => no answer PUT/file replacement can commit concurrently past it
-=> status changes to submitted
+=> shared read-only persisted-answer integrity gate succeeds
+=> only then status changes to submitted
 => later answer writes fail as non-editable
 ```
 
-Do not introduce N+1 Question/Answer validation on Submit.
+If any existing non-file or file-based Answer is structurally corrupt:
 
-Persisted answers were already validated at save time.
+```text
+LogicException
+=> safe 500 server_error
+=> Submit transaction rollback
+=> Attempt remains in_progress
+=> no completed/incomplete Submit idempotency record
+=> answers/files unchanged
+```
 
-If direct DB corruption is encountered later by Stage 9, checking owns that integrity boundary.
+Save-time validation alone is insufficient. Submit must not commit a submitted
+Attempt/completed 200 record and only afterward discover pre-existing saved
+Answer corruption while building the HTTP response. Only a successful integrity
+gate permits finalization, idempotency completion, and commit.
 
 ---
 
 # 23. Explicit Submit Transition
 
-For a valid editable pre-deadline Attempt call:
+For a structurally valid editable pre-deadline Attempt, only after Section 22's
+shared persisted-answer integrity gate succeeds, call:
 
 ```text
 HomeworkAttemptFinalizer::finalizeByStudentSubmit(
@@ -1066,12 +1172,15 @@ Ordering:
 ```text
 claim
 -> locked validation
+-> shared read-only persisted-answer integrity gate
 -> Attempt student_submit transition
 -> complete idempotency record
 -> commit
 ```
 
-If idempotency completion fails:
+If the persisted-answer integrity gate fails, roll back the new claim with zero
+Attempt/Answer/File writes and no completed/incomplete Submit record. If
+idempotency completion fails:
 
 ```text
 Attempt finalization must roll back
@@ -1151,9 +1260,27 @@ official_attempt
 
 in Stage 7.
 
-A same-key replay returns the same top-level message and current safe representation of the same logical Attempt.
+For a new valid in-progress Submit, Section 22 invokes the same delivered
+`StudentHomeworkAttemptAnswerStates` -> `StudentHomeworkAnswerIntegrity` path
+before finalization/commit. Response construction must not be the first point at
+which pre-existing saved Answer corruption is detected.
 
-If Stage 9 has since changed the Attempt status, safe replay may reflect the current later status while preserving the original Submit logical success.
+When the current Student-safe representation can be produced, a same-key replay
+returns the same top-level message and current representation of the same logical
+Attempt. Later Attempt terminal status progression may be tested while all saved
+Answers remain valid Stage-7 pending state.
+
+Corruption introduced after a historically successful Submit may prevent that
+current representation. Safe `500 server_error` is allowed in that case; it must
+never delete/rewrite the historical completed idempotency record, re-finalize the
+Attempt, or mutate Answers/Files.
+
+BE-007 guarantees durable Submit/idempotency replay semantics. It does not
+implement or validate genuine Stage-9 checked-answer projection. Stage 9 must
+extend the Student-safe read/integrity projection for legitimate later checking
+states while preserving the completed BE-007 Submit idempotency record and replay
+semantics. Keep Stage-7 `checking_status = pending` and all awarded/checking fields
+null; do not accept checked/scored Answers in BE-007.
 
 ---
 
@@ -1202,6 +1329,7 @@ task_archived
 deadline_passed
 attempt_not_editable
 business_conflict
+server_error
 ```
 
 Do not add:
@@ -1230,7 +1358,7 @@ First valid Submit:
 200
 ```
 
-Retry:
+Retry while the current Student-safe representation remains valid:
 
 ```text
 200
@@ -1240,6 +1368,12 @@ same logical Attempt
 No new finalization write.
 
 No timestamp rewrite.
+
+Durable Submit/idempotency replay semantics survive later Attempt terminal status
+progression. BE-007 endpoint replay tests keep saved Answers in valid Stage-7
+pending state; genuine Stage-9 checked-answer projection remains Stage 9 work.
+If later persisted corruption prevents the current safe representation, safe
+`500 server_error` is allowed and the historical completed record stays unchanged.
 
 ## Same key + another authorized Attempt
 
@@ -1278,7 +1412,11 @@ attempt_not_editable
 business_conflict
 404 authorization failure
 422 validation failure
+500 server_error from Attempt structural or persisted-answer corruption
 ```
+
+This zero-record rule applies to a failed **new** Submit. It never permits
+deleting/rewriting a completed historical record when later projection fails.
 
 ---
 
@@ -1588,14 +1726,31 @@ Verify:
 ```text
 checking_status = pending
 awarded_points = null
+feedback = null
+checked_by_user_id = null
+checked_at = null
 Attempt score fields remain null
 ```
+
+## Submit with partial answers
+
+Must succeed after the delivered shared persisted-answer integrity gate, with
+every saved Answer/File unchanged and no fabricated rows for unanswered Questions.
 
 ## Submit with zero answers
 
 Must succeed exactly the same way.
 
 No fabricated `attempt_answers`.
+
+## Persisted-answer corruption before finalization
+
+Cover both an existing non-file Answer and a file-based Answer rejected by the
+delivered shared integrity path. Each new Submit must return safe
+`500 server_error`, keep the Attempt `in_progress`, leave zero completed/incomplete
+Submit records, and preserve Answer/File rows and file contents. Section 38's
+fixed-key regressions must prove this happens before finalization/completion,
+rather than only while building the response after commit.
 
 ## Response
 
@@ -1675,17 +1830,83 @@ No new submit transition.
 
 ## Replay after later status progression
 
-If safe to fixture a later Stage 9-valid enum state without implementing Stage 9 logic, set Attempt to an existing later terminal status such as:
+Fixture later existing Attempt terminal statuses:
 
 ```text
 waiting_for_teacher_review
+checked
 ```
 
-while preserving original submit fields.
+while preserving original submit fields and keeping all saved Answers in valid
+Stage-7 pending state:
+
+```text
+checking_status = pending
+awarded_points = null
+feedback = null
+checked_by_user_id = null
+checked_at = null
+```
 
 Same original key still replays `200`.
 
 Do not require the resource status to remain `submitted`.
+
+This proves durable Submit/idempotency replay with later Attempt status
+progression only. It does not implement or validate genuine Stage-9 checked-answer
+projection. Stage 9 must extend that Student-safe read/integrity projection while
+preserving the completed BE-007 record and replay semantics.
+
+## Fixed-key corruption rollback and recovery
+
+Add separate focused regressions for:
+
+- a structurally corrupt persisted non-file Answer;
+- a structurally corrupt persisted file-based Answer.
+
+For each case, start with an existing active pre-deadline own `in_progress`
+Attempt and one fixed new Submit UUID Idempotency-Key `K`. Corrupt only the saved
+Answer fixture in a way rejected by delivered `StudentHomeworkAttemptAnswerStates`
+-> `StudentHomeworkAnswerIntegrity`.
+
+Assert this exact sequence using the same `K` throughout:
+
+```text
+Submit K -> safe 500 server_error
+Attempt remains in_progress; zero Submit idempotency records
+
+retry K -> safe 500 server_error
+Attempt remains in_progress; still zero completed/incomplete Submit records
+
+repair only test fixture
+
+Submit K -> 200
+Attempt.status = submitted
+Attempt.finalization_reason = student_submit
+exactly one completed Submit idempotency record
+
+replay K -> 200
+same completed record
+no timestamp churn
+```
+
+Compare Attempt/finalization fields before and after each failed request. Compare
+Answer/File row and file-content snapshots before/after every request to prove
+Submit never mutates them; only the explicit fixture repair may alter the saved
+fixture. Successful replay must preserve all Section 35 Attempt/idempotency
+timestamps and the completed record's identity/metadata.
+
+## Corruption after historical success
+
+First Submit `K` successfully and snapshot its completed idempotency record and
+Attempt finalization fields. Then introduce persisted saved Answer corruption
+through the test fixture and retry the original `K`.
+
+If the current Student-safe representation cannot be produced, expect safe
+`500 server_error` while the same historical completed record remains unchanged
+in full, including timestamps and result metadata. Repeated failed projection
+must not delete/rewrite that record, re-finalize the Attempt, or mutate
+Answers/Files. This is distinct from the zero-record rule for a failed new Submit.
 
 ## Different Attempt same key
 
@@ -1717,7 +1938,9 @@ Same key independently usable by another Student/Institution.
 
 ## Failed operations
 
-No Submit idempotency row remains after lifecycle/deadline/non-editable failure.
+No Submit idempotency row remains after a new lifecycle/deadline/non-editable or
+structural/Answer integrity failure. Historical success records remain unchanged
+when later response projection fails.
 
 ---
 
@@ -1757,13 +1980,39 @@ Persisted own assigned Attempt remains submittable while active/pre-deadline.
 409 task_archived
 ```
 
-## Already submitted/new key
+## Structurally valid terminal/new key
+
+Cover each allowed terminal status (`submitted`, `waiting_for_teacher_review`,
+`checked`) with the complete Section 15 invariant intact and saved Answers still
+valid Stage-7 pending state:
 
 ```text
 409 attempt_not_editable
 ```
 
 No timestamp rewrite.
+
+Zero Submit mutation and no completed/incomplete record for the new key.
+
+## Complete locked Homework Attempt invariant
+
+Prove safe `500 server_error` / `LogicException` for every failed Section 15
+structural requirement, including:
+
+- the exact previously authorized Attempt disappearing during locked re-resolution;
+- identity/Institution/Student/Assessment drift after successful preliminary authorization;
+- `assessment_student_id` differing from the authoritative persisted AssessmentStudent;
+- non-null Attempt `deadline_at`;
+- status outside `in_progress`, `submitted`, `waiting_for_teacher_review`, `checked`,
+  including Blitz-only `timed_out_finalized`;
+- Blitz-only `finalization_reason = timeout_auto_submit`, including on an otherwise
+  allowed terminal status.
+
+Use deterministic fixture/interleaving setup for post-authorization drift; retain
+Section 9's privacy-safe `404` for unsuccessful preliminary authorization. Failed
+locked re-resolution must never become ordinary `404` or `attempt_not_editable`.
+Every structural failure has zero Submit mutation and no completed/incomplete
+new Submit record; do not repair or substitute an Attempt.
 
 ## Corrupt in-progress finalization fields
 
@@ -1774,9 +2023,11 @@ status = in_progress
 submitted_at != null
 ```
 
-or another non-null finalization field.
+Cover each non-null field independently: `submitted_at`, `finalized_at`,
+`locked_at`, and `finalization_reason`.
 
-Expect safe server invariant failure.
+Expect `LogicException` / safe `500 server_error`, zero Submit mutation, and no
+completed/incomplete new Submit record.
 
 Do not return `attempt_not_editable` and do not repair/mutate the row.
 
@@ -1828,6 +2079,11 @@ lock-wait style.
 No arbitrary sleep synchronization.
 
 Split the proof into the two focused files declared in Section 36.
+
+All successful new Submit paths must include Section 22's shared read-only
+persisted-answer integrity gate while the own Attempt lock is held. That gate
+must preserve the lock modes and cross-Student independence below; it adds no
+Question/Answer/File row locks or Submit-specific answer validation.
 
 ## 40.1 `StudentHomeworkAttemptSubmitConcurrencyTest`
 
@@ -1912,7 +2168,8 @@ Real race against one BE-005 answer replace.
 
 Allowed serialized outcomes only:
 
-- answer save commits first -> Submit freezes the new answer;
+- answer save commits first -> the shared integrity gate reads the committed
+  saved state, then Submit freezes the new answer;
 - Submit commits first -> answer save returns `409 attempt_not_editable`.
 
 Never post-Submit answer mutation.
@@ -1923,7 +2180,8 @@ Real race against BE-006 replacement.
 
 Allowed serialized outcomes only:
 
-- replacement commits first -> Submit freezes the new stable File state;
+- replacement commits first -> the shared integrity gate reads the committed
+  saved state, then Submit freezes the new stable File state;
 - Submit commits first -> replacement DB mutation is rejected and BE-006 new-blob
   compensation runs.
 
@@ -2000,6 +2258,9 @@ tests/Feature/Teacher/TeacherHomeworkLifecycleApiTest.php
 Rationale:
 
 - shared Student Attempt controller/resource/idempotency infrastructure is reused;
+- Submit reuses the same read-only `StudentHomeworkAttemptAnswerStates` ->
+  `StudentHomeworkAnswerIntegrity` path as Show; its non-file/file integrity
+  contract and pending-only Stage-7 projection remain unchanged;
 - answer/file editability must stop after Submit;
 - deadline exact-once behavior is shared;
 - Teacher close must preserve an already explicit `student_submit`.
@@ -2007,6 +2268,10 @@ Rationale:
 Do not run full backend suite in this individual task.
 
 Full backend regression belongs to Stage 7 Backend Phase 2.
+
+The new fixed-key non-file/file corruption, rollback/recovery, and historical
+record preservation proofs belong to the BE-007 tests in Sections 37–39. They
+do not authorize broader regression suites or genuine Stage-9 projection tests.
 
 ---
 
@@ -2048,6 +2313,12 @@ docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app p
 Narrow diagnostic reruns of one failing test are allowed only to diagnose or
 confirm a concrete failure.
 
+The named BE-007 tests must include the complete Attempt structural invariant,
+shared integrity gate before finalization, both fixed-key corruption/recovery
+regressions, and preservation of historical completed records on later projection
+failure. Later terminal-status replay fixtures must retain valid Stage-7 pending
+Answers. Do not expand the command to Stage-9 checking/projection verification.
+
 ## 42.3 Diff hygiene
 
 Exactly:
@@ -2088,17 +2359,68 @@ PASS only if all are true.
 - no manual-review transition;
 - no score fields;
 - no official score/result logic;
-- response contains no checking/score surface.
+- response contains no checking/score surface;
+- every existing Answer retains `checking_status = pending`, `awarded_points = null`,
+  `feedback = null`, `checked_by_user_id = null`, and `checked_at = null`;
+- BE-007 guarantees durable Submit/idempotency replay semantics and may test later
+  Attempt terminal status progression only while Answers remain valid Stage-7
+  pending state;
+- genuine Stage-9 checked-answer projection is neither implemented nor validated;
+- Stage 9 must extend the Student-safe read/integrity projection for legitimate
+  later checking states while preserving the completed BE-007 record and replay
+  semantics; BE-007 does not accept checked/scored Answers.
+
+## Complete Homework Attempt invariant
+
+- locked `attempt.id` matches the preliminary authorized Attempt;
+- locked Institution/Student/Assessment match authenticated Student context and
+  the locked Homework Assessment;
+- `assessment_student_id` matches the authoritative persisted AssessmentStudent;
+- Attempt `deadline_at = null`;
+- status is one of `in_progress`, `submitted`, `waiting_for_teacher_review`, `checked`;
+- `finalization_reason != timeout_auto_submit`; Blitz-only `timed_out_finalized`
+  and `timeout_auto_submit` are rejected as corruption;
+- `in_progress` requires `submitted_at`, `finalized_at`, `locked_at`, and
+  `finalization_reason` all null;
+- disappearance/identity drift after successful preliminary authorization or any
+  structural violation produces `LogicException` / safe `500 server_error`, zero
+  Submit mutation, and no new Submit idempotency completion; it is never ordinary
+  `404` or `attempt_not_editable`;
+- only a structurally valid terminal Attempt maps to new-key `409 attempt_not_editable`.
+
+## Persisted-answer integrity before finalization
+
+- after lifecycle/deadline/Attempt validation, every new valid `in_progress`
+  Submit loads current Assessment Questions read-only in deterministic position/ID
+  order and invokes delivered `StudentHomeworkAttemptAnswerStates` for the locked
+  Attempt before `finalizeByStudentSubmit()`;
+- the delivered `StudentHomeworkAnswerIntegrity` path is reused solely as an
+  integrity gate, with no second Submit-specific validator;
+- no completeness requirement, fabricated/scored/checked Answer, Answer/File
+  mutation, or Question/Answer/File row lock is introduced;
+- the own Attempt `FOR UPDATE` remains the Student answer/file mutation barrier;
+- corrupt saved non-file/file Answers cause safe `500 server_error`, transaction
+  rollback, unchanged `in_progress` Attempt, zero completed/incomplete new Submit
+  records, and unchanged Answers/Files;
+- both fixed-key `K` regressions prove `500`, retry `500`, fixture-only repair,
+  `200 student_submit` with exactly one completed record, then replay `200` on the
+  same record without timestamp churn;
+- only a successful integrity gate permits finalization -> idempotency completion
+  -> commit; pre-existing saved Answer corruption is caught before commit.
 
 ## Idempotency
 
 - operation exactly `student.homework.attempt.submit`;
-- same key/same Attempt safely replays;
+- same key/same Attempt preserves durable success and returns `200` when the
+  current Student-safe representation can be produced;
 - original response status is 200;
 - different Attempt with same scoped key conflicts;
 - Start/Submit operation keys remain independent;
 - success transition + idempotency completion are atomic;
-- rejected Submit leaves no persisted incomplete/success record.
+- rejected new Submit leaves no persisted incomplete/success record;
+- corruption introduced after historical success may cause safe `500 server_error`
+  during projection, but never deletes/rewrites the completed record or its
+  timestamps and never mutates the Attempt/Answers/Files.
 
 ## Lifecycle/deadline
 
@@ -2110,8 +2432,9 @@ PASS only if all are true.
 - late Submit abandons its claim/releases its local transaction before public
   BE-002 deadline reconciliation;
 - deadline reconciliation commits before `409 deadline_passed`;
-- new key on already terminal Attempt gives `attempt_not_editable`;
-- corrupt `in_progress` finalization fields are server invariant failure, not
+- new key on a structurally valid terminal Attempt gives `attempt_not_editable`;
+- the complete Section 15 structural invariant is preserved; corrupt
+  `in_progress` finalization fields are server invariant failure, not
   `attempt_not_editable`.
 
 ## Concurrency
@@ -2163,8 +2486,15 @@ finalization_reason = student_submit
 all/partial/zero answers = submit allowed
 unanswered = no fabricated AttemptAnswer
 checking/scoring = Stage 9
-same-key replay bypasses later lifecycle
-different-key already-submitted = attempt_not_editable
+same-key replay bypasses later lifecycle and the new-Submit integrity gate
+HTTP replay 200 requires a producible current Student-safe representation
+BE-007 guarantee = durable Submit/idempotency replay semantics
+later Attempt terminal status replay fixtures = Answers remain valid Stage-7 pending
+genuine Stage-9 checked-answer projection = not implemented or validated by BE-007
+Stage 9 = extend Student-safe read/integrity projection, preserve completed Submit record/replay
+Stage-7 Answer integrity = pending; awarded_points/feedback/checked_by_user_id/checked_at null
+later corruption/projection 500 = historical completed record unchanged
+different-key structurally valid already-submitted = attempt_not_editable
 deadline comparison = submittedAt >= homework deadline
 deadline at equality = deadline wins
 submittedAt captured after own-Attempt lock/idempotency waits
@@ -2173,8 +2503,26 @@ Submit own route Attempt lock = FOR UPDATE
 Submit does not lock other Students' Attempts
 late Submit deadline reconciliation = public BE-002 action after local transaction
 Homework lifecycle precedence = closed/archived/draft first; active Topic consistency second
-terminal status != in_progress = attempt_not_editable for new key
-corrupt in_progress finalization fields = server invariant failure
+locked attempt.id = preliminary authorized Attempt
+locked attempt.institution_id = authenticated Student Institution
+locked attempt.student_id = authenticated Student
+locked attempt.assessment_id = locked Homework Assessment
+locked attempt.assessment_student_id = authoritative persisted AssessmentStudent
+locked attempt.deadline_at = null
+Homework Attempt statuses = in_progress/submitted/waiting_for_teacher_review/checked
+Homework finalization_reason != timeout_auto_submit
+timed_out_finalized / timeout_auto_submit = Blitz-only
+in_progress submitted_at/finalized_at/locked_at/finalization_reason = all null
+structurally valid terminal = attempt_not_editable for new key
+structurally valid in_progress = may Submit after shared persisted-answer integrity gate
+structural corruption/post-authorization drift or disappearance = LogicException / safe 500 server_error
+structural corruption = zero Submit mutation; no Submit idempotency completion
+new Submit gate = read-only Questions in position/ID order -> StudentHomeworkAttemptAnswerStates
+shared integrity implementation = delivered StudentHomeworkAnswerIntegrity; no second validator
+gate order = lifecycle/deadline/Attempt validation -> gate -> finalizeByStudentSubmit -> complete -> commit
+Question/Answer/File row locks = none; own Attempt FOR UPDATE remains mutation barrier
+non-file/file Answer corruption = rollback; Attempt in_progress; no new Submit record; Answers/Files unchanged
+fixed-key regressions = 500 -> 500 -> fixture-only repair -> 200/one completed record -> replay 200/no churn
 result pair = untouched by Submit
 next Attempt = never auto-created
 ```
@@ -2191,14 +2539,51 @@ Codex must not substitute:
 - exclusive shared-parent locks or all-Attempt locking for ordinary Submit;
 - inline all-Attempt deadline reconciliation inside the Submit transaction;
 - mapping corrupt `in_progress` finalization fields to normal non-editable;
+- mapping post-authorization disappearance/identity drift to ordinary `404`;
+- treating disallowed Homework Attempt status/reason or non-null Attempt deadline as ordinary non-editable;
+- finalizing/completing idempotency before the shared persisted-answer integrity gate;
+- a Submit-specific Answer validator or Answer/File `FOR UPDATE`;
+- relaxing Stage-7 integrity to accept checked/scored Answers or claiming genuine Stage-9 endpoint replay proof;
+- deleting/rewriting a historical completed record because later projection fails;
 - pair/result mutation;
 - submit-and-start-next behavior.
 
 ---
 
-# 45. Completion Report
+# 45. Implementation Execution, Delivery, and Completion Report
 
-Return only:
+Implementation remains unauthorized until the Readiness Gate is PASS. Once
+authorized, after **all** BE-007 implementation verification in Section 42 and
+the focused scope/diff self-review pass, Codex must complete GitHub delivery in
+the same execution. Do not stop before PR creation or wait for another delivery
+instruction.
+
+Suggested implementation branch:
+
+```text
+implement/s07-be-007-idempotent-final-homework-submit
+```
+
+Required delivery sequence:
+
+1. stage only BE-007 task scope, preserving unrelated user work;
+2. run `git diff --cached --check` and require PASS;
+3. commit with the exact message:
+
+   ```text
+   feat(stage7): add idempotent homework submit
+   ```
+
+4. push the implementation branch;
+5. create a PR against `main`;
+6. do not merge; Project Owner merges only after ChatGPT acceptance;
+7. do not update `STAGE_07_TASK_INDEX.md` or other task/Stage bookkeeping.
+
+Report completion only after the required PR exists. If implementation is
+complete but assigned delivery cannot complete safely, report `DELIVERY BLOCKED`
+with the exact blocker and current Git/delivery state.
+
+Use one status:
 
 ```text
 IMPLEMENTATION COMPLETE
@@ -2208,6 +2593,12 @@ or:
 
 ```text
 BLOCKED
+```
+
+or, only when implementation passed but assigned delivery cannot complete:
+
+```text
+DELIVERY BLOCKED
 ```
 
 with:
@@ -2224,8 +2615,14 @@ with:
 10. `git diff --check`;
 11. scope/non-goal confirmation;
 12. deviations/blockers;
-13. final `git status --short`.
+13. `git diff --cached --check` result before commit;
+14. commit SHA;
+15. implementation branch;
+16. PR number and URL against `main`;
+17. final `git status --short`.
 
 Do not claim `Accepted`.
 
-Do not commit/push/create PR/update Stage bookkeeping unless explicitly instructed later.
+Codex is explicitly authorized and required to commit/push/create the PR after
+all task verification passes. Project Owner owns merge only after ChatGPT
+acceptance; Codex must not merge or update Stage bookkeeping.
