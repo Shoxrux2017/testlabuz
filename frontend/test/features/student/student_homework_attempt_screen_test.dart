@@ -14,6 +14,7 @@ import 'package:testlabuz_client/features/student/application/student_homework_d
 import 'package:testlabuz_client/features/student/data/student_homework_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
+import 'package:testlabuz_client/features/student/domain/student_answer_mutation.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_route_target.dart';
@@ -25,6 +26,7 @@ import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/presentation/student_attempt_answer_read_view.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_attempt_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_read_view.dart';
+import 'package:testlabuz_client/features/student/presentation/student_question_answer_editor.dart';
 
 import 'student_test_support.dart';
 
@@ -71,10 +73,10 @@ void main() {
         expect(find.text('2026-09-08 17:00'), findsOneWidget);
         expect(find.text('Deadline'), findsOneWidget);
         expect(find.text('2026-09-10 18:00'), findsOneWidget);
-        expect(find.byType(StudentQuestionReadView), findsNWidgets(10));
-        expect(find.text('Saved answer'), findsNWidgets(9));
-        expect(find.text('Not answered'), findsOneWidget);
-        _expectReadOnly(tester);
+        expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(9));
+        expect(find.byType(StudentQuestionReadView), findsOneWidget);
+        expect(find.text('Saved answer'), findsOneWidget);
+        expect(find.text('Save answer'), findsNWidgets(9));
         expect(tester.takeException(), isNull);
       },
     );
@@ -82,7 +84,14 @@ void main() {
     testWidgets(
       '${surface.name} renders every own saved answer with mixed-case UUIDs without editing',
       (tester) async {
-        await _pump(tester, surface: surface);
+        await _pump(
+          tester,
+          surface: surface,
+          attemptRepository: _AttemptRepository(
+            onFetch: (_) async =>
+                _attempt(status: StudentHomeworkAttemptStatus.submitted),
+          ),
+        );
         await tester.pumpAndSettle();
         expect(find.text('Single selected option'), findsOneWidget);
         expect(find.text('Multiple selected A'), findsOneWidget);
@@ -298,6 +307,10 @@ void main() {
         surface: AppDeviceSurface.mobile,
         textScale: 2,
         width: 320,
+        attemptRepository: _AttemptRepository(
+          onFetch: (_) async =>
+              _attempt(status: StudentHomeworkAttemptStatus.submitted),
+        ),
       );
       await tester.pumpAndSettle();
       final scroll = find.byKey(const Key('studentHomeworkAttemptScroll'));
@@ -588,6 +601,12 @@ class _AttemptRepository implements StudentHomeworkAttemptRepository {
   @override
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) =>
       onFetch?.call(attemptId) ?? Future.value(_attempt());
+  @override
+  Future<StudentAttemptAnswerMutationResult> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  ) => throw StateError('Shell regression must never save an answer.');
   @override
   Future<StudentHomeworkAttemptStartResult> startAttempt(
     String homeworkId,

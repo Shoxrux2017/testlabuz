@@ -18,6 +18,8 @@ abstract final class ApiErrorCodes {
   static const taskArchived = 'task_archived';
   static const assessmentNotAssigned = 'assessment_not_assigned';
   static const deadlinePassed = 'deadline_passed';
+  static const attemptNotEditable = 'attempt_not_editable';
+  static const selectionLimitExceeded = 'selection_limit_exceeded';
   static const attemptsExhausted = 'attempts_exhausted';
   static const idempotencyKeyReused = 'idempotency_key_reused';
   static const resultPairLocked = 'result_pair_locked';

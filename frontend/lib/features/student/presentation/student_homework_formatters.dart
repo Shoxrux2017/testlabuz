@@ -97,3 +97,19 @@ String studentHomeworkStartFailureMessage(ApiFailure failure) =>
             'Refresh and try again.',
       _ => 'The attempt could not be started. Refresh and try again.',
     };
+
+String studentAnswerSaveFailureMessage(ApiFailure failure) =>
+    switch (failure.serverCode) {
+      ApiErrorCodes.selectionLimitExceeded => 'Too many options are selected.',
+      ApiErrorCodes.validationFailed =>
+        'Review your answer before saving again.',
+      ApiErrorCodes.deadlinePassed => 'The Homework deadline has passed.',
+      ApiErrorCodes.attemptNotEditable => 'This attempt is no longer editable.',
+      ApiErrorCodes.taskClosed ||
+      ApiErrorCodes.taskArchived ||
+      ApiErrorCodes.taskNotActive => 'This Homework is no longer editable.',
+      ApiErrorCodes.resourceNotFound => 'This Attempt is no longer available.',
+      ApiErrorCodes.businessConflict =>
+        'The Attempt changed. Review its reloaded state before saving again.',
+      _ => 'Your draft has been kept. Review it before saving again.',
+    };

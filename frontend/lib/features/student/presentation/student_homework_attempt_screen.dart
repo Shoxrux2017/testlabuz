@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
+import '../application/student_attempt_answer_editor_controller.dart';
+import '../application/student_attempt_answer_editor_state.dart';
 import '../application/student_homework_attempt_controller.dart';
 import '../application/student_homework_attempt_state.dart';
 import '../application/student_homework_detail_controller.dart';
 import '../application/student_homework_detail_state.dart';
+import '../application/student_session_key.dart';
 import '../domain/student_homework.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_route_target.dart';
@@ -15,15 +19,104 @@ import '../domain/student_homework_route_target.dart';
 import 'student_attempt_answer_read_view.dart';
 import 'student_homework_formatters.dart';
 import 'student_question_read_view.dart';
+import 'student_question_answer_editor.dart';
 import 'student_topic_formatters.dart';
 
-class StudentHomeworkAttemptScreen extends ConsumerWidget {
+class StudentHomeworkAttemptScreen extends ConsumerStatefulWidget {
   const StudentHomeworkAttemptScreen({required this.target, super.key});
 
   final StudentHomeworkAttemptRouteTarget target;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StudentHomeworkAttemptScreen> createState() =>
+      _StudentHomeworkAttemptScreenState();
+}
+
+class _StudentHomeworkAttemptScreenState
+    extends ConsumerState<StudentHomeworkAttemptScreen> {
+  bool _leaving = false;
+  DialogRoute<bool>? _leaveDialog;
+
+  StudentHomeworkAttemptRouteTarget get target => widget.target;
+
+  StudentSessionKey? get _sessionKey => StudentSessionSnapshot.fromSession(
+    ref.read(authSessionControllerProvider),
+    ref.read(appDeviceSurfaceProvider),
+  ).eligibleKey;
+
+  Future<void> _backToHomework() async {
+    if (_leaving) return;
+    _leaving = true;
+    final capturedTarget = target;
+    final capturedSession = _sessionKey;
+    final router = GoRouter.of(context);
+    final capturedLocation = router.routeInformationProvider.value.uri;
+    final provider = studentAttemptAnswerEditorControllerProvider(target);
+    final editor = ref.read(provider);
+    var leave = true;
+    if (editor.hasDirtyDrafts || editor.hasUncertainMutation) {
+      final route = DialogRoute<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Leave Attempt?'),
+          content: Text(
+            editor.hasUncertainMutation
+                ? 'A save result is still unconfirmed. '
+                      'Leaving will discard the local uncertainty/reconciliation state. '
+                      'Re-opening the attempt will reload server data.'
+                : 'You have unsaved answer changes.\n'
+                      'Leave and discard these changes?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Stay'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Leave'),
+            ),
+          ],
+        ),
+      );
+      _leaveDialog = route;
+      leave = await Navigator.of(context).push(route) ?? false;
+      if (identical(_leaveDialog, route)) _leaveDialog = null;
+    }
+    if (!mounted) return;
+    _leaving = false;
+    if (!leave ||
+        target != capturedTarget ||
+        _sessionKey != capturedSession ||
+        router.routeInformationProvider.value.uri != capturedLocation) {
+      return;
+    }
+    ref.read(provider.notifier).clearLocalState();
+    router.go(
+      AppRoutePaths.studentHomeworkDetailLocation(
+        capturedTarget.topicId,
+        capturedTarget.homeworkId,
+      ),
+    );
+  }
+
+  void _dismissObsoleteDialog() {
+    final route = _leaveDialog;
+    if (route == null) return;
+    _leaveDialog = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (route.isActive) route.navigator?.removeRoute(route);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant StudentHomeworkAttemptScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.target != target) _dismissObsoleteDialog();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final homeworkTarget = StudentHomeworkRouteTarget(
       topicId: target.topicId,
       homeworkId: target.homeworkId,
@@ -34,17 +127,22 @@ class StudentHomeworkAttemptScreen extends ConsumerWidget {
     final attemptProvider = studentHomeworkAttemptControllerProvider(target);
     final homeworkState = ref.watch(homeworkProvider);
     final attemptState = ref.watch(attemptProvider);
+    final editorProvider = studentAttemptAnswerEditorControllerProvider(target);
+    final editorState = ref.watch(editorProvider);
+    final editorController = ref.read(editorProvider.notifier);
     final homeworkController = ref.read(homeworkProvider.notifier);
     final attemptController = ref.read(attemptProvider.notifier);
     final timezone =
         ref.watch(authSessionControllerProvider).user?.institution?.timezone ??
         '';
-    void backToHomework() => context.go(
-      AppRoutePaths.studentHomeworkDetailLocation(
-        target.topicId,
-        target.homeworkId,
-      ),
-    );
+    final sessionKey = _sessionKey;
+    ref.listen(authSessionControllerProvider, (_, _) {
+      if (_sessionKey != sessionKey) _dismissObsoleteDialog();
+    });
+    ref.listen(appDeviceSurfaceProvider, (_, _) {
+      if (_sessionKey != sessionKey) _dismissObsoleteDialog();
+    });
+    void backToHomework() => _backToHomework();
     void backToTopic() =>
         context.go(AppRoutePaths.studentTopicDetailLocation(target.topicId));
     void refresh() {
@@ -52,6 +150,7 @@ class StudentHomeworkAttemptScreen extends ConsumerWidget {
       attemptController.refresh();
     }
 
+    final terminalAttempt = editorState.terminalAttempt;
     Widget body;
     if (homeworkState.status == StudentHomeworkDetailStatus.notFound) {
       body = _AttemptNotice(
@@ -65,6 +164,25 @@ class StudentHomeworkAttemptScreen extends ConsumerWidget {
         title: 'Attempt unavailable',
         actionLabel: 'Back to Homework',
         onAction: backToHomework,
+      );
+    } else if (sessionKey != null &&
+        homeworkState.status == StudentHomeworkDetailStatus.data &&
+        homeworkState.homework != null &&
+        homeworkState.homework!.id.toLowerCase() == target.homeworkId &&
+        homeworkState.homework!.topic.id.toLowerCase() == target.topicId &&
+        terminalAttempt != null &&
+        terminalAttempt.id.toLowerCase() == target.attemptId &&
+        terminalAttempt.assessmentId.toLowerCase() == target.homeworkId &&
+        (attemptState.status == StudentHomeworkAttemptLoadStatus.data ||
+            attemptState.status ==
+                StudentHomeworkAttemptLoadStatus.refreshing ||
+            attemptState.status == StudentHomeworkAttemptLoadStatus.error)) {
+      body = _AttemptContent(
+        homework: homeworkState.homework!,
+        attempt: terminalAttempt,
+        timezone: timezone,
+        editorState: editorState,
+        editorController: editorController,
       );
     } else if (homeworkState.status == StudentHomeworkDetailStatus.error ||
         attemptState.status == StudentHomeworkAttemptLoadStatus.error) {
@@ -92,6 +210,8 @@ class StudentHomeworkAttemptScreen extends ConsumerWidget {
         homework: homeworkState.homework!,
         attempt: attemptState.attempt!,
         timezone: timezone,
+        editorState: editorState,
+        editorController: editorController,
       );
     } else {
       final refreshing =
@@ -109,30 +229,36 @@ class StudentHomeworkAttemptScreen extends ConsumerWidget {
       );
     }
 
-    return Scaffold(
-      key: const Key('studentHomeworkAttemptScreen'),
-      appBar: AppBar(
-        title: const Text('Homework Attempt'),
-        leading: IconButton(
-          key: const Key('studentHomeworkAttemptBackButton'),
-          tooltip: 'Back to Homework',
-          onPressed: backToHomework,
-          icon: const Icon(Icons.arrow_back),
-        ),
-        actions: [
-          IconButton(
-            key: const Key('studentHomeworkAttemptRefreshButton'),
-            tooltip: 'Refresh Attempt',
-            onPressed:
-                homeworkState.isRequestInFlight ||
-                    attemptState.isRequestInFlight
-                ? null
-                : refresh,
-            icon: const Icon(Icons.refresh),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _backToHomework();
+      },
+      child: Scaffold(
+        key: const Key('studentHomeworkAttemptScreen'),
+        appBar: AppBar(
+          title: const Text('Homework Attempt'),
+          leading: IconButton(
+            key: const Key('studentHomeworkAttemptBackButton'),
+            tooltip: 'Back to Homework',
+            onPressed: backToHomework,
+            icon: const Icon(Icons.arrow_back),
           ),
-        ],
+          actions: [
+            IconButton(
+              key: const Key('studentHomeworkAttemptRefreshButton'),
+              tooltip: 'Refresh Attempt',
+              onPressed:
+                  homeworkState.isRequestInFlight ||
+                      attemptState.isRequestInFlight
+                  ? null
+                  : refresh,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        body: SafeArea(child: body),
       ),
-      body: SafeArea(child: body),
     );
   }
 }
@@ -142,11 +268,15 @@ class _AttemptContent extends StatelessWidget {
     required this.homework,
     required this.attempt,
     required this.timezone,
+    required this.editorState,
+    required this.editorController,
   });
 
   final StudentHomeworkDetail homework;
   final StudentHomeworkAttempt attempt;
   final String timezone;
+  final StudentAttemptAnswerEditorState editorState;
+  final StudentAttemptAnswerEditorController editorController;
 
   String instant(DateTime value) =>
       formatStudentInstitutionInstant(value, timezone) ??
@@ -158,6 +288,18 @@ class _AttemptContent extends StatelessWidget {
       for (final answer in attempt.answers)
         answer.questionId.toLowerCase(): answer,
     };
+    final activeEditor = editorState.questions[editorState.activeQuestionId];
+    final displayedQuestions = [
+      ...attempt.questions,
+      if (attempt.status == StudentHomeworkAttemptStatus.inProgress &&
+          activeEditor != null &&
+          !attempt.questions.any(
+            (question) =>
+                question.id.toLowerCase() ==
+                activeEditor.question.id.toLowerCase(),
+          ))
+        activeEditor.question,
+    ];
     final timing = <(String, String)>[
       ('Started', instant(attempt.startedAt)),
       if (attempt.deadlineAt case final value?) ('Deadline', instant(value)),
@@ -229,12 +371,31 @@ class _AttemptContent extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                for (final question in attempt.questions) ...[
-                  StudentQuestionReadView(question: question),
-                  StudentAttemptAnswerReadView(
-                    question: question,
-                    answer: answers[question.id.toLowerCase()],
-                  ),
+                for (final question in displayedQuestions) ...[
+                  if (attempt.status ==
+                          StudentHomeworkAttemptStatus.inProgress &&
+                      editorState.questions[question.id.toLowerCase()] != null)
+                    StudentQuestionAnswerEditor(
+                      state: editorState.questions[question.id.toLowerCase()]!,
+                      canEdit: editorState.canEdit(question.id),
+                      canSave: editorState.canSave(question.id),
+                      isReconciling: editorState.isReconciling,
+                      timezone: timezone,
+                      onChanged: (draft) =>
+                          editorController.updateDraft(question.id, draft),
+                      onSave: () => editorController.saveAnswer(question.id),
+                      onDiscard: () =>
+                          editorController.discardChanges(question.id),
+                      onClear: () => editorController.clearAnswer(question.id),
+                      onReload: editorController.reloadAttempt,
+                    )
+                  else ...[
+                    StudentQuestionReadView(question: question),
+                    StudentAttemptAnswerReadView(
+                      question: question,
+                      answer: answers[question.id.toLowerCase()],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                 ],
               ],
