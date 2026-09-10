@@ -8,13 +8,14 @@
 | Stage | `Stage 7 — Student Homework and Submission Flow` |
 | Block | `Backend` |
 | Review mode | `Read-only` |
-| Status | `Pending — execute only after S07-BE-001…007 are Accepted and Delivered` |
+| Status | `Pending current-main ChatGPT revalidation before execution` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current contract review baseline | `origin/main @ 943596fbac4bcac0e0226b5f0650d4843288e8c2` |
-| Audited `origin/main` | `Resolve at checkpoint execution time` |
+| Current contract review baseline | `origin/main @ ad40fc2bbca1efd348b8da25651bc3d6e5e9d8f7` |
+| Audited `origin/main` | `Resolve/freeze at actual checkpoint execution` |
+| Backend task delivery | `S07-BE-001…007 — Accepted / Delivered` |
 | Backend block diff base | `First parent of S07-BE-001 production merge 86067f9a61864a4d313b7ec8b59ee1217218b612` |
 | Review owner | `ChatGPT` |
-| Verification executor | `Project Owner or approved CI` |
+| Verification executor | `Project Owner / approved CI` |
 | Codex role | `None during read-only review; focused fixes only if ChatGPT later issues a fix contract` |
 | Verdict | `Pending` |
 | Findings | `Pending` |
@@ -32,6 +33,10 @@ Do not give this review to Codex merely to run the full suite or collect evidenc
 
 Run this checkpoint only when all conditions below are true.
 
+S07-BE-001…007 are now `Accepted / Delivered`. This delivery state does not
+constitute checkpoint execution or PASS; ChatGPT must still revalidate current
+main before execution and resolve/freeze the actual audited revision.
+
 | Condition | Required |
 |---|---|
 | `S07-DOC-001` accepted/delivered | Yes |
@@ -48,7 +53,7 @@ Run this checkpoint only when all conditions below are true.
 | Working tree | Clean |
 | No unresolved task blocker | Yes |
 
-At checkpoint execution, record:
+At checkpoint execution, record in the ChatGPT final Phase 2 review report:
 
 ```text
 origin/main = <sha>
@@ -81,11 +86,17 @@ During this review:
 - do not stage;
 - do not commit;
 - do not push;
+- do not create or update a PR;
 - do not merge.
 
 ChatGPT identifies and classifies findings.
 
-If code changes are required:
+All instructions to populate evidence or replace `Pending` fields apply to the
+**ChatGPT final Phase 2 review report**, not to editing this contract during the
+checkpoint. Production, tests, migrations, and contracts remain unchanged.
+
+If findings exist, Phase 2 returns `NOT ACCEPTED` and ChatGPT creates a separate
+focused fix task:
 
 1. record `NOT ACCEPTED`;
 2. preserve the review evidence;
@@ -144,7 +155,9 @@ GitHub `main` is the source of truth.
 
 # 5. Audited Backend Task Inventory
 
-Fill from actual delivery evidence.
+Fill from actual delivery evidence in the ChatGPT final Phase 2 review report.
+The `Pending` results below are checkpoint review results, not the already
+completed task acceptance/delivery statuses. Do not edit this contract to fill them.
 
 | Task | Required integrated outcome | Delivery evidence | Result |
 |---|---|---|---|
@@ -540,21 +553,67 @@ reason = task_closed_auto_finalize
 
 ## 12.5 Explicit Submit structural integrity
 
-For a new-key Submit:
+Verify safe locked exact-Attempt re-resolution retains the previously authorized
+target and trusted Institution/Student scope. The complete locked Homework
+Attempt invariant also requires identity/Assessment/recipient consistency:
 
 ```text
-status != in_progress
-=> 409 attempt_not_editable
+attempt.id = preliminary authorized Attempt
+attempt.institution_id = authenticated Student Institution
+attempt.student_id = authenticated Student
+attempt.assessment_id = locked Homework Assessment
+attempt.assessment_student_id = authoritative persisted AssessmentStudent
+
+attempt.deadline_at = null
+
+allowed Homework statuses only:
+- in_progress
+- submitted
+- waiting_for_teacher_review
+- checked
+
+finalization_reason != timeout_auto_submit
+
+in_progress requires:
+submitted_at = null
+finalized_at = null
+locked_at = null
+finalization_reason = null
 ```
 
-But an inconsistent row:
+For a new logical Submit, apply the complete invariant only after this
+precedence, without replacing safe exact-target locking with a status-only check:
 
 ```text
-status = in_progress
-AND any finalization field is non-null
+Homework lifecycle
+-> active Topic consistency
+-> deadline
+-> full Attempt structural invariant
+-> editability
 ```
 
-is a persisted invariant failure, not a normal `attempt_not_editable` outcome.
+Review outcomes at the structural/editability gate:
+
+```text
+structurally valid in_progress
+=> may proceed to the saved-answer integrity gate
+
+structurally valid terminal
+=> new-key 409 attempt_not_editable
+
+structural corruption
+=> safe server invariant / 500 server_error
+```
+
+Blitz-only `timed_out_finalized` / `timeout_auto_submit`, non-null Attempt
+deadline, invalid identity/recipient relationships, and corrupt `in_progress`
+finalization fields must not be reduced to ordinary non-editability. A new
+Submit rejected by this invariant leaves no Submit mutation or new
+completed/incomplete idempotency record.
+
+Completed same-key replay bypasses current lifecycle/deadline, but still
+validates the complete locked Homework Attempt invariant before returning
+action success. Historical completed idempotency metadata remains unchanged.
 
 The Student finalizer must preserve the delivered BE-002 structural semantics:
 terminal status returns false; corrupt `in_progress` state fails safely.
@@ -569,6 +628,70 @@ timeout_auto_submit
 waiting_for_teacher_review
 checked
 ```
+
+Later Attempt terminal status progression is only a replay compatibility case
+with valid Stage-7 pending Answers (Sections 17 and 25); Stage 7 does not produce
+Teacher-review or checked states.
+
+## 12.7 Pre-finalization saved-answer integrity
+
+For every new valid in-progress Submit, verify this delivered order while the
+own Attempt mutation barrier is held:
+
+```text
+own Attempt FOR UPDATE
+-> lifecycle/deadline
+-> full Attempt invariant
+-> StudentHomeworkAttemptAnswerStates
+-> StudentHomeworkAnswerIntegrity
+-> finalizeByStudentSubmit
+-> idempotency complete
+-> commit
+```
+
+The shared saved-answer gate must:
+
+- reuse the delivered read-only path also used by Student Attempt projection;
+- read current Assessment Questions in deterministic position/ID order;
+- validate both non-file and file-based persisted Answers, including the File graph;
+- require `checking_status = pending` and null `awarded_points`, `feedback`,
+  `checked_by_user_id`, and `checked_at`;
+- require no completeness: full, partial, and zero saved-answer sets are allowed;
+- create no missing Answers and perform no Answer/File mutation, repair, scoring,
+  or checking;
+- acquire no Question row lock or Answer/File `FOR UPDATE`;
+- retain own Attempt `FOR UPDATE` as the answer/file mutation barrier.
+
+Response projection must not be the first discovery of pre-existing saved-state
+corruption after finalization and idempotency completion have already committed.
+Corrupt saved Answer/File state before a new Submit must produce:
+
+```text
+safe 500 server_error
+Attempt remains in_progress
+no completed/incomplete Submit idempotency record
+no Answer/File mutation
+```
+
+Require evidence for this fixed-key sequence separately for non-file and
+file-based corruption, using the same key throughout:
+
+```text
+500
+-> retry same key 500
+-> fixture repair
+-> 200 student_submit / one completed record
+-> replay 200 / no timestamp churn
+```
+
+Compare Attempt fields, Answer/File rows and file contents around every request;
+only the explicit test-fixture repair may change the saved fixture. Verify the
+completed record identity, result metadata, and timestamps remain stable on replay.
+
+If corruption arises after a historical successful Submit, later Student-safe
+projection may return safe `500 server_error`. That failure must never delete or
+rewrite the historical completed Submit record or its timestamps, re-finalize the
+Attempt, or mutate Answers/Files.
 
 ---
 
@@ -616,6 +739,27 @@ No client/device clock authority.
 This is a blocking Stage 7 risk surface.
 
 Verify all competing operations make decisions from locked current state.
+
+For a new Submit, verify Homework lifecycle precedes active Topic consistency,
+then deadline, then the full Attempt invariant and editability (Section 12.5).
+The lock helper retains the safe exact target; it must not apply the complete
+structural validator before the lifecycle/deadline gates.
+
+Required negative precedence evidence includes:
+
+```text
+closed Homework + structurally invalid otherwise-resolved Attempt
+=> 409 task_closed; no Submit record; no Submit mutation
+
+active due Homework + structurally invalid terminal Homework Attempt
+=> 409 deadline_passed; no Submit record; no student_submit mutation
+```
+
+Late Submit abandons its new claim and releases its local transaction before
+public BE-002 reconciliation. That reconciliation may finalize due in-progress
+Attempts but must not rewrite an already terminal Attempt. Completed same-key
+replay bypasses current lifecycle/deadline while retaining full locked-invariant
+validation and historical idempotency metadata.
 
 Required outcomes:
 
@@ -755,14 +899,33 @@ same Attempt
 Same key/same Attempt:
 
 ```text
-200 replay
+complete locked Homework Attempt invariant
+-> 200 replay when the current Student-safe representation can be produced
 ```
 
-Different key after terminal Submit:
+For a new logical Submit, verify the delivered order after preliminary
+authorization and shared Topic/Assessment/Homework + exact Attempt locks:
 
 ```text
-attempt_not_editable
+completed idempotency replay check
+-> new claim
+-> submittedAt captured after lock/idempotency waits
+-> Homework lifecycle
+-> active Topic consistency
+-> deadline
+-> full Attempt structural invariant
+-> terminal editability
+-> shared saved-answer integrity gate
+-> student_submit finalization
+-> idempotency completion
+-> commit
 ```
+
+Only a structurally valid terminal Attempt on an otherwise active/pre-deadline
+new-key path maps to `409 attempt_not_editable`. Structural corruption at its
+required validation point is safe `500 server_error`, never a status-only
+non-editability shortcut. Rejected new claims leave no completed/incomplete
+Submit record; a historical completed record is never discarded for a later failure.
 
 ## 17.4 Replay after later lifecycle
 
@@ -770,13 +933,33 @@ A previously completed same-key request may replay after:
 
 - deadline;
 - close/archive;
-- later Stage 9 status progression.
+- later Attempt terminal status progression while saved Answers remain valid
+  Stage-7 pending state.
 
-Authorization to target remains required.
+BE-007 guarantees durable Submit/idempotency replay semantics. Authorization to
+the target and the complete locked Homework Attempt invariant remain required;
+completed same-key replay bypasses current lifecycle/deadline, editability, and
+the new-Submit saved-answer gate.
+
+HTTP replay still requires a producible current Student-safe representation.
+Later persisted corruption may cause safe `500 server_error` during projection,
+but never deletion/rewriting of historical completed metadata or timestamps.
+
+Genuine Stage-9 checked-answer Student projection is not implemented by Stage 7.
+BE-007 does not prove endpoint replay with checked/scored Answers. Stage 9 must
+extend `StudentHomeworkAnswerIntegrity` / Student-safe projection for legitimate
+checked/scored states while preserving historical completed BE-007 idempotency
+records and replay semantics. Phase 2 must reject premature relaxation of the
+Stage-7 pending-only Answer integrity boundary.
 
 ## 17.5 Atomicity
 
 Verify no successful protected operation can commit domain state without completed idempotency metadata in the same transaction.
+
+For Submit, the shared persisted-answer integrity gate must succeed before
+finalization and idempotency completion. Require both fixed-key corruption
+rollback/recovery regressions and historical-record preservation evidence from
+Section 12.7.
 
 Any reliable duplicate domain mutation from an idempotency race is `P1/P2` depending impact.
 
@@ -965,6 +1148,7 @@ BE-006 file answer:
 BE-007 explicit Submit:
   Topic/Assessment/Homework = shared/read
   own route Attempt = FOR UPDATE
+  saved-answer integrity gate = read-only; no Question/Answer/File row locks
   no ordinary class-wide/all-Attempt lock
 
 deadline reconciliation / Teacher close:
@@ -1033,14 +1217,31 @@ Verify:
 ```text
 shared Topic/Assessment/Homework locks
 own route Attempt FOR UPDATE
+lock helper = safe exact-target re-resolution, not the full structural validator
 no ordinary all-Attempt Submit lock
 late Submit releases local transaction before public BE-002 reconciliation
-Homework lifecycle precedence matches BE-005/006
-corrupt in_progress finalization state = server invariant failure
+new Submit: Homework lifecycle -> active Topic consistency -> deadline
+  -> full Attempt invariant -> editability
+full invariant = identity/recipient/tenant consistency + null Attempt deadline
+  + allowed Homework statuses + no timeout_auto_submit
+  + all in_progress finalization fields null
+valid in_progress -> shared saved-answer integrity gate -> finalize -> complete -> commit
+valid terminal on active/pre-deadline new key -> 409 attempt_not_editable
+structural corruption at invariant gate -> safe 500 server_error
+completed same-key replay bypasses lifecycle/deadline but validates full locked invariant
+StudentHomeworkAttemptAnswerStates -> StudentHomeworkAnswerIntegrity = read-only
+Questions ordered by position/ID; pending-only Answer state; no completeness/scoring
+no Answer/File FOR UPDATE; own Attempt lock remains the mutation barrier
+corrupt saved state -> 500 + in_progress + no new Submit record + no Answer/File mutation
+non-file and file fixed-key recovery/replay evidence required
+later projection failure never deletes/rewrites historical completed Submit metadata
 ```
 
-Any delivered implementation that follows the superseded coarse-lock behavior
-instead of these hardened contracts is a checkpoint finding.
+Verify the complete requirements and fixed-key evidence in Sections 12.5–12.7,
+14, and 17, including the Stage-7 pending-only / Stage-9 projection boundary.
+Superseded coarse locking, status-only validation, validation before required
+lifecycle/deadline precedence, or integrity checking only after commit is a
+checkpoint finding.
 
 ---
 
@@ -1106,14 +1307,24 @@ unsupported_file_type
 file_too_large
 file_upload_failed
 file_not_available
+server_error
 ```
+
+Structural or persisted-state corruption at its required validation point is
+intentionally surfaced as a safe server invariant / `500 server_error`. Verify
+the expected error envelope without weakening the invariant or replacing the
+defined lifecycle/deadline precedence. Failed new Submit integrity checks roll
+back the new claim; later projection failure preserves historical completed
+Submit metadata (Sections 12, 14, and 17).
 
 No raw:
 
+- `LogicException` details;
 - SQL;
 - filesystem path;
 - stack trace;
 - class name;
+- internal idempotency/resource metadata;
 - answer key;
 - foreign resource existence.
 
@@ -1230,11 +1441,28 @@ and does not preempt Stage 9 by:
 - converting to `checked`;
 - entering Teacher review.
 
+BE-007 guarantees durable Submit/idempotency replay semantics. Later Attempt
+terminal status progression may replay only while saved Answers remain valid
+Stage-7 pending state. This is not proof of genuine endpoint replay after
+Stage-9 checked/scored Answers.
+
+Genuine Stage-9 checked-answer Student projection is not implemented by Stage 7.
+Stage 9 must extend `StudentHomeworkAnswerIntegrity` / Student-safe projection
+for legitimate checked/scored states while preserving the historical completed
+BE-007 idempotency record and replay semantics.
+
+Verify Stage 7 has not prematurely relaxed `checking_status = pending` or the
+null awarded/checking fields. Later projection failures must not delete/rewrite
+completed Submit records. Require both pending-only boundary and durable-history
+evidence; do not demand Stage-9 implementation as a Stage-7 checkpoint condition.
+
 ---
 
 # 26. Stage 7 Backend Acceptance-Criteria Matrix
 
-At review execution populate evidence.
+At review execution populate evidence in the ChatGPT final Phase 2 review
+report, using this matrix as its template. Do not edit this contract or replace
+its `Pending` fields during the checkpoint.
 
 | Criterion | Primary task(s) | Evidence | Result |
 |---|---|---|---|
@@ -1250,7 +1478,9 @@ At review execution populate evidence.
 | File answer private flow | BE-001/006 | `<tests>` | Pending |
 | Own protected submission download | BE-006 | `<tests>` | Pending |
 | Explicit Submit freeze | BE-007 | `<tests>` | Pending |
+| Pre-finalization read-only saved-answer integrity + non-file/file fixed-key rollback/recovery, no Answer/File mutation or completeness | BE-007 | `<tests/code, row/file snapshots>` | Pending |
 | Durable Submit idempotency | BE-001/004/007 | `<tests>` | Pending |
+| Historical completed Submit metadata/timestamps preserved when later projection fails | BE-007 | `<tests, record snapshots>` | Pending |
 | Deadline auto-finalization | BE-002 | `<tests>` | Pending |
 | Teacher-close auto-finalization | BE-002 | `<tests>` | Pending |
 | No scoring/checking in Stage 7 | BE-002/005/006/007 | `<review/tests>` | Pending |
@@ -1258,7 +1488,10 @@ At review execution populate evidence.
 | Raw JSON / exact Student text boundary | BE-005 | `<tests/code>` | Pending |
 | File uploader/download integrity + shared download lock | BE-006 | `<tests/code>` | Pending |
 | Cross-Student ordinary-write non-blocking lock scope | BE-005/006/007 | `<pgsql tests>` | Pending |
-| Submit structural invariant + local lock scope | BE-007 | `<tests/code>` | Pending |
+| New-Submit lifecycle/Topic/deadline precedence before full invariant/editability, including invalid otherwise-resolved Attempts | BE-007 | `<tests/code>` | Pending |
+| Complete locked Homework Attempt invariant on new Submit and replay + local lock scope | BE-007 | `<tests/code>` | Pending |
+| Safe server_error for structural/persisted corruption without internal leaks | BE-005/006/007 | `<tests/code>` | Pending |
+| Durable replay after later Attempt status progression with pending Answers; no premature Stage-9 checked-answer projection | BE-007 | `<tests/review>` | Pending |
 | Concurrency exact-once | BE-002/004/005/006/007 | `<pgsql tests>` | Pending |
 
 No required row may remain `Not verified` for `PASS`.
@@ -1380,20 +1613,19 @@ Do not edit schema during review.
 
 ## 27.6 Stage-wide diff hygiene
 
-Resolve exactly:
+From Windows PowerShell, resolve and check exactly:
 
-```bash
-BACKEND_BLOCK_BASE="$(git rev-parse 86067f9a61864a4d313b7ec8b59ee1217218b612^1)"
-AUDITED_MAIN="$(git rev-parse origin/main)"
-```
+```powershell
+$BACKEND_BLOCK_BASE = git rev-parse '86067f9a61864a4d313b7ec8b59ee1217218b612^1'
+$AUDITED_MAIN = git rev-parse origin/main
 
-Then run:
-
-```bash
-git diff --check "${BACKEND_BLOCK_BASE}...${AUDITED_MAIN}"
+git diff --check "$BACKEND_BLOCK_BASE...$AUDITED_MAIN"
 ```
 
 Must pass.
+
+The semantic base remains the first parent of the S07-BE-001 production merge.
+Record both resolved revisions in the final review report.
 
 Also inspect the complete backend Stage 7 diff.
 
@@ -1510,6 +1742,8 @@ Security/data-integrity/core-contract issue, including:
 - another Student's Attempt/file access;
 - answer-key leak;
 - idempotency duplicate mutation causing data corruption;
+- saved-answer corruption committed as a successful Submit or destruction of a
+  historical completed Submit record after projection failure;
 - post-deadline mutation;
 - storage path/private-file exposure;
 - data loss/corruption.
@@ -1521,6 +1755,11 @@ Material functional/architecture/lifecycle defect, including:
 - wrong Attempt count;
 - stale deadline state;
 - wrong finalization reason/timestamp;
+- new-Submit lifecycle/deadline precedence masked by premature full structural validation;
+- status-only non-editability that skips the full Homework Attempt invariant;
+- completed replay returning action success without the full locked invariant;
+- missing read-only pre-finalization saved-answer gate or fixed-key corruption/recovery evidence;
+- premature acceptance of checked/scored Answers by Stage-7 pending-only integrity;
 - Stage 7 scoring leakage;
 - broken official pair lock;
 - broken cleanup/reference semantics;
@@ -1530,7 +1769,7 @@ Material functional/architecture/lifecycle defect, including:
 
 ## P3
 
-Non-blocking maintainability/test clarity issue that does not break Stage contract.
+Lower-severity maintainability/test clarity issue that does not break Stage contract.
 
 Record findings:
 
@@ -1570,9 +1809,19 @@ NOT ACCEPTED
 - `P1 = 0`;
 - `P2 = 0`;
 - no unresolved architecture/API/database/lifecycle/security/tenant/idempotency/concurrency conflict;
+- correct new-Submit lifecycle/Topic/deadline precedence before full invariant/editability,
+  and full locked-invariant validation for completed replay;
+- pre-finalization read-only saved-answer integrity with both fixed-key corruption
+  rollback/recovery proofs and no Answer/File mutation;
+- historical completed Submit records preserved on later projection failure;
+- pending-only Stage-7 Answer integrity preserved, with no claim of genuine
+  Stage-9 checked-answer endpoint replay;
+- safe `server_error` responses for invariant/persisted-state corruption without
+  LogicException/class/SQL/path/internal metadata leaks;
 - required Stage 7 backend criteria have evidence.
 
-P3 findings alone do not automatically block PASS, but record them.
+If any findings remain, including P3 findings, return `NOT ACCEPTED` and create a
+separate focused fix task. Findings are never corrected during this checkpoint.
 
 ---
 
@@ -1584,7 +1833,8 @@ If:
 Verdict: PASS
 ```
 
-record final evidence:
+record final evidence in the ChatGPT final Phase 2 review report, without editing
+this contract:
 
 ```text
 Audited main: <sha>
@@ -1594,7 +1844,7 @@ Lint/static-equivalent: <result>
 git diff --check: PASS
 P1=0
 P2=0
-P3=<count>
+P3=0
 ```
 
 Then:
@@ -1682,7 +1932,11 @@ Do not preserve evidence a later change materially invalidated.
 
 # 35. Final Review Record Template
 
-When executed, replace `Pending` fields with evidence and conclude with:
+At actual checkpoint execution, use this template in the **ChatGPT final Phase 2
+review report**. Populate evidence and replace `Pending` fields in that report
+only; do not edit this contract. Resolve/freeze the audited `origin/main` at that
+execution, rather than treating the current contract review baseline as audited.
+Conclude the report with:
 
 ```text
 S07-BE-PHASE-2
@@ -1711,6 +1965,11 @@ API: <PASS/FAIL>
 Persistence: <PASS/FAIL>
 Lifecycle/deadline: <PASS/FAIL>
 Idempotency: <PASS/FAIL>
+Submit lifecycle/deadline/full-invariant precedence: <PASS/FAIL>
+Pre-finalization saved-answer integrity / fixed-key recovery: <PASS/FAIL>
+Historical completed Submit record preservation: <PASS/FAIL>
+Pending-only Answer integrity / Stage 9 projection boundary: <PASS/FAIL>
+Safe server invariant responses: <PASS/FAIL>
 Concurrency: <PASS/FAIL>
 Authorization: <PASS/FAIL>
 Tenant isolation: <PASS/FAIL>
@@ -1731,4 +1990,7 @@ Next permitted gate:
 <S07-FE-001 only if PASS>
 ```
 
-This checkpoint itself performs no implementation.
+This checkpoint itself performs no implementation, production/test/contract
+edits, or commit/push/PR delivery. Findings produce `NOT ACCEPTED` and
+separate focused fix tasks under Section 34; fixes are never applied during the
+checkpoint itself.
