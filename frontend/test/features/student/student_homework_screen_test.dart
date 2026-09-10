@@ -26,6 +26,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_list_q
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
+import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_detail_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_section.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_read_view.dart';
@@ -1304,6 +1305,15 @@ class _FixedHomeworkController extends StudentHomeworkDetailController {
 }
 
 class _StartRepository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  }) =>
+      throw StateError('This regression must not upload Student file answers.');
+
   @override
   Future<StudentAttemptAnswerMutationResult> saveAnswer(
     String attemptId,

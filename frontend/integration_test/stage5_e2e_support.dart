@@ -392,6 +392,7 @@ class Stage5LocalFileAdapter implements LocalFilePlatformAdapter {
     required String fileName,
     required Uint8List bytes,
     required String mimeType,
+    required String dialogTitle,
   }) async {
     final extension = _trustedExtension(fileName, mimeType);
     final record = await _write(

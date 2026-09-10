@@ -12,6 +12,8 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_attempt_answer_editor_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_attempt_answer_editor_state.dart';
+import 'package:testlabuz_client/features/student/application/student_file_answer_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_submission_file_picker.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_attempt_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_attempt_state.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_detail_controller.dart';
@@ -25,6 +27,8 @@ import 'package:testlabuz_client/features/student/domain/student_homework_attemp
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
+import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
+import 'package:testlabuz_client/features/student/presentation/student_file_answer_editor.dart';
 import 'package:testlabuz_client/features/student/presentation/student_attempt_answer_read_view.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_attempt_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_fill_blank_answer_editor.dart';
@@ -64,7 +68,13 @@ void main() {
       try {
         final harness = await _pump(tester, surface: surface);
         expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(8));
-        expect(find.byType(StudentAttemptAnswerReadView), findsOneWidget);
+        expect(find.byType(StudentFileAnswerEditor), findsOneWidget);
+        expect(find.byType(StudentQuestionAnswerCard), findsNWidgets(9));
+        expect(find.byType(StudentAttemptAnswerReadView), findsNothing);
+        expect(
+          harness.editorState.questions.containsKey(_questionId(6)),
+          isFalse,
+        );
         expect(find.text('Save answer'), findsNWidgets(8));
         expect(find.text('Clear answer'), findsNWidgets(6));
         expect(find.text('Select up to 2.'), findsOneWidget);
@@ -550,7 +560,8 @@ void main() {
               .data,
           'Submitted',
         );
-        expect(find.byType(StudentAttemptAnswerReadView), findsNWidgets(9));
+        expect(find.byType(StudentAttemptAnswerReadView), findsNWidgets(8));
+        expect(find.byType(StudentFileAnswerEditor), findsOneWidget);
         expect(find.text('Unable to load Attempt'), findsNothing);
         expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
         expect(find.text('Save answer'), findsNothing);
@@ -685,6 +696,111 @@ void main() {
     await _tap(tester, find.byTooltip('Back to Homework'));
     expect(find.text('Leave Attempt?'), findsNothing);
     expect(find.text('Homework destination'), findsOneWidget);
+    expect(harness.repository.saves, isEmpty);
+  });
+
+  for (final scenario in [
+    (fileUncertain: false, nonFileUncertain: false, dirty: false),
+    (fileUncertain: false, nonFileUncertain: false, dirty: true),
+    (fileUncertain: false, nonFileUncertain: true, dirty: true),
+    (fileUncertain: true, nonFileUncertain: true, dirty: true),
+  ]) {
+    testWidgets(
+      'file leave guard priority and both-controller preservation $scenario',
+      (tester) async {
+        final harness = await _pump(tester, routed: true);
+        final fileProvider = studentFileAnswerControllerProvider(_target);
+        final fileSubscription = harness.container.listen(
+          fileProvider,
+          (_, _) {},
+        );
+        final editorSubscription = harness.container.listen(
+          studentAttemptAnswerEditorControllerProvider(_target),
+          (_, _) {},
+        );
+        addTearDown(fileSubscription.close);
+        addTearDown(editorSubscription.close);
+        if (scenario.dirty) {
+          await _enter(
+            tester,
+            _inside(5, find.byType(TextField)),
+            'pending text',
+          );
+        }
+        if (scenario.nonFileUncertain) await _makeUncertain(tester, harness);
+        await _tap(tester, find.text('Choose file'));
+        final selection = fileSubscription
+            .read()
+            .questions[_questionId(6)]!
+            .selectedFile;
+        expect(selection, isNotNull);
+        if (scenario.fileUncertain) {
+          await _tap(tester, find.text('Upload answer'), settle: false);
+          harness.repository.uploads.single.completeError(
+            studentLocalFailure(ApiFailureKind.timeout),
+          );
+          await tester.pumpAndSettle();
+        }
+        final expected = scenario.fileUncertain
+            ? 'A file upload result is still unconfirmed.'
+            : scenario.nonFileUncertain
+            ? 'A save result is still unconfirmed.'
+            : 'You have unsaved answer changes.';
+        final savesBeforeLeave = harness.repository.saves.length;
+        final uploadsBeforeLeave = harness.repository.uploads.length;
+        await _tap(tester, find.byTooltip('Back to Homework'));
+        expect(find.textContaining(expected), findsOneWidget);
+        if (scenario.fileUncertain) {
+          expect(
+            find.textContaining('A save result is still unconfirmed.'),
+            findsNothing,
+          );
+        }
+        await _tap(tester, find.text('Stay'));
+        expect(
+          fileSubscription.read().questions[_questionId(6)]!.selectedFile,
+          same(selection),
+        );
+        expect(
+          fileSubscription.read().hasUncertainUpload,
+          scenario.fileUncertain,
+        );
+        expect(
+          editorSubscription.read().hasUncertainMutation,
+          scenario.nonFileUncertain,
+        );
+        if (scenario.dirty) {
+          expect(editorSubscription.read().hasDirtyDrafts, isTrue);
+        }
+        await _tap(tester, find.byTooltip('Back to Homework'));
+        await _tap(tester, find.text('Leave'));
+        expect(find.text('Homework destination'), findsOneWidget);
+        expect(fileSubscription.read().hasPendingSelection, isFalse);
+        expect(fileSubscription.read().hasUncertainUpload, isFalse);
+        expect(editorSubscription.read().hasDirtyDrafts, isFalse);
+        expect(editorSubscription.read().hasUncertainMutation, isFalse);
+        expect(harness.repository.saves, hasLength(savesBeforeLeave));
+        expect(harness.repository.uploads, hasLength(uploadsBeforeLeave));
+      },
+    );
+  }
+
+  testWidgets('discarded local file leaves directly without uploading', (
+    tester,
+  ) async {
+    final harness = await _pump(tester, routed: true);
+    await _tap(tester, find.text('Choose file'));
+    await _tap(tester, find.text('Discard selected file'));
+    expect(
+      harness.container
+          .read(studentFileAnswerControllerProvider(_target))
+          .hasPendingSelection,
+      isFalse,
+    );
+    await _tap(tester, find.byTooltip('Back to Homework'));
+    expect(find.text('Leave Attempt?'), findsNothing);
+    expect(find.text('Homework destination'), findsOneWidget);
+    expect(harness.repository.uploads, isEmpty);
     expect(harness.repository.saves, isEmpty);
   });
 
@@ -911,6 +1027,7 @@ Future<_Harness> _pump(
         studentHomeworkAttemptRepositoryProvider.overrideWithValue(
           harness.repository,
         ),
+        studentSubmissionFilePickerProvider.overrideWithValue(_Picker()),
         studentHomeworkAttemptControllerProvider(
           _target,
         ).overrideWith(() => harness.parent),
@@ -1000,8 +1117,21 @@ class _HomeworkController extends StudentHomeworkDetailController {
 
 class _Repository implements StudentHomeworkAttemptRepository {
   final saves = <_PendingSave>[];
+  final uploads = <Completer<StudentAttemptAnswerMutationResult>>[];
   final fetches = <String>[];
   Completer<StudentHomeworkAttempt>? nextFetch;
+  @override
+  Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  }) {
+    final upload = Completer<StudentAttemptAnswerMutationResult>();
+    uploads.add(upload);
+    return upload.future;
+  }
+
   @override
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) {
     fetches.add(attemptId);
@@ -1025,6 +1155,17 @@ class _Repository implements StudentHomeworkAttemptRepository {
     String homeworkId,
     String idempotencyKey,
   ) => throw UnimplementedError();
+}
+
+class _Picker implements StudentSubmissionFilePicker {
+  @override
+  Future<StudentSubmissionUploadFile?> pickFile({
+    required List<String> allowedExtensions,
+  }) async => StudentSubmissionUploadFile(
+    name: 'answer.pdf',
+    length: 10,
+    openRead: () => Stream.value(List.filled(10, 1)),
+  );
 }
 
 class _PendingSave {

@@ -16,6 +16,7 @@ import 'package:testlabuz_client/features/student/domain/student_answer_draft.da
 import 'package:testlabuz_client/features/student/domain/student_answer_mutation.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
+import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
 void main() {
   test(
@@ -417,10 +418,15 @@ void main() {
   );
 
   test(
-    'shared parser retains FE-002 file metadata boundary without file mutation',
+    'shared parser and existing mutation DTO preserve strict file metadata',
     () {
       final question = _question(StudentQuestionType.fileBased);
       final answer = _answer(question.type);
+      final selected = StudentSubmissionUploadFile(
+        name: 'work.pdf',
+        length: 128,
+        openRead: () => Stream.value(List.filled(128, 1)),
+      );
       expect(
         parseStudentAttemptAnswerValue(answer, question),
         isA<StudentFileAnswerValue>(),
@@ -431,6 +437,14 @@ void main() {
         ).answers.single.value,
         isA<StudentFileAnswerValue>(),
       );
+      final saved = StudentAttemptAnswerMutationDto.fromJson(
+        _envelope(question.type, answer),
+        question: question,
+        requestedType: question.type,
+        selectedFile: selected,
+      );
+      expect(saved.answer, isA<StudentFileAnswerValue>());
+      expect(saved.updatedAt, DateTime.utc(2026, 9, 8, 12, 10));
       for (final invalidFile in [
         {
           'id': _id(9),
@@ -456,9 +470,71 @@ void main() {
           'extension': 'pdf',
           'size_bytes': 1,
         },
+        {
+          'id': _id(9),
+          'original_name': 'work.pdf',
+          'extension': 'pdf',
+          'size_bytes': 128,
+          'checksum': 'private',
+        },
+        {
+          'id': _id(9),
+          'original_name': 'work.pdf',
+          'extension': 'pdf',
+          'size_bytes': 128,
+          'storage_path': 'private',
+        },
       ]) {
         expect(
           () => parseStudentAttemptAnswerValue({'file': invalidFile}, question),
+          throwsFormatException,
+        );
+        expect(
+          () => StudentAttemptAnswerMutationDto.fromJson(
+            _envelope(question.type, {'file': invalidFile}),
+            question: question,
+            requestedType: question.type,
+            selectedFile: selected,
+          ),
+          throwsFormatException,
+        );
+      }
+      for (final invalid in [
+        _envelope(question.type, null, updatedAt: null),
+        _envelope(question.type, null),
+        _envelope(question.type, answer, updatedAt: null),
+        {'data': _result(question.type, answer)..['question_id'] = _id(99)},
+        {'data': _result(question.type, answer)..['type'] = 'short_written'},
+      ]) {
+        expect(
+          () => StudentAttemptAnswerMutationDto.fromJson(
+            invalid,
+            question: question,
+            requestedType: question.type,
+            selectedFile: selected,
+          ),
+          throwsFormatException,
+        );
+      }
+      for (final invalidQuestion in [
+        _question(StudentQuestionType.shortWritten),
+        StudentQuestion(
+          id: question.id,
+          type: question.type,
+          prompt: question.prompt,
+          instructions: null,
+          points: 1,
+          position: 1,
+          answerUi: const StudentEmptyAnswerUi(),
+        ),
+      ]) {
+        expect(
+          () => StudentAttemptAnswerMutationDto.fromJson(
+            _envelope(question.type, answer),
+            question: invalidQuestion,
+            requestedType: question.type,
+            selectedFile: selected,
+          ),
           throwsFormatException,
         );
       }
@@ -466,12 +542,65 @@ void main() {
         () => StudentAttemptAnswerMutationDto.fromJson(
           _envelope(question.type, answer),
           question: question,
-          requestedType: question.type,
+          requestedType: StudentQuestionType.shortWritten,
+          selectedFile: selected,
         ),
         throwsFormatException,
       );
     },
   );
+
+  test('historical GET file policy survives a lower current upload limit', () {
+    final type = StudentQuestionType.fileBased;
+    final questionJson = _questionJson(type);
+    questionJson['answer_ui'] = {
+      'allowed_extensions': ['pdf', 'docx', 'ppt', 'pptx'],
+      'max_size_bytes': 64,
+    };
+    final question = StudentQuestionDto.fromJson(questionJson).toDomain();
+    final attemptJson = _attempt(type, _answer(type));
+    attemptJson['questions'] = [questionJson];
+    final historical = StudentHomeworkAttemptDto.fromJson(attemptJson);
+    expect(
+      (historical.answers.single.value as StudentFileAnswerValue)
+          .file
+          .sizeBytes,
+      128,
+    );
+    expect(
+      () => StudentAttemptAnswerMutationDto.fromJson(
+        _envelope(type, _answer(type)),
+        question: question,
+        requestedType: type,
+        selectedFile: StudentSubmissionUploadFile(
+          name: 'work.pdf',
+          length: 128,
+          openRead: () => Stream.value(List.filled(128, 1)),
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('FE-003 non-file JSON mutation cannot upload a file Question', () async {
+    final question = _question(StudentQuestionType.fileBased);
+    final adapter = _RecordingAdapter(
+      (_) => throw StateError('JSON Save must not send file answers.'),
+    );
+    expect(
+      () => StudentAnswerDraft.fromAnswer(question, null),
+      throwsArgumentError,
+    );
+    await expectLater(
+      _repository(adapter).saveAnswer(
+        _attemptId,
+        question,
+        const StudentShortWrittenMutation(text: 'not a file upload'),
+      ),
+      throwsArgumentError,
+    );
+    expect(adapter.requests, isEmpty);
+  });
 
   test(
     'malformed JSON and uncertain transport failures never retry PUT',

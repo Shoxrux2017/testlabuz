@@ -24,6 +24,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_list_q
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
+import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
 import 'student_test_support.dart';
 
@@ -32,6 +33,121 @@ const _attemptId = '60000000-0000-0000-0000-000000000001';
 const _otherAttemptId = '60000000-0000-0000-0000-000000000002';
 
 void main() {
+  test(
+    'terminal acceptance compares canonical UUID letters case-insensitively',
+    () async {
+      const attemptId = 'abcdefab-0000-0000-0000-000000000001';
+      const homeworkId = 'fedcbafe-0000-0000-0000-000000000001';
+      final target = StudentHomeworkAttemptRouteTarget(
+        topicId: studentTopicId,
+        homeworkId: homeworkId,
+        attemptId: attemptId,
+      );
+      final repository = _Repository();
+      final container = ProviderContainer(
+        overrides: [
+          authSessionControllerProvider.overrideWith(
+            () => FakeStudentAuthSessionController.authenticated(
+              studentUser('student-a'),
+            ),
+          ),
+          appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
+          studentHomeworkAttemptRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final view = container.listen(
+        studentHomeworkAttemptControllerProvider(target),
+        (_, _) {},
+      );
+      await Future<void>.value();
+      await container.pump();
+      final terminal = _attempt(
+        id: attemptId.toUpperCase(),
+        homeworkId: homeworkId.toUpperCase(),
+        status: StudentHomeworkAttemptStatus.submitted,
+      );
+      expect(
+        container
+            .read(studentHomeworkAttemptControllerProvider(target).notifier)
+            .acceptAuthoritativeTerminalAttempt(terminal),
+        isTrue,
+      );
+      expect(view.read().status, StudentHomeworkAttemptLoadStatus.data);
+      expect(view.read().attempt, same(terminal));
+      repository.requests.single.complete(
+        _attempt(id: attemptId, homeworkId: homeworkId),
+      );
+      await Future<void>.value();
+      await container.pump();
+      expect(view.read().attempt, same(terminal));
+    },
+  );
+
+  test('accepted terminal snapshot invalidates an older parent GET', () async {
+    final harness = _Harness();
+    final view = harness.listen();
+    await harness.flush();
+    final older = harness.repository.requests.single;
+    final terminal = _attempt(status: StudentHomeworkAttemptStatus.submitted);
+    expect(
+      harness.controller.acceptAuthoritativeTerminalAttempt(terminal),
+      isTrue,
+    );
+    expect(view.read().status, StudentHomeworkAttemptLoadStatus.data);
+    expect(view.read().attempt, same(terminal));
+    older.complete(_attempt());
+    await harness.flush();
+    expect(view.read().attempt, same(terminal));
+  });
+
+  for (final invalid in [
+    _attempt(),
+    _attempt(id: 'bad', status: StudentHomeworkAttemptStatus.submitted),
+    _attempt(homeworkId: 'bad', status: StudentHomeworkAttemptStatus.submitted),
+    _attempt(
+      id: _otherAttemptId,
+      status: StudentHomeworkAttemptStatus.submitted,
+    ),
+    _attempt(
+      homeworkId: '40000000-0000-0000-0000-000000000002',
+      status: StudentHomeworkAttemptStatus.submitted,
+    ),
+  ]) {
+    test(
+      'rejects terminal acceptance for ${invalid.id}/${invalid.assessmentId}/${invalid.status}',
+      () async {
+        final harness = _Harness();
+        final view = harness.listen();
+        await harness.flush();
+        final before = view.read();
+        expect(
+          harness.controller.acceptAuthoritativeTerminalAttempt(invalid),
+          isFalse,
+        );
+        expect(view.read(), same(before));
+      },
+    );
+  }
+
+  test(
+    'terminal acceptance rejects an obsolete session and disposed target',
+    () async {
+      final harness = _Harness();
+      harness.listen();
+      await harness.flush();
+      final controller = harness.controller;
+      final terminal = _attempt(status: StudentHomeworkAttemptStatus.submitted);
+      harness.auth.logOut();
+      expect(controller.acceptAuthoritativeTerminalAttempt(terminal), isFalse);
+      await harness.flush();
+      harness.close();
+      expect(controller.acceptAuthoritativeTerminalAttempt(terminal), isFalse);
+    },
+  );
+
   test('eligible Student auto-loads then refreshes retained Attempt', () async {
     final harness = _Harness();
     final attempt = harness.listen();
@@ -361,6 +477,15 @@ class _Surface extends Notifier<AppDeviceSurface> {
 }
 
 class _Repository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  }) =>
+      throw StateError('This regression must not upload Student file answers.');
+
   @override
   Future<StudentAttemptAnswerMutationResult> saveAnswer(
     String attemptId,

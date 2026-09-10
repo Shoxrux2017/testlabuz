@@ -226,7 +226,37 @@ void main() {
       expect(adapter.savedName, 'lesson.pdf');
       expect(adapter.savedMime, 'application/pdf');
       expect(adapter.savedBytes, [1, 2, 3]);
+      expect(adapter.savedDialogTitle, 'Save learning material');
     });
+
+    test(
+      'Save As forwards default and custom titles through native dialog',
+      () async {
+        final titles = <String>[];
+        final native = NativeLocalFilePlatformAdapter(
+          saveFileDialog: (name, bytes, mime, title) async {
+            expect(name, 'lesson.pdf');
+            expect(bytes, [1, 2, 3]);
+            expect(mime, 'application/pdf');
+            titles.add(title);
+            return null;
+          },
+        );
+        final actions = LocalFileActions(platform: native);
+        await actions.saveAs(_trustedFile());
+        await actions.saveAs(
+          _trustedFile(),
+          dialogTitle: 'Save submitted answer',
+        );
+        expect(titles, ['Save learning material', 'Save submitted answer']);
+
+        final adapter = _FakeLocalAdapter();
+        await LocalFileActions(
+          platform: adapter,
+        ).saveAs(_trustedFile(), dialogTitle: 'Save submitted answer');
+        expect(adapter.savedDialogTitle, 'Save submitted answer');
+      },
+    );
 
     test(
       'Open writes UUID plus canonical extension under TestLabUz temp',
@@ -359,6 +389,7 @@ class _FakeLocalAdapter implements LocalFilePlatformAdapter {
   Uri? saveResult;
   String? savedName;
   String? savedMime;
+  String? savedDialogTitle;
   Uint8List? savedBytes;
 
   @override
@@ -376,9 +407,11 @@ class _FakeLocalAdapter implements LocalFilePlatformAdapter {
     required String fileName,
     required Uint8List bytes,
     required String mimeType,
+    required String dialogTitle,
   }) async {
     savedName = fileName;
     savedMime = mimeType;
+    savedDialogTitle = dialogTitle;
     savedBytes = bytes;
     return saveResult;
   }

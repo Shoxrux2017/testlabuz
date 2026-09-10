@@ -8,6 +8,8 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../data/student_homework_attempt_repository_impl.dart';
+import '../domain/student_homework.dart';
+import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
 import 'student_homework_attempt_state.dart';
@@ -67,6 +69,27 @@ class StudentHomeworkAttemptController
     if (state.status == StudentHomeworkAttemptLoadStatus.error) {
       refresh();
     }
+  }
+
+  bool acceptAuthoritativeTerminalAttempt(StudentHomeworkAttempt attempt) {
+    final key = _activeSessionKey;
+    if (key == null ||
+        !_matchesSession(key) ||
+        !isCanonicalStudentAttemptId(attempt.id) ||
+        !isCanonicalStudentAttemptId(target.attemptId) ||
+        !isCanonicalStudentHomeworkId(attempt.assessmentId) ||
+        !isCanonicalStudentHomeworkId(target.homeworkId) ||
+        attempt.id.toLowerCase() != target.attemptId.toLowerCase() ||
+        attempt.assessmentId.toLowerCase() != target.homeworkId.toLowerCase() ||
+        attempt.status == StudentHomeworkAttemptStatus.inProgress) {
+      return false;
+    }
+    _generation += 1;
+    state = StudentHomeworkAttemptState(
+      status: StudentHomeworkAttemptLoadStatus.data,
+      attempt: attempt,
+    );
+    return true;
   }
 
   Future<void> _load(

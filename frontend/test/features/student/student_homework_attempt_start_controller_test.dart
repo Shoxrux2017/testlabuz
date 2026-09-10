@@ -24,6 +24,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_list_q
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
+import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
 import 'student_test_support.dart';
 
@@ -493,6 +494,15 @@ class _Keys implements IdempotencyKeyGenerator {
 }
 
 class _Attempts implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  }) =>
+      throw StateError('This regression must not upload Student file answers.');
+
   @override
   Future<StudentAttemptAnswerMutationResult> saveAnswer(
     String attemptId,
