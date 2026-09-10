@@ -11,12 +11,14 @@
 | Implementation type | `Flutter idempotent Homework Attempt start + current Attempt resume/read shell + canonical execution routing` |
 | Depends on | `S07-FE-001 = Accepted / Delivered`; Stage 7 Backend Phase 2 remains `PASS` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline | `origin/main @ 8277667c75beeb0d9e49cf2f0374e1ca2711ebc6` |
+| Current review baseline | `origin/main @ f067542597174015cf1ebdd3f0ab7b314c70474a` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-PHASE-2 = PASS` and `S07-FE-001 = Accepted / Delivered` |
+| Readiness Gate | `PENDING — current-main revalidation by ChatGPT required after this correction is merged`; execution remains blocked until that revalidation passes, `S07-BE-PHASE-2 = PASS`, and `S07-FE-001 = Accepted / Delivered` |
 | Supported surfaces | `Student desktop + mobile` |
 | Verification | focused frontend tests + format/analyze + diff check |
-| Delivery | Project Owner |
+| Delivery | Codex: implementation, focused verification, final focused scope/diff self-review, stage task scope only, cached diff check, commit, push, create PR, stop before merge; Project Owner: merge only after ChatGPT acceptance review |
+| Implementation branch | `implement/s07-fe-002-attempt-start-resume-shell` |
+| Pre-approved implementation commit message | `feat(stage7): add student homework attempt shell` |
 | Frontend block checkpoint | Stage 7 Frontend Phase 2 after `S07-FE-001…005` |
 
 Do not create a duplicate `CODEX-PROMPT`.
@@ -145,16 +147,24 @@ The execution route will perform authoritative GET Attempt reconciliation.
 ## If no current in-progress Attempt
 
 A **new Start mutation** may be offered only from a confirmed current FE-001
-Homework detail state:
+Homework detail state satisfying all of:
 
 ```text
-StudentHomeworkDetailStatus = data
-isStale = false / no retained-stale marker
-status = active
-remaining > 0
-in_progress_attempt = null
-Start controller is not submitting/uncertain
+StudentHomeworkDetailStatus == data
+homework != null
+homework.status == active
+homework.attempts.remaining > 0
+homework.attempts.inProgressAttempt == null
+Start controller != submitting
+Start controller != uncertain
 ```
+
+The delivered `StudentHomeworkDetailState` has exactly these statuses:
+`initial`, `loading`, `data`, `refreshing`, `notFound`, and `error`.
+`data` is the exact FE-001 confirmed-current authority state. There is no
+independent detail `isStale` property or `stale` status; do not require or
+introduce either for FE-002. Separate FE-001 Homework list stale semantics
+remain unchanged.
 
 Then render:
 
@@ -170,13 +180,13 @@ Do not offer a new Start from retained or non-authoritative detail state:
 initial
 loading
 refreshing
-stale
 error
 notFound
 ```
 
-A refreshing/stale view may continue showing read-only Homework information, but
-must not expose a new Start action based on retained counts/lifecycle.
+Retained Homework in `refreshing` or `error` may continue showing read-only
+information, but is non-authoritative for a new Start. Retained counts/lifecycle
+must not authorize that action.
 
 Do not derive deadline eligibility from device time.
 
@@ -1408,8 +1418,11 @@ On transport-success `200/201`:
    ```
    treat the Start outcome as **uncertain**, retain the same pending key, and do
    not navigate;
-3. on valid confirmed success, mark/invalidate FE-001 Homework detail/list as
-   stale so future reads refresh used/remaining/in-progress status;
+3. on valid confirmed success, invalidate/refresh FE-001 Homework detail using
+   its existing states so future reads refresh used/remaining/in-progress
+   status; retained Homework in `refreshing` or `error` cannot authorize a new
+   Start before confirmed-current `data` returns. Mark/invalidate the Homework
+   list as stale using its existing, unchanged list stale semantics;
 4. publish:
    ```text
    completedAttemptId
@@ -1776,12 +1789,12 @@ Existing destination/session behavior applies.
 
 Show progress until required current hierarchy is known.
 
-A retained `refreshing`/stale Homework detail is not sufficient to establish the
-current parent hierarchy for a new execution view. Render the execution shell
-only after:
+Retained Homework detail in `refreshing` or `error` is not sufficient to
+establish the current parent hierarchy for a new execution view. Render the
+execution shell only after:
 
 ```text
-Homework detail = confirmed current data for target
+Homework detail status == data, homework != null, confirmed for target
 Attempt = confirmed current data for target
 ```
 
@@ -1934,7 +1947,9 @@ Do not attempt to reopen editors.
 
 Do not display score.
 
-This makes direct Resume navigation safe even when FE-001 detail was stale and the Attempt has since been finalized.
+This makes direct Resume navigation safe even when it uses an already known
+`in_progress_attempt` and the Attempt has since been finalized. GET Attempt
+remains authoritative.
 
 ---
 
@@ -1963,6 +1978,9 @@ Resume Attempt <N>
 Direct navigation.
 
 ## No current Attempt + active + remaining > 0
+
+Offer a new Start only when every exact detail/controller predicate in Section 5
+holds, including `StudentHomeworkDetailStatus == data` and `homework != null`.
 
 Button key:
 
@@ -2506,10 +2524,13 @@ No POST controller call.
 Only confirmed-current FE-001 `data` state with:
 
 ```text
-active
-remaining > 0
-in_progress_attempt = null
-not stale/refreshing
+StudentHomeworkDetailStatus == data
+homework != null
+homework.status == active
+homework.attempts.remaining > 0
+homework.attempts.inProgressAttempt == null
+Start controller != submitting
+Start controller != uncertain
 ```
 
 shows:
@@ -2523,14 +2544,19 @@ Start Attempt
 For:
 
 ```text
+initial
 loading
 refreshing
-stale
 error
 notFound
 ```
 
 do not expose a new Start action from retained lifecycle/capacity values.
+
+Explicitly cover retained Homework in both `refreshing` and `error`; neither
+authorizes a new Start. A null Homework also cannot authorize a new Start.
+Use the existing detail statuses without adding an `isStale` property or a
+`stale` status. Keep separate Homework list stale behavior unchanged.
 
 ## Non-active / zero remaining
 
@@ -2756,9 +2782,16 @@ PASS only if all are true.
 
 - confirmed FE-001 in-progress Attempt resumes by direct navigation;
 - no redundant POST for confirmed Resume;
-- new Start is offered only from confirmed current/non-stale FE-001 detail;
-- retained/loading/refreshing/stale/error/notFound detail cannot authorize a new
-  Start action;
+- new Start is offered only when `StudentHomeworkDetailStatus == data`,
+  `homework != null`, `homework.status == active`,
+  `homework.attempts.remaining > 0`,
+  `homework.attempts.inProgressAttempt == null`, and the Start controller is
+  neither `submitting` nor `uncertain`;
+- `initial`/`loading`/`refreshing`/`error`/`notFound` detail cannot authorize a
+  new Start, including retained Homework in `refreshing` or `error`;
+- `data` is the existing confirmed-current detail authority; no detail `isStale`
+  property or `stale` status is introduced, and Homework list stale semantics
+  remain unchanged;
 - Start POST accepts backend 201 create / 200 race-resume;
 - malformed successful Start response is treated as uncertain and retains the
   same key;
@@ -2830,9 +2863,14 @@ These are decisions, not suggestions:
 
 ```text
 confirmed current Attempt => direct Resume navigation, no POST
-new Start action => only confirmed current/non-stale FE-001 detail
-no current Attempt + active + remaining>0 => Start POST
-retained/refreshing/stale Homework detail => no new Start action
+new Start action => all exact Section 5 detail/controller predicates hold
+detail authority => StudentHomeworkDetailStatus == data and homework != null
+Start eligibility => homework.status == active, remaining > 0, inProgressAttempt == null
+new Start controller guard => neither submitting nor uncertain
+initial/loading/refreshing/error/notFound detail => no new Start action
+retained Homework in refreshing/error => non-authoritative for a new Start
+detail isStale property/stale status => absent; do not introduce
+Homework list stale semantics => unchanged
 Start success 201 = created
 Start success 200 = resumed
 Start malformed 2xx payload = uncertain, SAME key retained
@@ -2864,7 +2902,9 @@ Codex must not substitute:
 - insecure random key;
 - new key on timeout/invalid-response Retry;
 - treating session/account gate errors as ordinary feature failure;
-- new Start action from retained/refreshing/stale Homework detail;
+- new Start action from `initial`/`loading`/`refreshing`/`error`/`notFound` detail,
+  including retained Homework in `refreshing` or `error`;
+- introducing a detail `isStale` property or `stale` status for FE-002;
 - POST for every confirmed Resume;
 - adding Start/Attempt methods to FE-001 `StudentHomeworkRepository`;
 - broadening Topic/Homework route classifiers to match Attempt routes;
@@ -2876,38 +2916,93 @@ Codex must not substitute:
 
 ---
 
-# 72. Completion Report
+# 72. Integrated Delivery and Completion Report
 
-Return only:
+## Codex-owned implementation delivery
+
+This contract explicitly assigns S07-FE-002 implementation and Git/GitHub
+delivery to Codex. Use exactly:
+
+```text
+Branch: implement/s07-fe-002-attempt-start-resume-shell
+Commit message: feat(stage7): add student homework attempt shell
+```
+
+Execute:
+
+```text
+implementation
+-> focused verification (all Section 69 checks pass)
+-> final focused scope/diff self-review
+-> stage task scope only
+-> git diff --cached --check
+-> commit
+-> push
+-> create PR against main
+-> stop before merge
+```
+
+After all Section 69 verification passes, Codex must:
+
+1. perform the final focused scope/diff self-review required by the applicable
+   `AGENTS.md` files;
+2. stage only S07-FE-002 implementation/test files within this contract's scope;
+3. run `git diff --cached --check` and review the focused staged diff;
+4. commit exactly `feat(stage7): add student homework attempt shell`;
+5. push `implement/s07-fe-002-attempt-start-resume-shell`;
+6. create a PR against `main`, including focused verification results and
+   scope/non-goals in the PR body;
+7. stop before merge.
+
+Do not merge. The Project Owner owns the merge only after ChatGPT acceptance
+review. Do not update `STAGE_07_TASK_INDEX.md` or other Stage bookkeeping.
+
+If implementation verification passes but Git/GitHub delivery fails, return
+`DELIVERY BLOCKED` with the exact blocker and completed delivery evidence. Do
+not report successful task completion until the PR has been created.
+
+## Completion report
+
+Successful task completion must return:
 
 ```text
 IMPLEMENTATION COMPLETE
 ```
 
-or:
+If implementation cannot complete, return:
 
 ```text
 BLOCKED
 ```
 
-with:
+If verified implementation cannot complete Git/GitHub delivery, return:
+
+```text
+DELIVERY BLOCKED
+```
+
+Include:
 
 1. implementation summary;
 2. changed files and purpose;
 3. exact focused test results;
 4. idempotency-key generation/same-key uncertain retry evidence;
 5. 201-create / 200-resume + malformed-2xx uncertain evidence;
-6. strict Attempt/lifecycle/answer DTO evidence;
+6. strict Attempt DTO/lifecycle/answer-integrity evidence;
 7. session/account reconciliation + stale-completion evidence;
 8. mutually exclusive nested routing/bootstrap direct-entry evidence;
 9. desktop/mobile shell evidence;
 10. directly affected regressions;
 11. format/analyze results;
 12. `git diff --check`;
-13. scope/non-goal confirmation;
-14. deviations/blockers;
-15. final `git status --short`.
+13. final focused scope/diff self-review and staged diff review;
+14. `git diff --cached --check`;
+15. scope/non-goal confirmation;
+16. deviations/blockers;
+17. commit SHA;
+18. branch;
+19. PR number;
+20. PR URL;
+21. final `git status --short`.
 
 Do not claim `Accepted`.
-
-Do not commit/push/create PR/update Stage bookkeeping unless explicitly instructed later.
