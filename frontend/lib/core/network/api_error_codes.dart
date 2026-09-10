@@ -18,6 +18,8 @@ abstract final class ApiErrorCodes {
   static const taskArchived = 'task_archived';
   static const assessmentNotAssigned = 'assessment_not_assigned';
   static const deadlinePassed = 'deadline_passed';
+  static const attemptsExhausted = 'attempts_exhausted';
+  static const idempotencyKeyReused = 'idempotency_key_reused';
   static const resultPairLocked = 'result_pair_locked';
   static const assessmentHasNoScoreablePoints =
       'assessment_has_no_scoreable_points';

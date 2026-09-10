@@ -32,6 +32,7 @@ abstract final class AppRouteNames {
   static const student = 'student';
   static const studentTopicDetail = 'student-topic-detail';
   static const studentHomeworkDetail = 'student-homework-detail';
+  static const studentHomeworkAttempt = 'student-homework-attempt';
   static const parent = 'parent';
   static const unsupportedDevice = 'unsupported-device';
 }
@@ -114,10 +115,15 @@ abstract final class AppRoutePaths {
   static const studentTopicIdParameter = 'topicId';
   static const studentHomeworkSegment = 'homework';
   static const studentHomeworkIdParameter = 'homeworkId';
+  static const studentHomeworkAttemptsSegment = 'attempts';
+  static const studentHomeworkAttemptIdParameter = 'attemptId';
   static const studentTopicDetail =
       '$student/$studentTopicsSegment/:$studentTopicIdParameter';
   static const studentHomeworkDetail =
       '$studentTopicDetail/$studentHomeworkSegment/:$studentHomeworkIdParameter';
+  static const studentHomeworkAttempt =
+      '$studentHomeworkDetail/$studentHomeworkAttemptsSegment/'
+      ':$studentHomeworkAttemptIdParameter';
   static const parent = '/parent';
   static const unsupportedDevice = '/unsupported-device';
 
@@ -182,6 +188,9 @@ abstract final class AppRoutePaths {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _studentHomeworkIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _studentAttemptIdPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
@@ -540,19 +549,43 @@ abstract final class AppRoutePaths {
   static bool isStudentApprovedLocation(String path) {
     return path == student ||
         isStudentTopicDetailPath(path) ||
-        isStudentHomeworkDetailPath(path);
+        isStudentHomeworkDetailPath(path) ||
+        isStudentHomeworkAttemptPath(path);
+  }
+
+  static bool isStudentHomeworkAttemptPath(String path) {
+    const prefix = '$student/$studentTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 5 &&
+        _studentTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == studentHomeworkSegment &&
+        _studentHomeworkIdPattern.hasMatch(segments[2]) &&
+        segments[3] == studentHomeworkAttemptsSegment &&
+        _studentAttemptIdPattern.hasMatch(segments[4]);
   }
 
   static String? studentTopicIdFromPath(String path) {
     const prefix = '$student/$studentTopicsSegment/';
-    if (!isStudentTopicDetailPath(path) && !isStudentHomeworkDetailPath(path)) {
+    if (!isStudentTopicDetailPath(path) &&
+        !isStudentHomeworkDetailPath(path) &&
+        !isStudentHomeworkAttemptPath(path)) {
       return null;
     }
     return path.substring(prefix.length).split('/').first;
   }
 
   static String? studentHomeworkIdFromPath(String path) {
-    return isStudentHomeworkDetailPath(path) ? path.split('/').last : null;
+    return isStudentHomeworkDetailPath(path) ||
+            isStudentHomeworkAttemptPath(path)
+        ? path.split('/')[5]
+        : null;
+  }
+
+  static String? studentAttemptIdFromPath(String path) {
+    return isStudentHomeworkAttemptPath(path) ? path.split('/').last : null;
   }
 
   static String studentTopicDetailLocation(String topicId) {
@@ -580,5 +613,21 @@ abstract final class AppRoutePaths {
     }
     return '${studentTopicDetailLocation(topicId)}/$studentHomeworkSegment/'
         '${Uri.encodeComponent(homeworkId)}';
+  }
+
+  static String studentHomeworkAttemptLocation(
+    String topicId,
+    String homeworkId,
+    String attemptId,
+  ) {
+    if (!_studentAttemptIdPattern.hasMatch(attemptId)) {
+      throw ArgumentError.value(
+        attemptId,
+        'attemptId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+    return '${studentHomeworkDetailLocation(topicId, homeworkId)}/'
+        '$studentHomeworkAttemptsSegment/${Uri.encodeComponent(attemptId)}';
   }
 }

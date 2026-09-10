@@ -7,41 +7,42 @@ import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../auth/application/auth_session_controller.dart';
-import '../data/student_homework_repository_impl.dart';
+import '../data/student_homework_attempt_repository_impl.dart';
+import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
-import 'student_homework_detail_state.dart';
+import 'student_homework_attempt_state.dart';
+import 'student_homework_detail_controller.dart';
 import 'student_homework_list_controller.dart';
 import 'student_session_key.dart';
 
-final studentHomeworkDetailControllerProvider = NotifierProvider.autoDispose
+final studentHomeworkAttemptControllerProvider = NotifierProvider.autoDispose
     .family<
-      StudentHomeworkDetailController,
-      StudentHomeworkDetailState,
-      StudentHomeworkRouteTarget
-    >(StudentHomeworkDetailController.new);
+      StudentHomeworkAttemptController,
+      StudentHomeworkAttemptState,
+      StudentHomeworkAttemptRouteTarget
+    >(StudentHomeworkAttemptController.new);
 
-class StudentHomeworkDetailController
-    extends Notifier<StudentHomeworkDetailState> {
-  StudentHomeworkDetailController(this.target);
+class StudentHomeworkAttemptController
+    extends Notifier<StudentHomeworkAttemptState> {
+  StudentHomeworkAttemptController(this.target);
 
-  final StudentHomeworkRouteTarget target;
+  final StudentHomeworkAttemptRouteTarget target;
   StudentSessionKey? _activeSessionKey;
   var _generation = 0;
 
   @override
-  StudentHomeworkDetailState build() {
+  StudentHomeworkAttemptState build() {
     final key = StudentSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
     ).eligibleKey;
     if (key == null) {
       _clearOwnership();
-      return const StudentHomeworkDetailState();
+      return const StudentHomeworkAttemptState();
     }
-    if (_activeSessionKey == key && !ref.isRefresh) {
+    if (_activeSessionKey == key) {
       return state;
     }
-
     _clearOwnership();
     _activeSessionKey = key;
     final generation = _generation;
@@ -50,54 +51,54 @@ class StudentHomeworkDetailController
         unawaited(_load(key));
       }
     });
-    return const StudentHomeworkDetailState(
-      status: StudentHomeworkDetailStatus.loading,
+    return const StudentHomeworkAttemptState(
+      status: StudentHomeworkAttemptLoadStatus.loading,
     );
   }
 
   void refresh() {
     final key = _activeSessionKey;
     if (key != null && !state.isRequestInFlight && _matchesSession(key)) {
-      unawaited(_load(key, retainHomework: true));
+      unawaited(_load(key, retainAttempt: true));
     }
   }
 
   void retry() {
-    if (state.status == StudentHomeworkDetailStatus.error) {
+    if (state.status == StudentHomeworkAttemptLoadStatus.error) {
       refresh();
     }
   }
 
   Future<void> _load(
     StudentSessionKey key, {
-    bool retainHomework = false,
+    bool retainAttempt = false,
   }) async {
     final generation = ++_generation;
     final requestTarget = target;
-    final retainedHomework = retainHomework ? state.homework : null;
-    state = StudentHomeworkDetailState(
-      status: retainedHomework == null
-          ? StudentHomeworkDetailStatus.loading
-          : StudentHomeworkDetailStatus.refreshing,
-      homework: retainedHomework,
+    final retainedAttempt = retainAttempt ? state.attempt : null;
+    state = StudentHomeworkAttemptState(
+      status: retainedAttempt == null
+          ? StudentHomeworkAttemptLoadStatus.loading
+          : StudentHomeworkAttemptLoadStatus.refreshing,
+      attempt: retainedAttempt,
     );
     try {
-      final homework = await ref
-          .read(studentHomeworkRepositoryProvider)
-          .fetchHomeworkDetail(requestTarget.homeworkId);
+      final attempt = await ref
+          .read(studentHomeworkAttemptRepositoryProvider)
+          .fetchAttempt(requestTarget.attemptId);
       if (!_canPublish(generation, key, requestTarget)) {
         return;
       }
-      if (homework.id.toLowerCase() != requestTarget.homeworkId ||
-          homework.topic.id.toLowerCase() != requestTarget.topicId) {
-        state = const StudentHomeworkDetailState(
-          status: StudentHomeworkDetailStatus.notFound,
+      if (attempt.id.toLowerCase() != requestTarget.attemptId ||
+          attempt.assessmentId.toLowerCase() != requestTarget.homeworkId) {
+        state = const StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.notFound,
         );
         return;
       }
-      state = StudentHomeworkDetailState(
-        status: StudentHomeworkDetailStatus.data,
-        homework: homework,
+      state = StudentHomeworkAttemptState(
+        status: StudentHomeworkAttemptLoadStatus.data,
+        attempt: attempt,
       );
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, key, requestTarget) ||
@@ -106,24 +107,39 @@ class StudentHomeworkDetailController
       }
       if (exception.failure.statusCode == 404 &&
           exception.failure.serverCode == ApiErrorCodes.resourceNotFound) {
-        state = const StudentHomeworkDetailState(
-          status: StudentHomeworkDetailStatus.notFound,
+        state = const StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.notFound,
         );
-        _markTopicHomeworkListStale(key);
+        _reconcileHomework(key);
         return;
       }
-      state = StudentHomeworkDetailState(
-        status: StudentHomeworkDetailStatus.error,
-        homework: retainedHomework,
+      state = StudentHomeworkAttemptState(
+        status: StudentHomeworkAttemptLoadStatus.error,
+        attempt: retainedAttempt,
         failure: exception.failure,
       );
+    }
+  }
+
+  void _reconcileHomework(StudentSessionKey key) {
+    ref.invalidate(
+      studentHomeworkDetailControllerProvider(
+        StudentHomeworkRouteTarget(
+          topicId: target.topicId,
+          homeworkId: target.homeworkId,
+        ),
+      ),
+    );
+    final listProvider = studentHomeworkListControllerProvider(target.topicId);
+    if (ref.exists(listProvider)) {
+      ref.read(listProvider.notifier).markAuthoritativeRowsStale(key);
     }
   }
 
   bool _canPublish(
     int generation,
     StudentSessionKey key,
-    StudentHomeworkRouteTarget requestTarget,
+    StudentHomeworkAttemptRouteTarget requestTarget,
   ) =>
       ref.mounted &&
       generation == _generation &&
@@ -148,18 +164,11 @@ class StudentHomeworkDetailController
       return false;
     }
     _clearOwnership();
-    state = const StudentHomeworkDetailState();
+    state = const StudentHomeworkAttemptState();
     if (code != ApiErrorCodes.authenticationRequired) {
       unawaited(ref.read(authSessionControllerProvider.notifier).bootstrap());
     }
     return true;
-  }
-
-  void _markTopicHomeworkListStale(StudentSessionKey key) {
-    final provider = studentHomeworkListControllerProvider(target.topicId);
-    if (ref.exists(provider)) {
-      ref.read(provider.notifier).markAuthoritativeRowsStale(key);
-    }
   }
 
   void _clearOwnership() {
