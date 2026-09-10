@@ -94,7 +94,14 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       previous.serverFile?.id,
     );
     final generation = _generation;
-    _replace(id, _entry(previous, status: StudentFileAnswerStatus.selecting));
+    _replace(
+      id,
+      _entry(
+        previous,
+        status: StudentFileAnswerStatus.selecting,
+        failure: previous.failure,
+      ),
+    );
     try {
       final selected = await ref
           .read(studentSubmissionFilePickerProvider)
@@ -121,7 +128,14 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       }
       final current = _currentQuestion(id);
       if (current == null) {
-        _finish(id, _entry(state.questions[id]!, status: previous.status));
+        _finish(
+          id,
+          _entry(
+            state.questions[id]!,
+            status: previous.status,
+            failure: previous.failure,
+          ),
+        );
         return;
       }
       final error = validateStudentSubmissionSelection(
@@ -137,6 +151,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           status: error == null
               ? StudentFileAnswerStatus.ready
               : previous.status,
+          failure: error == null ? null : previous.failure,
           selectionError: error,
         ),
       );
@@ -150,7 +165,8 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           selectedFile: previous.selectedFile,
           status: previous.selectedFile == null
               ? StudentFileAnswerStatus.failure
-              : StudentFileAnswerStatus.ready,
+              : previous.status,
+          failure: previous.failure,
           localFailure: StudentFileAnswerLocalFailure.pickerUnavailable,
         ),
       );

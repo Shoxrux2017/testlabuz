@@ -156,6 +156,8 @@ void main() {
         StudentFileAnswerLocalFailure.pickerUnavailable,
       );
       expect(h.entry.selectedFile, same(selected));
+      expect(h.entry.status, StudentFileAnswerStatus.ready);
+      expect(h.state.canUpload(_questionId), isTrue);
       expect(h.state.activeQuestionId, isNull);
       expect(h.repository.uploads, isEmpty);
     },
@@ -183,6 +185,8 @@ void main() {
         await h.pick(file: invalid.$1);
         expect(h.entry.selectedFile, same(previous));
         expect(h.entry.selectionError, invalid.$2);
+        expect(h.entry.status, StudentFileAnswerStatus.ready);
+        expect(h.state.canUpload(_questionId), isTrue);
         expect(h.repository.uploads, isEmpty);
       },
     );
@@ -588,6 +592,188 @@ void main() {
       await h.controller.uploadAnswer(_questionId);
       expect(h.repository.uploads, hasLength(1));
       await h.pick();
+      expect(h.state.canUpload(_questionId), isTrue);
+    },
+  );
+
+  for (final failure in [
+    (code: ApiErrorCodes.validationFailed, statusCode: 422),
+    (code: ApiErrorCodes.fileUploadFailed, statusCode: 500),
+  ]) {
+    for (final outcome in ['cancellation', 'invalid selection', 'exception']) {
+      test(
+        '${failure.code} retains selected-file provenance after picker $outcome',
+        () async {
+          final h = _Harness();
+          await h.pick();
+          final selected = h.entry.selectedFile;
+          final upload = h.controller.uploadAnswer(_questionId);
+          h.repository.uploads.single.fail(
+            studentServerFailure(failure.code, statusCode: failure.statusCode),
+          );
+          await upload;
+          final serverFailure = h.entry.failure;
+          final previousQuestion = h.entry.question;
+
+          final repick = h.controller.chooseFile(_questionId);
+          expect(h.entry.status, StudentFileAnswerStatus.selecting);
+          expect(h.entry.failure, same(serverFailure));
+          final currentQuestion = _question(maxSize: 10);
+          h.parent.publish(
+            _data(_attempt(saved: true, questions: [currentQuestion])),
+          );
+          await h.flush();
+          final currentFile = h.entry.serverFile;
+          expect(currentFile, isNotNull);
+          switch (outcome) {
+            case 'cancellation':
+              h.picker.requests.last.complete(null);
+            case 'invalid selection':
+              h.picker.requests.last.complete(_selected(name: 'answer.exe'));
+            case 'exception':
+              h.picker.requests.last.completeError(
+                StateError('private local path'),
+              );
+          }
+          await repick;
+
+          expect(h.entry.selectedFile, same(selected));
+          expect(h.entry.failure, same(serverFailure));
+          expect(h.entry.failure!.serverCode, failure.code);
+          expect(h.entry.status, StudentFileAnswerStatus.failure);
+          expect(h.entry.question, isNot(same(previousQuestion)));
+          expect(h.entry.question, same(currentQuestion));
+          expect(h.entry.serverFile, same(currentFile));
+          expect(
+            h.entry.selectionError,
+            outcome == 'invalid selection'
+                ? StudentSubmissionSelectionError.unsupportedExtension
+                : isNull,
+          );
+          expect(
+            h.entry.localFailure,
+            outcome == 'exception'
+                ? StudentFileAnswerLocalFailure.pickerUnavailable
+                : isNull,
+          );
+          expect(h.state.activeQuestionId, isNull);
+
+          if (failure.code == ApiErrorCodes.validationFailed) {
+            expect(h.state.canUpload(_questionId), isFalse);
+            await h.controller.uploadAnswer(_questionId);
+            expect(h.repository.uploads, hasLength(1));
+
+            final replacement = _selected(name: 'replacement.pdf');
+            await h.pick(file: replacement);
+            expect(h.entry.selectedFile, same(replacement));
+            expect(h.entry.failure, isNull);
+            expect(h.entry.selectionError, isNull);
+            expect(h.entry.localFailure, isNull);
+            expect(h.entry.status, StudentFileAnswerStatus.ready);
+            expect(h.state.canUpload(_questionId), isTrue);
+          } else {
+            expect(h.state.hasUncertainUpload, isFalse);
+            expect(h.state.canUpload(_questionId), isTrue);
+            final retry = h.controller.uploadAnswer(_questionId);
+            expect(h.repository.uploads, hasLength(2));
+            expect(h.repository.uploads.last.file, same(selected));
+            h.repository.uploads.last.complete(_result());
+            await retry;
+            expect(h.entry.status, StudentFileAnswerStatus.uploaded);
+          }
+        },
+      );
+    }
+
+    for (final status in [
+      StudentHomeworkAttemptLoadStatus.refreshing,
+      StudentHomeworkAttemptLoadStatus.error,
+    ]) {
+      test(
+        '${failure.code} retains selected-file provenance when picker loses $status authority',
+        () async {
+          final h = _Harness();
+          await h.pick();
+          final selected = h.entry.selectedFile;
+          final upload = h.controller.uploadAnswer(_questionId);
+          h.repository.uploads.single.fail(
+            studentServerFailure(failure.code, statusCode: failure.statusCode),
+          );
+          await upload;
+          final serverFailure = h.entry.failure;
+          final previousQuestion = h.entry.question;
+
+          final repick = h.controller.chooseFile(_questionId);
+          expect(h.entry.status, StudentFileAnswerStatus.selecting);
+          expect(h.entry.failure, same(serverFailure));
+          final currentQuestion = _question(maxSize: 10);
+          final currentAttempt = _attempt(
+            saved: true,
+            questions: [currentQuestion],
+          );
+          h.parent.publish(_data(currentAttempt));
+          await h.flush();
+          final currentFile = h.entry.serverFile;
+          expect(currentFile, isNotNull);
+          h.parent.publish(
+            StudentHomeworkAttemptState(
+              status: status,
+              attempt: currentAttempt,
+            ),
+          );
+          await h.flush();
+          h.picker.requests.last.complete(_selected(name: 'replacement.pdf'));
+          await repick;
+
+          expect(h.entry.selectedFile, same(selected));
+          expect(h.entry.failure, same(serverFailure));
+          expect(h.entry.failure!.serverCode, failure.code);
+          expect(h.entry.status, StudentFileAnswerStatus.failure);
+          expect(h.entry.question, isNot(same(previousQuestion)));
+          expect(h.entry.question, same(currentQuestion));
+          expect(h.entry.serverFile, same(currentFile));
+          expect(h.state.activeQuestionId, isNull);
+          expect(h.state.canUpload(_questionId), isFalse);
+          await h.controller.uploadAnswer(_questionId);
+          expect(h.repository.uploads, hasLength(1));
+
+          h.parent.publish(_data(currentAttempt));
+          await h.flush();
+          if (failure.code == ApiErrorCodes.validationFailed) {
+            expect(h.state.canUpload(_questionId), isFalse);
+            await h.controller.uploadAnswer(_questionId);
+            expect(h.repository.uploads, hasLength(1));
+          } else {
+            expect(h.state.canUpload(_questionId), isTrue);
+            final retry = h.controller.uploadAnswer(_questionId);
+            expect(h.repository.uploads, hasLength(2));
+            expect(h.repository.uploads.last.file, same(selected));
+            h.repository.uploads.last.complete(_result());
+            await retry;
+            expect(h.entry.status, StudentFileAnswerStatus.uploaded);
+          }
+        },
+      );
+    }
+  }
+
+  test(
+    'valid replacement clears confirmed storage-failure provenance',
+    () async {
+      final h = _Harness();
+      await h.pick();
+      final upload = h.controller.uploadAnswer(_questionId);
+      h.repository.uploads.single.fail(
+        studentServerFailure(ApiErrorCodes.fileUploadFailed, statusCode: 500),
+      );
+      await upload;
+      final replacement = _selected(name: 'replacement.pdf');
+      await h.pick(file: replacement);
+      expect(h.entry.selectedFile, same(replacement));
+      expect(h.entry.failure, isNull);
+      expect(h.entry.selectionError, isNull);
+      expect(h.entry.localFailure, isNull);
+      expect(h.entry.status, StudentFileAnswerStatus.ready);
       expect(h.state.canUpload(_questionId), isTrue);
     },
   );
