@@ -11,12 +11,14 @@
 | Implementation type | `Flutter typed drafts + explicit save/replace/clear UX for eight non-file Student Homework Question types` |
 | Depends on | `S07-FE-002 = Accepted / Delivered`; Stage 7 Backend Phase 2 remains `PASS` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
-| Current review baseline | `origin/main @ 8277667c75beeb0d9e49cf2f0374e1ca2711ebc6` |
+| Current review baseline | `origin/main @ fcbaa02133700693834471e2eb482190050c99e3` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-PHASE-2 = PASS` and `S07-FE-002 = Accepted / Delivered` |
+| Readiness Gate | `PENDING — current-main revalidation by ChatGPT required after this correction is merged` |
 | Supported surfaces | `Student desktop + mobile` |
 | Verification | focused frontend tests + format/analyze + diff check |
-| Delivery | Project Owner |
+| Delivery | Codex: implementation -> focused verification -> final focused scope/diff self-review -> stage task scope only -> `git diff --cached --check` -> commit -> push -> create PR -> stop before merge; Project Owner: merge only after ChatGPT acceptance review |
+| Implementation branch | `implement/s07-fe-003-eight-non-file-answer-editors` |
+| Pre-approved commit | `feat(stage7): add student homework answer editors` |
 | Frontend block checkpoint | Stage 7 Frontend Phase 2 after `S07-FE-001…005` |
 
 Do not create a duplicate `CODEX-PROMPT`.
@@ -245,13 +247,14 @@ This controller owns only:
 - confirmed server answer bases;
 - local validation;
 - one active answer mutation;
-- uncertain mutation snapshot + authoritative GET reconciliation ownership;
+- uncertain mutation snapshot + explicit authoritative reconciliation GET through
+  `StudentHomeworkAttemptRepository.fetchAttempt(target.attemptId)`;
 - dirty state;
 - discard/reset state.
 
 It does not own:
 
-- Attempt loading;
+- ordinary parent Attempt loading/refresh;
 - Homework loading;
 - routing;
 - final Submit;
@@ -1031,8 +1034,28 @@ type = current safe StudentQuestion.type
 The mutation-response parser must receive the current validated safe
 `StudentQuestion` as request context, not only the two route/type strings.
 
-When `answer != null`, reuse the delivered FE-002 saved-answer typed parser and
-apply the same cross-collection constraints against that safe Question:
+The reusable saved-answer logic currently lives privately in:
+
+```text
+frontend/lib/features/student/data/dto/student_homework_attempt_dto.dart
+```
+
+FE-003 is authorized to modify that exact file to expose one focused public
+data-layer parser:
+
+```dart
+StudentAttemptAnswerValue parseStudentAttemptAnswerValue(
+  Object? json,
+  StudentQuestion question,
+)
+```
+
+Move/reuse the existing FE-002 `_readAnswerValue` behavior behind this function.
+Validate against the supplied safe `StudentQuestion` and preserve every existing
+FE-002 child-ID, max-selection, ordering-position, text, file and type invariant.
+Existing GET Attempt parsing must call this same function.
+`student_attempt_answer_mutation_dto.dart` must call it for every non-null
+mutation-response `answer`, applying the same cross-collection constraints:
 
 ```text
 single/multiple choice IDs belong to Question options
@@ -1044,7 +1067,9 @@ fill blank IDs belong to Question blanks
 written/fill persisted text is semantically non-empty when present
 ```
 
-Do not duplicate parsing logic.
+Keep Attempt-level answer-state parsing private where it is specific to the full
+Attempt collection. Do not duplicate saved-answer parsing logic or create a
+second saved-answer parser abstraction/file.
 
 Any response target/type/child-integrity mismatch is:
 
@@ -1160,7 +1185,7 @@ Map malformed success to:
 ApiFailureKind.invalidResponse
 ```
 
-No automatic retry.
+No mutation retry is performed by the data source.
 
 ---
 
@@ -1283,18 +1308,36 @@ There is **no blind PUT retry operation** in FE-003.
 
 # 29. Save Preconditions
 
+The delivered FE-002 states are exactly:
+
+```text
+StudentHomeworkAttemptLoadStatus:
+initial
+loading
+data
+refreshing
+notFound
+error
+```
+
+There is no Attempt-level `stale` status or `isStale` property. Do not introduce
+either. Separate Homework-list stale semantics remain unchanged.
+
 A Question Save is enabled only when all are true:
 
 ```text
-FE-002 Attempt controller status = data
-Attempt data is confirmed current/non-stale for this target
-Attempt.status = in_progress
-Question type is one of FE-003 eight
-draft locally valid
+Attempt controller status == data
+attempt != null
+attempt.id == route target attemptId
+attempt.assessmentId == route target homeworkId
+attempt.status == in_progress
+current Student/session/route target is eligible
+draft is locally valid
 draft is semantically dirty
-no active save/uncertain reconciliation operation for this Attempt
-current Student session/route target is eligible/current
+no active save/reconciliation operation
 ```
+
+Only the eight FE-003 non-file Question types have editors.
 
 Do not send a PUT while the parent Attempt view is:
 
@@ -1302,14 +1345,15 @@ Do not send a PUT while the parent Attempt view is:
 initial
 loading
 refreshing
-stale/retained-only
 error
 notFound
 ```
 
-Local drafts may remain visible/editable where the delivered FE-002 retained
-presentation permits it, but Save is disabled until a new confirmed-current
-`data` Attempt establishes editability again.
+`refreshing` and `error` may contain retained Attempt data, but retained data is
+non-authoritative for sending PUT. Local drafts may remain in editor-controller
+memory and visible/editable where the delivered FE-002 presentation permits it.
+No Save may occur until a new confirmed `data` Attempt is published and all
+preconditions above hold.
 
 For Single/True:
 
@@ -1434,7 +1478,8 @@ If that refresh fails:
 
 - keep the mutation response as confirmed local server answer;
 - show no false rollback;
-- normal Attempt refresh UI may indicate stale/error independently.
+- normal Attempt refresh UI may show `error` with retained data independently;
+  retained data does not authorize another PUT.
 
 Do not patch Homework attempt counts; answer save does not change them.
 
@@ -1557,14 +1602,23 @@ For the affected Question:
 - disable its input controls;
 - show:
   ```text
-  We could not confirm whether this answer was saved.
+  Save result unconfirmed
   ```
 - show exactly one recovery action:
   ```text
   Reload attempt
   ```
 
-Do **not** show a blind `Reload attempt` action.
+`Reload attempt` is the authoritative recovery action. It invokes the explicit
+editor-owned reconciliation GET defined in Section 37.
+
+Forbidden:
+
+```text
+blind PUT retry
+Retry Save
+automatic resend of pendingMutationSnapshot
+```
 
 While uncertainty exists:
 
@@ -1614,19 +1668,42 @@ Do not add an idempotency header to ordinary answer PUT in FE-003.
 
 # 37. Authoritative Uncertain-Outcome Reconciliation
 
-`Reload attempt` starts one explicit editor-owned reconciliation operation using
-the FE-002 authoritative GET Attempt boundary.
+`Reload attempt` starts one explicit reconciliation GET owned by the editor
+controller at this exact boundary:
 
-The editor records a reconciliation generation/token bound to:
+```text
+StudentAttemptAnswerEditorController
+-> StudentHomeworkAttemptRepository.fetchAttempt(target.attemptId)
+```
+
+At dispatch, capture the operation's ownership context and validate it again
+before accepting its completion:
 
 ```text
 StudentSessionKey
 StudentHomeworkAttemptRouteTarget
 questionId
 pendingMutationSnapshot
+reconciliation generation/token
 ```
 
-Only that owned GET completion may resolve the uncertainty.
+The captured Student/session, route target, Question, pending mutation snapshot
+and reconciliation generation/token must still match the active operation.
+Only that owned GET completion may resolve the uncertainty. An ordinary FE-002
+parent refresh is not proof of the uncertain PUT result, and blindly resending
+PUT is not reconciliation.
+
+Before using the returned Attempt to resolve uncertainty, require:
+
+```text
+returnedAttempt.id == target.attemptId
+returnedAttempt.assessmentId == target.homeworkId
+```
+
+Compare identifiers case-insensitively only after canonical UUID validation of
+both returned and target identifiers. A target/hierarchy mismatch is an invalid
+authoritative response (`ApiFailureKind.invalidResponse`), must not prove save
+success, and follows the non-authoritative GET failure behavior below.
 
 While reconciliation is in flight:
 
@@ -1686,6 +1763,10 @@ and allow another `Reload attempt` later.
 
 Session/target loss invalidates reconciliation ownership and clears local editor
 state under Section 39.
+
+After reconciliation, normal FE-002 Attempt refresh/invalidation may be requested
+to synchronize the parent screen. That ordinary refresh itself must never be
+used as proof of the uncertain mutation.
 
 Do not fabricate success.
 
@@ -1959,10 +2040,12 @@ attempt.status = in_progress
 render editors for the eight non-file types with Save eligibility from
 Section 29.
 
-During retained `refreshing`/stale presentation of a previously in-progress
-Attempt, local drafts may remain visible according to the delivered FE-002
-presentation, but all mutation Save actions are disabled until confirmed current
-`data` returns.
+During `refreshing` or `error`, retained Attempt data is non-authoritative for
+PUT. Local drafts may remain in editor-controller memory and visible according
+to the delivered FE-002 presentation. `initial`, `loading`, `refreshing`, `error`
+and `notFound` must not authorize Save. All mutation Save actions stay disabled
+until a new confirmed `data` Attempt is published and every Section 29
+precondition holds, including both route-target identity checks.
 
 When a confirmed Attempt is terminal:
 
@@ -2139,7 +2222,7 @@ Text editing must remain deterministic.
 Widgets may use `TextEditingController` where appropriate, but must synchronize it with the typed application draft without:
 
 - cursor jumps on every rebuild;
-- stale server refresh overwriting dirty text;
+- ordinary parent refresh overwriting dirty text;
 - controller leaks.
 
 Dispose controllers.
@@ -2269,6 +2352,7 @@ frontend/test/features/student/student_answer_editor_screen_test.dart
 
 ```text
 frontend/lib/features/student/domain/student_homework_attempt_repository.dart
+frontend/lib/features/student/data/dto/student_homework_attempt_dto.dart
 frontend/lib/features/student/data/student_homework_attempt_remote_data_source.dart
 frontend/lib/features/student/data/student_homework_attempt_repository_impl.dart
 
@@ -2278,9 +2362,14 @@ frontend/lib/features/student/presentation/student_homework_formatters.dart
 frontend/lib/core/network/api_error_codes.dart
 ```
 
-Modify FE-002 Attempt answer parsing code only to expose/reuse an existing safe typed answer parser.
+Modify `frontend/lib/features/student/data/dto/student_homework_attempt_dto.dart`
+only to expose/reuse `parseStudentAttemptAnswerValue(Object? json,
+StudentQuestion question)` as specified in Section 23. GET Attempt and non-null
+answer mutation response parsing must both call it; Attempt-specific collection
+answer-state parsing remains private.
 
-Do not create duplicate saved-answer models/parsers.
+Do not create duplicate saved-answer models/parsers or a new parser
+abstraction/file.
 
 No routing path change required.
 
@@ -2347,14 +2436,20 @@ Verify:
 
 - encoded IDs;
 - JSON body exact;
-- no query;
+- `Content-Type = application/json`;
+- no query parameters;
 - no Idempotency-Key;
-- `followRedirects=false`;
-- success 200 only.
+- `followRedirects = false`;
+- HTTP 200 only;
+- no mutation retry is performed by the data source.
 
 Response parsing:
 
 - non-null typed answer;
+- non-null mutation answers and existing GET Attempt answers use the same
+  `parseStudentAttemptAnswerValue` parser from `student_homework_attempt_dto.dart`,
+  preserving FE-002 child-ID, max-selection, ordering-position, text, file and
+  type invariants;
 - null clear response;
 - exact `answer <=> updated_at` nullability;
 - exact whole-second UTC `YYYY-MM-DDTHH:MM:SSZ`;
@@ -2410,9 +2505,15 @@ File Question excluded from editor map.
 ## Save
 
 - valid dirty sends exact mutation only from confirmed-current `data`
-  in-progress Attempt;
+  in-progress Attempt with non-null data, matching `attempt.id`/route attemptId,
+  matching `attempt.assessmentId`/route homeworkId and eligible Student/session/
+  route target;
 - clean does not send;
-- refreshing/stale/error/notFound parent cannot send;
+- locally invalid, null Attempt, wrong Attempt ID, wrong Homework ID or
+  ineligible Student/session/route target cannot send;
+- `initial`, `loading`, `refreshing`, `error` and `notFound` parent cannot send;
+- retained Attempt data in `refreshing`/`error` cannot authorize PUT; drafts may
+  remain in controller memory, but Save waits for a new confirmed `data` Attempt;
 - only one active save/reconciliation per Attempt;
 - saving current Question disables further save.
 
@@ -2440,13 +2541,24 @@ File Question excluded from editor map.
 ## Uncertain
 
 - exact mutation snapshot retained;
-- no Retry-save control/path exists;
+- no `Retry Save` control/path or automatic pending-snapshot resend exists;
 - other save blocked;
 - Reload Attempt is the only recovery action.
 
 ## Reload reconciliation
 
-- owned reconciliation completion with refreshed server answer == snapshot => saved;
+- `Reload attempt` calls
+  `StudentHomeworkAttemptRepository.fetchAttempt(target.attemptId)` from
+  `StudentAttemptAnswerEditorController`;
+- captured `StudentSessionKey`, `StudentHomeworkAttemptRouteTarget`, `questionId`,
+  `pendingMutationSnapshot` and reconciliation generation/token are validated
+  before publishing the owned GET completion;
+- returned Attempt ID and assessment ID must match the captured target Attempt
+  and Homework IDs, case-insensitively only after canonical UUID validation;
+- malformed UUID or target/hierarchy mismatch is an invalid authoritative
+  response, retains uncertainty/snapshot and cannot prove save success;
+- matching owned reconciliation completion with returned server answer ==
+  pending semantic mutation result => saved;
 - differs while in-progress => refreshed server becomes base and exact snapshot
   returns as dirty local draft;
 - differing/newer server state is never automatically overwritten;
@@ -2456,6 +2568,8 @@ File Question excluded from editor map.
 ## Parent refresh ownership
 
 - ordinary in-progress parent refresh does not resolve an uncertain Question;
+- post-reconciliation parent refresh/invalidation may synchronize the screen
+  but is never proof of the uncertain PUT result;
 - terminal parent refresh invalidates active PUT/reconciliation generation;
 - late PUT/GET completion after terminal publish is ignored.
 
@@ -2527,11 +2641,16 @@ No picker/upload in FE-003.
 ## Common
 
 - Save disabled when clean;
-- Save disabled while parent Attempt is refreshing/stale/non-current;
+- Save disabled for `initial`, `loading`, `refreshing`, `error` and `notFound`;
+- retained Attempt data in `refreshing`/`error` does not enable Save; local drafts
+  may remain in memory until a new confirmed `data` Attempt is published;
+- Save disabled for a null Attempt, route Attempt/Homework mismatch or ineligible
+  Student/session/route target;
 - Saving busy;
 - Saved state;
 - deterministic error;
-- uncertain state shows `Reload attempt` and no `Reload attempt`;
+- uncertain state shows `Save result unconfirmed` and exactly one recovery
+  action, `Reload attempt`, with no `Retry Save` or blind PUT retry;
 - other Save buttons blocked during active mutation/reconciliation.
 
 No score/correctness UI.
@@ -2663,6 +2782,7 @@ dart format --output=none --set-exit-if-changed \
   lib/features/student/domain/student_answer_mutation.dart \
   lib/features/student/domain/student_homework_attempt_repository.dart \
   lib/features/student/data/dto/student_attempt_answer_mutation_dto.dart \
+  lib/features/student/data/dto/student_homework_attempt_dto.dart \
   lib/features/student/data/student_homework_attempt_remote_data_source.dart \
   lib/features/student/data/student_homework_attempt_repository_impl.dart \
   lib/features/student/application/student_attempt_answer_editor_state.dart \
@@ -2682,11 +2802,9 @@ dart format --output=none --set-exit-if-changed \
   test/features/student/student_answer_editor_screen_test.dart
 ```
 
-If exposing the delivered FE-002 saved-answer parser requires editing its
-existing DTO/domain file, add that **exact delivered changed file** to this
-format invocation during ChatGPT implementation-baseline revalidation before
-Codex starts. Codex must not choose an unreviewed parser refactor/file on its
-own.
+The command explicitly includes the authorized shared-parser change in
+`frontend/lib/features/student/data/dto/student_homework_attempt_dto.dart`.
+Do not introduce another parser abstraction/file.
 
 ## 65.3 Static analysis
 
@@ -2714,6 +2832,33 @@ Do not run:
 - backend suite;
 - E2E/integration runner.
 
+## 65.5 Integrated implementation delivery
+
+After every verification check in Sections 65.1–65.4 passes, Codex must:
+
+1. perform final focused scope/diff self-review;
+2. stage only the S07-FE-003 implementation/test scope from Section 57;
+3. run `git diff --cached --check`;
+4. perform a focused staged scope/diff review;
+5. commit exactly:
+   ```text
+   feat(stage7): add student homework answer editors
+   ```
+6. push the implementation branch:
+   ```text
+   implement/s07-fe-003-eight-non-file-answer-editors
+   ```
+7. create a PR against `main`;
+8. include focused verification and scope/non-goals in the PR body;
+9. stop before merge;
+10. do not update `STAGE_07_TASK_INDEX.md`.
+
+Successful implementation requires an existing PR. Project Owner merges only
+after ChatGPT acceptance review.
+
+If implementation or its verification fails, report `BLOCKED`. If implementation
+verification passes but delivery fails, report `DELIVERY BLOCKED`.
+
 ---
 
 # 66. Acceptance Criteria
@@ -2736,7 +2881,12 @@ PASS only if all are true.
 
 - no raw answer Maps in application/presentation;
 - typed drafts/mutations;
-- FE-002 saved-answer parser reused;
+- one public `parseStudentAttemptAnswerValue(Object? json, StudentQuestion question)`
+  in `student_homework_attempt_dto.dart` reuses the existing `_readAnswerValue`
+  behavior for GET Attempt and non-null mutation answers;
+- all FE-002 child-ID, max-selection, ordering-position, text, file and type
+  invariants are preserved; Attempt collection answer-state parsing stays private;
+- no duplicate saved-answer parsing logic or new parser abstraction/file;
 - mutation response is validated against the current safe `StudentQuestion`;
 - mutation timestamps reuse exact Stage 7 whole-second UTC parser;
 - repository/data source own transport.
@@ -2757,8 +2907,16 @@ PASS only if all are true.
 - uncertain PUT retains the exact mutation only for GET comparison/local draft
   restoration;
 - no blind PUT Retry exists after an uncertain outcome;
+- `Save result unconfirmed` exposes exactly one recovery action, `Reload attempt`;
+- the editor controller owns reconciliation through
+  `StudentHomeworkAttemptRepository.fetchAttempt(target.attemptId)`;
+- owned GET completion validates the captured Student/session, route target,
+  Question, pending snapshot and reconciliation generation/token;
+- returned Attempt ID and assessment ID match the captured target Attempt and
+  Homework IDs, case-insensitively only after canonical UUID validation;
+- invalid UUID or target/hierarchy mismatch cannot prove success;
 - authoritative Reload reconciles safely without overwriting an intervening
-  newer server answer;
+  newer server answer or automatically resending the pending snapshot;
 - ordinary parent refresh cannot silently resolve an uncertain Question;
 - terminal parent refresh invalidates active operation generations;
 - deterministic lifecycle errors refresh authoritative state;
@@ -2766,9 +2924,13 @@ PASS only if all are true.
 
 ## Lifecycle
 
-- editing/Save authority requires confirmed-current FE-002 `data` +
-  `in_progress`;
-- refreshing/stale/error/notFound parent state cannot send PUT;
+- Save authority requires every Section 29 condition: FE-002 controller status
+  `data`, non-null Attempt, both route-target identity matches, `in_progress`,
+  eligible Student/session/route target, locally valid and semantically dirty
+  draft, and no active save/reconciliation operation;
+- `initial`, `loading`, `refreshing`, `error` and `notFound` cannot send PUT;
+- retained `refreshing`/`error` Attempt data is non-authoritative; drafts may
+  remain in controller memory but Save waits for a new confirmed `data` Attempt;
 - terminal refresh removes editors and invalidates active save/reconciliation;
 - no device-time eligibility;
 - no post-finalization optimistic state.
@@ -2803,6 +2965,15 @@ PASS only if all are true.
 - `git diff --check` passes;
 - focused self-review passes.
 
+## Delivery
+
+- only S07-FE-003 implementation/test scope is staged;
+- `git diff --cached --check` and focused staged review pass;
+- exact pre-approved commit is pushed on the frozen implementation branch;
+- a PR against `main` exists with focused verification and scope/non-goals;
+- Codex stops before merge and leaves Stage bookkeeping unchanged;
+- Project Owner merges only after ChatGPT acceptance review.
+
 ---
 
 # 67. Locked Implementation Decisions
@@ -2819,24 +2990,45 @@ ordinary answer PUT = no Idempotency-Key
 semantic clean state = no request
 one active save/reconciliation operation per Attempt
 uncertain PUT = no blind PUT retry
-uncertain recovery = authoritative GET Attempt reconciliation
+uncertain UI = Save result unconfirmed + Reload attempt
+uncertain recovery = editor-owned authoritative GET Attempt reconciliation
+reconciliation boundary = StudentAttemptAnswerEditorController -> StudentHomeworkAttemptRepository.fetchAttempt(target.attemptId)
+reconciliation ownership = StudentSessionKey + StudentHomeworkAttemptRouteTarget + questionId + pendingMutationSnapshot + generation/token
+reconciliation identity = returned Attempt ID and assessment ID match target Attempt and Homework IDs, case-insensitively only after canonical UUID validation
+reconciliation target/hierarchy mismatch = invalid authoritative response, never proof of save success
 pending mutation snapshot = comparison + local dirty-intent restoration only
-clearable = multiple, short, open, matching, ordering, fill
-not clearable = single, true_false
+clearable = multiple_choice, short_written, open_written, matching, ordering, fill_in_blank
+not clearable = single_choice, true_false
+Short/Open whitespace-only = semantic clear, exact Student text still sent in explicit PUT
+Fill whitespace-only entries = omitted
+non-empty Student text = never trimmed or normalized
 Short max = 1000 Unicode scalars
 Open max = 20000 Unicode scalars
 Fill value max = 1000 Unicode scalars
 matching partial = allowed
 ordering partial = allowed
 fill partial = allowed
-server Attempt confirmed-current data/status = editability authority
-refreshing/stale parent Attempt = no PUT
+Attempt load statuses = initial, loading, data, refreshing, notFound, error
+Save authority = every Section 29 precondition, including non-null in-progress data and both route-target identity matches
+initial/loading/refreshing/error/notFound parent Attempt = no PUT
+retained refreshing/error Attempt data = non-authoritative for PUT
+drafts may remain in editor-controller memory; Save waits for a new confirmed data Attempt
 device time = never editability authority
+saved-answer parser = parseStudentAttemptAnswerValue(Object? json, StudentQuestion question) in student_homework_attempt_dto.dart
+GET Attempt and non-null mutation answers = same parser, all FE-002 invariants preserved
+Attempt collection answer-state parsing = private
+new parser abstraction/file = forbidden
 mutation response = validate against current safe Question
 mutation updatedAt = exact YYYY-MM-DDTHH:MM:SSZ
 dirty local draft survives normal in-progress parent refresh
 ordinary parent refresh does not resolve uncertain Question
 terminal parent state invalidates active operations, discards unsavable dirty drafts and shows server state
+implementation delivery = Codex implements, verifies, reviews, stages task scope only, checks cached diff, commits, pushes and creates PR; stops before merge
+implementation branch = implement/s07-fe-003-eight-non-file-answer-editors
+pre-approved commit = feat(stage7): add student homework answer editors
+successful implementation = existing PR required
+Project Owner = merge only after ChatGPT acceptance review
+Stage bookkeeping = unchanged
 ```
 
 Codex must not substitute:
@@ -2858,16 +3050,22 @@ Codex must not substitute:
 
 # 68. Completion Report
 
-Return only:
+For implementation with all required verification and PR delivery complete:
 
 ```text
 IMPLEMENTATION COMPLETE
 ```
 
-or:
+If implementation or verification fails:
 
 ```text
 BLOCKED
+```
+
+If implementation verification passes but delivery fails:
+
+```text
+DELIVERY BLOCKED
 ```
 
 with:
@@ -2886,8 +3084,14 @@ with:
 12. `git diff --check`;
 13. scope/non-goal confirmation;
 14. deviations/blockers;
-15. final `git status --short`.
+15. commit SHA;
+16. branch;
+17. PR number;
+18. PR URL;
+19. final `git status --short`.
 
 Do not claim `Accepted`.
 
-Do not commit/push/create PR/update Stage bookkeeping unless explicitly instructed later.
+Complete the integrated Codex delivery from Section 65.5. Successful
+implementation requires an existing PR. Stop before merge; Project Owner merges
+only after ChatGPT acceptance review. Do not update `STAGE_07_TASK_INDEX.md`.
