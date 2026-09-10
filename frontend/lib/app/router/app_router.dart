@@ -26,6 +26,8 @@ import '../../features/platform_admin/presentation/platform_owner_institution_ed
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
 import '../../features/student/application/student_session_key.dart';
+import '../../features/student/domain/student_homework_route_target.dart';
+import '../../features/student/presentation/student_homework_detail_screen.dart';
 import '../../features/student/presentation/student_learning_workspace_screen.dart';
 import '../../features/student/presentation/student_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_learning_workspace_screen.dart';
@@ -427,6 +429,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     '',
               ),
             ),
+            routes: [
+              GoRoute(
+                name: AppRouteNames.studentHomeworkDetail,
+                path:
+                    '${AppRoutePaths.studentHomeworkSegment}/:${AppRoutePaths.studentHomeworkIdParameter}',
+                builder: (context, state) {
+                  final target = StudentHomeworkRouteTarget(
+                    topicId: state
+                        .pathParameters[AppRoutePaths.studentTopicIdParameter]!,
+                    homeworkId:
+                        state.pathParameters[AppRoutePaths
+                            .studentHomeworkIdParameter]!,
+                  );
+                  return _buildStudentDestination(
+                    StudentHomeworkDetailScreen(
+                      key: ValueKey<StudentHomeworkRouteTarget>(target),
+                      target: target,
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -716,7 +740,8 @@ bool _keepsLocationDuringBootstrap(
       (AppRoutePaths.isTeacherHomeworkDetailPath(location) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
-      (AppRoutePaths.isStudentTopicDetailPath(location) &&
+      ((AppRoutePaths.isStudentTopicDetailPath(location) ||
+              AppRoutePaths.isStudentHomeworkDetailPath(location)) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       (surface == AppDeviceSurface.desktop &&
