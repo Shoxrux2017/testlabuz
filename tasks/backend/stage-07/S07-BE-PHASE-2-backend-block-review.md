@@ -1581,9 +1581,8 @@ If that remains true at checkpoint execution, do not invent a new static-analysi
 
 Run exactly:
 
-```bash
-docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app sh -lc \
-  'set -eu; find app bootstrap config database public routes tests -type f -name "*.php" -print0 | xargs -0 -n1 php -l'
+```powershell
+docker compose --env-file docker/.env -f docker/docker-compose.yml exec -T app sh -lc 'set -eu; find app bootstrap config database public routes tests -type f -name "*.php" -print0 | xargs -0 -n1 php -l'
 ```
 
 Record exact result/exit code.
