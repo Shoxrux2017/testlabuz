@@ -11,8 +11,9 @@
 | Implementation type | `Flutter final Attempt review/confirmation + idempotent Student Submit + finalization reconciliation` |
 | Depends on | `S07-FE-004 = Accepted / Delivered`; Stage 7 Backend Phase 2 remains `PASS` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current review baseline | `origin/main @ 12398de03154fef14ae774ed19326518185ea0c2` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependencies above |
+| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-PHASE-2 = PASS` and `S07-FE-004 = Accepted / Delivered` |
 | Supported surfaces | `Student desktop + mobile` |
 | Verification | focused frontend tests + FE-001…004 regressions + format/analyze + diff check |
 | Delivery | Project Owner |
@@ -52,7 +53,7 @@ This contract resolves:
 - Submit-vs-lifecycle reconciliation;
 - immediate terminal state adoption;
 - post-Submit cache invalidation;
-- route-leave behavior during submitting/uncertain state;
+- route-operation serialization + route-leave behavior during submitting/uncertain state;
 - tests and verification.
 
 If delivered backend or FE-004 materially conflicts with this contract, return `BLOCKED` with exact evidence. Do not redesign.
@@ -331,20 +332,26 @@ The Submit controller:
   - session/route-target invalidation;
   - explicit abandonment when leaving an uncertain route.
 
-FE-003/004 answer controllers read the gate before beginning a new mutation.
+FE-003/004 mutation controllers read the gate before beginning any new
+mutation-capable operation.
 
-They must refuse new save/upload work while:
+They must refuse new save/upload/picker work while:
 
 ```text
 submitting
 submitUncertain
 ```
 
+The gate does not retroactively cancel a mutation that already synchronously
+claimed its own FE-003/004 active state before Submit preflight ran. In that
+ordering, Submit readiness must observe the active mutation and refuse to claim
+the gate.
+
 ---
 
 # 12. Modify FE-003 Answer Mutation Gate Check
 
-Before a non-file Question save/retry begins, delivered:
+Before a non-file Question **Save** begins, delivered:
 
 ```text
 StudentAttemptAnswerEditorController
@@ -354,6 +361,18 @@ must additionally require:
 
 ```text
 routeOperationGate == idle
+```
+
+The corrected FE-003 has no blind PUT retry for an uncertain answer save;
+uncertainty is reconciled through authoritative GET and any later Save is a new
+explicit mutation.
+
+For Save entry, order must be synchronous:
+
+```text
+check routeOperationGate == idle
+-> claim FE-003 saving/operation ownership
+-> only then perform first await / PUT
 ```
 
 If Submit already claimed the gate:
@@ -370,15 +389,15 @@ Do not make the answer controller depend on Submit business state beyond this sm
 
 # 13. Modify FE-004 File Mutation Gate Check
 
-Before:
+Before any mutation-capable file operation begins:
 
 ```text
 file picker
 file upload
-retry upload
+confirmed file_upload_failed Retry upload
 ```
 
-begins, delivered:
+delivered:
 
 ```text
 StudentFileAnswerController
@@ -388,6 +407,17 @@ must additionally require:
 
 ```text
 routeOperationGate == idle
+```
+
+The corrected FE-004 has no blind PUT retry for uncertain upload; that state is
+reconciled through authoritative GET.
+
+For picker/upload entry, order must be synchronous:
+
+```text
+check routeOperationGate == idle
+-> claim FE-004 selecting/uploading operation ownership
+-> only then perform first await / picker / PUT
 ```
 
 If Submit already claimed the gate:
@@ -426,6 +456,18 @@ StudentHomeworkSubmitBlocker:
   localStateUnavailable
 ```
 
+`localStateUnavailable` is required whenever FE-003/004 local state cannot be
+proven to belong to the same current:
+
+```text
+StudentSessionKey
+StudentHomeworkAttemptRouteTarget
+confirmed Attempt publication/generation
+Question set
+```
+
+as the Attempt data used for Submit readiness.
+
 No raw booleans-only API.
 
 ---
@@ -443,9 +485,20 @@ StudentAttemptRouteOperationGate
 
 and the current route target.
 
+Ready requires all participating states to be aligned to the same current
+`StudentSessionKey`, route target and confirmed Attempt publication/generation.
+
+If editor/file state is not initialized yet, belongs to an older Attempt
+publication, has a Question-set mismatch, or ownership cannot be proven:
+
+```text
+localStateUnavailable
+```
+
 The computed readiness must update reactively in presentation.
 
-Submit controller must independently re-check the same required conditions synchronously immediately before claiming the gate.
+Submit controller must independently re-check the same required conditions
+synchronously immediately before claiming the gate.
 
 UI disabling is not the sole safety boundary.
 
@@ -469,21 +522,36 @@ checked
 
 Do not accept `timed_out_finalized` as Homework.
 
-If parent Attempt is currently loading with no confirmed data:
+Submit may be ready only from:
 
 ```text
-attemptStateLoading
+StudentHomeworkAttemptController.status = data
+current/non-stale publication for this session/target
+status = in_progress
 ```
 
-If a refresh is in progress while retaining confirmed `in_progress` data:
+Treat all of the following as not ready:
 
-- disable Submit until the refresh completes.
+```text
+initial/loading
+refreshing
+stale/retained-only
+error
+notFound
+session/account reconciliation in progress
+```
+
+Use `attemptStateLoading` for unresolved/loading/refreshing lifecycle state where
+appropriate and `attemptNotEditable`/`localStateUnavailable` for the other typed
+cases according to delivered state shape; do not invent a ready path from
+retained data.
 
 Reason:
 
-> a refresh may be reconciling deadline/close finalization.
+> a refresh/error/stale publication may be reconciling deadline/close
+> finalization and is not current mutation authority.
 
-Do not submit against knowingly refreshing lifecycle state.
+Do not submit against knowingly non-current lifecycle state.
 
 ---
 
@@ -557,6 +625,7 @@ Submit is blocked while:
 ```text
 selecting
 uploading
+uncertain-upload reconciliation GET in progress
 ```
 
 Use:
@@ -565,7 +634,7 @@ Use:
 fileUploadInProgress
 ```
 
-Submit is blocked for:
+Submit is blocked for unresolved:
 
 ```text
 uncertain upload
@@ -612,13 +681,30 @@ Do not count local dirty/selected-but-unsaved work as answered.
 
 # 20. Confirmed Answer Snapshot Merge
 
-The FE-002 Attempt may be slightly older than a just-confirmed FE-003/004 mutation response when a non-blocking GET refresh failed.
+The FE-002 Attempt may be slightly older than a just-confirmed FE-003/004
+mutation response when the post-mutation non-blocking GET refresh failed.
 
-Therefore compute current **confirmed server answer state** by merging:
+Therefore current **confirmed server answer state** may merge:
 
 1. FE-002 Attempt `answers`;
 2. FE-003 latest confirmed `serverAnswer` per non-file Question;
 3. FE-004 latest confirmed `serverFile` per file Question.
+
+But an FE-003/004 overlay is eligible only when it carries/proves confirmation
+ownership for the same:
+
+```text
+StudentSessionKey
+StudentHomeworkAttemptRouteTarget
+Question ID
+```
+
+and is newer than (or not yet incorporated into) the current FE-002 Attempt
+publication.
+
+After a newer authoritative FE-002 GET publication has synchronized/rebased the
+FE-003/004 controllers, stale mutation overlays must not be re-applied over that
+newer GET.
 
 Rules:
 
@@ -627,7 +713,9 @@ Rules:
 - FE-004 confirmed `serverFile != null` adds it;
 - no local dirty draft counts;
 - no selected file counts;
-- no uncertain mutation snapshot counts.
+- no uncertain mutation/file snapshot counts;
+- unowned/stale editor/file overlays cause `localStateUnavailable`, not an
+  invented count.
 
 Use Question IDs as identity.
 
@@ -900,36 +988,49 @@ returned attempt.id == target.attemptId
 returned attempt.assessmentId == target.homeworkId
 ```
 
-A successful Submit response must not return:
+A valid successful Submit/replay `200` must prove the same logical explicit
+Student Submit.
+
+Require:
+
+```text
+status in:
+  submitted
+  waiting_for_teacher_review
+  checked
+
+finalizationReason = studentSubmit
+submittedAt != null
+finalizedAt == submittedAt
+```
+
+The corrected FE-002 Attempt parser already enforces the general timestamp/
+deadline consistency.
+
+`waiting_for_teacher_review` / `checked` are allowed only as later lifecycle
+progression of the same originally explicit `student_submit`; they do not relax
+the required finalization reason.
+
+Reject as malformed success, for example:
 
 ```text
 status = in_progress
+finalizationReason = homeworkDeadline
+finalizationReason = taskClosed
+submittedAt = null
 ```
 
-Allowed current returned statuses:
+even if the transport status is `200`.
+
+Any malformed/inconsistent `200` becomes:
 
 ```text
-submitted
-waiting_for_teacher_review
-checked
+ApiFailureKind.invalidResponse
+=> uncertain outcome
+=> retain SAME Idempotency-Key
 ```
 
-This supports a safe same-key replay after later server lifecycle progression.
-
-For immediate Stage 7 normal success, the backend returns:
-
-```text
-submitted
-student_submit
-```
-
-If the response is malformed/inconsistent:
-
-```text
-uncertain outcome
-```
-
-because server finalization may already have committed.
+because the backend finalization may already have committed.
 
 ---
 
@@ -1024,16 +1125,41 @@ Statuses:
 idle
 submitting
 uncertain
+checking
 failure
 completed
+reconciledTerminal
 ```
 
-State may include:
+Meaning:
+
+```text
+completed
+  = current logical Submit is proven successful by a valid same-key/new Submit
+    HTTP 200 response
+
+reconciledTerminal
+  = authoritative GET proves the Attempt is terminal, but does not prove that
+    this current logical Submit operation produced that terminal state
+```
+
+State may include typed:
 
 ```text
 failure?
 notice?
+terminalReconciliationReason?
 ```
+
+Use a typed reconciliation reason such as:
+
+```text
+studentSubmitAlreadyTerminal
+homeworkDeadlineAutoFinalized
+taskClosedAutoFinalized
+```
+
+Do not use display strings as control values.
 
 Do not expose raw idempotency key to Widget state.
 
@@ -1045,20 +1171,37 @@ Do not expose raw idempotency key to Widget state.
 
 1. resolve current eligible `StudentSessionKey`;
 2. verify route target;
-3. verify current Attempt confirmed/in-progress/not refreshing;
-4. verify no FE-003 dirty/save/uncertain state;
-5. verify no FE-004 selected/upload/uncertain state;
-6. verify operation gate `idle`;
-7. generate/reuse the logical Submit key;
-8. synchronously claim:
+3. verify current Attempt is exact current `data`, in-progress, non-refreshing,
+   non-stale;
+4. verify FE-003/004 local state ownership matches this same session/target/
+   Attempt publication;
+5. verify no FE-003 dirty/save/uncertain/reconciliation state;
+6. verify no FE-004 selected/picker/upload/uncertain/reconciliation state;
+7. verify operation gate `idle`;
+8. generate/reuse the logical Submit key;
+9. synchronously claim:
    ```text
    gate = submitting
    ```
-9. only then start async request.
+10. only then start async request.
 
 No first `await` before the gate claim.
 
-This prevents a new answer save/upload from entering between readiness check and Submit.
+The FE-003/004 mutation entry points must symmetrically claim their own
+saving/selecting/uploading states synchronously after checking `gate == idle`
+and before their first await.
+
+Thus in the single Flutter isolate:
+
+```text
+answer/file operation claims first
+=> Submit preflight sees blocker and sends no POST
+
+Submit claims gate first
+=> later answer/file operation sees non-idle gate and sends no PUT/picker
+```
+
+No interleaving window is left to a Widget-only check.
 
 ---
 
@@ -1069,18 +1212,22 @@ While:
 ```text
 submitting
 uncertain
+checking
 ```
 
 do not start another logical Submit.
 
-During `uncertain`, only:
+During `uncertain`, actions are:
 
 ```text
 Retry submission
 Check current Attempt
 ```
 
-actions are allowed.
+but exactly one resolution operation may be active at a time.
+
+During `checking`, disable both duplicate Check and Retry until that owned GET
+finishes.
 
 No normal new-key Submit button.
 
@@ -1139,7 +1286,10 @@ Check current Attempt
 
 `Retry submission` is the primary safe action.
 
-While uncertain:
+When either Retry or Check starts, disable the other action until the current
+resolution operation completes.
+
+While uncertain/checking:
 
 - all answer editors are locally frozen/read-only;
 - file picker/upload is blocked;
@@ -1162,43 +1312,105 @@ same body {}
 
 No new key.
 
-If `200` valid:
+Before the POST, claim one Submit-resolution generation bound to:
 
-- confirmed success.
+```text
+StudentSessionKey
+StudentHomeworkAttemptRouteTarget
+pending Idempotency-Key
+logical Submit generation
+```
+
+While Retry is in flight, `Check current Attempt` is disabled.
+
+If valid `200`:
+
+- confirmed success;
+- invalidate any older Check generation.
 
 If another uncertain result:
 
-- retain the same key/gate.
+- retain the same key/gate;
+- return to `uncertain`.
 
 If deterministic lifecycle result:
 
 - release gate/key;
+- invalidate resolution generation;
 - reconcile authoritative Attempt.
 
 This exact same-key retry behavior requires a controller test.
 
 ---
 
-# 38. Check Current Attempt
+# 38. Owned `Check Current Attempt` Reconciliation
 
-The uncertain state may call delivered:
+The uncertain state may invoke the delivered authoritative Attempt GET boundary,
+but FE-005 must own the resolution operation rather than treating any unrelated
+parent refresh as proof.
+
+`checkCurrentAttempt()` (or equivalent) binds one check generation to:
 
 ```text
-StudentHomeworkAttemptController.refresh()
+StudentSessionKey
+StudentHomeworkAttemptRouteTarget
+pending Idempotency-Key
+logical Submit generation
+check generation
 ```
 
-After authoritative GET:
+Before the GET:
 
-## Attempt now terminal with `student_submit`
+```text
+status = checking
+gate remains submitUncertain
+Retry submission disabled
+duplicate Check disabled
+```
 
-Treat the desired submission outcome as achieved:
+The implementation may call a focused FE-002 refresh/fetch method, but only the
+completion owned by this check generation may resolve the Submit state.
+
+A late Check completion is ignored after:
+
+```text
+valid Retry/new Submit 200 success
+deterministic Submit resolution
+explicit uncertain-route Leave
+session change
+route-target change
+controller disposal
+newer Check generation
+```
+
+After the owned authoritative GET:
+
+## Attempt terminal with `student_submit`
+
+This proves the **Attempt is explicitly submitted**, but by itself does not prove
+that the current pending Idempotency-Key/logical client operation caused that
+terminal state; another device/request could have won the race.
+
+Actions:
 
 - clear pending key;
 - release gate;
-- state `completed`;
-- use current terminal Attempt.
+- state `reconciledTerminal`;
+- adopt/use current terminal Attempt;
+- typed reason:
+  ```text
+  studentSubmitAlreadyTerminal
+  ```
+- show neutral terminal notice such as:
+  ```text
+  This Attempt is already submitted.
+  ```
+- do **not** show the current-operation success notice:
+  ```text
+  Attempt submitted successfully.
+  ```
 
-This is valid proof that the Attempt has been explicitly submitted, regardless of which idempotent delivery observed the success.
+The user's desired terminal outcome is achieved, so no retry is necessary.
 
 ## Attempt terminal due:
 
@@ -1207,54 +1419,65 @@ homework_deadline_auto_submit
 task_closed_auto_finalize
 ```
 
-The Attempt is finalized, but not by explicit Student submit.
-
 Actions:
 
-- clear key/gate;
-- state returns to a terminal-reconciled notice;
+- clear pending key;
+- release gate;
+- state `reconciledTerminal`;
+- adopt/use current terminal Attempt;
+- set the corresponding typed reconciliation reason;
 - show the authoritative finalization reason;
-- do not show:
-  ```text
-  Submitted successfully
-  ```
-  as an explicit action success.
+- do not show explicit Student Submit success.
 
 ## Attempt remains `in_progress`
 
 Do **not** conclude that the original Submit definitely failed.
 
-The original timed-out request may still be resolving.
-
-Remain:
+Actions:
 
 ```text
-uncertain
+status = uncertain
+retain same Idempotency-Key
+gate remains submitUncertain
 ```
 
-with the same key.
+`Retry submission` remains the durable-idempotency resolution path.
 
-`Retry submission` remains the safe resolution path.
+## Check GET is itself non-authoritatively failed/uncertain
+
+Return to:
+
+```text
+status = uncertain
+retain same Idempotency-Key
+gate remains submitUncertain
+```
+
+and allow a later Retry submission or another Check.
+
+Do not allow an ordinary FE-002 parent refresh to resolve the logical Submit
+state unless its result is explicitly consumed through this owned Check flow.
 
 ---
 
 # 39. Confirmed Submit Success
 
-On valid `200`:
+On a valid Submit/replay `200` satisfying Section 29:
 
 1. clear pending key;
-2. release route operation gate;
-3. state:
+2. invalidate any active Check/retry resolution generation;
+3. release route operation gate;
+4. state:
    ```text
    completed
    ```
-4. adopt returned server Attempt into the FE-002 Attempt controller;
-5. clear/reconcile FE-003/004 local editor state through the now-terminal parent Attempt;
-6. mark/invalidate FE-001:
+5. adopt returned server Attempt into the FE-002 Attempt controller;
+6. clear/reconcile FE-003/004 local editor state through the now-terminal parent Attempt;
+7. mark/invalidate FE-001:
    - Homework detail;
    - Topic Homework list;
-7. remain on the Attempt route;
-8. show:
+8. remain on the Attempt route;
+9. show:
    ```text
    Attempt submitted successfully.
    ```
@@ -1283,14 +1506,24 @@ adoptAuthoritativeAttempt(
 
 or equivalent.
 
-It may accept the returned Submit Attempt only when:
+For a Submit-response adoption it may accept the returned Attempt only when:
 
 ```text
 current route target matches
 current Student session matches
 attempt.id == target.attemptId
 attempt.assessmentId == target.homeworkId
+attempt.status is terminal
+attempt.finalizationReason == studentSubmit
+attempt.submittedAt != null
+attempt.finalizedAt == attempt.submittedAt
 ```
+
+For owned Check-current terminal reconciliation, a separate focused path may
+adopt the authoritative terminal Attempt with deadline/close/student-submit
+reason after the Section 38 check-generation validation.
+
+Do not expose one generic arbitrary model injection API.
 
 Then publish:
 
@@ -1301,8 +1534,6 @@ data
 without another network request.
 
 This avoids a transient UI where backend Submit succeeded but the local Attempt still appears editable.
-
-Do not expose a generic arbitrary model injection API.
 
 ---
 
@@ -1333,6 +1564,19 @@ myStatus
 ```
 
 Backend remains authoritative.
+
+---
+
+# 41A. Deterministic Resolution Ownership
+
+Before handling any deterministic Submit failure after the logical operation has
+started:
+
+- invalidate the current Submit resolution/check generation;
+- ensure a late Retry/Check completion cannot publish;
+- then apply the specific key/gate/reconciliation behavior below.
+
+Session/target loss remains stronger and clears all Submit operation ownership.
 
 ---
 
@@ -1507,9 +1751,11 @@ use existing Student session reconciliation.
 
 Also:
 
+- invalidate logical Submit/check/retry generation;
 - clear pending Submit key;
 - release gate;
-- no completion/navigation from stale response.
+- clear Submit state ownership;
+- no completion/navigation/notice from stale response.
 
 Do not carry pending Submit state into a future session.
 
@@ -1572,7 +1818,13 @@ submitting
 submitUncertain
 ```
 
-the FE-003/004 presentation must become locally read-only/frozen.
+or Submit controller is in its owned:
+
+```text
+checking
+```
+
+resolution state, the FE-003/004 presentation must remain locally read-only/frozen.
 
 Do not clear visible confirmed answers.
 
@@ -1781,7 +2033,7 @@ FE-005 extends the FE-003/004 Attempt PopScope priority.
 Use exactly:
 
 1. `submitting`
-2. `submitUncertain`
+2. `checking` / `submitUncertain`
 3. uncertain answer/file mutation
 4. ordinary dirty answer / selected file
 5. clean leave
@@ -1977,6 +2229,9 @@ Reject:
 - wrong Attempt ID;
 - wrong Homework assessment ID;
 - returned `in_progress`;
+- returned deadline/close finalization reason under HTTP 200;
+- terminal response without `student_submit`;
+- missing/null submitted timestamp for successful explicit Submit;
 - malformed Attempt;
 - extra top-level key;
 - score/checking fields;
@@ -1999,16 +2254,21 @@ No automatic retry.
 `student_homework_submit_readiness_test.dart` must cover independently:
 
 ```text
-ready clean in_progress
+ready clean confirmed-current in_progress
 terminal attempt
 loading
 refreshing
+retained/stale/error/notFound parent
 dirty non-file
 saving non-file
-uncertain non-file
+uncertain/reconciling non-file
 pending file selection
-selecting/uploading file
+selecting/uploading/reconciling file
 uncertain file
+FE-003 state not initialized
+FE-004 state not initialized
+editor/file state from older Attempt publication
+Question-set ownership mismatch
 local state unavailable
 ```
 
@@ -2023,12 +2283,15 @@ when no local blockers exist.
 Verify answer-count merge:
 
 - Attempt base answer;
-- FE-003 newly confirmed non-file answer not yet reflected in GET;
+- FE-003 newly confirmed owned non-file answer not yet reflected in GET;
 - FE-003 confirmed clear;
-- FE-004 newly confirmed file;
+- FE-004 newly confirmed owned file;
+- newer authoritative GET supersedes/rebases older overlays;
+- stale/unowned overlay cannot override newer GET and blocks via
+  `localStateUnavailable`;
 - local dirty value ignored;
 - selected file ignored;
-- uncertain mutation ignored.
+- uncertain mutation/file snapshot ignored.
 
 ---
 
@@ -2076,6 +2339,21 @@ Classified uncertain.
 
 Same key retained.
 
+Cover at minimum:
+
+- HTTP 200 with deadline reason;
+- HTTP 200 with close reason;
+- HTTP 200 terminal without `student_submit`;
+- HTTP 200 missing explicit submitted timestamp.
+
+## Check-current ownership
+
+- uncertain -> Check claims `checking`;
+- Retry disabled while Check active;
+- duplicate Check ignored;
+- stale Check `in_progress` completion after a newer valid Retry 200 is ignored;
+- stale Check completion after Leave/session/target change is ignored.
+
 ## Deterministic 409
 
 Key/gate cleared.
@@ -2106,25 +2384,57 @@ Add focused tests proving:
 
 ## Submit claims first
 
+Submit synchronously sets:
+
+```text
+gate = submitting
+```
+
+before first await.
+
 Then FE-003 answer Save:
 
 ```text
 sends no PUT
 ```
 
-and FE-004 file picker/upload:
+and FE-004 file picker/upload/confirmed-failure retry:
 
 ```text
-sends no mutation
+sends no picker/PUT
 ```
 
-## Answer/file mutation already active
+## Answer save claims first
 
-Readiness blocks Submit before gate claim.
+FE-003 synchronously claims `saving` before its first await/PUT.
 
-No POST.
+Then Submit preflight:
+
+```text
+blocked
+does not claim gate
+sends no POST
+```
+
+## File operation claims first
+
+FE-004 synchronously claims `selecting` or `uploading` before its first await.
+
+Then Submit preflight:
+
+```text
+blocked
+does not claim gate
+sends no POST
+```
+
+## Uncertain/reconciliation state already active
+
+FE-003/004 uncertainty or reconciliation blocks Submit.
 
 This is application-layer behavior, not Widget-only disabling.
+
+Use controlled completers; no arbitrary sleeps.
 
 ---
 
@@ -2132,28 +2442,38 @@ This is application-layer behavior, not Widget-only disabling.
 
 Controller/widget tests cover:
 
-## GET returns student_submit terminal
+## GET returns `student_submit` terminal
 
 - uncertainty clears;
 - key/gate clears;
-- completed state;
-- explicit success achieved.
+- state = `reconciledTerminal`, not `completed`;
+- typed reason = `studentSubmitAlreadyTerminal`;
+- neutral "already submitted" notice;
+- no current-operation success notice.
 
 ## GET returns deadline terminal
 
 - uncertainty clears;
+- state = `reconciledTerminal`;
 - no explicit success notice;
 - deadline finalization displayed.
 
 ## GET returns close terminal
 
-Same authoritative auto-finalization behavior.
+Same authoritative `reconciledTerminal` auto-finalization behavior.
 
 ## GET remains in_progress
 
-- uncertainty remains;
+- state returns from `checking` to `uncertain`;
 - key retained;
-- Retry still same key.
+- Retry still uses same key.
+
+## Check/Retry race suppression
+
+- Check active => Retry disabled;
+- Retry active => Check disabled;
+- late older Check cannot overwrite newer Retry success;
+- late Check after Leave/session/target invalidation is ignored.
 
 No new key.
 
@@ -2181,9 +2501,11 @@ Disabled + message.
 
 Disabled + resolve message.
 
-## Refreshing
+## Refreshing / stale / local-state mismatch
 
 Disabled.
+
+`localStateUnavailable` has a safe blocker message and opens no confirmation.
 
 ## Confirmation counts
 
@@ -2234,7 +2556,15 @@ Verify:
 - no new normal Submit;
 - Back shows uncertainty leave warning.
 
-## Leave uncertain
+## Checking current Attempt
+
+- checking/busy state;
+- duplicate Check disabled;
+- Retry disabled until Check completes;
+- editors remain frozen;
+- gate remains `submitUncertain`.
+
+## Leave uncertain/checking
 
 - key/gate state abandoned;
 - route returns to Homework detail;
@@ -2258,6 +2588,21 @@ After confirmed returned Attempt:
 - no Submit button;
 - saved file Open/Save As may remain in terminal UI;
 - Back to Homework works.
+
+## Check-current finds already `student_submit`
+
+- terminal read-only;
+- state uses reconciled/already-submitted notice;
+- finalization summary may still label:
+  ```text
+  Submitted by you
+  ```
+  from the authoritative reason;
+- no current-operation:
+  ```text
+  Attempt submitted successfully.
+  ```
+  notice.
 
 ## Deadline reconciliation
 
@@ -2330,7 +2675,9 @@ test/features/student/student_homework_screen_test.dart
 test/features/student/student_homework_controller_test.dart
 ```
 
-Use actual delivered filenames if FE-001…004 naming differs slightly and report the exact mapping.
+If delivered FE-001…004 materially do not contain these approved boundaries,
+return `BLOCKED` for dependency-contract mismatch instead of silently remapping
+verification.
 
 Do not run the full frontend test suite in this individual task.
 
@@ -2338,13 +2685,15 @@ Do not run the full frontend test suite in this individual task.
 
 # 77. Verification
 
-From:
+Run from:
 
 ```text
 frontend/
 ```
 
-Run:
+## 77.1 Focused FE-005 + directly affected FE-004/003/002/001 regressions
+
+Exactly:
 
 ```bash
 flutter test \
@@ -2365,25 +2714,67 @@ flutter test \
   test/features/student/student_homework_controller_test.dart
 ```
 
-Run format over changed task-owned Dart files:
+Narrow single-test diagnostic reruns are allowed only to diagnose/confirm a
+concrete failure.
+
+## 77.2 Exact Dart format check
+
+Exactly:
 
 ```bash
-dart format --output=none --set-exit-if-changed <changed Dart files>
+dart format --output=none --set-exit-if-changed \
+  lib/features/student/domain/student_homework_submit.dart \
+  lib/features/student/domain/student_homework_attempt_repository.dart \
+  lib/features/student/data/dto/student_homework_submit_dto.dart \
+  lib/features/student/data/student_homework_attempt_remote_data_source.dart \
+  lib/features/student/data/student_homework_attempt_repository_impl.dart \
+  lib/features/student/application/student_attempt_route_operation_gate.dart \
+  lib/features/student/application/student_homework_submit_readiness.dart \
+  lib/features/student/application/student_homework_submit_state.dart \
+  lib/features/student/application/student_homework_submit_controller.dart \
+  lib/features/student/application/student_homework_attempt_controller.dart \
+  lib/features/student/application/student_attempt_answer_editor_controller.dart \
+  lib/features/student/application/student_file_answer_controller.dart \
+  lib/features/student/presentation/student_homework_submit_controls.dart \
+  lib/features/student/presentation/student_attempt_finalization_summary.dart \
+  lib/features/student/presentation/student_homework_attempt_screen.dart \
+  lib/features/student/presentation/student_question_answer_editor.dart \
+  lib/features/student/presentation/student_file_answer_editor.dart \
+  lib/features/student/presentation/student_homework_formatters.dart \
+  test/features/student/student_homework_submit_data_test.dart \
+  test/features/student/student_homework_submit_readiness_test.dart \
+  test/features/student/student_homework_submit_controller_test.dart \
+  test/features/student/student_homework_submit_screen_test.dart \
+  test/features/student/student_answer_editor_controller_test.dart \
+  test/features/student/student_answer_editor_screen_test.dart \
+  test/features/student/student_file_answer_controller_test.dart \
+  test/features/student/student_file_answer_screen_test.dart
 ```
 
-Run:
+If implementation-baseline revalidation proves one additional delivered
+FE-003/004 state file must be modified solely to expose current publication/
+ownership metadata already required by this contract, ChatGPT must add that
+exact file to this command before Codex starts. Codex must not select an
+unreviewed state refactor/file itself.
+
+## 77.3 Static analysis
+
+Exactly:
 
 ```bash
 flutter analyze
 ```
 
-Then repository root:
+## 77.4 Diff hygiene
+
+From repository root exactly:
 
 ```bash
 git diff --check
 ```
 
-and focused diff/scope self-review.
+Then perform the focused diff/scope self-review required by root/frontend
+`AGENTS.md`.
 
 Do not run:
 
@@ -2402,11 +2793,13 @@ PASS only if all are true.
 
 ## Submit eligibility
 
-- only confirmed current `in_progress` Attempt;
-- disabled during refresh;
+- only exact confirmed-current/non-stale `in_progress` Attempt;
+- disabled during loading/refreshing/stale/error/notFound/session reconciliation;
+- FE-003/004 local states must match the same session/route/Attempt publication;
+- uninitialized/older/mismatched local state blocks via `localStateUnavailable`;
 - dirty non-file draft blocks;
-- active/uncertain answer save blocks;
-- selected/active/uncertain file mutation blocks;
+- active/uncertain/reconciling answer state blocks;
+- selected/active/uncertain/reconciling file state blocks;
 - zero unanswered/all unanswered does **not** block;
 - no local deadline logic.
 
@@ -2424,26 +2817,37 @@ PASS only if all are true.
 - one key per logical Submit;
 - uncertain outcome retains same key;
 - Retry uses same key;
+- valid 200 must prove terminal `student_submit`;
+- malformed/auto-finalized 200 is uncertain and retains the same key;
 - deterministic failure clears key;
-- duplicate Submit suppressed;
+- duplicate Submit/resolution suppressed;
 - no automatic new-key retry.
 
 ## Operation gate
 
-- Submit synchronously freezes new answer/file mutations;
+- Submit synchronously claims gate before first await;
+- FE-003 Save and FE-004 picker/upload synchronously claim their own active
+  operation after checking gate and before first await;
+- both ordering directions are race-safe;
 - answer/file controllers enforce the gate;
-- submitting/uncertain screen is locally read-only;
+- submitting/uncertain/checking screen is locally read-only;
 - gate releases correctly.
 
 ## Reconciliation
 
-- valid 200 authoritative Attempt adopted immediately;
+- valid 200 authoritative `student_submit` Attempt adopted immediately as
+  `completed`;
 - Homework detail/list invalidated;
 - deadline/close/not-editable outcomes refresh;
+- Check current is an owned single resolution operation;
+- while Check runs, Retry is disabled and vice versa;
 - uncertain Check current:
-  - student_submit terminal confirms;
-  - auto-finalized terminal reconciles without false success;
-  - in_progress remains uncertain.
+  - `student_submit` terminal => `reconciledTerminal` / already-submitted notice,
+    not current-operation success;
+  - auto-finalized terminal => `reconciledTerminal` without false success;
+  - in_progress => uncertainty remains with same key;
+- stale Check completion cannot overwrite newer Retry success/Leave/session/
+  target state.
 
 ## Terminal UX
 
@@ -2468,9 +2872,9 @@ PASS only if all are true.
 
 ## Verification
 
-- focused tests pass;
-- named regressions pass;
-- format passes;
+- exact focused test command passes;
+- exact named regressions pass;
+- exact Dart format command passes;
 - `flutter analyze` passes;
 - `git diff --check` passes;
 - focused self-review passes.
@@ -2492,12 +2896,17 @@ Submit never auto-saves answers
 confirmation = required
 confirmation shows saved/unanswered counts
 Submit claims route operation gate before first await
-submitting/uncertain = editors frozen
+FE-003/004 mutation entry claims own active state synchronously before first await
+mutation-first => Submit blocked; Submit-first => mutation blocked
+submitting/uncertain/checking = editors frozen
 uncertain Submit retry = SAME idempotency key
+valid HTTP 200 => terminal student_submit proof required
+auto-finalized/malformed HTTP 200 => uncertain, SAME key retained
+Check current = owned single resolution operation
 Check current in_progress = uncertainty remains
-Check current student_submit terminal = desired outcome confirmed
-deadline/close terminal = authoritative auto-finalization, not explicit success
-valid success Attempt = adopted immediately
+Check current student_submit terminal = reconciledTerminal/already submitted, not current-operation success
+deadline/close terminal = reconciledTerminal authoritative auto-finalization, not explicit success
+valid same-key/new Submit 200 = completed + adopted immediately
 Homework detail/list = invalidated, not optimistically patched
 terminal screen = remain on Attempt route
 next Attempt = only through Back to Homework + FE-002
@@ -2508,6 +2917,9 @@ Codex must not substitute:
 - requiring all Questions answered;
 - auto-saving dirty drafts;
 - generating a new key on timeout Retry;
+- accepting a 200 deadline/close finalization as Submit success;
+- claiming current-operation success from Check-current `student_submit`;
+- allowing Check and Retry resolution calls to overlap;
 - claiming success from an in-progress GET;
 - client-created finalization timestamps/status;
 - navigating away immediately after success;
@@ -2538,10 +2950,10 @@ with:
 3. exact focused test results;
 4. Submit readiness/zero-answer evidence;
 5. confirmation evidence;
-6. idempotency same-key retry evidence;
-7. route operation gate evidence;
-8. deadline/close/uncertain reconciliation evidence;
-9. authoritative Attempt adoption/cache invalidation evidence;
+6. idempotency same-key retry + strict `student_submit` 200 proof evidence;
+7. symmetric route-operation gate race evidence;
+8. owned Check-current / deadline / close / uncertain reconciliation evidence;
+9. completed-vs-reconciledTerminal Attempt adoption/cache invalidation evidence;
 10. navigation-guard evidence;
 11. desktop/mobile/accessibility evidence;
 12. FE-003/004 regression evidence;

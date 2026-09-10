@@ -11,8 +11,9 @@
 | Implementation type | `Flutter idempotent Homework Attempt start + current Attempt resume/read shell + canonical execution routing` |
 | Depends on | `S07-FE-001 = Accepted / Delivered`; Stage 7 Backend Phase 2 remains `PASS` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current review baseline | `origin/main @ 8277667c75beeb0d9e49cf2f0374e1ca2711ebc6` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependencies above |
+| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-PHASE-2 = PASS` and `S07-FE-001 = Accepted / Delivered` |
 | Supported surfaces | `Student desktop + mobile` |
 | Verification | focused frontend tests + format/analyze + diff check |
 | Delivery | Project Owner |
@@ -143,14 +144,19 @@ The execution route will perform authoritative GET Attempt reconciliation.
 
 ## If no current in-progress Attempt
 
-If backend-confirmed Homework detail says:
+A **new Start mutation** may be offered only from a confirmed current FE-001
+Homework detail state:
 
 ```text
+StudentHomeworkDetailStatus = data
+isStale = false / no retained-stale marker
 status = active
 remaining > 0
+in_progress_attempt = null
+Start controller is not submitting/uncertain
 ```
 
-render:
+Then render:
 
 ```text
 Start Attempt
@@ -158,13 +164,30 @@ Start Attempt
 
 Action sends the idempotent Start POST.
 
+Do not offer a new Start from retained or non-authoritative detail state:
+
+```text
+initial
+loading
+refreshing
+stale
+error
+notFound
+```
+
+A refreshing/stale view may continue showing read-only Homework information, but
+must not expose a new Start action based on retained counts/lifecycle.
+
 Do not derive deadline eligibility from device time.
 
 ## Otherwise
 
-No Start/Resume action.
+No new Start action.
 
-Show the existing read-only Homework state only.
+A confirmed current `in_progress_attempt` may still expose the direct Resume
+action defined above; the execution-route GET remains authoritative.
+
+Show the existing read-only Homework state only where applicable.
 
 Do not invent a disabled action based on local clock.
 
@@ -357,6 +380,23 @@ Do not duplicate Student Question models.
 
 Strict parser must enforce coherent Stage 7 Homework state.
 
+All non-null Attempt timestamps use the delivered FE-001 exact Homework timestamp
+parser:
+
+```text
+YYYY-MM-DDTHH:MM:SSZ
+```
+
+Do not fall back to the older, more permissive Student Topic timestamp syntax.
+
+For every Attempt require:
+
+```text
+started_at != null
+started_at <= finalized_at when finalized_at != null
+started_at <= submitted_at when submitted_at != null
+```
+
 ## `in_progress`
 
 Require:
@@ -389,12 +429,22 @@ submitted_at != null
 submitted_at == finalized_at
 ```
 
+If `deadline_at != null`:
+
+```text
+finalized_at < deadline_at
+```
+
+because equality/after-deadline belongs to deadline finalization.
+
 ### `homework_deadline_auto_submit`
 
 Require:
 
 ```text
+deadline_at != null
 submitted_at = null
+finalized_at == deadline_at
 ```
 
 ### `task_closed_auto_finalize`
@@ -404,6 +454,14 @@ Require:
 ```text
 submitted_at = null
 ```
+
+If `deadline_at != null`:
+
+```text
+finalized_at < deadline_at
+```
+
+because at/effectively after deadline the deadline reason must win.
 
 ## `waiting_for_teacher_review` / `checked`
 
@@ -416,7 +474,15 @@ finalized_at != null
 finalization_reason != null
 ```
 
-Preserve the same explicit/automatic `submitted_at` consistency based on `finalization_reason`.
+Preserve the same explicit/automatic `submitted_at` and deadline consistency
+based on `finalization_reason`:
+
+- `student_submit` -> `submitted_at == finalized_at`, and before deadline when a
+  deadline exists;
+- `homework_deadline_auto_submit` -> `submitted_at = null`,
+  `deadline_at != null`, `finalized_at == deadline_at`;
+- `task_closed_auto_finalize` -> `submitted_at = null`, and before deadline when
+  a deadline exists.
 
 FE-002 does not render scores.
 
@@ -497,7 +563,11 @@ For Multiple Choice:
 
 ```text
 count >= 1
+count <= referenced Question.answerUi.maxSelections
 ```
+
+The referenced FE-001 Multiple Choice Question must provide the validated
+positive `maxSelections`.
 
 An empty persisted answer must not appear in GET Attempt.
 
@@ -546,7 +616,18 @@ Preserve exact text.
 
 Do not trim/normalize.
 
-A persisted saved answer must be non-empty according to backend semantics; if backend returns a semantically cleared written state as persisted data, treat the response as invalid.
+A persisted saved answer must satisfy:
+
+```text
+text.trim().isNotEmpty
+```
+
+for the DTO semantic-empty check. This check does **not** mutate the value:
+preserve the original non-empty String exactly, including meaningful
+leading/trailing whitespace.
+
+If backend returns a semantically cleared written state as persisted data, treat
+the response as invalid.
 
 Do not score/compare accepted answers.
 
@@ -605,10 +686,12 @@ Require:
 ```text
 at least one item
 canonical item UUID
-position >= 1
+1 <= position <= referenced Question ordering item count
 unique item IDs
 unique submitted positions
 ```
+
+Partial subsets and non-contiguous positions remain valid.
 
 Do not compare to correct position.
 
@@ -634,9 +717,10 @@ Require:
 - at least one value;
 - canonical blank UUIDs;
 - unique blank IDs;
-- non-empty saved text.
+- every saved `text.trim().isNotEmpty`.
 
-Preserve exact text.
+Preserve each original non-empty text exactly; do not trim/normalize the stored
+display value.
 
 Do not parse accepted answers.
 
@@ -737,12 +821,16 @@ Strict `StudentHomeworkAttemptDto` parsing must enforce:
 
 - Question IDs unique;
 - Question positions unique;
+- Question positions are exactly `1..N`;
+- Question collection order is ascending by `position`;
 - Answer `question_id` unique;
 - every Answer references a returned Question;
 - Answer `type` exactly equals referenced Question type;
 - saved choice option IDs belong to the safe Question's option ID set;
+- saved Multiple Choice count does not exceed the safe Question `maxSelections`;
 - matching saved left/right IDs belong to the corresponding safe Question side sets;
-- ordering saved item IDs belong to that Question's item set;
+- ordering saved item IDs belong to that Question's item set and each submitted
+  position is within `1..Question.items.length`;
 - fill saved blank IDs belong to that Question's blank set;
 - file answer only references a `file_based` Question.
 
@@ -929,7 +1017,7 @@ data
 
 # 27. Repository
 
-Create:
+Create exactly one dedicated Attempt repository boundary:
 
 ```text
 frontend/lib/features/student/domain/student_homework_attempt_repository.dart
@@ -948,6 +1036,18 @@ Future<StudentHomeworkAttempt> fetchAttempt(
   String attemptId,
 )
 ```
+
+Ownership is fixed:
+
+```text
+StudentHomeworkRepository
+  = FE-001 Homework list/detail reads only
+
+StudentHomeworkAttemptRepository
+  = FE-002 Start + Attempt read only
+```
+
+Do not add Start/Attempt methods to `StudentHomeworkRepository`.
 
 No presentation formatting.
 
@@ -1163,9 +1263,40 @@ Do not show confirmed failure/success.
 
 ---
 
+# 32A. Start Session / Account Failure Reconciliation
+
+Session/account gate failures are **not** normal feature-level deterministic
+Start failures.
+
+Handle stable codes through the existing Student session reconciliation:
+
+```text
+authentication_required
+password_change_required
+user_inactive
+institution_inactive
+```
+
+Required behavior:
+
+1. clear `_pendingIdempotencyKey`;
+2. invalidate the current Start generation/ownership;
+3. return Start controller state to neutral/cleared;
+4. do not publish feature SnackBar/inline Start failure from that stale operation;
+5. apply the same existing Student auth/session reconciliation behavior used by
+   FE-001 controllers:
+   - authentication loss follows current auth routing;
+   - password/user/institution gate changes trigger the existing bootstrap/
+     reconciliation path where current Student conventions require it.
+
+A late completion after session reconciliation must not publish or navigate.
+
+---
+
 # 33. Deterministic Start Failure Classification
 
-A structured 4xx is deterministic for this operation.
+After excluding the session/account failures above, a structured confirmed 4xx
+is deterministic for this logical Start operation.
 
 Handle stable codes.
 
@@ -1265,23 +1396,26 @@ show only the safe same-key Retry path, not a separate new-key Start.
 
 # 35. Start Success Reconciliation
 
-On confirmed `200/201`:
+On transport-success `200/201`:
 
 1. ensure returned:
    ```text
    attempt.assessmentId == target.homeworkId
    ```
-2. if mismatch:
+2. if strict success parsing/hierarchy fails:
    ```text
-   invalidResponse
+   ApiFailureKind.invalidResponse
    ```
-   and do not navigate;
-3. mark/invalidate FE-001 Homework detail/list as stale so future reads refresh used/remaining/in-progress status;
+   treat the Start outcome as **uncertain**, retain the same pending key, and do
+   not navigate;
+3. on valid confirmed success, mark/invalidate FE-001 Homework detail/list as
+   stale so future reads refresh used/remaining/in-progress status;
 4. publish:
    ```text
    completedAttemptId
    completedResultKind
    ```
+5. clear the pending key only after valid success has been confirmed.
 
 Presentation owns navigation after observing a current completed state.
 
@@ -1398,22 +1532,41 @@ isStudentHomeworkAttemptPath(path)
 studentAttemptIdFromPath(path)
 ```
 
-Update:
+Preserve the corrected FE-001 route classifiers as mutually exclusive.
+
+Exact semantics after FE-002:
 
 ```text
-isStudentApprovedLocation(...)
-studentTopicIdFromPath(...)
-studentHomeworkIdFromPath(...)
+isStudentTopicDetailPath(path)
+  = true only for /student/topics/{topicId}
+
+isStudentHomeworkDetailPath(path)
+  = true only for /student/topics/{topicId}/homework/{homeworkId}
+
+isStudentHomeworkAttemptPath(path)
+  = true only for
+    /student/topics/{topicId}/homework/{homeworkId}/attempts/{attemptId}
+
+studentTopicIdFromPath(path)
+  = Topic ID for exact Topic, Homework or Attempt route
+
+studentHomeworkIdFromPath(path)
+  = Homework ID for exact Homework or Attempt route
+  = null for Topic/root
+
+studentAttemptIdFromPath(path)
+  = Attempt ID only for exact Attempt route
+
+isStudentApprovedLocation(path)
+  = Student root OR one of the three exact route forms
 ```
 
-so all correctly recognize:
+Do not redefine `isStudentTopicDetailPath()` or
+`isStudentHomeworkDetailPath()` merely in terms of a broader ID extractor.
 
-```text
-Student root
-Topic detail
-Homework detail
-Attempt execution
-```
+Update router bootstrap location preservation so the exact Attempt execution
+route remains at its canonical deep-link during auth bootstrap on both desktop
+and mobile, just like the corrected FE-001 Homework route.
 
 Reject:
 
@@ -1619,11 +1772,24 @@ Back to Homework
 
 Existing destination/session behavior applies.
 
-## Loading
+## Loading / retained parent state
 
 Show progress until required current hierarchy is known.
 
-Do not show execution controls with only stale/partial target validation.
+A retained `refreshing`/stale Homework detail is not sufficient to establish the
+current parent hierarchy for a new execution view. Render the execution shell
+only after:
+
+```text
+Homework detail = confirmed current data for target
+Attempt = confirmed current data for target
+```
+
+A terminal Attempt is still valid read-only data once both hierarchy components
+are confirmed.
+
+Do not show execution controls/content with only stale/partial target
+validation.
 
 ---
 
@@ -2091,14 +2257,9 @@ frontend/lib/app/router/app_router.dart
 frontend/lib/core/network/api_error_codes.dart
 ```
 
-Modify FE-001:
-
-```text
-student_homework_repository.dart
-student_homework_repository_impl.dart
-```
-
-only if the final local structure logically keeps Attempt methods in the same repository. Preferred contract is the separate Attempt repository above; do not create both duplicate paths.
+Do not modify FE-001 `StudentHomeworkRepository` / repository implementation
+to add Attempt operations. The dedicated Attempt repository in this contract is
+the only owner of Start/Attempt read transport.
 
 No backend files.
 
@@ -2148,13 +2309,21 @@ Reject:
 - `timed_out_finalized`;
 - `timeout_auto_submit`;
 - incoherent timestamps/reason;
+- deadline-finalized Attempt where `deadline_at` is null;
+- deadline-finalized Attempt where `finalized_at != deadline_at`;
+- student-submit/close reason at or after a non-null deadline;
+- `started_at > submitted_at/finalized_at`;
 - Attempt number outside 1..3;
-- malformed IDs/timestamps;
+- malformed/non-whole-second/non-UTC timestamps;
 - unknown keys;
 - score/checking fields;
 - duplicate Question/Answer IDs;
+- duplicate/non-contiguous/out-of-order Question positions;
 - Answer referencing missing Question;
 - Answer type mismatch;
+- saved Multiple Choice count above safe `maxSelections`;
+- saved Ordering position outside `1..Question.items.length`;
+- saved written/fill text whose `trim().isEmpty`;
 - saved child ID outside safe Question;
 - storage internals in file answer.
 
@@ -2244,9 +2413,36 @@ Same retained-key behavior.
 - state failure;
 - a later explicit new Start generates key B.
 
+## Invalid success response / hierarchy mismatch
+
+- first call uses key A;
+- backend transport returns 200/201 but strict payload/hierarchy is invalid;
+- state becomes uncertain;
+- key A is retained;
+- Retry uses key A again;
+- no new generator call.
+
 ## `idempotency_key_reused`
 
 No silent automatic new-key retry.
+
+## Session/account failures
+
+For each relevant stable gate code:
+
+```text
+authentication_required
+password_change_required
+user_inactive
+institution_inactive
+```
+
+verify:
+
+- key cleared;
+- Start state/ownership cleared;
+- existing auth/session reconciliation invoked as contracted;
+- no stale feature feedback/navigation.
 
 ## Session switch
 
@@ -2307,11 +2503,34 @@ No POST controller call.
 
 ## Available new Attempt
 
-Active + remaining >0 + no in-progress:
+Only confirmed-current FE-001 `data` state with:
+
+```text
+active
+remaining > 0
+in_progress_attempt = null
+not stale/refreshing
+```
+
+shows:
 
 ```text
 Start Attempt
 ```
+
+## Retained/non-authoritative detail state
+
+For:
+
+```text
+loading
+refreshing
+stale
+error
+notFound
+```
+
+do not expose a new Start action from retained lifecycle/capacity values.
 
 ## Non-active / zero remaining
 
@@ -2380,14 +2599,19 @@ Test:
 
 - helper path;
 - all 3 UUID validation;
-- route recognition;
-- Topic extraction;
-- Homework extraction;
-- Attempt extraction;
+- exact Attempt route recognition;
+- `isStudentTopicDetailPath` is false for Homework and Attempt routes;
+- `isStudentHomeworkDetailPath` is false for Attempt route;
+- `isStudentHomeworkAttemptPath` is true only for exact Attempt route;
+- Topic extraction works for Topic/Homework/Attempt routes;
+- Homework extraction works for Homework/Attempt routes only;
+- Attempt extraction works only for Attempt route;
 - approved Student location;
 - malformed IDs rejected;
 - extra path segment rejected;
 - direct entry renders Attempt screen through Student destination gate;
+- canonical Attempt deep-link is preserved during bootstrap on desktop/mobile;
+- query/fragment follows existing Student rejection/redirect behavior;
 - wrong/ineligible session uses existing technical-root behavior;
 - back action returns to Homework detail.
 
@@ -2397,7 +2621,7 @@ Confirm no flat frontend Attempt route exists.
 
 # 68. Directly Affected Regression Tests
 
-Run FE-002 tests plus:
+Run FE-002 tests plus the exact corrected FE-001/directly affected boundaries:
 
 ```text
 test/features/student/student_homework_dto_test.dart
@@ -2409,7 +2633,9 @@ test/features/student/student_workspace_screen_test.dart
 test/router_bootstrap_test.dart
 ```
 
-Use actual delivered filenames if FE-001 naming differs slightly, and report exact mapping.
+If delivered FE-001 materially does not contain these approved boundaries,
+return `BLOCKED` for dependency-contract mismatch instead of silently remapping
+verification.
 
 Do not run the full frontend suite in this individual task.
 
@@ -2417,13 +2643,15 @@ Do not run the full frontend suite in this individual task.
 
 # 69. Verification
 
-From:
+Run from:
 
 ```text
 frontend/
 ```
 
-Run:
+## 69.1 Focused FE-002 + directly affected FE-001/router regressions
+
+Exactly:
 
 ```bash
 flutter test \
@@ -2443,25 +2671,63 @@ flutter test \
   test/router_bootstrap_test.dart
 ```
 
-Run formatting over only changed task files:
+Narrow single-test diagnostic reruns are allowed only to diagnose/confirm a
+concrete failure.
+
+## 69.2 Exact Dart format check
+
+Exactly:
 
 ```bash
-dart format --output=none --set-exit-if-changed <changed Dart files>
+dart format --output=none --set-exit-if-changed \
+  lib/core/network/idempotency_key_generator.dart \
+  lib/core/network/api_error_codes.dart \
+  lib/features/student/domain/student_homework_attempt.dart \
+  lib/features/student/domain/student_homework_attempt_repository.dart \
+  lib/features/student/domain/student_homework_attempt_route_target.dart \
+  lib/features/student/data/dto/student_homework_attempt_dto.dart \
+  lib/features/student/data/student_homework_attempt_remote_data_source.dart \
+  lib/features/student/data/student_homework_attempt_repository_impl.dart \
+  lib/features/student/application/student_homework_attempt_start_state.dart \
+  lib/features/student/application/student_homework_attempt_start_controller.dart \
+  lib/features/student/application/student_homework_attempt_state.dart \
+  lib/features/student/application/student_homework_attempt_controller.dart \
+  lib/features/student/presentation/student_homework_attempt_screen.dart \
+  lib/features/student/presentation/student_attempt_answer_read_view.dart \
+  lib/features/student/presentation/student_homework_detail_screen.dart \
+  lib/features/student/presentation/student_homework_formatters.dart \
+  lib/app/router/app_route_paths.dart \
+  lib/app/router/app_router.dart \
+  test/core/network/idempotency_key_generator_test.dart \
+  test/features/student/student_homework_attempt_dto_test.dart \
+  test/features/student/student_homework_attempt_data_test.dart \
+  test/features/student/student_homework_attempt_start_controller_test.dart \
+  test/features/student/student_homework_attempt_controller_test.dart \
+  test/features/student/student_homework_attempt_screen_test.dart \
+  test/features/student/student_homework_attempt_routing_test.dart \
+  test/features/student/student_homework_screen_test.dart \
+  test/features/student/student_homework_routing_test.dart \
+  test/router_bootstrap_test.dart
 ```
 
-Run:
+## 69.3 Static analysis
+
+Exactly:
 
 ```bash
 flutter analyze
 ```
 
-Then repository root:
+## 69.4 Diff hygiene
+
+From repository root exactly:
 
 ```bash
 git diff --check
 ```
 
-and focused diff/scope self-review.
+Then perform the focused diff/scope self-review required by root/frontend
+`AGENTS.md`.
 
 Do not run:
 
@@ -2490,28 +2756,44 @@ PASS only if all are true.
 
 - confirmed FE-001 in-progress Attempt resumes by direct navigation;
 - no redundant POST for confirmed Resume;
+- new Start is offered only from confirmed current/non-stale FE-001 detail;
+- retained/loading/refreshing/stale/error/notFound detail cannot authorize a new
+  Start action;
 - Start POST accepts backend 201 create / 200 race-resume;
+- malformed successful Start response is treated as uncertain and retains the
+  same key;
 - returned Attempt hierarchy is checked;
 - no optimistic counts.
 
 ## Attempt read
 
 - GET Attempt is strict/typed;
+- Attempt timestamps/lifecycle/deadline reason invariants are coherent;
 - all saved answer types parse safely;
+- saved Multiple Choice/Ordering/text values respect their safe Question/domain
+  bounds without checking correctness;
+- Question positions remain exact `1..N` ascending;
 - cross-collection answer/Question integrity is validated;
 - no correctness/checking/score/storage fields enter domain.
 
 ## Routing
 
 - nested canonical execution route exists;
+- Topic/Homework/Attempt classifiers remain mutually exclusive;
+- broader Topic/Homework ID extractors correctly support nested Attempt route;
+- bootstrap preserves canonical Attempt deep-link on desktop/mobile;
 - deep-link hierarchy validates Topic/Homework/Attempt composition;
 - no competing flat frontend route.
 
 ## Application
 
 - Start and Attempt controllers are session/target/generation safe;
+- dedicated `StudentHomeworkAttemptRepository` exclusively owns Start/Attempt
+  read operations;
 - duplicate mutation suppressed;
 - stale completions cannot navigate/publish;
+- session/account gate failures clear operation ownership/key and use existing
+  Student auth reconciliation rather than feature failure UX;
 - deterministic vs uncertain failures are distinct.
 
 ## UI
@@ -2533,9 +2815,9 @@ PASS only if all are true.
 
 ## Verification
 
-- focused tests pass;
-- named regressions pass;
-- format passes;
+- exact focused test command passes;
+- exact named FE-001/router regressions pass;
+- exact Dart format command passes;
 - `flutter analyze` passes;
 - `git diff --check` passes;
 - focused self-review passes.
@@ -2548,17 +2830,29 @@ These are decisions, not suggestions:
 
 ```text
 confirmed current Attempt => direct Resume navigation, no POST
+new Start action => only confirmed current/non-stale FE-001 detail
 no current Attempt + active + remaining>0 => Start POST
+retained/refreshing/stale Homework detail => no new Start action
 Start success 201 = created
 Start success 200 = resumed
+Start malformed 2xx payload = uncertain, SAME key retained
 Start Idempotency-Key = secure client UUID v4
 uncertain Start retry = SAME key
 deterministic failed logical Start = key discarded
+session/account gate failure = key/ownership cleared + existing auth reconciliation
 no automatic new-key retry
+Attempt repository = dedicated StudentHomeworkAttemptRepository
 Attempt API route = /student/attempts/:id
 frontend execution route = nested Topic/Homework/Attempt path
+Topic/Homework/Attempt route classifiers = mutually exclusive
+Attempt deep-link = bootstrap-preserved desktop/mobile
 Attempt shell = read-only in FE-002
 saved answer domain = typed, no raw maps
+Attempt/Homework timestamps = exact whole-second UTC Z
+deadline finalization => finalizedAt == deadlineAt
+saved Multiple Choice <= maxSelections
+saved Ordering positions <= Question item count
+written/fill persisted text trim().isNotEmpty but exact value preserved
 device deadline = never eligibility authority
 backend used/remaining/inProgress = authoritative
 no optimistic count/state mutation
@@ -2568,8 +2862,12 @@ Codex must not substitute:
 
 - `uuid` package addition;
 - insecure random key;
-- new key on timeout Retry;
+- new key on timeout/invalid-response Retry;
+- treating session/account gate errors as ordinary feature failure;
+- new Start action from retained/refreshing/stale Homework detail;
 - POST for every confirmed Resume;
+- adding Start/Attempt methods to FE-001 `StudentHomeworkRepository`;
+- broadening Topic/Homework route classifiers to match Attempt routes;
 - flat `/student/attempts/:id` frontend navigation route;
 - Teacher Question model/config reuse;
 - score/checking fields;
@@ -2597,11 +2895,11 @@ with:
 1. implementation summary;
 2. changed files and purpose;
 3. exact focused test results;
-4. idempotency-key generation/retry evidence;
-5. 201-create / 200-resume evidence;
-6. strict Attempt/answer DTO evidence;
-7. session/stale-completion evidence;
-8. nested routing/direct-entry evidence;
+4. idempotency-key generation/same-key uncertain retry evidence;
+5. 201-create / 200-resume + malformed-2xx uncertain evidence;
+6. strict Attempt/lifecycle/answer DTO evidence;
+7. session/account reconciliation + stale-completion evidence;
+8. mutually exclusive nested routing/bootstrap direct-entry evidence;
 9. desktop/mobile shell evidence;
 10. directly affected regressions;
 11. format/analyze results;

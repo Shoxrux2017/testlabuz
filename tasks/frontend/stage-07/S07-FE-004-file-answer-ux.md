@@ -11,8 +11,9 @@
 | Implementation type | `Flutter file-based Homework answer select/upload/replace + own protected file open/save UX` |
 | Depends on | `S07-FE-003 = Accepted / Delivered`; Stage 7 Backend Phase 2 remains `PASS` |
 | Planning baseline | `origin/main @ 294d17317ed0c7428171fc20223da65e7a2cafd1` |
+| Current review baseline | `origin/main @ c4814a02122b13b99ed2c3fd5229a07309bbe4b8` |
 | Implementation baseline | ChatGPT re-checks/freezes current `origin/main` immediately before Codex starts |
-| Readiness Gate | `PASS`, conditional on dependencies above |
+| Readiness Gate | `PASS — corrected/revalidated`; execution remains blocked until `S07-BE-PHASE-2 = PASS` and `S07-FE-003 = Accepted / Delivered` |
 | Supported surfaces | `Student desktop + mobile` |
 | Verification | focused frontend tests + shared-file regressions + format/analyze + diff check |
 | Delivery | Project Owner |
@@ -50,7 +51,7 @@ This contract resolves:
 - first upload vs replacement UX;
 - upload progress;
 - deterministic vs uncertain mutation outcome;
-- safe same-selection retry;
+- safe uncertain-upload reconciliation without blind PUT replay;
 - parent Attempt reconciliation;
 - saved file Open / Save As;
 - protected download validation against current saved metadata;
@@ -71,7 +72,7 @@ Choose file
 Upload first answer
 Choose replacement
 Replace saved answer
-Retry uncertain/known-retryable upload
+Reconcile uncertain upload / retry confirmed storage failure
 Open own saved submission
 Save own saved submission locally
 ```
@@ -379,7 +380,7 @@ name is not "." or ".."
 
 The final extension exists.
 
-Filename UTF-8 byte length:
+Filename Unicode code-point length:
 
 ```text
 <= 500
@@ -388,10 +389,17 @@ Filename UTF-8 byte length:
 Use:
 
 ```dart
-utf8.encode(name).length
+name.runes.length
 ```
 
-to match the backend byte-oriented transport boundary conservatively.
+to align with the delivered BE-006 backend boundary:
+
+```text
+mb_strlen(original_name, 'UTF-8') <= 500
+```
+
+Do not use UTF-8 byte length as the acceptance limit; that would incorrectly
+reject valid multibyte Unicode filenames that the backend accepts.
 
 Do not silently rename the upload.
 
@@ -578,33 +586,62 @@ Do not fabricate a local upload selection from saved server metadata.
 
 # 16. Parent Attempt Synchronization
 
-Observe the delivered Attempt state.
+Observe the delivered FE-002 Attempt controller and distinguish confirmed-current
+data from retained/loading/error state.
 
-## Attempt remains `in_progress`
+## Confirmed Attempt remains `in_progress`
 
 For each file Question:
 
 - update `serverFile` to the latest confirmed server answer;
 - preserve a local valid `selectedFile`;
-- preserve an active/uncertain upload snapshot;
+- preserve an unresolved uncertain-upload snapshot until the explicit
+  reconciliation flow in Section 32 resolves it;
 - remove state for Questions no longer present.
 
-A normal GET refresh must not silently discard a Student's selected local file.
+A normal parent GET refresh must not silently discard a Student's selected local
+file.
 
-## Attempt becomes terminal
+A normal refresh also must not silently convert an uncertain upload into
+`uploaded`, even when filename/size/extension happen to match.
+
+## Parent is refreshing/stale/non-current
+
+Local selected files may remain visible as unsaved work, but:
+
+```text
+Choose file
+Choose replacement
+Upload answer
+Upload replacement
+```
+
+must not begin a new picker/upload operation until a confirmed-current
+`data` Attempt is available again.
+
+## Confirmed Attempt becomes terminal
+
+Terminal server state always wins.
 
 Immediately:
 
+- invalidate picker/upload/reconciliation generation;
+- clear `activeQuestionId`;
 - clear all selected local files;
-- clear active/uncertain upload state;
-- update `serverFile` from authoritative Attempt;
+- clear unresolved uncertain-upload ownership/snapshots;
+- update `serverFile` from authoritative terminal Attempt;
 - make file Questions read-only.
+
+Any picker/PUT/reconciliation GET completion from the obsolete editable
+generation must be ignored and must not publish success/failure/progress,
+restore selections, or re-enable editing.
 
 No new upload may start.
 
 ## Session/route target changes
 
-Clear all local selections/operation ownership.
+Invalidate operation generation and clear all local selections/operation
+ownership.
 
 Do not carry a selected file across Student/session/Attempt targets.
 
@@ -616,8 +653,11 @@ For an editable current `file_based` Question:
 
 1. ensure:
    ```text
+   FE-002 Attempt controller status = data
+   Attempt data is confirmed current/non-stale for this target
    Attempt.status = in_progress
-   no active file upload
+   Question.type = file_based
+   no active file upload/reconciliation
    current session/target valid
    ```
 2. set Question state:
@@ -741,14 +781,28 @@ There is no Stage 7 file clear.
 Enable upload only when:
 
 ```text
+FE-002 Attempt controller status = data
+Attempt data is confirmed current/non-stale for this target
 Attempt.status = in_progress
 Question.type = file_based
 selectedFile is locally valid
-no active file upload for this Attempt
+no active file upload/reconciliation for this Attempt
 current session/target valid
 ```
 
-Revalidate the selected file against the **current** Question `answer_ui` immediately before sending.
+Do not send while the parent Attempt is:
+
+```text
+initial
+loading
+refreshing
+stale/retained-only
+error
+notFound
+```
+
+Revalidate the selected file against the **current confirmed** Question
+`answer_ui` immediately before sending.
 
 If FE-002 refresh lowered `maxSizeBytes` while a file was selected:
 
@@ -773,7 +827,7 @@ Add:
 ```text
 uploadFileAnswer(
   attemptId,
-  questionId,
+  StudentQuestion question,
   file,
   onProgress,
 )
@@ -784,7 +838,7 @@ Exact request:
 ```dart
 dio.put<Object?>(
   '/student/attempts/${Uri.encodeComponent(attemptId)}/answers/'
-  '${Uri.encodeComponent(questionId)}',
+  '${Uri.encodeComponent(question.id)}',
   data: FormData.fromMap({
     'type': 'file_based',
     'file': MultipartFile.fromStream(
@@ -831,7 +885,7 @@ Add:
 ```text
 uploadFileAnswer(
   attemptId,
-  questionId,
+  StudentQuestion question,
   StudentSubmissionUploadFile file, {
   StudentSubmissionUploadProgress? onProgress,
 })
@@ -859,14 +913,29 @@ Do not create a second answer mutation DTO format.
 
 # 24. File Mutation Response Integrity
 
-For a valid `200` require:
+For a valid `200`, reuse the corrected FE-003 mutation-response parser and pass
+the current validated safe `StudentQuestion`.
+
+Require:
 
 ```text
-response.questionId == requested questionId
+question.type == file_based
+question.answerUi is StudentFileAnswerUi
+
+response.questionId == question.id
 response.type == file_based
 response.answer != null
 response.answer is file
 response.updatedAt != null
+```
+
+The returned file must satisfy both the canonical saved-file parser and the
+current safe Question policy:
+
+```text
+response.file.extension in question.answerUi.allowedExtensions
+response.file.sizeBytes > 0
+response.file.sizeBytes <= 15_728_640
 ```
 
 Additionally compare response file metadata with the uploaded selection:
@@ -885,13 +954,20 @@ response.file.id == previous serverFile.id
 
 because backend replacement preserves File identity.
 
-Any mismatch is:
+`response.updatedAt` must use the corrected Stage 7 exact timestamp parser:
 
 ```text
-invalidResponse
+YYYY-MM-DDTHH:MM:SSZ
 ```
 
-and therefore an uncertain mutation outcome because the server may have committed.
+Any target/type/policy/metadata/File-ID/timestamp mismatch is:
+
+```text
+ApiFailureKind.invalidResponse
+```
+
+and therefore an uncertain mutation outcome because the server may have
+committed.
 
 Do not navigate/announce success.
 
@@ -955,16 +1031,39 @@ Do not change non-file drafts.
 
 # 27. Why Upload Outcome Can Be Uncertain
 
-File upload has no idempotency key.
+File upload has:
 
-However backend mutation is a complete replacement and repeating the same chosen file is safe:
+```text
+no Idempotency-Key
+no ETag/version precondition
+no compare-and-swap token
+```
 
-- if first request did not commit, retry can commit it;
-- if first request committed, retrying the same bytes/name becomes an equivalent replace/no-op server-side.
+A connection/timeout/malformed-success failure may occur after the backend has
+already committed the file replacement.
 
-The client cannot prove exact byte identity from a GET Attempt because the API intentionally does not expose checksum.
+However, blindly repeating the same PUT is **not** generally safe. Between the
+lost response and a retry, another device/request for the same Student may save
+a newer file. A blind replay of the older selected file would overwrite that
+newer server state.
 
-Therefore a plain GET reload is **not sufficient evidence** that the exact selected file committed.
+The backend exact-binary no-op protects only a replay against an unchanged
+server file graph; it does not protect against an intervening replacement.
+
+The client also cannot prove exact byte identity from GET Attempt because the
+Student API intentionally does not expose checksum.
+
+Therefore uncertain upload recovery is:
+
+```text
+uncertain PUT
+-> authoritative GET Attempt reconciliation
+-> current server state becomes the base
+-> selected local file remains explicit unsaved intent if Attempt is editable
+-> Student decides whether to Upload again
+```
+
+No blind PUT retry is permitted for an uncertain outcome.
 
 ---
 
@@ -998,9 +1097,9 @@ except the specifically deterministic:
 file_upload_failed
 ```
 
-covered below.
+covered in Section 35.
 
-Store the same:
+Store:
 
 ```text
 StudentSubmissionUploadFile
@@ -1019,6 +1118,14 @@ uncertain
 
 Do not claim success/failure.
 
+The snapshot is retained only for:
+
+- preserving the Student's selected local intent;
+- revalidating it after authoritative GET;
+- allowing a later **new explicit Upload** if the Student chooses.
+
+It is not an automatic retry token.
+
 ---
 
 # 29. Uncertain Upload UX
@@ -1032,54 +1139,57 @@ For the affected Question:
   ```text
   We could not confirm whether this file was uploaded.
   ```
-- show:
+- show exactly one recovery action:
   ```text
-  Retry upload
+  Reload attempt
   ```
 
-Retry must use:
+Do **not** show `Retry upload` for an uncertain outcome.
 
-```text
-the same selected StudentSubmissionUploadFile
-same attemptId
-same questionId
-```
-
-No new picker selection may start until uncertainty is resolved or the Student leaves the route/session.
+No new picker/upload may start until uncertainty is reconciled or the Student
+leaves the route/session.
 
 ---
 
-# 30. Retry Upload
+# 30. No Blind PUT Retry After Uncertain Upload
 
-`Retry upload` reopens the same selected file stream through:
+Forbidden:
 
 ```text
-selectedFile.openRead
+uncertain
+-> reopen selectedFile.openRead
+-> resend the previous multipart PUT
 ```
 
-and sends the same multipart semantic content/name.
+The old request may already have committed, and a newer intervening server
+replacement may exist.
 
-If valid `200` returns:
+After uncertainty reconciliation, any later upload is a new explicit Student
+mutation decision based on:
 
-- confirm success normally.
+```text
+confirmed-current Attempt
+current safe file Question
+current serverFile
+retained/revalidated selectedFile
+```
 
-If uncertain again:
+No `Idempotency-Key` is added in FE-004.
 
-- keep same pending selection.
-
-If deterministic failure:
-
-- clear uncertainty and apply the deterministic failure rules.
-
-Do not generate any idempotency key.
+`Retry upload` remains allowed only for the confirmed `file_upload_failed`
+case in Section 35, where the backend explicitly reports storage-write failure.
 
 ---
 
-# 31. Stream Reopen Failure
+# 31. Selected Stream Availability
 
-If retry cannot open/read the previously selected file before a valid server outcome is obtained:
+Whenever a retained selected file is about to be sent by a **new explicit
+Upload** (including the confirmed `file_upload_failed` retry), stream opening may
+still fail because the local source was removed or became inaccessible.
 
-- stop retry;
+If `openRead` cannot open/read before a valid server outcome:
+
+- stop the local operation;
 - clear active network state;
 - show:
   ```text
@@ -1088,32 +1198,85 @@ If retry cannot open/read the previously selected file before a valid server out
 - clear the stale local selection;
 - refresh Attempt to show current server state.
 
-Do not claim whether the earlier upload committed.
+Do not claim any prior uncertain upload result from this local error.
 
 ---
 
-# 32. Reload During Uncertain Upload
+# 32. Authoritative Uncertain Upload Reconciliation
 
-The Student may manually refresh/re-enter the Attempt through the existing FE-002 GET.
+`Reload attempt` starts one file-controller-owned reconciliation through the
+delivered FE-002 authoritative GET Attempt boundary.
 
-The refreshed `serverFile` is authoritative for current server state.
-
-But while the same controller still owns an unresolved uncertain upload:
-
-- a GET showing matching filename/size/extension does **not** confirm exact selected bytes;
-- do not automatically mark the uncertain upload as saved.
-
-The only in-place confirmation path is:
+Bind reconciliation ownership to:
 
 ```text
-Retry upload -> valid 200
+StudentSessionKey
+StudentHomeworkAttemptRouteTarget
+questionId
+pending selected file identity/object
+operation generation
 ```
 
-If the Student explicitly leaves the route after the warning:
+While reconciliation is in flight:
 
-- discard local retry state;
-- next entry starts from server GET state;
-- the Student may choose/upload the desired file again.
+- no file PUT may start;
+- duplicate Reload taps are suppressed;
+- the affected file Question remains picker/upload disabled;
+- non-file local drafts remain untouched.
+
+After the owned confirmed GET:
+
+## Attempt is terminal
+
+- clear uncertainty/reconciliation ownership;
+- clear selected local file;
+- publish authoritative terminal `serverFile`;
+- switch the file Question read-only;
+- no upload action is offered.
+
+## Attempt remains `in_progress`
+
+The refreshed `serverFile` is the current confirmed server base.
+
+A matching:
+
+```text
+filename
+extension
+size
+```
+
+still does **not** prove that the exact selected bytes committed.
+
+Therefore:
+
+- clear uncertainty/reconciliation ownership;
+- set `serverFile` from GET;
+- retain the previously selected local file as unsaved local intent;
+- revalidate it against the refreshed safe `StudentFileAnswerUi`;
+- if valid, set the file Question to `ready`;
+- if invalid under the refreshed policy, retain it only long enough to show the
+  typed selection error, then require the Student to choose a valid file before
+  upload according to the normal selection rules;
+- allow a new explicit Upload only from confirmed-current Attempt data.
+
+The Student may also `Discard selected file` and accept the current server state.
+
+## Reconciliation GET fails non-authoritatively
+
+Keep:
+
+```text
+status = uncertain
+pending selected file/snapshot
+```
+
+and allow another `Reload attempt` later.
+
+Session/target/terminal-generation invalidation still wins over a late GET
+completion.
+
+Do not mark the prior upload confirmed merely from metadata equality.
 
 ---
 
@@ -1180,16 +1343,24 @@ Actions:
 
 - retain selected file;
 - state `failure`;
-- allow:
-  ```text
-  Retry upload
-  ```
-  using the same file;
 - keep existing `serverFile`;
 - show:
   ```text
   The file could not be stored. Try again.
   ```
+
+Allow:
+
+```text
+Retry upload
+```
+
+only as a new explicit Student action after rechecking the normal Section 21
+preconditions against confirmed-current Attempt/Question state and revalidating
+the selected file.
+
+This confirmed-failure retry is not the uncertain blind-retry path forbidden in
+Section 30.
 
 Do not mark saved.
 
@@ -1236,7 +1407,11 @@ Confirmed rejection.
 - refresh Attempt;
 - show safe conflict message.
 
-Session failures follow existing Student session reconciliation.
+Session failures use the existing Student session reconciliation and must:
+
+- invalidate file picker/upload/reconciliation generation;
+- clear active operation ownership and local selected files for the old session;
+- publish no stale file feedback/open/save action after auth/session changes.
 
 ---
 
@@ -1339,7 +1514,11 @@ questionId
 fileId
 ```
 
-Resolve from the current FE-002 Attempt controller state.
+Resolve from a **confirmed-current** FE-002 Attempt controller `data` state.
+The Attempt may be in-progress or terminal; transfer is read-only.
+
+Do not start a new Open/Save As transfer from loading/refreshing/stale/error/
+notFound parent state.
 
 Require:
 
@@ -1514,7 +1693,18 @@ Save submitted answer
 
 No other behavior changes.
 
-Update affected test fakes.
+Update every existing `LocalFilePlatformAdapter` implementation/fake required
+for signature compatibility, including:
+
+```text
+frontend/test/core/network/protected_learning_material_transfer_test.dart
+frontend/test/features/student/student_topic_detail_transfer_controller_test.dart
+frontend/test/features/teacher/teacher_material_transfer_controller_test.dart
+frontend/integration_test/stage5_e2e_support.dart
+```
+
+The Stage 5 integration helper is a compile/analyze compatibility touch only in
+FE-004; do not run Stage 5 E2E here.
 
 ---
 
@@ -1682,29 +1872,31 @@ Do not create provider cycles merely to globally serialize both controller types
 
 # 51. Upload vs Parent Finalization
 
-If parent Attempt refresh becomes terminal during:
+If a confirmed parent Attempt refresh becomes terminal during:
 
 ```text
 selecting
 ready
 failure
+uncertain/reconciling
+uploading
 ```
 
-clear local selection and switch read-only.
+apply Section 16 terminal invalidation:
 
-If upload is currently in flight and server finalization wins:
+- invalidate picker/upload/reconciliation generation;
+- clear `activeQuestionId`;
+- clear selected file/pending uncertainty;
+- switch read-only;
+- ignore every late completion from the obsolete editable generation.
 
-backend returns a deterministic lifecycle error or the subsequent refresh becomes terminal.
+If backend finalization wins against an in-flight upload, the request may return
+a lifecycle error or the parent refresh may publish terminal state first.
+Either way, the confirmed terminal parent state is authoritative and no retry
+action is restored.
 
-Then:
-
-- clear selected file;
-- no retry;
-- show authoritative terminal Attempt state.
-
-If upload committed before finalization:
-
-GET refresh shows the saved file and terminal state.
+If upload committed before finalization, a later authoritative GET may show that
+saved file in terminal state.
 
 No optimistic reconciliation.
 
@@ -1745,7 +1937,7 @@ Use uncertainty-priority warning:
 
 ```text
 A file upload result is still unconfirmed.
-Leaving will discard the retry state. Re-opening the attempt will reload server data.
+Leaving will discard the local uncertainty/reconciliation state. Re-opening the attempt will reload server data.
 ```
 
 Do not automatically upload on leave.
@@ -1879,7 +2071,7 @@ Required:
 - current saved vs selected replacement are textually distinct;
 - Open/Save As labels explicit;
 - failure/uncertain states not color-only;
-- Retry upload accessible by keyboard/touch;
+- Reload attempt for uncertain upload and confirmed-failure Retry upload are keyboard/touch accessible;
 - Discard selection label is unambiguous;
 - no "Delete answer" wording;
 - buttons wrap on mobile;
@@ -1940,11 +2132,17 @@ frontend/lib/features/student/presentation/student_homework_formatters.dart
 frontend/lib/core/files/local_file_actions.dart
 
 frontend/test/core/network/protected_learning_material_transfer_test.dart
+frontend/test/features/student/student_topic_detail_transfer_controller_test.dart
+frontend/test/features/teacher/teacher_material_transfer_controller_test.dart
+frontend/integration_test/stage5_e2e_support.dart
 ```
 
-Modify FE-002/003 saved-answer DTO/parser only as required for safe reuse/invariants.
+Modify the delivered FE-002/003 saved-answer/mutation-response DTO parser only if
+required to pass the current safe `StudentQuestion` into the already-approved
+shared parser. Do not duplicate that parser/model.
 
-Update existing Student/Teacher file-transfer test fakes only as required by the `dialogTitle` adapter parameter.
+`stage5_e2e_support.dart` may change only for `LocalFilePlatformAdapter`
+signature compatibility. No Stage 5 behavior redesign.
 
 No route path change.
 
@@ -1964,7 +2162,7 @@ No backend/pubspec/pubspec.lock/platform files.
 - disallowed extension;
 - exact `maxSizeBytes`;
 - over max;
-- filename UTF-8 byte boundary;
+- filename Unicode code-point boundary (500 runes);
 - Unicode filename;
 - invalid filename;
 - selected-file validation typed error.
@@ -2009,11 +2207,15 @@ Reject as invalid response:
 
 - answer null;
 - wrong question ID;
-- wrong type;
+- wrong type/non-file safe Question;
+- response extension outside current safe Question allowed extensions;
 - selected name/size/extension mismatch;
 - replacement returns different File ID;
 - extra storage/checksum fields;
-- malformed updated_at.
+- malformed/non-whole-second/non-UTC `updated_at`.
+
+Malformed `200` is classified as uncertain by the controller and requires GET
+reconciliation.
 
 No automatic retry.
 
@@ -2059,15 +2261,21 @@ Only current operation can publish.
 
 - timeout retains same selected file;
 - invalid success retains uncertainty;
-- Retry uses same upload object;
-- picker/new upload disabled;
-- repeated uncertainty preserved.
+- no blind Retry-upload path exists;
+- Reload Attempt is the only uncertainty recovery;
+- picker/new upload disabled until reconciliation;
+- GET metadata equality alone never marks prior PUT confirmed;
+- in-progress reconciliation makes GET server file the base and retained local
+  selection `ready` only after current-policy revalidation;
+- reconciliation failure preserves uncertainty;
+- terminal reconciliation clears selected state and becomes read-only.
 
 ## `file_upload_failed`
 
 - confirmed failure;
 - selected file retained;
-- Retry allowed.
+- Retry allowed only after current Attempt/Question/selection preconditions are
+  revalidated.
 
 ## unsupported/too-large
 
@@ -2077,11 +2285,15 @@ Only current operation can publish.
 ## lifecycle
 
 - deadline/non-editable refreshes parent;
-- terminal parent clears selections.
+- parent refreshing/stale state disables Choose/Upload;
+- terminal parent clears selections and invalidates active upload/reconciliation
+  generation;
+- late PUT/GET/picker completion after terminal state is ignored.
 
 ## stale/session
 
-- Student/session/route/dispose stale completion ignored.
+- Student/session/route/dispose stale completion ignored;
+- session failure clears local selected files and operation ownership.
 
 ---
 
@@ -2091,8 +2303,9 @@ Only current operation can publish.
 
 ## Current saved file
 
-- Open downloads `/files/{id}/download`;
-- Save As downloads same endpoint;
+- confirmed-current Attempt data permits Open via `/files/{id}/download`;
+- confirmed-current Attempt data permits Save As via same endpoint;
+- loading/refreshing/stale/error/notFound parent cannot start a new transfer;
 - no public URL.
 
 ## Metadata validation
@@ -2230,8 +2443,9 @@ Selected replacement
 ## Uncertain
 
 - unconfirmed warning;
-- Retry upload only;
-- no choose-new-file action.
+- `Reload attempt` recovery only;
+- no blind `Retry upload`;
+- no choose-new-file action until reconciliation.
 
 ## Errors
 
@@ -2257,8 +2471,8 @@ Extend FE-003 navigation tests:
 - pending file selection triggers unsaved warning;
 - discard/leave sends no upload;
 - uncertain file upload triggers uncertainty warning;
-- Stay preserves retry state;
-- Leave clears local file retry state;
+- Stay preserves uncertainty/reconciliation state;
+- Leave clears local file uncertainty/reconciliation state;
 - clean file state does not add confirmation.
 
 If non-file dirty draft and uncertain file upload coexist:
@@ -2289,7 +2503,9 @@ test/features/student/student_topic_detail_transfer_controller_test.dart
 test/features/teacher/teacher_material_transfer_controller_test.dart
 ```
 
-Use actual delivered filenames if FE-001…003 naming differs slightly and report the exact mapping.
+If delivered FE-001…003 materially do not contain these approved boundaries,
+return `BLOCKED` for dependency-contract mismatch instead of silently remapping
+verification.
 
 Do not run the full frontend suite in this individual task.
 
@@ -2297,13 +2513,15 @@ Do not run the full frontend suite in this individual task.
 
 # 69. Verification
 
-From:
+Run from:
 
 ```text
 frontend/
 ```
 
-Run:
+## 69.1 Focused FE-004 + directly affected FE-003/FE-002/shared-file regressions
+
+Exactly:
 
 ```bash
 flutter test \
@@ -2323,25 +2541,69 @@ flutter test \
   test/features/teacher/teacher_material_transfer_controller_test.dart
 ```
 
-Run format over changed task-owned Dart files:
+Do not run Stage 5 integration E2E here; its support file is modified only for
+interface compatibility and is covered by static analysis.
+
+Narrow single-test diagnostic reruns are allowed only to diagnose/confirm a
+concrete failure.
+
+## 69.2 Exact Dart format check
+
+Exactly:
 
 ```bash
-dart format --output=none --set-exit-if-changed <changed Dart files>
+dart format --output=none --set-exit-if-changed \
+  lib/features/student/domain/student_submission_upload.dart \
+  lib/features/student/domain/student_homework_attempt_repository.dart \
+  lib/features/student/application/student_submission_file_picker.dart \
+  lib/features/student/application/student_file_answer_state.dart \
+  lib/features/student/application/student_file_answer_controller.dart \
+  lib/features/student/application/student_submission_transfer_state.dart \
+  lib/features/student/application/student_submission_transfer_controller.dart \
+  lib/features/student/data/student_homework_attempt_remote_data_source.dart \
+  lib/features/student/data/student_homework_attempt_repository_impl.dart \
+  lib/features/student/application/student_attempt_answer_editor_state.dart \
+  lib/features/student/presentation/student_file_answer_editor.dart \
+  lib/features/student/presentation/student_homework_attempt_screen.dart \
+  lib/features/student/presentation/student_question_answer_editor.dart \
+  lib/features/student/presentation/student_homework_formatters.dart \
+  lib/core/files/local_file_actions.dart \
+  test/features/student/student_submission_upload_test.dart \
+  test/features/student/student_file_answer_data_test.dart \
+  test/features/student/student_file_answer_controller_test.dart \
+  test/features/student/student_submission_transfer_controller_test.dart \
+  test/features/student/student_file_answer_screen_test.dart \
+  test/features/student/student_answer_editor_controller_test.dart \
+  test/features/student/student_answer_editor_screen_test.dart \
+  test/core/network/protected_learning_material_transfer_test.dart \
+  test/features/student/student_topic_detail_transfer_controller_test.dart \
+  test/features/teacher/teacher_material_transfer_controller_test.dart \
+  integration_test/stage5_e2e_support.dart
 ```
 
-Run:
+If the delivered corrected FE-003 parser reuse requires one existing DTO/parser
+file to be edited, ChatGPT must add that exact delivered file to this format
+command during implementation-baseline revalidation before Codex starts. Codex
+must not select an unreviewed parser refactor/file itself.
+
+## 69.3 Static analysis
+
+Exactly:
 
 ```bash
 flutter analyze
 ```
 
-Then repository root:
+## 69.4 Diff hygiene
+
+From repository root exactly:
 
 ```bash
 git diff --check
 ```
 
-and focused diff/scope self-review.
+Then perform the focused diff/scope self-review required by root/frontend
+`AGENTS.md`.
 
 Do not run:
 
@@ -2361,6 +2623,7 @@ PASS only if all are true.
 - existing `file_picker` reused;
 - safe extensions come from Question;
 - selected extension/size/name revalidated;
+- filename limit is 500 Unicode code points/runes, aligned with BE-006;
 - current backend `max_size_bytes` used for local UX;
 - no local binary/MIME trust pretends to replace backend inspection;
 - cancellation neutral.
@@ -2372,34 +2635,44 @@ PASS only if all are true.
 - no Idempotency-Key;
 - streaming upload;
 - progress;
+- Upload/Choose require confirmed-current in-progress Attempt;
+- response is validated against the current safe file Question;
+- exact Stage 7 whole-second UTC mutation timestamp is enforced;
 - first upload and replacement both work;
 - confirmed replacement preserves File ID;
 - no file clear/delete.
 
 ## Reliability
 
-- one active file upload per Attempt;
+- one active file upload/reconciliation per Attempt;
 - timeout/unknown/invalid-success is uncertain;
-- same selected file retained;
-- Retry uses same file;
-- GET metadata alone never falsely proves exact selected bytes committed;
-- `file_upload_failed` is confirmed retryable failure;
+- same selected file retained as local intent;
+- uncertain outcome has no blind PUT retry;
+- authoritative GET reconciles current server state before any later new upload;
+- GET metadata equality never falsely proves exact selected bytes committed;
+- `file_upload_failed` is confirmed retryable failure, but Retry is a new
+  explicit action gated by current confirmed state;
+- terminal parent state invalidates late picker/PUT/GET completions;
 - lifecycle errors reconcile Attempt/Homework.
 
 ## Download
 
 - existing protected transfer reused;
-- saved own submission supports Open/Save As;
+- saved own submission supports Open/Save As from confirmed-current Attempt data;
+- stale/refreshing/error parent state cannot start a new transfer;
 - response bytes checked against current saved extension/size before local action;
 - terminal historical file remains readable from UI;
 - no public/storage URL;
-- Stage 5 Learning Material transfer remains unchanged.
+- Stage 5 Learning Material transfer remains unchanged;
+- all `LocalFilePlatformAdapter` fakes/helpers compile with the dialog-title
+  compatibility extension.
 
 ## State / Navigation
 
 - selected file is unsaved local work;
-- terminal Attempt clears upload controls;
-- session/route stale completions cannot publish/open/save;
+- parent refreshing/stale state disables new Choose/Upload;
+- terminal Attempt clears upload controls and invalidates active generations;
+- session/route/terminal-obsolete completions cannot publish/open/save;
 - pending/uncertain file work participates in FE-003 leave protection.
 
 ## UX
@@ -2420,10 +2693,11 @@ PASS only if all are true.
 
 ## Verification
 
-- focused tests pass;
-- shared-file regressions pass;
-- format passes;
-- `flutter analyze` passes;
+- exact focused tests pass;
+- exact shared-file regressions pass;
+- exact Dart format check passes;
+- `flutter analyze` passes, including the Stage 5 integration helper compatibility
+  touch;
 - `git diff --check` passes;
 - focused self-review passes.
 
@@ -2439,25 +2713,36 @@ file upload = explicit, not automatic after pick
 transport = multipart PUT on existing answer endpoint
 multipart fields = type,file
 file answer Idempotency-Key = none
+filename max = 500 Unicode code points/runes
 allowed extensions = backend answer_ui
 local size max = backend answer_ui.max_size_bytes
 backend binary inspection = authoritative
 file clear/delete = not available
 replacement = same server File ID
-upload uncertain retry = same selected file
+Choose/Upload authority = confirmed-current in_progress Attempt only
+uncertain upload = no blind PUT retry
+uncertain recovery = authoritative GET Attempt reconciliation
+retained selected file after reconciliation = local unsaved intent
 GET Attempt metadata = not proof of exact uncertain bytes
-file_upload_failed = confirmed failed, retryable same file
+file_upload_failed = confirmed failed; same-file Retry is a new explicit gated action
+file mutation response = validate against current safe StudentQuestion
+file mutation updatedAt = exact YYYY-MM-DDTHH:MM:SSZ
+terminal parent = invalidate picker/upload/reconciliation generation
 protected download = reuse ProtectedLearningMaterialTransfer
+saved file transfer = confirmed-current Attempt data only
 saved file local actions = Open + Save As
 Student Save As dialog = "Save submitted answer"
 terminal saved file = still downloadable
 selected local file = unsaved-work guard input
+Stage5 LocalFilePlatformAdapter helper = signature compatibility touch only
 ```
 
 Codex must not substitute:
 
 - upload immediately on picker return;
+- UTF-8 byte-count filename limit instead of 500 Unicode code points;
 - new file ID assumption on replacement;
+- blind replay of uncertain upload PUT;
 - filename/size equality as proof of uncertain upload success;
 - checksum field exposure;
 - public URL;
@@ -2488,13 +2773,13 @@ with:
 1. implementation summary;
 2. changed files and purpose;
 3. exact focused test results;
-4. picker/local-validation evidence;
-5. multipart/progress evidence;
+4. picker/Unicode-filename/local-validation evidence;
+5. multipart/progress/current-safe-Question response evidence;
 6. first-upload/replacement identity evidence;
-7. uncertain/retry and deterministic-failure evidence;
-8. protected Open/Save As evidence;
-9. session/stale/navigation-guard evidence;
-10. Stage 5 shared-file regression evidence;
+7. uncertain GET-reconciliation/no-blind-retry + deterministic-failure evidence;
+8. protected Open/Save As confirmed-current-target evidence;
+9. session/stale/terminal-generation/navigation-guard evidence;
+10. Stage 5 shared-file + adapter-helper compatibility regression evidence;
 11. desktop/mobile/accessibility evidence;
 12. format/analyze results;
 13. `git diff --check`;
