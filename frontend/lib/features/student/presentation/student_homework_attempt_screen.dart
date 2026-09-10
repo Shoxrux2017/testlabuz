@@ -7,11 +7,13 @@ import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/student_attempt_answer_editor_controller.dart';
 import '../application/student_attempt_answer_editor_state.dart';
+import '../application/student_attempt_route_operation_gate.dart';
 import '../application/student_file_answer_controller.dart';
 import '../application/student_homework_attempt_controller.dart';
 import '../application/student_homework_attempt_state.dart';
 import '../application/student_homework_detail_controller.dart';
 import '../application/student_homework_detail_state.dart';
+import '../application/student_homework_submit_controller.dart';
 import '../application/student_session_key.dart';
 import '../application/student_submission_transfer_controller.dart';
 import '../domain/student_homework.dart';
@@ -19,8 +21,10 @@ import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
 import 'student_attempt_answer_read_view.dart';
+import 'student_attempt_finalization_summary.dart';
 import 'student_file_answer_editor.dart';
 import 'student_homework_formatters.dart';
+import 'student_homework_submit_controls.dart';
 import 'student_question_read_view.dart';
 import 'student_question_answer_editor.dart';
 import 'student_topic_formatters.dart';
@@ -58,17 +62,40 @@ class _StudentHomeworkAttemptScreenState
     final editor = ref.read(provider);
     final fileProvider = studentFileAnswerControllerProvider(target);
     final files = ref.read(fileProvider);
+    final submitProvider = studentHomeworkSubmitControllerProvider(target);
+    final gate = ref.read(studentAttemptRouteOperationGateProvider(target));
+    final submitting = gate == StudentAttemptRouteOperation.submitting;
+    final submitUncertain =
+        gate == StudentAttemptRouteOperation.submitUncertain;
     var leave = true;
-    if (files.hasUncertainUpload ||
+    if (submitting ||
+        submitUncertain ||
+        files.hasUncertainUpload ||
         editor.hasUncertainMutation ||
         files.hasPendingSelection ||
         editor.hasDirtyDrafts) {
       final route = DialogRoute<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Leave Attempt?'),
+          key: Key(
+            submitting
+                ? 'studentHomeworkSubmitInProgressDialog'
+                : submitUncertain
+                ? 'studentHomeworkSubmitLeaveDialog'
+                : 'studentHomeworkAttemptLeaveDialog',
+          ),
+          title: Text(
+            submitting ? 'Submission is in progress.' : 'Leave Attempt?',
+          ),
+          scrollable: true,
           content: Text(
-            files.hasUncertainUpload
+            submitting
+                ? 'Wait until the result is known.'
+                : submitUncertain
+                ? 'The submission result is still unconfirmed.\n\n'
+                      'Leaving will discard this retry key.\n'
+                      'When you open the Attempt again, the app will load the current server state.'
+                : files.hasUncertainUpload
                 ? 'A file upload result is still unconfirmed. '
                       'Leaving will discard the local uncertainty/reconciliation state. '
                       'Re-opening the attempt will reload server data.'
@@ -81,13 +108,15 @@ class _StudentHomeworkAttemptScreenState
           ),
           actions: [
             TextButton(
+              autofocus: true,
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Stay'),
             ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Leave'),
-            ),
+            if (!submitting)
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Leave'),
+              ),
           ],
         ),
       );
@@ -98,11 +127,14 @@ class _StudentHomeworkAttemptScreenState
     if (!mounted) return;
     _leaving = false;
     if (!leave ||
+        ref.read(studentAttemptRouteOperationGateProvider(target)) ==
+            StudentAttemptRouteOperation.submitting ||
         target != capturedTarget ||
         _sessionKey != capturedSession ||
         router.routeInformationProvider.value.uri != capturedLocation) {
       return;
     }
+    ref.read(submitProvider.notifier).clearLocalState();
     ref.read(provider.notifier).clearLocalState();
     ref.read(fileProvider.notifier).clearLocalState();
     router.go(
@@ -143,6 +175,9 @@ class _StudentHomeworkAttemptScreenState
     final editorProvider = studentAttemptAnswerEditorControllerProvider(target);
     final editorState = ref.watch(editorProvider);
     ref.watch(studentFileAnswerControllerProvider(target));
+    ref.watch(studentHomeworkSubmitControllerProvider(target));
+    final gate = ref.watch(studentAttemptRouteOperationGateProvider(target));
+    final gateIdle = gate == StudentAttemptRouteOperation.idle;
     final editorController = ref.read(editorProvider.notifier);
     final homeworkController = ref.read(homeworkProvider.notifier);
     final attemptController = ref.read(attemptProvider.notifier);
@@ -160,6 +195,10 @@ class _StudentHomeworkAttemptScreenState
     void backToTopic() =>
         context.go(AppRoutePaths.studentTopicDetailLocation(target.topicId));
     void refresh() {
+      if (ref.read(studentAttemptRouteOperationGateProvider(target)) !=
+          StudentAttemptRouteOperation.idle) {
+        return;
+      }
       homeworkController.refresh();
       attemptController.refresh();
     }
@@ -169,8 +208,8 @@ class _StudentHomeworkAttemptScreenState
     if (homeworkState.status == StudentHomeworkDetailStatus.notFound) {
       body = _AttemptNotice(
         title: 'Homework unavailable',
-        actionLabel: 'Back to Topic',
-        onAction: backToTopic,
+        actionLabel: gateIdle ? 'Back to Topic' : 'Back to Homework',
+        onAction: gateIdle ? backToTopic : backToHomework,
       );
     } else if (attemptState.status ==
         StudentHomeworkAttemptLoadStatus.notFound) {
@@ -180,7 +219,9 @@ class _StudentHomeworkAttemptScreenState
         onAction: backToHomework,
       );
     } else if (sessionKey != null &&
-        homeworkState.status == StudentHomeworkDetailStatus.data &&
+        (homeworkState.status == StudentHomeworkDetailStatus.data ||
+            homeworkState.status == StudentHomeworkDetailStatus.refreshing ||
+            homeworkState.status == StudentHomeworkDetailStatus.error) &&
         homeworkState.homework != null &&
         homeworkState.homework!.id.toLowerCase() == target.homeworkId &&
         homeworkState.homework!.topic.id.toLowerCase() == target.topicId &&
@@ -213,7 +254,8 @@ class _StudentHomeworkAttemptScreenState
         actionLabel: 'Retry',
         onAction: refresh,
       );
-    } else if (homeworkState.status == StudentHomeworkDetailStatus.data &&
+    } else if (sessionKey != null &&
+        homeworkState.status == StudentHomeworkDetailStatus.data &&
         homeworkState.homework != null &&
         attemptState.status == StudentHomeworkAttemptLoadStatus.data &&
         attemptState.attempt != null &&
@@ -266,7 +308,8 @@ class _StudentHomeworkAttemptScreenState
               tooltip: 'Refresh Attempt',
               onPressed:
                   homeworkState.isRequestInFlight ||
-                      attemptState.isRequestInFlight
+                      attemptState.isRequestInFlight ||
+                      !gateIdle
                   ? null
                   : refresh,
               icon: const Icon(Icons.refresh),
@@ -309,6 +352,10 @@ class _AttemptContent extends ConsumerWidget {
     final fileProvider = studentFileAnswerControllerProvider(target);
     final fileState = ref.watch(fileProvider);
     final fileController = ref.read(fileProvider.notifier);
+    final gate = ref.watch(studentAttemptRouteOperationGateProvider(target));
+    final gateIdle = gate == StudentAttemptRouteOperation.idle;
+    final isTerminal =
+        attempt.status != StudentHomeworkAttemptStatus.inProgress;
     final transferProvider = studentSubmissionTransferControllerProvider(
       target,
     );
@@ -342,13 +389,6 @@ class _AttemptContent extends ConsumerWidget {
     final timing = <(String, String)>[
       ('Started', instant(attempt.startedAt)),
       if (attempt.deadlineAt case final value?) ('Deadline', instant(value)),
-      if (attempt.submittedAt case final value?) ('Submitted', instant(value)),
-      if (attempt.finalizedAt case final value?) ('Finalized', instant(value)),
-      if (attempt.finalizationReason case final reason?)
-        (
-          'Finalization reason',
-          studentHomeworkAttemptFinalizationLabel(reason),
-        ),
     ];
     return SingleChildScrollView(
       key: const Key('studentHomeworkAttemptScroll'),
@@ -380,14 +420,20 @@ class _AttemptContent extends ConsumerWidget {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 8),
-                        Semantics(
-                          container: true,
-                          liveRegion: true,
-                          child: Text(
-                            studentHomeworkAttemptStatusLabel(attempt.status),
-                            key: const Key('studentHomeworkAttemptStatus'),
+                        if (!isTerminal) ...[
+                          Text(
+                            'Status',
+                            style: Theme.of(context).textTheme.labelLarge,
                           ),
-                        ),
+                          Semantics(
+                            container: true,
+                            liveRegion: true,
+                            child: Text(
+                              studentHomeworkAttemptStatusLabel(attempt.status),
+                              key: const Key('studentHomeworkAttemptStatus'),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         for (final row in timing) ...[
                           Text(
@@ -401,6 +447,18 @@ class _AttemptContent extends ConsumerWidget {
                     ),
                   ),
                 ),
+                if (isTerminal) ...[
+                  StudentAttemptFinalizationSummary(
+                    attempt: attempt,
+                    timezone: timezone,
+                  ),
+                  StudentHomeworkSubmitControls(
+                    key: ValueKey((target, sessionKey, 'submit')),
+                    target: target,
+                    attemptNumber: attempt.attemptNumber,
+                    isTerminal: true,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Semantics(
                   header: true,
@@ -417,11 +475,12 @@ class _AttemptContent extends ConsumerWidget {
                       key: ValueKey((target, sessionKey, question.id)),
                       state: file,
                       isTerminal: fileState.isTerminal,
-                      canChoose: fileState.canChoose(question.id),
-                      canUpload: fileState.canUpload(question.id),
-                      canDiscard: fileState.canDiscard(question.id),
-                      isReconciling: fileState.isReconciling,
+                      canChoose: gateIdle && fileState.canChoose(question.id),
+                      canUpload: gateIdle && fileState.canUpload(question.id),
+                      canDiscard: gateIdle && fileState.canDiscard(question.id),
+                      isReconciling: fileState.isReconciling || !gateIdle,
                       canTransfer:
+                          gateIdle &&
                           file.serverFile != null &&
                           transferController.canTransfer(
                             question.id,
@@ -447,9 +506,9 @@ class _AttemptContent extends ConsumerWidget {
                       editorState.questions[question.id.toLowerCase()] != null)
                     StudentQuestionAnswerEditor(
                       state: editorState.questions[question.id.toLowerCase()]!,
-                      canEdit: editorState.canEdit(question.id),
-                      canSave: editorState.canSave(question.id),
-                      isReconciling: editorState.isReconciling,
+                      canEdit: gateIdle && editorState.canEdit(question.id),
+                      canSave: gateIdle && editorState.canSave(question.id),
+                      isReconciling: editorState.isReconciling || !gateIdle,
                       timezone: timezone,
                       onChanged: (draft) =>
                           editorController.updateDraft(question.id, draft),
@@ -468,6 +527,13 @@ class _AttemptContent extends ConsumerWidget {
                   ],
                   const SizedBox(height: 12),
                 ],
+                if (!isTerminal)
+                  StudentHomeworkSubmitControls(
+                    key: ValueKey((target, sessionKey, 'submit')),
+                    target: target,
+                    attemptNumber: attempt.attemptNumber,
+                    isTerminal: false,
+                  ),
               ],
             ),
           ),

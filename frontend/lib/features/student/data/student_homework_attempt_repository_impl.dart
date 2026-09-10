@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/student_answer_mutation.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_repository.dart';
+import '../domain/student_homework_submit.dart';
 import '../domain/student_question.dart';
 import '../domain/student_submission_upload.dart';
 import 'student_homework_attempt_remote_data_source.dart';
@@ -36,6 +37,19 @@ class StudentHomeworkAttemptRepositoryImpl
   @override
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) async {
     return (await remoteDataSource.fetchAttempt(attemptId)).toDomain();
+  }
+
+  @override
+  Future<StudentHomeworkSubmitResult> submitAttempt(
+    String attemptId,
+    String expectedHomeworkId,
+    String idempotencyKey,
+  ) async {
+    return (await remoteDataSource.submitAttempt(
+      attemptId,
+      expectedHomeworkId,
+      idempotencyKey,
+    )).toDomain();
   }
 
   @override

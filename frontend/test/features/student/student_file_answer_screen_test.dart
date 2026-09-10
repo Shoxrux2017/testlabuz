@@ -24,6 +24,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_attemp
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_submit.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 import 'package:testlabuz_client/features/student/presentation/student_file_answer_editor.dart';
@@ -573,6 +574,17 @@ StudentSubmissionUploadFile _selection(String name) =>
     );
 
 class _Repository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentHomeworkSubmitResult> submitAttempt(
+    String attemptId,
+    String expectedHomeworkId,
+    String idempotencyKey,
+  ) async {
+    throw StateError(
+      'This regression must not submit a Student Homework Attempt.',
+    );
+  }
+
   _Repository(this.current);
   StudentHomeworkAttempt current;
   final nextFetches = Queue<Future<StudentHomeworkAttempt>>();

@@ -88,6 +88,7 @@ class StudentHomeworkAttemptController
     state = StudentHomeworkAttemptState(
       status: StudentHomeworkAttemptLoadStatus.data,
       attempt: attempt,
+      publicationToken: StudentHomeworkAttemptPublicationToken(),
     );
     return true;
   }
@@ -99,11 +100,15 @@ class StudentHomeworkAttemptController
     final generation = ++_generation;
     final requestTarget = target;
     final retainedAttempt = retainAttempt ? state.attempt : null;
+    final retainedPublication = retainedAttempt == null
+        ? null
+        : state.publicationToken;
     state = StudentHomeworkAttemptState(
       status: retainedAttempt == null
           ? StudentHomeworkAttemptLoadStatus.loading
           : StudentHomeworkAttemptLoadStatus.refreshing,
       attempt: retainedAttempt,
+      publicationToken: retainedPublication,
     );
     try {
       final attempt = await ref
@@ -122,6 +127,7 @@ class StudentHomeworkAttemptController
       state = StudentHomeworkAttemptState(
         status: StudentHomeworkAttemptLoadStatus.data,
         attempt: attempt,
+        publicationToken: StudentHomeworkAttemptPublicationToken(),
       );
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, key, requestTarget) ||
@@ -140,6 +146,7 @@ class StudentHomeworkAttemptController
         status: StudentHomeworkAttemptLoadStatus.error,
         attempt: retainedAttempt,
         failure: exception.failure,
+        publicationToken: retainedPublication,
       );
     }
   }

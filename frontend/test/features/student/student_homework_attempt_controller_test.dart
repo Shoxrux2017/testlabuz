@@ -23,6 +23,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_list.d
 import 'package:testlabuz_client/features/student/domain/student_homework_list_query.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_submit.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
@@ -33,6 +34,90 @@ const _attemptId = '60000000-0000-0000-0000-000000000001';
 const _otherAttemptId = '60000000-0000-0000-0000-000000000002';
 
 void main() {
+  test(
+    'every authoritative GET and terminal acceptance creates a fresh token',
+    () async {
+      final h = _Harness();
+      final view = h.listen();
+      expect(view.read().publicationToken, isNull);
+      await h.flush();
+      h.repository.requests.single.complete(_attempt());
+      await h.flush();
+      final first = view.read().publicationToken;
+      expect(first, isNotNull);
+      h.controller.refresh();
+      expect(view.read().publicationToken, same(first));
+      h.repository.requests.last.complete(_attempt());
+      await h.flush();
+      final second = view.read().publicationToken;
+      expect(second, isNotNull);
+      expect(second, isNot(same(first)));
+      h.controller.refresh();
+      final older = h.repository.requests.last;
+      final terminal = _attempt(status: StudentHomeworkAttemptStatus.submitted);
+      expect(h.controller.acceptAuthoritativeTerminalAttempt(terminal), isTrue);
+      final terminalPublication = view.read().publicationToken;
+      expect(terminalPublication, isNotNull);
+      expect(terminalPublication, isNot(same(second)));
+      older.complete(_attempt());
+      await h.flush();
+      expect(view.read().publicationToken, same(terminalPublication));
+      expect(view.read().attempt, same(terminal));
+    },
+  );
+
+  test(
+    'retained error and refresh preserve token, notFound clears it',
+    () async {
+      final h = _Harness();
+      final view = h.listen();
+      await h.flush();
+      h.repository.requests.single.complete(_attempt());
+      await h.flush();
+      final publication = view.read().publicationToken;
+      h.controller.refresh();
+      expect(view.read().publicationToken, same(publication));
+      h.repository.requests.last.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
+      );
+      await h.flush();
+      expect(view.read().status, StudentHomeworkAttemptLoadStatus.error);
+      expect(view.read().publicationToken, same(publication));
+      h.controller.retry();
+      expect(view.read().publicationToken, same(publication));
+      h.repository.requests.last.complete(_attempt(id: _otherAttemptId));
+      await h.flush();
+      expect(view.read().status, StudentHomeworkAttemptLoadStatus.notFound);
+      expect(view.read().publicationToken, isNull);
+    },
+  );
+
+  test(
+    'initial load failure and session loss cannot retain publication',
+    () async {
+      final h = _Harness();
+      final view = h.listen();
+      expect(view.read().publicationToken, isNull);
+      await h.flush();
+      h.repository.requests.single.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
+      );
+      await h.flush();
+      expect(view.read().status, StudentHomeworkAttemptLoadStatus.error);
+      expect(view.read().publicationToken, isNull);
+      h.controller.retry();
+      expect(view.read().status, StudentHomeworkAttemptLoadStatus.loading);
+      expect(view.read().publicationToken, isNull);
+      h.repository.requests.last.complete(_attempt());
+      await h.flush();
+      expect(view.read().publicationToken, isNotNull);
+      h.auth.logOut();
+      await h.flush();
+      expect(view.read().status, StudentHomeworkAttemptLoadStatus.initial);
+      expect(view.read().publicationToken, isNull);
+    },
+  );
+
   test(
     'terminal acceptance compares canonical UUID letters case-insensitively',
     () async {
@@ -477,6 +562,17 @@ class _Surface extends Notifier<AppDeviceSurface> {
 }
 
 class _Repository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentHomeworkSubmitResult> submitAttempt(
+    String attemptId,
+    String expectedHomeworkId,
+    String idempotencyKey,
+  ) async {
+    throw StateError(
+      'This regression must not submit a Student Homework Attempt.',
+    );
+  }
+
   @override
   Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
     String attemptId,

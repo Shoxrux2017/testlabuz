@@ -16,6 +16,7 @@ import '../domain/student_homework_route_target.dart';
 import '../domain/student_question.dart';
 import '../domain/student_submission_upload.dart';
 import 'student_attempt_answer_editor_controller.dart';
+import 'student_attempt_route_operation_gate.dart';
 import 'student_file_answer_state.dart';
 import 'student_homework_attempt_controller.dart';
 import 'student_homework_attempt_state.dart';
@@ -65,25 +66,41 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     }
     if (_cleared) return StudentFileAnswerState();
     final previous = changedSession ? StudentFileAnswerState() : state;
+    final changedParent = !identical(parent, _lastParent);
+    _lastParent = parent;
     if (terminal != null &&
         _matchesAttempt(terminal) &&
         terminal.status != StudentHomeworkAttemptStatus.inProgress) {
       final changed = !identical(terminal, _lastTerminal);
       _lastTerminal = terminal;
-      return changed ? _synchronize(previous, terminal) : previous;
+      final fromParentPublication =
+          parent.status == StudentHomeworkAttemptLoadStatus.data &&
+          identical(parent.attempt, terminal);
+      return changed || (changedParent && fromParentPublication)
+          ? _synchronize(
+              previous,
+              terminal,
+              sourcePublication: fromParentPublication
+                  ? parent.publicationToken
+                  : null,
+            )
+          : previous;
     }
-    final changedParent = !identical(parent, _lastParent);
-    _lastParent = parent;
     if (changedParent &&
         parent.status == StudentHomeworkAttemptLoadStatus.data &&
         parent.attempt != null &&
         _matchesAttempt(parent.attempt!)) {
-      return _synchronize(previous, parent.attempt!);
+      return _synchronize(
+        previous,
+        parent.attempt!,
+        sourcePublication: parent.publicationToken,
+      );
     }
     return _copyState(previous, isAuthoritative: _hasAuthority(parent));
   }
 
   Future<void> chooseFile(String questionId) async {
+    if (!_gateIsIdle) return;
     final id = questionId.toLowerCase();
     final question = _currentQuestion(id);
     if (question == null || !state.canChoose(id)) return;
@@ -174,6 +191,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
   }
 
   void discardSelectedFile(String questionId) {
+    if (!_gateIsIdle) return;
     final id = questionId.toLowerCase();
     final key = _activeSessionKey;
     if (key == null || !_matchesSession(key) || !state.canDiscard(id)) return;
@@ -188,6 +206,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
   }
 
   Future<void> uploadAnswer(String questionId) async {
+    if (!_gateIsIdle) return;
     final id = questionId.toLowerCase();
     final question = _currentQuestion(id);
     if (question == null || !state.canChoose(id)) return;
@@ -261,6 +280,10 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           serverFile: (result.answer as StudentFileAnswerValue).file,
           status: StudentFileAnswerStatus.uploaded,
         ),
+        preservePublication: identical(
+          operation.sourcePublication,
+          state.sourceAttemptPublication,
+        ),
       );
       _refreshAttempt();
     } on StudentSubmissionSourceUnavailable {
@@ -318,6 +341,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
   }
 
   Future<void> reloadAttempt() async {
+    if (!_gateIsIdle) return;
     final operation = _operation;
     if (operation == null ||
         !state.hasUncertainUpload ||
@@ -338,7 +362,15 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
         final accepted = ref
             .read(studentHomeworkAttemptControllerProvider(target).notifier)
             .acceptAuthoritativeTerminalAttempt(attempt);
-        if (accepted && ref.mounted) state = _synchronize(state, attempt);
+        if (accepted && ref.mounted) {
+          state = _synchronize(
+            state,
+            attempt,
+            sourcePublication: ref
+                .read(studentHomeworkAttemptControllerProvider(target))
+                .publicationToken,
+          );
+        }
         return;
       }
       final matches = attempt.questions.where(
@@ -403,8 +435,9 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
 
   StudentFileAnswerState _synchronize(
     StudentFileAnswerState previous,
-    StudentHomeworkAttempt attempt,
-  ) {
+    StudentHomeworkAttempt attempt, {
+    StudentHomeworkAttemptPublicationToken? sourcePublication,
+  }) {
     final terminal = attempt.status != StudentHomeworkAttemptStatus.inProgress;
     if (previous.isTerminal && !terminal) return previous;
     if (terminal) {
@@ -412,11 +445,13 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       _operation = null;
     }
     final questions = <String, StudentFileQuestionAnswerState>{};
+    var preservedUncertainty = false;
     for (final question in attempt.questions.where(_isFileQuestion)) {
       final id = question.id.toLowerCase();
       final old = previous.questions[id];
       if (!terminal && old?.status == StudentFileAnswerStatus.uncertain) {
         questions[id] = old!;
+        preservedUncertainty = true;
         continue;
       }
       final selected = terminal ? null : old?.selectedFile;
@@ -449,6 +484,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       final old = previous.questions[activeId];
       if (old?.status == StudentFileAnswerStatus.uncertain) {
         questions[activeId] = old!;
+        preservedUncertainty = true;
       } else {
         _generation += 1;
         _operation = null;
@@ -460,6 +496,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       isTerminal: terminal,
       activeQuestionId: _operation?.questionId,
       isReconciling: !terminal && _operation != null && previous.isReconciling,
+      sourceAttemptPublication: preservedUncertainty ? null : sourcePublication,
     );
   }
 
@@ -493,6 +530,10 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       parent.attempt != null &&
       _matchesAttempt(parent.attempt!) &&
       parent.attempt!.status == StudentHomeworkAttemptStatus.inProgress;
+
+  bool get _gateIsIdle =>
+      ref.read(studentAttemptRouteOperationGateProvider(target)) ==
+      StudentAttemptRouteOperation.idle;
 
   StudentQuestion? _currentQuestion(String id) {
     final key = _activeSessionKey;
@@ -547,6 +588,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       id,
       selected,
       previousFileId,
+      state.sourceAttemptPublication,
     );
     _operation = operation;
     _generation += 1;
@@ -703,12 +745,19 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
   void _replace(String id, StudentFileQuestionAnswerState entry) =>
       state = _copyState(state, questions: {...state.questions, id: entry});
 
-  void _finish(String id, StudentFileQuestionAnswerState entry) {
+  void _finish(
+    String id,
+    StudentFileQuestionAnswerState entry, {
+    bool preservePublication = true,
+  }) {
     _operation = null;
     state = StudentFileAnswerState(
       questions: {...state.questions, id: entry},
       isAuthoritative: state.isAuthoritative,
       isTerminal: state.isTerminal,
+      sourceAttemptPublication: preservePublication
+          ? state.sourceAttemptPublication
+          : null,
     );
   }
 
@@ -724,6 +773,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     isTerminal: previous.isTerminal,
     activeQuestionId: activeQuestionId ?? previous.activeQuestionId,
     isReconciling: isReconciling ?? previous.isReconciling,
+    sourceAttemptPublication: previous.sourceAttemptPublication,
   );
 }
 
@@ -734,10 +784,12 @@ class _FileOperation {
     this.questionId,
     this.selectedFile,
     this.previousServerFileId,
+    this.sourcePublication,
   );
   final StudentSessionKey session;
   final StudentHomeworkAttemptRouteTarget target;
   final String questionId;
   final StudentSubmissionUploadFile? selectedFile;
   final String? previousServerFileId;
+  final StudentHomeworkAttemptPublicationToken? sourcePublication;
 }

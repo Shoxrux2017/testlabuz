@@ -2,6 +2,7 @@ import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../domain/student_homework.dart';
 import '../domain/student_homework_attempt.dart';
+import '../application/student_homework_submit_readiness.dart';
 import '../domain/student_question.dart';
 import '../domain/student_submission_upload.dart';
 
@@ -66,8 +67,32 @@ String studentHomeworkAttemptFinalizationLabel(
 ) => switch (reason) {
   StudentHomeworkAttemptFinalizationReason.studentSubmit => 'Submitted by you',
   StudentHomeworkAttemptFinalizationReason.homeworkDeadline =>
-    'Homework deadline reached',
-  StudentHomeworkAttemptFinalizationReason.taskClosed => 'Homework closed',
+    'Finalized at the Homework deadline',
+  StudentHomeworkAttemptFinalizationReason.taskClosed =>
+    'Finalized when the Homework was closed',
+};
+
+String studentHomeworkSubmitBlockerMessage(
+  StudentHomeworkSubmitBlocker blocker,
+) => switch (blocker) {
+  StudentHomeworkSubmitBlocker.attemptNotEditable =>
+    'This Attempt is not available for submission.',
+  StudentHomeworkSubmitBlocker.attemptStateLoading =>
+    'Wait for the Attempt refresh to finish.',
+  StudentHomeworkSubmitBlocker.nonFileUnsavedChanges =>
+    'Save or discard unsaved answer changes before submitting.',
+  StudentHomeworkSubmitBlocker.nonFileSaveInProgress =>
+    'Wait for the current answer save to finish.',
+  StudentHomeworkSubmitBlocker.nonFileSaveUncertain =>
+    'Resolve the unconfirmed answer save before submitting.',
+  StudentHomeworkSubmitBlocker.fileSelectionPending =>
+    'Upload or discard the selected file before submitting.',
+  StudentHomeworkSubmitBlocker.fileUploadInProgress =>
+    'Wait for the current file operation to finish.',
+  StudentHomeworkSubmitBlocker.fileUploadUncertain =>
+    'Resolve the unconfirmed file upload before submitting.',
+  StudentHomeworkSubmitBlocker.localStateUnavailable =>
+    'Refresh the Attempt to confirm the current saved answers before submitting.',
 };
 
 String studentHomeworkAttemptFailureMessage(ApiFailure failure) =>

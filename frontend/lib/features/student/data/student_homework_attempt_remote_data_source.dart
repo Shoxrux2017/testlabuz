@@ -12,6 +12,7 @@ import '../domain/student_submission_upload.dart';
 import 'dto/student_attempt_answer_mutation_dto.dart';
 import 'dto/student_dto_parse.dart';
 import 'dto/student_homework_attempt_dto.dart';
+import 'dto/student_homework_submit_dto.dart';
 
 final studentHomeworkAttemptRemoteDataSourceProvider =
     Provider<StudentHomeworkAttemptRemoteDataSource>((ref) {
@@ -72,6 +73,36 @@ class StudentHomeworkAttemptRemoteDataSource {
         );
       }
       return _readEnvelope(response.data);
+    });
+  }
+
+  Future<StudentHomeworkSubmitDto> submitAttempt(
+    String attemptId,
+    String expectedHomeworkId,
+    String idempotencyKey,
+  ) {
+    _validateUuid(attemptId, 'attemptId');
+    _validateUuid(expectedHomeworkId, 'expectedHomeworkId');
+    _validateUuid(idempotencyKey, 'idempotencyKey');
+    return _mapFailures(() async {
+      final response = await dio.post<Object?>(
+        '/student/attempts/${Uri.encodeComponent(attemptId)}/submit',
+        data: const <String, Object?>{},
+        options: Options(
+          followRedirects: false,
+          headers: {'Idempotency-Key': idempotencyKey},
+        ),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'Homework Submit success status must be 200.',
+        );
+      }
+      return StudentHomeworkSubmitDto.fromJson(
+        response.data,
+        expectedAttemptId: attemptId,
+        expectedHomeworkId: expectedHomeworkId,
+      );
     });
   }
 

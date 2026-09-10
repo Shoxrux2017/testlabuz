@@ -3,6 +3,7 @@ import '../../../core/network/api_failure.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_question.dart';
 import '../domain/student_submission_upload.dart';
+import 'student_homework_attempt_state.dart';
 
 enum StudentFileAnswerStatus {
   idle,
@@ -47,6 +48,7 @@ class StudentFileAnswerState {
     this.isTerminal = false,
     this.activeQuestionId,
     this.isReconciling = false,
+    this.sourceAttemptPublication,
   }) : questions = Map.unmodifiable(questions);
 
   final Map<String, StudentFileQuestionAnswerState> questions;
@@ -54,6 +56,7 @@ class StudentFileAnswerState {
   final bool isTerminal;
   final String? activeQuestionId;
   final bool isReconciling;
+  final StudentHomeworkAttemptPublicationToken? sourceAttemptPublication;
 
   bool get hasPendingSelection =>
       questions.values.any((entry) => entry.selectedFile != null);
