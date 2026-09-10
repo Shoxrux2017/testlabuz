@@ -4,6 +4,7 @@ import '../domain/student_answer_mutation.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_repository.dart';
 import '../domain/student_question.dart';
+import '../domain/student_submission_upload.dart';
 import 'student_homework_attempt_remote_data_source.dart';
 
 final studentHomeworkAttemptRepositoryProvider =
@@ -47,6 +48,21 @@ class StudentHomeworkAttemptRepositoryImpl
       attemptId,
       question,
       mutation,
+    )).toDomain();
+  }
+
+  @override
+  Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  }) async {
+    return (await remoteDataSource.uploadFileAnswer(
+      attemptId,
+      question,
+      file,
+      onProgress: onProgress,
     )).toDomain();
   }
 }

@@ -23,7 +23,9 @@ import 'package:testlabuz_client/features/student/domain/student_homework_list_q
 import 'package:testlabuz_client/features/student/domain/student_homework_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
+import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 import 'package:testlabuz_client/features/student/presentation/student_attempt_answer_read_view.dart';
+import 'package:testlabuz_client/features/student/presentation/student_file_answer_editor.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_attempt_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_read_view.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_answer_editor.dart';
@@ -74,8 +76,12 @@ void main() {
         expect(find.text('Deadline'), findsOneWidget);
         expect(find.text('2026-09-10 18:00'), findsOneWidget);
         expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(9));
-        expect(find.byType(StudentQuestionReadView), findsOneWidget);
-        expect(find.text('Saved answer'), findsOneWidget);
+        expect(find.byType(StudentQuestionAnswerCard), findsNWidgets(10));
+        expect(find.byType(StudentQuestionReadView), findsNothing);
+        expect(find.byType(StudentFileAnswerEditor), findsOneWidget);
+        expect(find.text('Current file:'), findsOneWidget);
+        expect(find.text('Choose replacement'), findsOneWidget);
+        _expectSavedFileActions(tester);
         expect(find.text('Save answer'), findsNWidgets(9));
         expect(tester.takeException(), isNull);
       },
@@ -114,9 +120,11 @@ void main() {
           find.text('my-own-long-homework-submission.pdf'),
           findsOneWidget,
         );
-        expect(find.text('Extension: pdf'), findsOneWidget);
-        expect(find.text('Size: 1.0 KiB'), findsOneWidget);
-        expect(find.byType(StudentAttemptAnswerReadView), findsNWidgets(10));
+        expect(find.text('Current file:'), findsOneWidget);
+        expect(find.text('PDF · 1.0 KB'), findsOneWidget);
+        expect(find.byType(StudentFileAnswerEditor), findsOneWidget);
+        expect(find.byType(StudentAttemptAnswerReadView), findsNWidgets(9));
+        expect(find.byType(StudentQuestionReadView), findsNWidgets(9));
         _expectReadOnly(tester);
         await tester.ensureVisible(find.text('Not answered'));
         await tester.pumpAndSettle();
@@ -422,9 +430,15 @@ void _expectReadOnly(WidgetTester tester) {
     'Submit',
     'Score',
     'Correct answer',
-    'Open',
     'Download',
     'Upload file',
+    'Choose file',
+    'Choose replacement',
+    'Upload answer',
+    'Upload replacement',
+    'Retry upload',
+    'Discard selected file',
+    'Delete answer',
   ]) {
     expect(find.text(label), findsNothing);
   }
@@ -437,6 +451,15 @@ void _expectReadOnly(WidgetTester tester) {
         .every((widget) => widget.readOnly),
     isTrue,
   );
+  _expectSavedFileActions(tester);
+}
+
+void _expectSavedFileActions(WidgetTester tester) {
+  for (final label in ['Open', 'Save As…']) {
+    final button = find.widgetWithText(OutlinedButton, label);
+    expect(button, findsOneWidget);
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNotNull);
+  }
 }
 
 const _longAnswer =
@@ -596,6 +619,15 @@ class _HomeworkRepository implements StudentHomeworkRepository {
 }
 
 class _AttemptRepository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  }) =>
+      throw StateError('This regression must not upload Student file answers.');
+
   _AttemptRepository({this.onFetch});
   final Future<StudentHomeworkAttempt> Function(String)? onFetch;
   @override

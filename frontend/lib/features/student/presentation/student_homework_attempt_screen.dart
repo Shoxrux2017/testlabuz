@@ -7,16 +7,19 @@ import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/student_attempt_answer_editor_controller.dart';
 import '../application/student_attempt_answer_editor_state.dart';
+import '../application/student_file_answer_controller.dart';
 import '../application/student_homework_attempt_controller.dart';
 import '../application/student_homework_attempt_state.dart';
 import '../application/student_homework_detail_controller.dart';
 import '../application/student_homework_detail_state.dart';
 import '../application/student_session_key.dart';
+import '../application/student_submission_transfer_controller.dart';
 import '../domain/student_homework.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
 import 'student_attempt_answer_read_view.dart';
+import 'student_file_answer_editor.dart';
 import 'student_homework_formatters.dart';
 import 'student_question_read_view.dart';
 import 'student_question_answer_editor.dart';
@@ -53,14 +56,23 @@ class _StudentHomeworkAttemptScreenState
     final capturedLocation = router.routeInformationProvider.value.uri;
     final provider = studentAttemptAnswerEditorControllerProvider(target);
     final editor = ref.read(provider);
+    final fileProvider = studentFileAnswerControllerProvider(target);
+    final files = ref.read(fileProvider);
     var leave = true;
-    if (editor.hasDirtyDrafts || editor.hasUncertainMutation) {
+    if (files.hasUncertainUpload ||
+        editor.hasUncertainMutation ||
+        files.hasPendingSelection ||
+        editor.hasDirtyDrafts) {
       final route = DialogRoute<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Leave Attempt?'),
           content: Text(
-            editor.hasUncertainMutation
+            files.hasUncertainUpload
+                ? 'A file upload result is still unconfirmed. '
+                      'Leaving will discard the local uncertainty/reconciliation state. '
+                      'Re-opening the attempt will reload server data.'
+                : editor.hasUncertainMutation
                 ? 'A save result is still unconfirmed. '
                       'Leaving will discard the local uncertainty/reconciliation state. '
                       'Re-opening the attempt will reload server data.'
@@ -92,6 +104,7 @@ class _StudentHomeworkAttemptScreenState
       return;
     }
     ref.read(provider.notifier).clearLocalState();
+    ref.read(fileProvider.notifier).clearLocalState();
     router.go(
       AppRoutePaths.studentHomeworkDetailLocation(
         capturedTarget.topicId,
@@ -129,6 +142,7 @@ class _StudentHomeworkAttemptScreenState
     final attemptState = ref.watch(attemptProvider);
     final editorProvider = studentAttemptAnswerEditorControllerProvider(target);
     final editorState = ref.watch(editorProvider);
+    ref.watch(studentFileAnswerControllerProvider(target));
     final editorController = ref.read(editorProvider.notifier);
     final homeworkController = ref.read(homeworkProvider.notifier);
     final attemptController = ref.read(attemptProvider.notifier);
@@ -178,6 +192,7 @@ class _StudentHomeworkAttemptScreenState
                 StudentHomeworkAttemptLoadStatus.refreshing ||
             attemptState.status == StudentHomeworkAttemptLoadStatus.error)) {
       body = _AttemptContent(
+        target: target,
         homework: homeworkState.homework!,
         attempt: terminalAttempt,
         timezone: timezone,
@@ -207,6 +222,7 @@ class _StudentHomeworkAttemptScreenState
         attemptState.attempt!.id.toLowerCase() == target.attemptId &&
         attemptState.attempt!.assessmentId.toLowerCase() == target.homeworkId) {
       body = _AttemptContent(
+        target: target,
         homework: homeworkState.homework!,
         attempt: attemptState.attempt!,
         timezone: timezone,
@@ -263,8 +279,9 @@ class _StudentHomeworkAttemptScreenState
   }
 }
 
-class _AttemptContent extends StatelessWidget {
+class _AttemptContent extends ConsumerWidget {
   const _AttemptContent({
+    required this.target,
     required this.homework,
     required this.attempt,
     required this.timezone,
@@ -272,6 +289,7 @@ class _AttemptContent extends StatelessWidget {
     required this.editorController,
   });
 
+  final StudentHomeworkAttemptRouteTarget target;
   final StudentHomeworkDetail homework;
   final StudentHomeworkAttempt attempt;
   final String timezone;
@@ -283,12 +301,25 @@ class _AttemptContent extends StatelessWidget {
       'Institution timezone unavailable';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionKey = StudentSessionSnapshot.fromSession(
+      ref.watch(authSessionControllerProvider),
+      ref.watch(appDeviceSurfaceProvider),
+    ).eligibleKey;
+    final fileProvider = studentFileAnswerControllerProvider(target);
+    final fileState = ref.watch(fileProvider);
+    final fileController = ref.read(fileProvider.notifier);
+    final transferProvider = studentSubmissionTransferControllerProvider(
+      target,
+    );
+    final transferState = ref.watch(transferProvider);
+    final transferController = ref.read(transferProvider.notifier);
     final answers = {
       for (final answer in attempt.answers)
         answer.questionId.toLowerCase(): answer,
     };
     final activeEditor = editorState.questions[editorState.activeQuestionId];
+    final activeFile = fileState.questions[fileState.activeQuestionId];
     final displayedQuestions = [
       ...attempt.questions,
       if (attempt.status == StudentHomeworkAttemptStatus.inProgress &&
@@ -299,6 +330,14 @@ class _AttemptContent extends StatelessWidget {
                 activeEditor.question.id.toLowerCase(),
           ))
         activeEditor.question,
+      if (attempt.status == StudentHomeworkAttemptStatus.inProgress &&
+          activeFile != null &&
+          !attempt.questions.any(
+            (question) =>
+                question.id.toLowerCase() ==
+                activeFile.question.id.toLowerCase(),
+          ))
+        activeFile.question,
     ];
     final timing = <(String, String)>[
       ('Started', instant(attempt.startedAt)),
@@ -372,7 +411,38 @@ class _AttemptContent extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 for (final question in displayedQuestions) ...[
-                  if (attempt.status ==
+                  if (fileState.questions[question.id.toLowerCase()]
+                      case final file?)
+                    StudentFileAnswerEditor(
+                      key: ValueKey((target, sessionKey, question.id)),
+                      state: file,
+                      isTerminal: fileState.isTerminal,
+                      canChoose: fileState.canChoose(question.id),
+                      canUpload: fileState.canUpload(question.id),
+                      canDiscard: fileState.canDiscard(question.id),
+                      isReconciling: fileState.isReconciling,
+                      canTransfer:
+                          file.serverFile != null &&
+                          transferController.canTransfer(
+                            question.id,
+                            file.serverFile!.id,
+                          ),
+                      transferState: transferState,
+                      onChoose: () => fileController.chooseFile(question.id),
+                      onUpload: () => fileController.uploadAnswer(question.id),
+                      onDiscard: () =>
+                          fileController.discardSelectedFile(question.id),
+                      onReload: fileController.reloadAttempt,
+                      onOpen: () => transferController.open(
+                        question.id,
+                        file.serverFile!.id,
+                      ),
+                      onSaveAs: () => transferController.saveAs(
+                        question.id,
+                        file.serverFile!.id,
+                      ),
+                    )
+                  else if (attempt.status ==
                           StudentHomeworkAttemptStatus.inProgress &&
                       editorState.questions[question.id.toLowerCase()] != null)
                     StudentQuestionAnswerEditor(

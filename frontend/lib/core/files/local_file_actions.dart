@@ -18,6 +18,7 @@ abstract interface class LocalFilePlatformAdapter {
     required String fileName,
     required Uint8List bytes,
     required String mimeType,
+    required String dialogTitle,
   });
 
   Future<LocalFileOpenOutcome> openTemporaryFile({
@@ -41,6 +42,7 @@ class NativeLocalFilePlatformAdapter implements LocalFilePlatformAdapter {
     String fileName,
     Uint8List bytes,
     String mimeType,
+    String dialogTitle,
   )?
   saveFileDialog;
 
@@ -49,16 +51,17 @@ class NativeLocalFilePlatformAdapter implements LocalFilePlatformAdapter {
     required String fileName,
     required Uint8List bytes,
     required String mimeType,
+    required String dialogTitle,
   }) {
     final override = saveFileDialog;
     if (override != null) {
-      return override(fileName, bytes, mimeType);
+      return override(fileName, bytes, mimeType, dialogTitle);
     }
     return FilePicker.saveFile(
       fileName: fileName,
       bytes: bytes,
       mimeType: mimeType,
-      dialogTitle: 'Save learning material',
+      dialogTitle: dialogTitle,
     );
   }
 
@@ -100,11 +103,15 @@ class LocalFileActions {
 
   final LocalFilePlatformAdapter platform;
 
-  Future<bool> saveAs(TrustedDownloadedFile file) async {
+  Future<bool> saveAs(
+    TrustedDownloadedFile file, {
+    String dialogTitle = 'Save learning material',
+  }) async {
     final location = await platform.saveFile(
       fileName: file.filename,
       bytes: file.bytes,
       mimeType: file.mimeType,
+      dialogTitle: dialogTitle,
     );
     return location != null;
   }

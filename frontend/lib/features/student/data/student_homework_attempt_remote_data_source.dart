@@ -8,6 +8,7 @@ import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/student_answer_mutation.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_question.dart';
+import '../domain/student_submission_upload.dart';
 import 'dto/student_attempt_answer_mutation_dto.dart';
 import 'dto/student_dto_parse.dart';
 import 'dto/student_homework_attempt_dto.dart';
@@ -78,6 +79,13 @@ class StudentHomeworkAttemptRemoteDataSource {
     try {
       return await request();
     } on DioException catch (exception) {
+      Object? cause = exception;
+      while (cause is DioException) {
+        cause = cause.error;
+      }
+      if (cause is StudentSubmissionSourceUnavailable) {
+        throw cause;
+      }
       // Dio wraps JSON decoding failures before the exact DTO parser runs.
       if (exception.type == DioExceptionType.unknown &&
           exception.error is FormatException) {
@@ -125,6 +133,61 @@ class StudentHomeworkAttemptRemoteDataSource {
         requestedType: mutation.type,
       );
     });
+  }
+
+  Future<StudentAttemptAnswerMutationDto> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  }) {
+    _validateUuid(attemptId, 'attemptId');
+    _validateUuid(question.id, 'question.id');
+    if (question.type != StudentQuestionType.fileBased ||
+        question.answerUi is! StudentFileAnswerUi) {
+      throw ArgumentError('File upload requires a safe file Question.');
+    }
+    return _mapFailures(() async {
+      final response = await dio.put<Object?>(
+        '/student/attempts/${Uri.encodeComponent(attemptId)}/answers/'
+        '${Uri.encodeComponent(question.id)}',
+        data: FormData.fromMap({
+          'type': 'file_based',
+          'file': MultipartFile.fromStream(
+            () => _readSelectedSource(file),
+            file.length,
+            filename: file.name,
+          ),
+        }),
+        options: Options(
+          sendTimeout: const Duration(minutes: 5),
+          followRedirects: false,
+        ),
+        onSendProgress: onProgress,
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'File answer upload success status must be 200.',
+        );
+      }
+      return StudentAttemptAnswerMutationDto.fromJson(
+        response.data,
+        question: question,
+        requestedType: StudentQuestionType.fileBased,
+        selectedFile: file,
+      );
+    });
+  }
+}
+
+Stream<List<int>> _readSelectedSource(StudentSubmissionUploadFile file) async* {
+  try {
+    await for (final chunk in file.openRead()) {
+      yield chunk;
+    }
+  } catch (_) {
+    // Preserve local read failures before Dio classifies its wrapped exception.
+    throw const StudentSubmissionSourceUnavailable();
   }
 }
 

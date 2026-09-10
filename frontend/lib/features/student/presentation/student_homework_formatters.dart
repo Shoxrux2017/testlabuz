@@ -3,6 +3,7 @@ import '../../../core/network/api_failure.dart';
 import '../domain/student_homework.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_question.dart';
+import '../domain/student_submission_upload.dart';
 
 String studentHomeworkStatusLabel(StudentHomeworkStatus status) {
   return switch (status) {
@@ -113,3 +114,46 @@ String studentAnswerSaveFailureMessage(ApiFailure failure) =>
         'The Attempt changed. Review its reloaded state before saving again.',
       _ => 'Your draft has been kept. Review it before saving again.',
     };
+
+String formatStudentSubmissionBytes(int bytes) {
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  return '$bytes bytes';
+}
+
+String studentSubmissionSelectionErrorMessage(
+  StudentSubmissionSelectionError error,
+) => switch (error) {
+  StudentSubmissionSelectionError.emptyFile => 'The selected file is empty.',
+  StudentSubmissionSelectionError.unsupportedExtension =>
+    'Choose a file with an allowed extension.',
+  StudentSubmissionSelectionError.tooLarge =>
+    'The selected file exceeds the current upload limit.',
+  StudentSubmissionSelectionError.filenameTooLong =>
+    'The filename must contain no more than 500 characters.',
+  StudentSubmissionSelectionError.invalidFilename =>
+    'Choose a file with a valid filename.',
+};
+
+String studentFileAnswerFailureMessage(
+  ApiFailure failure,
+) => switch (failure.serverCode) {
+  ApiErrorCodes.unsupportedFileType =>
+    'The selected file content is not a supported PDF, DOCX, PPT, or PPTX file.',
+  ApiErrorCodes.fileTooLarge =>
+    'The selected file exceeds the current upload limit.',
+  ApiErrorCodes.fileUploadFailed => 'The file could not be stored. Try again.',
+  ApiErrorCodes.validationFailed =>
+    'The file answer could not be accepted. Choose a file again.',
+  ApiErrorCodes.deadlinePassed => 'The Homework deadline has passed.',
+  ApiErrorCodes.attemptNotEditable => 'This attempt is no longer editable.',
+  ApiErrorCodes.taskNotActive ||
+  ApiErrorCodes.taskClosed ||
+  ApiErrorCodes.taskArchived => 'This Homework is no longer editable.',
+  ApiErrorCodes.resourceNotFound => 'This Attempt is no longer available.',
+  ApiErrorCodes.businessConflict =>
+    'The Attempt changed. Review its reloaded state before uploading again.',
+  _ => 'The file answer could not be uploaded. Choose a file again.',
+};

@@ -1,6 +1,7 @@
 import 'student_answer_mutation.dart';
 import 'student_homework_attempt.dart';
 import 'student_question.dart';
+import 'student_submission_upload.dart';
 
 abstract interface class StudentHomeworkAttemptRepository {
   Future<StudentHomeworkAttemptStartResult> startAttempt(
@@ -15,4 +16,11 @@ abstract interface class StudentHomeworkAttemptRepository {
     StudentQuestion question,
     StudentAnswerMutation mutation,
   );
+
+  Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentSubmissionUploadFile file, {
+    StudentSubmissionUploadProgress? onProgress,
+  });
 }

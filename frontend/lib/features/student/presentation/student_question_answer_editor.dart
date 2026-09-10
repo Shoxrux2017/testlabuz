@@ -52,102 +52,80 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
       StudentAnswerSaveStatus.idle =>
         state.isDirty ? 'Unsaved changes' : 'No unsaved changes',
     };
-    return Card(
+    return StudentQuestionAnswerCard(
       key: ValueKey('studentAnswerEditor${question.id}'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      question: question,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _editorBody(),
+          if (state.validation case final validation?
+              when state.draft is! StudentShortWrittenDraft &&
+                  state.draft is! StudentOpenWrittenDraft) ...[
+            const SizedBox(height: 8),
+            Semantics(liveRegion: true, child: Text(validation)),
+          ],
+          const SizedBox(height: 12),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              status,
+              key: ValueKey('studentSaveStatus${question.id}'),
+            ),
+          ),
+          if (state.saveStatus == StudentAnswerSaveStatus.saved &&
+              state.updatedAt != null) ...[
+            const SizedBox(height: 4),
             Text(
-              'Question ${question.position} · '
-              '${studentQuestionTypeLabel(question.type)}',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            Semantics(
-              header: true,
-              child: SelectableText(
-                question.prompt,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            if (question.instructions case final instructions?) ...[
-              const SizedBox(height: 8),
-              SelectableText(instructions),
-            ],
-            const SizedBox(height: 8),
-            Text('Points: ${formatStudentHomeworkPoints(question.points)}'),
-            const SizedBox(height: 16),
-            _editorBody(),
-            if (state.validation case final validation?
-                when state.draft is! StudentShortWrittenDraft &&
-                    state.draft is! StudentOpenWrittenDraft) ...[
-              const SizedBox(height: 8),
-              Semantics(liveRegion: true, child: Text(validation)),
-            ],
-            const SizedBox(height: 12),
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                status,
-                key: ValueKey('studentSaveStatus${question.id}'),
-              ),
-            ),
-            if (state.saveStatus == StudentAnswerSaveStatus.saved &&
-                state.updatedAt != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Last saved: ${formatStudentInstitutionInstant(state.updatedAt!, timezone) ?? 'Institution timezone unavailable'}',
-              ),
-            ],
-            if (state.saveStatus == StudentAnswerSaveStatus.failure &&
-                state.failure != null) ...[
-              const SizedBox(height: 8),
-              Semantics(
-                liveRegion: true,
-                child: Text(studentAnswerSaveFailureMessage(state.failure!)),
-              ),
-            ],
-            if (busy) ...[
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                semanticsLabel: isReconciling
-                    ? 'Reloading Attempt'
-                    : 'Saving answer',
-              ),
-            ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (uncertain)
-                  FilledButton(
-                    onPressed: isReconciling ? null : onReload,
-                    child: const Text('Reload attempt'),
-                  )
-                else ...[
-                  FilledButton(
-                    key: ValueKey('studentSaveAnswer${question.id}'),
-                    onPressed: canSave ? onSave : null,
-                    child: const Text('Save answer'),
-                  ),
-                  if (state.isDirty)
-                    TextButton(
-                      onPressed: canEdit ? onDiscard : null,
-                      child: const Text('Discard changes'),
-                    ),
-                  if (state.draft.canClear)
-                    TextButton(
-                      onPressed: canEdit ? onClear : null,
-                      child: const Text('Clear answer'),
-                    ),
-                ],
-              ],
+              'Last saved: ${formatStudentInstitutionInstant(state.updatedAt!, timezone) ?? 'Institution timezone unavailable'}',
             ),
           ],
-        ),
+          if (state.saveStatus == StudentAnswerSaveStatus.failure &&
+              state.failure != null) ...[
+            const SizedBox(height: 8),
+            Semantics(
+              liveRegion: true,
+              child: Text(studentAnswerSaveFailureMessage(state.failure!)),
+            ),
+          ],
+          if (busy) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              semanticsLabel: isReconciling
+                  ? 'Reloading Attempt'
+                  : 'Saving answer',
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (uncertain)
+                FilledButton(
+                  onPressed: isReconciling ? null : onReload,
+                  child: const Text('Reload attempt'),
+                )
+              else ...[
+                FilledButton(
+                  key: ValueKey('studentSaveAnswer${question.id}'),
+                  onPressed: canSave ? onSave : null,
+                  child: const Text('Save answer'),
+                ),
+                if (state.isDirty)
+                  TextButton(
+                    onPressed: canEdit ? onDiscard : null,
+                    child: const Text('Discard changes'),
+                  ),
+                if (state.draft.canClear)
+                  TextButton(
+                    onPressed: canEdit ? onClear : null,
+                    child: const Text('Clear answer'),
+                  ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -195,4 +173,48 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
       onChanged: onChanged,
     ),
   };
+}
+
+class StudentQuestionAnswerCard extends StatelessWidget {
+  const StudentQuestionAnswerCard({
+    required this.question,
+    required this.body,
+    super.key,
+  });
+
+  final StudentQuestion question;
+  final Widget body;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Question ${question.position} · '
+            '${studentQuestionTypeLabel(question.type)}',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          Semantics(
+            header: true,
+            child: SelectableText(
+              question.prompt,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          if (question.instructions case final instructions?) ...[
+            const SizedBox(height: 8),
+            SelectableText(instructions),
+          ],
+          const SizedBox(height: 8),
+          Text('Points: ${formatStudentHomeworkPoints(question.points)}'),
+          const SizedBox(height: 16),
+          body,
+        ],
+      ),
+    ),
+  );
 }

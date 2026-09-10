@@ -498,6 +498,7 @@ class _FakeLocalAdapter implements LocalFilePlatformAdapter {
     required String fileName,
     required Uint8List bytes,
     required String mimeType,
+    required String dialogTitle,
   }) async {
     saveCalls += 1;
     return saveResult;
