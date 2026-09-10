@@ -66,6 +66,31 @@ final class StudentHomeworkAttemptAccess
         return $this->lockHomeworkRows($student, $preliminaryAssessment, exclusive: false);
     }
 
+    /** @return array{topic: Topic, assessment: Assessment, homework: HomeworkAssignment, attempt: AssessmentAttempt} */
+    public function lockForSubmit(User $student, Assessment $preliminaryAssessment, AssessmentAttempt $preliminaryAttempt): array
+    {
+        try {
+            $homeworkRows = $this->lockHomeworkRows($student, $preliminaryAssessment, exclusive: false);
+        } catch (NotFoundHttpException $exception) {
+            throw new LogicException('Authorized Homework Attempt lost its locked Homework chain.', previous: $exception);
+        }
+
+        $attempt = AssessmentAttempt::query()
+            ->where('institution_id', $student->institution_id)
+            ->where('student_id', $student->id)
+            ->whereKey($preliminaryAttempt->id)
+            ->lockForUpdate()
+            ->first();
+
+        if ($attempt === null || $attempt->id !== $preliminaryAttempt->id) {
+            throw new LogicException('Authorized Homework Attempt disappeared during locked re-resolution.');
+        }
+
+        $this->assertValidAnswerAttempt($student, $homeworkRows['assessment'], $attempt);
+
+        return [...$homeworkRows, 'attempt' => $attempt];
+    }
+
     /** @return array{topic: Topic, assessment: Assessment, homework: HomeworkAssignment} */
     private function lockHomeworkRows(User $student, Assessment $preliminaryAssessment, bool $exclusive): array
     {
