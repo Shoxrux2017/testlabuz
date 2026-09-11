@@ -441,12 +441,14 @@ class Stage7Harness {
 
   Future<void> select<T>(Finder dropdown, T value) async {
     await tap(dropdown);
-    final item = find
-        .byWidgetPredicate(
-          (widget) => widget is DropdownMenuItem<T> && widget.value == value,
-        )
-        .hitTestable();
-    await tap(item);
+    final item = find.byWidgetPredicate(
+      (widget) => widget is DropdownMenuItem<T> && widget.value == value,
+    );
+    await waitWidget(item, 'dropdown item for value $value');
+
+    final child = tester.widget<DropdownMenuItem<T>>(item).child;
+    await tap(find.byWidget(child).last);
+
     await until(
       () => tester.widget<DropdownButton<T>>(dropdown).value == value,
       'selected value for ${dropdown.describeMatch(Plurality.one)}',
