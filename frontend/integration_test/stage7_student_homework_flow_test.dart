@@ -50,7 +50,7 @@ Future<void> _mainFlow(Stage7Harness h) async {
   final topicCard = h.byKey('studentTopicCard$_topic');
   await h.waitWidget(topicCard, 'Main Topic card');
   expect(h.textIn(topicCard, 'E2E S07 Main Topic'), findsOneWidget);
-  await h.tap(h.within(topicCard, find.byType(InkWell)));
+  await h.tap(topicCard);
   await h.waitRoute(AppRoutePaths.studentTopicDetailLocation(_topic));
   await h.waitWidget(
     h.byKey('studentHomeworkSection'),
