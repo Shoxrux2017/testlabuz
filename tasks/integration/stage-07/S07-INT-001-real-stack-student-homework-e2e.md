@@ -1139,7 +1139,7 @@ no score/review
 
 Peer Student has no Attempt.
 
-A real Student read must reconcile target Attempt to:
+The exact Student Attempt GET in Section 76, executed in the Section 38A order before any broad Student Homework list, must reconcile the target Attempt to:
 
 ```text
 status = submitted
@@ -1170,7 +1170,7 @@ Runner invokes:
 php artisan homework:reconcile-deadlines
 ```
 
-through the guarded backend container.
+through the guarded backend container only after the targeted lifecycle scenarios and the global candidate-set guard in Section 77.
 
 Oracle requires the exact deadline finalization state.
 
@@ -1276,6 +1276,59 @@ short_written
 No existing Attempts.
 
 The automated Windows runner must leave this fixture untouched.
+
+---
+
+# 38A. Lifecycle Fixture Consumption Order
+
+The original runner order seeded multiple due `in_progress` lifecycle fixtures before the Main Student UI flow. That order was an integration-harness contract defect, not a production defect.
+
+Production intentionally performs:
+
+```text
+ListStudentHomework
+-> ReconcileStudentHomeworkDeadlines::all(...)
+-> only afterward apply Topic/status filtering
+```
+
+The first normal Student Homework list can therefore reconcile other due Homework assigned to that Student. Also, `homework:reconcile-deadlines` is a global due-Homework reconciler with no integration-fixture scope; it consumes every active due Homework with an `in_progress` Attempt.
+
+Before the first Flutter Student Homework list/read flow that can invoke broad Student deadline reconciliation, consume the dedicated lifecycle fixtures exactly once in this order:
+
+```text
+1. Deadline Read fixture
+2. Due Teacher Close fixture
+3. Future Teacher Close fixture
+4. Scheduler fixture
+5. only then Main Windows Student UI flow
+```
+
+Deadline Read uses the exact Student Attempt GET to exercise the specific Homework read-reconciliation path. Due Teacher Close uses the exact Teacher close endpoint to prove deadline precedence. Future Teacher Close uses the exact Teacher close endpoint to prove normal task-close finalization.
+
+After those targeted scenarios become terminal/closed, the only remaining Stage 7 active-due `in_progress` lifecycle fixture must be `E2E S07 Scheduler Homework`. Only then may the global scheduler run, subject to the global candidate-set guard in Sections 77 and 83. After scheduler reconciliation, no Stage 7 due `in_progress` lifecycle fixture may remain before Main UI starts.
+
+Immediately after seeding and before any lifecycle-triggering request, the baseline DB oracle must prove:
+
+```text
+Deadline Read Attempt = in_progress
+Scheduler Attempt = in_progress
+Teacher Close Attempt = in_progress; Homework deadline is future
+Due Teacher Close Attempt = in_progress; Homework deadline is past
+
+Main Homework:
+used = 0
+remaining = 3
+no Attempts
+far-future deadline
+```
+
+No Student Homework list request may occur before baseline evidence is captured or before all four lifecycle scenarios are consumed. Authenticate through the real direct API for the targeted lifecycle requests; do not navigate Flutter for those scenarios.
+
+The Stage 7 seed remains one deterministic baseline. Do not introduce scenario-specific DB resets, partial reseeding between lifecycle phases, test-only production endpoints, scheduler scope options, or production behavior changes. A full runner retry may perform the existing guarded full Stage 7 manifest cleanup/reseed; individual lifecycle scenarios must not rewind committed evidence.
+
+Earlier lifecycle consumption must leave Main Homework untouched. Sections 47–61 remain unchanged, including the initial three-attempt allowance and all Main UI assertions. The API/security matrix remains unchanged and runs after Main UI. Restart occurs after all automated mutation/oracle phases without reseeding, preserving the earlier lifecycle results as well as Main flow state.
+
+Existing Backend Phase 2 and Frontend Phase 2 PASS evidence remains valid; this correction changes integration sequencing only.
 
 ---
 
@@ -2361,7 +2414,9 @@ This scenario verifies Stage 7 assignment scope is independent of current member
 
 # 76. Deadline Read Reconciliation — Real Request
 
-Use target Student.
+Execute this scenario first, before any broad Student Homework list, following Section 38A.
+
+Authenticate the target Student through the real direct API. Do not navigate the Flutter Student Homework UI for this scenario.
 
 Before request oracle confirms:
 
@@ -2369,13 +2424,11 @@ Before request oracle confirms:
 Deadline Read Attempt = in_progress
 ```
 
-Call one relevant Student read:
+Call only the exact required Attempt read:
 
 ```text
-GET /student/attempts/{attempt}
+GET /student/attempts/{deadlineReadAttempt}
 ```
-
-or exact final delivered read path.
 
 Expected API resource now terminal:
 
@@ -2383,8 +2436,19 @@ Expected API resource now terminal:
 status = submitted
 submitted_at = null
 finalized_at = exact Homework deadline
+locked_at = exact Homework deadline
 reason = homework_deadline_auto_submit
 ```
+
+Additionally, the oracle must prove:
+
+```text
+Scheduler Attempt remains in_progress
+Due Teacher Close Attempt remains in_progress
+Future Teacher Close Attempt remains in_progress
+```
+
+This confirms the specific read did not consume unrelated lifecycle fixtures.
 
 Then answer PUT:
 
@@ -2402,13 +2466,26 @@ Peer recipient still has no Attempt.
 
 # 77. Scheduler Deadline Reconciliation
 
-Before command:
+Run the global scheduler only after the Deadline Read, Due Teacher Close, and Future Teacher Close scenarios have been consumed in the Section 38A order.
+
+Immediately before the first command, the DB/oracle guard must enumerate the actual global production scheduler candidate set, using the production predicate and current DB/application time:
 
 ```text
+active Homework
+deadline_at <= current DB/application time
+at least one in_progress Attempt
+```
+
+Require exactly one global candidate, whose identity and relationships match the explicit Stage 7 manifest:
+
+```text
+E2E S07 Scheduler Homework
 Scheduler fixture Attempt = in_progress
 ```
 
-Run in guarded backend container:
+Do not infer safety from Stage 7-scoped queries alone. If any non-Stage-7 or unexpected Homework would be mutated, STOP before executing the command. Do not delete, reset, or rewrite unrelated rows to make the guard pass. Classify an unexpected non-Stage-7 candidate as an `environment/runtime isolation failure` within the `environment/runtime defect` category; incorrect Stage 7-owned fixture state is an `integration-harness defect`.
+
+Only after the exact candidate-set guard passes, run in the guarded backend container:
 
 ```bash
 php artisan homework:reconcile-deadlines
@@ -2428,7 +2505,7 @@ reason = homework_deadline_auto_submit
 
 No never-started recipient Attempt fabricated.
 
-Run command a second time:
+Before the second command, enumerate the global candidate set again and require it to be empty; stop if an unexpected candidate would be mutated. Then run the command a second time:
 
 ```text
 exit code 0
@@ -2438,20 +2515,31 @@ terminal timestamps unchanged
 
 This proves idempotent reconciliation.
 
+Afterward the oracle must require:
+
+```text
+zero active due Stage 7 Homework with in_progress Attempts
+```
+
+Main Windows UI may start only after this evidence is captured.
+
 ---
 
 # 78. Teacher Close Auto-Finalization
+
+Execute after Due Teacher Close and before the global scheduler, following Section 38A.
 
 Login/authenticate real target Teacher via direct API helper.
 
 Before:
 
 ```text
+Homework.status = active
 Close fixture Attempt = in_progress
 future deadline
 ```
 
-Call:
+Call only the exact Teacher close endpoint:
 
 ```text
 POST /teacher/homework/{homework}/close
@@ -2473,23 +2561,34 @@ saved answer preserved
 
 Student later GET sees terminal state.
 
+After close, the oracle must also prove `Scheduler Attempt remains in_progress`.
+
 ---
 
 # 79. Teacher Close After Deadline — Deadline Wins
 
-On the due-close fixture:
+Execute after Deadline Read and before Future Teacher Close and the global scheduler, following Section 38A.
+
+Before the targeted Teacher close, the oracle must prove:
 
 ```text
-deadline already past
-Attempt still in_progress
+Due Teacher Close Homework = active
+deadline < now
+Due Teacher Close Attempt = in_progress
 ```
 
-Call Teacher close.
+Authenticate the real target Teacher and call only:
+
+```text
+POST /teacher/homework/{dueCloseHomework}/close
+```
+
+The Teacher close path must not be replaced by scheduler reconciliation for this scenario.
 
 Oracle:
 
 ```text
-Homework closes
+Homework.status = closed
 Attempt.status = submitted
 submitted_at = null
 finalized_at = exact deadline
@@ -2504,6 +2603,8 @@ task_closed_auto_finalize
 ```
 
 onto the due Attempt.
+
+Afterward the oracle must also prove `Scheduler Attempt remains in_progress`.
 
 ---
 
@@ -2568,7 +2669,7 @@ Do not print DB credentials/tokens.
 
 # 83. Oracle Scope Guard
 
-Every DB query must scope to explicit Stage 7 manifest IDs.
+Fixture DB queries must scope to explicit Stage 7 manifest IDs. The sole global read exception is the read-only scheduler candidate enumeration required below; it protects unrelated test DB state and never grants mutation or cleanup ownership.
 
 Do not use broad prefix matching as the authority.
 
@@ -2593,6 +2694,10 @@ fail
 ```
 
 Do not continue with broad queries.
+
+Before the first global scheduler command, enumerate its actual global candidates using the Section 77 production predicate. Validate that the complete candidate set contains exactly the expected manifest-owned `E2E S07 Scheduler Homework`, with its expected Institution and Homework/Assessment identity.
+
+If any candidate exists outside that exact expected Homework, STOP before the scheduler. A Stage 7-only query cannot prove this safety condition. Do not mutate, delete, or rewrite unexpected rows to make the guard pass. Before the second idempotency invocation, repeat the global enumeration and require zero candidates as specified in Section 77.
 
 ---
 
@@ -2752,6 +2857,17 @@ At minimum prove verifier rejects:
 - cross-Tenant row;
 - unexpected extra Attempt #4.
 
+The pure scheduler candidate-set validator must additionally reject:
+
+- zero candidates before the first scheduler invocation;
+- two Stage 7 scheduler candidates;
+- Deadline Read still `in_progress` when the scheduler is about to run;
+- Due Teacher Close still `in_progress` when the scheduler is about to run;
+- an unexpected non-Stage-7 global scheduler candidate;
+- the wrong expected scheduler Homework ID.
+
+For the first invocation, accept only exactly one global candidate equal to the explicit manifest-owned `E2E S07 Scheduler Homework`. Separately verify the second-invocation guard accepts only an empty global candidate set.
+
 Then invoke the actual oracle during the real runner.
 
 ---
@@ -2834,12 +2950,16 @@ Before any full UI flow:
 1. validate Flutter executable/pin;
 2. execute runtime guard;
 3. execute runtime-guard verifier;
-4. generate/verify Stage 7 runtime test files;
-5. run Stage7E2eSeeder focused test if part of runner policy or rely on pre-delivery focused evidence;
-6. seed Stage 7 deterministic state;
-7. run DB oracle baseline mode;
+4. generate/verify Stage 7 runtime files;
+5. run focused Seeder verification as required;
+6. seed one deterministic Stage 7 baseline;
+7. run baseline DB oracle, including all Section 38A lifecycle and Main Homework preconditions;
 8. run API-security pure verifier;
-9. start the Windows real-stack Flutter test.
+9. execute the pre-UI lifecycle phase in this exact order: Deadline Read reconciliation; Due Teacher Close / deadline precedence; Future Teacher Close; guarded global Scheduler reconciliation;
+10. run lifecycle oracle confirming all dedicated due fixtures are consumed;
+11. start the Main Windows real-stack Flutter UI flow.
+
+No Student Homework list/UI flow may occur between seeding in Step 6 and completion of the guarded scheduler phase in Step 9. Capture baseline evidence before any lifecycle-triggering request. Only the targeted lifecycle API requests and the guarded scheduler may trigger lifecycle transitions before Main UI.
 
 Do not rerun Backend/Frontend Phase 2 suites.
 
@@ -2847,7 +2967,7 @@ Do not rerun Backend/Frontend Phase 2 suites.
 
 # 93. Integration Harness Preflight — Mandatory
 
-After integration assets are delivered to `origin/main` and before Step 9 above, ChatGPT performs a focused read-only preflight.
+After integration assets are delivered to `origin/main` and before the first full runner, including its pre-UI lifecycle phase, ChatGPT performs a focused read-only preflight.
 
 Review at minimum:
 
@@ -2884,6 +3004,13 @@ Preflight validates:
 - safe private-volume assumptions;
 - correct API expectations;
 - exact Stage 7 lifecycle expectations;
+- no Student Homework list occurs before lifecycle consumption;
+- Deadline Read precedes scheduler execution;
+- Due Teacher Close precedes scheduler execution;
+- Future Teacher Close precedes scheduler execution;
+- the global scheduler has a fail-closed exact candidate-set guard;
+- Main UI begins only after zero Stage 7 due `in_progress` lifecycle fixtures remain;
+- no partial scenario reset/reseed hides sequencing defects;
 - tenant-safe fixture ownership;
 - DB oracle scoping;
 - cleanup paths;
@@ -2927,29 +3054,41 @@ Record:
 
 # 95. Runner Phase Order
 
-The full runner should execute deterministic phases:
+The full runner must execute these deterministic phases in order:
 
 ```text
 A. Runtime guard
 B. Seed baseline
 C. Baseline oracle
-D. Main Windows Student UI flow
-E. Main-flow oracle
-F. Direct API idempotency/security/business matrix
-G. API/DB oracle
-H. Deadline read reconciliation
-I. Scheduler reconciliation
-J. Teacher close fixture
-K. Due Teacher close precedence fixture
-L. Oracle
-M. Backend restart
-N. Post-restart API/file/persistence verification
-O. final automated oracle
-P. preserve manual-smoke fixture
-Q. cleanup generated local test files
+
+D. Deadline Read reconciliation
+E. Deadline Read oracle
+
+F. Due Teacher Close / deadline precedence
+G. Due Teacher Close oracle
+
+H. Future Teacher Close auto-finalization
+I. Future Teacher Close oracle
+
+J. Global Scheduler candidate-set fail-closed guard
+K. Scheduler reconciliation
+L. Scheduler/idempotency oracle
+
+M. Main Windows Student UI flow
+N. Main-flow oracle
+
+O. Direct API idempotency/security/business matrix
+P. API/DB oracle
+
+Q. Backend restart
+R. Post-restart API/file/persistence verification
+S. Final automated oracle
+
+T. Preserve manual-smoke fixture
+U. Cleanup generated local test files
 ```
 
-Final DB fixture cleanup waits until required Android manual smoke evidence is complete.
+Required Android manual smoke follows automated runner evidence. Final DB fixture cleanup waits until required Android manual smoke evidence is complete.
 
 ---
 
@@ -2975,6 +3114,8 @@ After automated mutation/oracle phases:
    - protected owner download still returns exact replacement bytes.
 
 A backend restart must not lose private submission state.
+
+Lifecycle results created before Main UI must remain persisted through restart alongside Main flow state. Do not reseed or reset lifecycle fixtures before restart.
 
 ---
 
@@ -3008,7 +3149,7 @@ It must:
 - run the same runtime guard;
 - confirm target backend/API identity;
 - confirm Stage 7 manual-smoke fixture exists and remains unmutated;
-- if reset is required, reset only through the guarded Stage 7 manifest/seeder process;
+- if reset is required, use the guarded full Stage 7 manifest cleanup/reseed only as a new full runner retry, never a partial scenario reset;
 - print only non-secret manual actor login and safe fixture labels;
 - never print password unless the Project Owner explicitly supplies/handles it through the established secure workflow;
 - leave backend ready for Android app connection.
@@ -3315,6 +3456,13 @@ PASS requires oracle proves:
 
 PASS requires:
 
+- baseline lifecycle preconditions proven before the first trigger;
+- the specific Deadline Read does not consume other lifecycle fixtures;
+- Due Teacher Close proves deadline precedence before scheduler execution;
+- Future Teacher Close proves task-close behavior before scheduler execution;
+- the scheduler executes only after its exact expected global candidate set is proven;
+- any unexpected global scheduler candidate causes a fail-closed stop;
+- Main UI cannot prematurely consume lifecycle evidence;
 - request-path deadline finalization exact;
 - scheduler deadline finalization exact/idempotent;
 - Teacher close before deadline uses `task_closed_auto_finalize`;
@@ -3386,7 +3534,7 @@ PASS requires:
 - hit-testability checks where needed;
 - deterministic fixtures;
 - deterministic idempotency/file queues;
-- DB oracle scoped to manifest;
+- fixture DB oracle scoped to manifest, with only the read-only global scheduler candidate guard exception in Section 83;
 - cleanup verified;
 - no test-only production branches.
 
