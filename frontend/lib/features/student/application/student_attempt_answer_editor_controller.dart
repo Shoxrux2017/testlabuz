@@ -16,6 +16,7 @@ import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
 import '../domain/student_question.dart';
 import 'student_attempt_answer_editor_state.dart';
+import 'student_attempt_route_operation_gate.dart';
 import 'student_homework_attempt_controller.dart';
 import 'student_homework_attempt_state.dart';
 import 'student_homework_detail_controller.dart';
@@ -64,7 +65,11 @@ class StudentAttemptAnswerEditorController
         parent.status == StudentHomeworkAttemptLoadStatus.data &&
         parent.attempt != null &&
         _matchesAttempt(parent.attempt!)) {
-      return _synchronize(previous, parent.attempt!);
+      return _synchronize(
+        previous,
+        parent.attempt!,
+        sourcePublication: parent.publicationToken,
+      );
     }
     return _copyState(previous, isAuthoritative: _hasSaveAuthority(parent));
   }
@@ -115,7 +120,8 @@ class StudentAttemptAnswerEditorController
     final id = questionId.toLowerCase();
     final key = _activeSessionKey;
     final parent = ref.read(studentHomeworkAttemptControllerProvider(target));
-    if (key == null ||
+    if (!_gateIsIdle ||
+        key == null ||
         !_matchesSession(key) ||
         !_hasSaveAuthority(parent) ||
         !state.canSave(id)) {
@@ -124,6 +130,7 @@ class StudentAttemptAnswerEditorController
 
     final entry = state.questions[id]!;
     final snapshot = entry.draft.toMutation(entry.question);
+    final mutationPublication = state.sourceAttemptPublication;
     final generation = ++_generation;
     final requestTarget = target;
     state = _copyState(
@@ -161,6 +168,10 @@ class StudentAttemptAnswerEditorController
           draft: StudentAnswerDraft.fromAnswer(current.question, result.answer),
           saveStatus: StudentAnswerSaveStatus.saved,
         ),
+        preservePublication: identical(
+          mutationPublication,
+          state.sourceAttemptPublication,
+        ),
       );
       _refreshAttempt();
     } on ApiRequestException catch (exception) {
@@ -189,7 +200,8 @@ class StudentAttemptAnswerEditorController
     final key = _activeSessionKey;
     final id = state.activeQuestionId;
     final snapshot = state.pendingMutationSnapshot;
-    if (key == null ||
+    if (!_gateIsIdle ||
+        key == null ||
         id == null ||
         snapshot == null ||
         !_matchesSession(key) ||
@@ -262,11 +274,13 @@ class StudentAttemptAnswerEditorController
 
   StudentAttemptAnswerEditorState _synchronize(
     StudentAttemptAnswerEditorState previous,
-    StudentHomeworkAttempt attempt,
-  ) {
+    StudentHomeworkAttempt attempt, {
+    StudentHomeworkAttemptPublicationToken? sourcePublication,
+  }) {
     final terminal = attempt.status != StudentHomeworkAttemptStatus.inProgress;
     if (previous.terminalAttempt != null && !terminal) return previous;
     if (terminal) _generation += 1;
+    var preservedUncertainty = false;
     final questions = <String, StudentQuestionAnswerEditorState>{};
     for (final question in attempt.questions) {
       if (question.type == StudentQuestionType.fileBased) continue;
@@ -275,6 +289,7 @@ class StudentAttemptAnswerEditorController
       if (!terminal &&
           previousQuestion?.saveStatus == StudentAnswerSaveStatus.uncertain) {
         questions[id] = previousQuestion!;
+        preservedUncertainty = true;
         continue;
       }
       final answer = _answerFor(attempt, id);
@@ -302,6 +317,7 @@ class StudentAttemptAnswerEditorController
       if (activeQuestion != null) {
         // An ordinary refresh cannot remove the uncertain operation's recovery.
         questions[activeId] = activeQuestion;
+        preservedUncertainty = true;
       }
     }
     return StudentAttemptAnswerEditorState(
@@ -314,6 +330,7 @@ class StudentAttemptAnswerEditorController
           : previous.pendingMutationSnapshot,
       isReconciling: !terminal && previous.isReconciling,
       terminalAttempt: terminal ? attempt : null,
+      sourceAttemptPublication: preservedUncertainty ? null : sourcePublication,
     );
   }
 
@@ -344,8 +361,15 @@ class StudentAttemptAnswerEditorController
 
   bool _canEdit(String id) {
     final key = _activeSessionKey;
-    return key != null && _matchesSession(key) && state.canEdit(id);
+    return _gateIsIdle &&
+        key != null &&
+        _matchesSession(key) &&
+        state.canEdit(id);
   }
+
+  bool get _gateIsIdle =>
+      ref.read(studentAttemptRouteOperationGateProvider(target)) ==
+      StudentAttemptRouteOperation.idle;
 
   bool _canPublish(
     int generation,
@@ -491,12 +515,19 @@ class StudentAttemptAnswerEditorController
     state = _copyState(state, questions: {...state.questions, id: entry});
   }
 
-  void _finishQuestion(String id, StudentQuestionAnswerEditorState entry) {
+  void _finishQuestion(
+    String id,
+    StudentQuestionAnswerEditorState entry, {
+    bool preservePublication = true,
+  }) {
     state = StudentAttemptAnswerEditorState(
       questions: {...state.questions, id: entry},
       isEligible: state.isEligible,
       isAuthoritative: state.isAuthoritative,
       terminalAttempt: state.terminalAttempt,
+      sourceAttemptPublication: preservePublication
+          ? state.sourceAttemptPublication
+          : null,
     );
   }
 
@@ -516,5 +547,6 @@ class StudentAttemptAnswerEditorController
         pendingMutationSnapshot ?? previous.pendingMutationSnapshot,
     isReconciling: isReconciling ?? previous.isReconciling,
     terminalAttempt: previous.terminalAttempt,
+    sourceAttemptPublication: previous.sourceAttemptPublication,
   );
 }

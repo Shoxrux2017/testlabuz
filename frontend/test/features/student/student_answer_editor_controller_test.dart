@@ -10,6 +10,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/student/application/student_attempt_answer_editor_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_attempt_answer_editor_state.dart';
+import 'package:testlabuz_client/features/student/application/student_attempt_route_operation_gate.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_attempt_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_attempt_state.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_detail_controller.dart';
@@ -21,6 +22,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_attemp
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_submit.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
@@ -32,6 +34,166 @@ const _otherAttemptId = '6abcdef0-0000-0000-0000-000000000002';
 final _updatedAt = DateTime.utc(2026, 9, 1, 1);
 
 void main() {
+  test(
+    'route gate permits only owned Submit transitions and releases on session loss',
+    () async {
+      final h = _Harness();
+      await h.flush();
+      final view = h.container.listen(
+        studentAttemptRouteOperationGateProvider(h.target),
+        (_, _) {},
+      );
+      final gate = h.container.read(
+        studentAttemptRouteOperationGateProvider(h.target).notifier,
+      );
+      expect(view.read(), StudentAttemptRouteOperation.idle);
+      expect(gate.claimRetry(), isFalse);
+      expect(gate.markSubmitUncertain(), isFalse);
+      expect(gate.claimSubmit(), isTrue);
+      expect(gate.claimSubmit(), isFalse);
+      expect(gate.claimRetry(), isFalse);
+      expect(gate.markSubmitUncertain(), isTrue);
+      expect(gate.markSubmitUncertain(), isFalse);
+      expect(gate.claimSubmit(), isFalse);
+      expect(gate.claimRetry(), isTrue);
+      expect(view.read(), StudentAttemptRouteOperation.submitting);
+      gate.release();
+      expect(view.read(), StudentAttemptRouteOperation.idle);
+      expect(gate.claimSubmit(), isTrue);
+      h.auth.logOut();
+      await h.flush();
+      expect(view.read(), StudentAttemptRouteOperation.idle);
+      expect(gate.claimSubmit(), isFalse);
+      expect(gate.claimRetry(), isFalse);
+    },
+  );
+
+  test(
+    'parent publication survives draft and confirmed answer overlays',
+    () async {
+      final h = _Harness();
+      await h.flush();
+      final publication = h.container
+          .read(studentHomeworkAttemptControllerProvider(h.target))
+          .publicationToken;
+      expect(publication, isNotNull);
+      expect(h.state.sourceAttemptPublication, same(publication));
+      h.editText('Confirmed answer');
+      expect(h.state.sourceAttemptPublication, same(publication));
+      final save = h.controller.saveAnswer(_id(4));
+      expect(h.state.activeQuestionId, _id(4));
+      expect(
+        h.entry(StudentQuestionType.shortWritten).saveStatus,
+        StudentAnswerSaveStatus.saving,
+      );
+      h.repository.saves.single.complete(
+        _result(answer: const StudentTextAnswerValue(text: 'Confirmed answer')),
+      );
+      await save;
+      expect(h.state.sourceAttemptPublication, same(publication));
+      final newer = _parentState(_attempt(shortText: 'Newer server answer'));
+      h.parent.publish(newer);
+      await h.flush();
+      expect(h.state.sourceAttemptPublication, same(newer.publicationToken));
+      expect(
+        (h.entry(StudentQuestionType.shortWritten).serverAnswer!
+                as StudentTextAnswerValue)
+            .text,
+        'Newer server answer',
+      );
+    },
+  );
+
+  test('older save overlay cannot claim a newer parent publication', () async {
+    final h = _Harness();
+    await h.flush();
+    h.editText('Saved intent');
+    final save = h.controller.saveAnswer(_id(4));
+    h.parent.publish(_parentState(_attempt(shortText: 'Newer GET')));
+    await h.flush();
+    h.repository.saves.single.complete(
+      _result(answer: const StudentTextAnswerValue(text: 'Saved intent')),
+    );
+    await save;
+    expect(h.state.sourceAttemptPublication, isNull);
+  });
+
+  test(
+    'mixed uncertain and owned GET state awaits a complete parent rebase',
+    () async {
+      final h = _Harness();
+      await h.makeUncertain(text: 'Pending intent');
+      expect(h.state.sourceAttemptPublication, isNotNull);
+      final newer = _parentState(_attempt(shortText: 'Pending intent'));
+      h.parent.publish(newer);
+      await h.flush();
+      expect(h.state.hasUncertainMutation, isTrue);
+      expect(h.state.sourceAttemptPublication, isNull);
+      final reload = h.controller.reloadAttempt();
+      h.repository.reads.single.complete(_attempt(shortText: 'Pending intent'));
+      await reload;
+      expect(h.state.hasUncertainMutation, isFalse);
+      expect(h.state.sourceAttemptPublication, isNull);
+      final complete = _parentState(_attempt(shortText: 'Pending intent'));
+      h.parent.publish(complete);
+      await h.flush();
+      expect(h.state.sourceAttemptPublication, same(complete.publicationToken));
+    },
+  );
+
+  for (final uncertainGate in [false, true]) {
+    test(
+      'Submit gate uncertain=$uncertainGate refuses every answer entry',
+      () async {
+        final h = _Harness(attempt: _attempt(saved: true));
+        await h.flush();
+        h.editText('Preserved draft');
+        h.container.listen(
+          studentAttemptRouteOperationGateProvider(h.target),
+          (_, _) {},
+        );
+        final gate = h.container.read(
+          studentAttemptRouteOperationGateProvider(h.target).notifier,
+        );
+        expect(gate.claimSubmit(), isTrue);
+        if (uncertainGate) expect(gate.markSubmitUncertain(), isTrue);
+        final before = h.state;
+        h.editText('Blocked draft');
+        h.controller.discardChanges(_id(4));
+        h.controller.clearAnswer(_id(4));
+        await h.controller.saveAnswer(_id(4));
+        await h.controller.reloadAttempt();
+        expect(h.state, same(before));
+        expect(h.repository.saves, isEmpty);
+        expect(h.repository.reads, isEmpty);
+        h.controller.clearLocalState();
+        expect(h.state.questions, isEmpty);
+        expect(h.state.sourceAttemptPublication, isNull);
+      },
+    );
+
+    test(
+      'Submit gate uncertain=$uncertainGate freezes uncertain answer GET',
+      () async {
+        final h = _Harness();
+        await h.makeUncertain();
+        h.container.listen(
+          studentAttemptRouteOperationGateProvider(h.target),
+          (_, _) {},
+        );
+        final gate = h.container.read(
+          studentAttemptRouteOperationGateProvider(h.target).notifier,
+        );
+        expect(gate.claimSubmit(), isTrue);
+        if (uncertainGate) expect(gate.markSubmitUncertain(), isTrue);
+        final before = h.state;
+        await h.controller.reloadAttempt();
+        expect(h.state, same(before));
+        expect(h.repository.reads, isEmpty);
+      },
+    );
+  }
+
   for (final saved in [false, true]) {
     test('initializes exactly eight typed drafts with saved=$saved', () async {
       final harness = _Harness(attempt: _attempt(saved: saved));
@@ -1411,6 +1573,15 @@ class _Surface extends Notifier<AppDeviceSurface> {
 
 class _Repository implements StudentHomeworkAttemptRepository {
   @override
+  Future<StudentHomeworkSubmitResult> submitAttempt(
+    String attemptId,
+    String expectedHomeworkId,
+    String idempotencyKey,
+  ) => throw StateError(
+    'This regression must not submit a Student Homework Attempt.',
+  );
+
+  @override
   Future<StudentAttemptAnswerMutationResult> uploadFileAnswer(
     String attemptId,
     StudentQuestion question,
@@ -1478,6 +1649,7 @@ StudentHomeworkAttemptState _parentState(StudentHomeworkAttempt? attempt) =>
     StudentHomeworkAttemptState(
       status: StudentHomeworkAttemptLoadStatus.data,
       attempt: attempt,
+      publicationToken: StudentHomeworkAttemptPublicationToken(),
     );
 StudentAttemptAnswerMutationResult _result({
   String? questionId,

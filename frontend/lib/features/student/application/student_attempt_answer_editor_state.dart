@@ -3,6 +3,7 @@ import '../domain/student_answer_draft.dart';
 import '../domain/student_answer_mutation.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_question.dart';
+import 'student_homework_attempt_state.dart';
 
 enum StudentAnswerSaveStatus { idle, saving, uncertain, failure, saved }
 
@@ -36,6 +37,7 @@ class StudentAttemptAnswerEditorState {
     this.pendingMutationSnapshot,
     this.isReconciling = false,
     this.terminalAttempt,
+    this.sourceAttemptPublication,
   }) : questions = Map.unmodifiable(questions);
 
   final Map<String, StudentQuestionAnswerEditorState> questions;
@@ -45,6 +47,7 @@ class StudentAttemptAnswerEditorState {
   final StudentAnswerMutation? pendingMutationSnapshot;
   final bool isReconciling;
   final StudentHomeworkAttempt? terminalAttempt;
+  final StudentHomeworkAttemptPublicationToken? sourceAttemptPublication;
 
   bool get hasDirtyDrafts =>
       terminalAttempt == null && questions.values.any((entry) => entry.isDirty);

@@ -8,6 +8,7 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_attempt_answer_editor_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_attempt_route_operation_gate.dart';
 import 'package:testlabuz_client/features/student/application/student_file_answer_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_file_answer_state.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_attempt_controller.dart';
@@ -22,6 +23,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_attemp
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_route_target.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_submit.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
@@ -44,6 +46,132 @@ final _detailTarget = StudentHomeworkRouteTarget(
 );
 
 void main() {
+  test(
+    'selection and confirmed upload preserve their parent publication',
+    () async {
+      final h = _Harness();
+      await h.flush();
+      final publication = h.container
+          .read(studentHomeworkAttemptControllerProvider(_target))
+          .publicationToken;
+      expect(publication, isNotNull);
+      expect(h.state.sourceAttemptPublication, same(publication));
+      await h.pick();
+      expect(h.state.sourceAttemptPublication, same(publication));
+      final upload = h.controller.uploadAnswer(_questionId);
+      expect(h.state.activeQuestionId, _questionId);
+      expect(h.entry.status, StudentFileAnswerStatus.uploading);
+      h.repository.uploads.single.complete(_result());
+      await upload;
+      expect(h.state.sourceAttemptPublication, same(publication));
+      final newer = _data(_attempt());
+      h.parent.publish(newer);
+      await h.flush();
+      expect(h.state.sourceAttemptPublication, same(newer.publicationToken));
+      expect(h.entry.serverFile, isNull);
+    },
+  );
+
+  test(
+    'older upload overlay cannot claim a newer parent publication',
+    () async {
+      final h = _Harness();
+      await h.pick();
+      final upload = h.controller.uploadAnswer(_questionId);
+      h.parent.publish(_data(_attempt()));
+      await h.flush();
+      h.repository.uploads.single.complete(_result());
+      await upload;
+      expect(h.state.sourceAttemptPublication, isNull);
+    },
+  );
+
+  test(
+    'mixed uncertain file and owned GET wait for complete parent rebase',
+    () async {
+      final h = _Harness();
+      await h.makeUncertain();
+      expect(h.state.sourceAttemptPublication, isNotNull);
+      h.parent.publish(_data(_attempt(saved: true)));
+      await h.flush();
+      expect(h.state.hasUncertainUpload, isTrue);
+      expect(h.state.sourceAttemptPublication, isNull);
+      final reload = h.controller.reloadAttempt();
+      h.repository.reads.single.complete(_attempt(saved: true));
+      await reload;
+      expect(h.state.hasUncertainUpload, isFalse);
+      expect(h.state.sourceAttemptPublication, isNull);
+      final complete = _data(_attempt(saved: true));
+      h.parent.publish(complete);
+      await h.flush();
+      expect(h.state.sourceAttemptPublication, same(complete.publicationToken));
+    },
+  );
+
+  for (final uncertainGate in [false, true]) {
+    for (final storageFailure in [false, true]) {
+      test('Submit gate uncertain=$uncertainGate refuses file entries '
+          'after storageFailure=$storageFailure', () async {
+        final h = _Harness(attempt: _attempt(saved: true));
+        await h.pick();
+        if (storageFailure) {
+          final upload = h.controller.uploadAnswer(_questionId);
+          h.repository.uploads.single.fail(
+            studentServerFailure(
+              ApiErrorCodes.fileUploadFailed,
+              statusCode: 500,
+            ),
+          );
+          await upload;
+        }
+        h.container.listen(
+          studentAttemptRouteOperationGateProvider(_target),
+          (_, _) {},
+        );
+        final gate = h.container.read(
+          studentAttemptRouteOperationGateProvider(_target).notifier,
+        );
+        expect(gate.claimSubmit(), isTrue);
+        if (uncertainGate) expect(gate.markSubmitUncertain(), isTrue);
+        final before = h.state;
+        final pickerCount = h.picker.requests.length;
+        final uploadCount = h.repository.uploads.length;
+        await h.controller.chooseFile(_questionId);
+        await h.controller.uploadAnswer(_questionId);
+        h.controller.discardSelectedFile(_questionId);
+        await h.controller.reloadAttempt();
+        expect(h.state, same(before));
+        expect(h.picker.requests, hasLength(pickerCount));
+        expect(h.repository.uploads, hasLength(uploadCount));
+        expect(h.repository.reads, isEmpty);
+        h.controller.clearLocalState();
+        expect(h.state.questions, isEmpty);
+        expect(h.state.sourceAttemptPublication, isNull);
+      });
+    }
+
+    test(
+      'Submit gate uncertain=$uncertainGate freezes uncertain upload GET',
+      () async {
+        final h = _Harness();
+        await h.makeUncertain();
+        h.container.listen(
+          studentAttemptRouteOperationGateProvider(_target),
+          (_, _) {},
+        );
+        final gate = h.container.read(
+          studentAttemptRouteOperationGateProvider(_target).notifier,
+        );
+        expect(gate.claimSubmit(), isTrue);
+        if (uncertainGate) expect(gate.markSubmitUncertain(), isTrue);
+        final before = h.state;
+        await h.controller.reloadAttempt();
+        expect(h.state, same(before));
+        expect(h.repository.reads, isEmpty);
+      },
+    );
+  }
+
   test(
     'picker cancellation preserves server file refreshed while picker is open',
     () async {
@@ -1174,6 +1302,15 @@ class _Picker implements StudentSubmissionFilePicker {
 }
 
 class _Repository implements StudentHomeworkAttemptRepository {
+  @override
+  Future<StudentHomeworkSubmitResult> submitAttempt(
+    String attemptId,
+    String expectedHomeworkId,
+    String idempotencyKey,
+  ) => throw StateError(
+    'This regression must not submit a Student Homework Attempt.',
+  );
+
   final reads = <Completer<StudentHomeworkAttempt>>[];
   final uploads = <_Upload>[];
   final saves = <Completer<StudentAttemptAnswerMutationResult>>[];
@@ -1231,6 +1368,7 @@ StudentHomeworkAttemptState _data(StudentHomeworkAttempt? attempt) =>
     StudentHomeworkAttemptState(
       status: StudentHomeworkAttemptLoadStatus.data,
       attempt: attempt,
+      publicationToken: StudentHomeworkAttemptPublicationToken(),
     );
 StudentSubmissionUploadFile _selected({
   String name = 'answer.pdf',
