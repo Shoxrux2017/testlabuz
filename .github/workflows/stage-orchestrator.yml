@@ -1,0 +1,47 @@
+name: Stage Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Positive Stage number
+        required: true
+        type: string
+  push:
+    branches: [main]
+    paths: ['tasks/STAGE_*_TASK_INDEX.md']
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+# Serialize issue discovery, approval updates, and creation across all triggers.
+concurrency:
+  group: stage-orchestrator-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: >-
+      github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      # Never execute a PR head, a dispatch-selected ref, or comment content.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Refresh Stage Control
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/stage-orchestrator/orchestrator.py
