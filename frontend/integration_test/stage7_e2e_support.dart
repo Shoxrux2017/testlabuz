@@ -13,6 +13,7 @@ import 'package:testlabuz_client/app/config/app_config.dart';
 import 'package:testlabuz_client/app/router/app_route_paths.dart';
 import 'package:testlabuz_client/core/files/local_file_actions.dart';
 import 'package:testlabuz_client/core/network/idempotency_key_generator.dart';
+import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_submission_file_picker.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
@@ -362,8 +363,12 @@ class Stage7Harness {
     picker.releaseRead();
     try {
       if (_loggedIn) {
-        await go(AppRoutePaths.student);
-        await tap(byKey('entryLogoutButton'));
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(TestLabUzApp)),
+          listen: false,
+        );
+        final auth = container.read(authSessionControllerProvider.notifier);
+        await auth.signOut();
         await waitRoute(AppRoutePaths.login);
         _loggedIn = false;
       }
