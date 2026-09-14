@@ -67,7 +67,7 @@ final _confirmDialog = find.byKey(
 
 void main() {
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
-    for (final saved in [9, 5, 0]) {
+    for (final saved in [9, 8, 5, 0]) {
       testWidgets(
         '${surface.name} confirmation announces $saved of 9 and Cancel saves nothing',
         (tester) async {
@@ -88,7 +88,14 @@ void main() {
                   .label,
               contains('$saved of 9 answers are saved.'),
             );
-            if (saved < 9) {
+            if (saved == 9) {
+              expect(find.textContaining('no saved answer.'), findsNothing);
+            } else if (saved == 8) {
+              expect(
+                find.text('1 Question has no saved answer.'),
+                findsOneWidget,
+              );
+            } else {
               expect(
                 find.text('${9 - saved} Questions have no saved answer.'),
                 findsOneWidget,
