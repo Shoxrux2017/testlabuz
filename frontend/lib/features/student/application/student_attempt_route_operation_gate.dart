@@ -27,7 +27,7 @@ class StudentAttemptRouteOperationGate
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
     ).eligibleKey;
-    if (key != null && key == _activeSessionKey) return state;
+    if (!ref.isRefresh && key != null && key == _activeSessionKey) return state;
     _activeSessionKey = key;
     return StudentAttemptRouteOperation.idle;
   }

@@ -1112,6 +1112,100 @@ void main() {
   });
 
   test(
+    'same-session invalidation lets a retained cleared file editor restore server metadata',
+    () async {
+      final h = _Harness(attempt: _attempt(saved: true));
+      await h.makeUncertain();
+      final retained = h.controller;
+      retained.clearLocalState();
+      expect(h.state.questions, isEmpty);
+      h.parent.publish(
+        const StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.loading,
+        ),
+      );
+      await h.flush();
+      h.container.invalidate(studentFileAnswerControllerProvider(_target));
+      await h.flush();
+      expect(h.controller, same(retained));
+      expect(h.state.questions, isEmpty);
+      expect(h.state.sourceAttemptPublication, isNull);
+      final authoritative = _data(_attempt(saved: true));
+      h.parent.publish(authoritative);
+      await h.flush();
+      expect(h.entry.serverFile!.id, _fileId);
+      expect(h.entry.serverFile!.originalName, 'answer.pdf');
+      expect(h.entry.status, StudentFileAnswerStatus.idle);
+      expect(h.entry.selectedFile, isNull);
+      expect(h.entry.failure, isNull);
+      expect(h.state.hasPendingSelection, isFalse);
+      expect(h.state.hasUncertainUpload, isFalse);
+      expect(h.state.activeQuestionId, isNull);
+      expect(h.state.isReconciling, isFalse);
+      expect(h.state.canChoose(_questionId), isTrue);
+      expect(
+        h.state.sourceAttemptPublication,
+        same(authoritative.publicationToken),
+      );
+      expect(h.repository.uploads, hasLength(1));
+      expect(h.repository.reads, isEmpty);
+    },
+  );
+
+  for (final phase in ['picker', 'upload', 'recovery']) {
+    test(
+      'same-session invalidation drops file state and rejects old $phase completion',
+      () async {
+        final h = _Harness(attempt: _attempt(saved: true));
+        await h.flush();
+        final retained = h.controller;
+        final Future<void> obsolete;
+        if (phase == 'picker') {
+          obsolete = retained.chooseFile(_questionId);
+        } else if (phase == 'upload') {
+          await h.pick();
+          obsolete = retained.uploadAnswer(_questionId);
+          h.repository.uploads.single.progress!(1, 3);
+          expect(h.entry.sentBytes, 1);
+        } else {
+          await h.makeUncertain();
+          obsolete = retained.reloadAttempt();
+        }
+        expect(h.state.activeQuestionId, _questionId);
+        h.container.invalidate(studentFileAnswerControllerProvider(_target));
+        await h.flush();
+        expect(h.controller, same(retained));
+        final reset = h.state;
+        expect(h.entry.serverFile!.id, _fileId);
+        expect(h.entry.status, StudentFileAnswerStatus.idle);
+        expect(h.entry.selectedFile, isNull);
+        expect(h.entry.sentBytes, 0);
+        expect(h.entry.totalBytes, 0);
+        expect(h.entry.failure, isNull);
+        expect(reset.hasPendingSelection, isFalse);
+        expect(reset.hasUncertainUpload, isFalse);
+        expect(reset.activeQuestionId, isNull);
+        expect(reset.isReconciling, isFalse);
+        if (phase == 'picker') {
+          h.picker.requests.single.complete(_selected());
+        } else if (phase == 'upload') {
+          h.repository.uploads.single.progress!(3, 3);
+          h.repository.uploads.single.complete(_result());
+        } else {
+          h.repository.reads.single.complete(_attempt());
+        }
+        await obsolete;
+        await h.flush();
+        expect(h.state, same(reset));
+        expect(h.parent.refreshCalls, 0);
+        expect(h.picker.requests, hasLength(1));
+        expect(h.repository.uploads, hasLength(phase == 'picker' ? 0 : 1));
+        expect(h.repository.reads, hasLength(phase == 'recovery' ? 1 : 0));
+      },
+    );
+  }
+
+  test(
     'file-owned terminal GET publishes through real parent and defeats older GET',
     () async {
       final h = _Harness(realParent: true);
