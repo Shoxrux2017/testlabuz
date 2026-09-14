@@ -932,6 +932,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 4 — Groups and User Relationships | `Closed` | Stable dependency for Stage 5 |
 | Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
+| Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 
 Current Stage 5 progress:
 
@@ -1001,6 +1002,56 @@ Current Stage 6 progress:
 - Stage 6 — Homework Assignment Management: Closed.
 - Next permitted workflow step: Stage 7 planning/decomposition only; Stage 7
   implementation has not started.
+
+Current Stage 7 progress:
+
+This is the current project state; the Stage 5/6 progress sections above preserve
+their historical completion handoffs.
+
+- Stage 7 planning/decomposition: Approved / Delivered.
+- `S07-DOC-001`: Accepted / Delivered — PR #187,
+  merge `6529ae4b4a114828d0636baec597d10c03ef3164`.
+- Final documentation synchronization review: PASS; no additional `docs/01–09`
+  correction is required by closure.
+- `S07-BE-001…007`: Accepted / Delivered.
+- Stage 7 Backend Phase 2: PASS — audited revision
+  `4780c56d36816ac0f7b1ab381c28c7387a2804c6`; P1=0, P2=0, P3=0.
+- `S07-FE-001…005`: Accepted / Delivered.
+- Stage 7 Frontend Phase 2: PASS — final refreshed evidence after the production
+  Resume correction: 2420 passed, 0 failed; analyze PASS; read-only format check
+  672 files checked, 0 changed; Windows and Android debug builds PASS;
+  Stage-wide `git diff --check` PASS; P1=0, P2=0, P3=0.
+- `S07-INT-001`: Accepted / Delivered / PASS.
+- Integration assets: PR #225,
+  merge `30e29b0382a05067af2faef4fb0e509bef38aa4f`.
+- Focused Stage 7 integration findings/corrections: PR #226,
+  merge `3d71a58a375ac4473594c3b7fe79a9ca6de7d099`; no additional task IDs.
+- Integration Harness Preflight: PASS.
+- Windows real-stack: PASS — production UI process exit code 0.
+- Android real-stack manual smoke: PASS — Project Owner, 2026-09-14,
+  Android emulator Android 17 / API 37.
+- API/security, DB/private-file oracle, and backend restart persistence: PASS.
+- Cleanup: PASS — manifest-owned DB fixtures/private blobs/generated local files
+  removed; unrelated sentinel state preserved; temporary Android reverse mapping
+  removed and final reverse list empty. The external dedicated Docker/private
+  named volume may remain provisioned.
+- Final automated full-run audited SHA:
+  `8e6fc73b327baf921e829a2dcf5c4c829ea3a694`.
+- Later copy-only correction plus focused regression coverage:
+  `c392e94988d796575f1d39b0b44e1615584d0d4b`. ChatGPT determined that the accepted
+  Windows, Android, API/security, persistence, Backend Phase 2, and Frontend Phase 2
+  evidence remains valid. No GitHub workflow run for that commit was used as
+  closure evidence.
+- Stage 7 Closure Review: PASS — STAGE CLOSED, 2026-09-14; P1=0, P2=0, P3=0.
+- Stage 7 — Student Homework and Submission Flow: Closed.
+- Accepted product main before closure bookkeeping:
+  `3d71a58a375ac4473594c3b7fe79a9ca6de7d099`.
+- Closure-only bookkeeping delivery: `docs/stage7-closure`; final post-merge main
+  synchronization remains a Project Owner/ChatGPT verification gate.
+- No product verification rerun is required for closure bookkeeping because
+  ChatGPT determined that existing evidence remains valid.
+- Next permitted action: Stage 8 — Blitz Task Workflow planning/decomposition
+  only. Stage 8 implementation is not authorized by this closure.
 
 ---
 
