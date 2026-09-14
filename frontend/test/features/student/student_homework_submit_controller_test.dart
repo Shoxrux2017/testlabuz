@@ -55,6 +55,120 @@ final _detailTarget = StudentHomeworkRouteTarget(
 
 void main() {
   test(
+    'same-session invalidation forgets uncertain Submit and its retry key',
+    () async {
+      final h = _Harness();
+      await h.ready();
+      final retained = h.controller;
+      await h.makeUncertain();
+      final retainedState = h.state;
+
+      h.auth.replaceUser(h.container.read(authSessionControllerProvider).user!);
+      await h.flush();
+      expect(h.controller, same(retained));
+      expect(h.state, same(retainedState));
+      expect(h.gate, StudentAttemptRouteOperation.submitUncertain);
+
+      h.container.invalidate(studentHomeworkSubmitControllerProvider(_target));
+      h.container.invalidate(studentAttemptRouteOperationGateProvider(_target));
+      await h.flush();
+      expect(h.controller, same(retained));
+      expect(h.state.status, StudentHomeworkSubmitStatus.idle);
+      expect(h.state.failure, isNull);
+      expect(h.state.notice, isNull);
+      expect(h.state.terminalReconciliationReason, isNull);
+      expect(h.gate, StudentAttemptRouteOperation.idle);
+      await retained.retrySubmission();
+      await retained.checkCurrentAttempt();
+      expect(h.repository.posts, hasLength(1));
+      expect(h.repository.gets, hasLength(1));
+      expect(h.keys.calls, 1);
+
+      final next = retained.submitConfirmed(h.token);
+      expect(h.repository.posts.last.key, _keyB);
+      expect(h.keys.calls, 2);
+      h.repository.posts.last.complete(_attempt(terminal: true));
+      await next;
+      expect(h.state.status, StudentHomeworkSubmitStatus.completed);
+    },
+  );
+
+  for (final checking in [false, true]) {
+    test(
+      'same-session invalidation rejects abandoned ${checking ? 'Check' : 'Submit'} completion',
+      () async {
+        final h = _Harness();
+        await h.ready();
+        final retained = h.controller;
+        final Future<void> pending;
+        if (checking) {
+          await h.makeUncertain();
+          pending = retained.checkCurrentAttempt();
+        } else {
+          pending = retained.submitConfirmed(h.token);
+        }
+        h.container.invalidate(
+          studentHomeworkSubmitControllerProvider(_target),
+        );
+        h.container.invalidate(
+          studentAttemptRouteOperationGateProvider(_target),
+        );
+        await h.flush();
+        expect(h.controller, same(retained));
+        expect(h.state.status, StudentHomeworkSubmitStatus.idle);
+        expect(h.gate, StudentAttemptRouteOperation.idle);
+        expect(h.keys.calls, 1);
+        expect(h.repository.posts, hasLength(1));
+
+        if (checking) {
+          h.repository.gets.last.complete(_attempt(terminal: true));
+        } else {
+          h.repository.posts.last.complete(_attempt(terminal: true));
+        }
+        await pending;
+        expect(h.state.status, StudentHomeworkSubmitStatus.idle);
+        expect(h.gate, StudentAttemptRouteOperation.idle);
+        expect(
+          h.attempt.attempt!.status,
+          StudentHomeworkAttemptStatus.inProgress,
+        );
+        expect(h.homework.details, hasLength(1));
+      },
+    );
+  }
+
+  for (final uncertain in [false, true]) {
+    test(
+      'same-session gate invalidation resets ${uncertain ? 'submitUncertain' : 'submitting'} on retained notifier',
+      () async {
+        final h = _Harness();
+        await h.ready();
+        final provider = studentAttemptRouteOperationGateProvider(_target);
+        final retained = h.container.read(provider.notifier);
+        expect(retained.claimSubmit(), isTrue);
+        if (uncertain) expect(retained.markSubmitUncertain(), isTrue);
+        final heldState = h.gate;
+
+        h.auth.replaceUser(
+          h.container.read(authSessionControllerProvider).user!,
+        );
+        await h.flush();
+        expect(h.container.read(provider.notifier), same(retained));
+        expect(h.gate, heldState);
+
+        h.container.invalidate(provider);
+        await h.flush();
+        expect(h.container.read(provider.notifier), same(retained));
+        expect(h.gate, StudentAttemptRouteOperation.idle);
+        expect(retained.claimSubmit(), isTrue);
+        retained.release();
+        expect(h.repository.posts, isEmpty);
+        expect(h.keys.calls, 0);
+      },
+    );
+  }
+
+  test(
     'failed terminal adoption retains the key and cannot report completion',
     () async {
       final h = _Harness(rejectAdoption: true);

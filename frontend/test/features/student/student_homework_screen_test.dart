@@ -7,19 +7,33 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_route_paths.dart';
+import 'package:testlabuz_client/core/files/protected_download_metadata.dart';
+import 'package:testlabuz_client/core/files/protected_learning_material_transfer.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
+import 'package:testlabuz_client/core/network/idempotency_key_generator.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_attempt_answer_editor_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_attempt_route_operation_gate.dart';
+import 'package:testlabuz_client/features/student/application/student_file_answer_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_attempt_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_attempt_state.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_detail_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_detail_state.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_attempt_start_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_homework_attempt_start_state.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_submit_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_homework_submit_state.dart';
+import 'package:testlabuz_client/features/student/application/student_submission_transfer_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_submission_transfer_state.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/student/domain/student_answer_mutation.dart';
+import 'package:testlabuz_client/features/student/domain/student_answer_draft.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt.dart';
+import 'package:testlabuz_client/features/student/domain/student_homework_attempt_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_list.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework_list_query.dart';
@@ -29,6 +43,7 @@ import 'package:testlabuz_client/features/student/domain/student_homework_submit
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_detail_screen.dart';
+import 'package:testlabuz_client/features/student/presentation/student_homework_attempt_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_homework_section.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_read_view.dart';
 import 'package:testlabuz_client/features/student/presentation/student_topic_detail_screen.dart';
@@ -39,6 +54,282 @@ const _homeworkId = '40000000-0000-0000-0000-000000000001';
 const _questionPrefix = '50000000-0000-0000-0000-';
 
 void main() {
+  testWidgets(
+    'Resume restores persisted answers from a fresh Attempt read after retained route abandonment',
+    (tester) async {
+      final attemptTarget = StudentHomeworkAttemptRouteTarget(
+        topicId: studentTopicId,
+        homeworkId: _homeworkId,
+        attemptId: _startedAttemptId,
+      );
+      final retainedAttempt = _resumeAttempt(
+        text: 'Previously loaded answer',
+        filename: 'previously-loaded.pdf',
+      );
+      final authoritativeAttempt = _resumeAttempt(
+        text: 'Persisted answer from server',
+        filename: 'persisted-answer.pdf',
+      );
+      final repository = _ResumeRepository(retainedAttempt);
+      final keys = _CountingIdempotencyKeyGenerator();
+      final scopeObserver = _ResumeScopeObserver();
+      final container = ProviderContainer(
+        observers: [scopeObserver],
+        overrides: [
+          appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
+          authSessionControllerProvider.overrideWith(
+            () => FakeStudentAuthSessionController.authenticated(
+              studentUser('student-a'),
+            ),
+          ),
+          studentHomeworkRepositoryProvider.overrideWithValue(
+            _HomeworkRepository(
+              onDetail: (_) async =>
+                  _detail(questions: authoritativeAttempt.questions),
+            ),
+          ),
+          studentHomeworkAttemptRepositoryProvider.overrideWithValue(
+            repository,
+          ),
+          idempotencyKeyGeneratorProvider.overrideWithValue(keys),
+          protectedLearningMaterialTransferProvider.overrideWithValue(
+            _UnavailableSubmissionTransfer(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final attemptProvider = studentHomeworkAttemptControllerProvider(
+        attemptTarget,
+      );
+      final editorProvider = studentAttemptAnswerEditorControllerProvider(
+        attemptTarget,
+      );
+      final fileProvider = studentFileAnswerControllerProvider(attemptTarget);
+      final submitProvider = studentHomeworkSubmitControllerProvider(
+        attemptTarget,
+      );
+      final gateProvider = studentAttemptRouteOperationGateProvider(
+        attemptTarget,
+      );
+      final transferProvider = studentSubmissionTransferControllerProvider(
+        attemptTarget,
+      );
+      final resumedProviders = [
+        attemptProvider,
+        editorProvider,
+        fileProvider,
+        submitProvider,
+        gateProvider,
+        transferProvider,
+      ];
+      // Retain every real route provider across abandonment and re-entry so
+      // disposal timing cannot make the regression pass accidentally.
+      final subscriptions = [
+        container.listen(attemptProvider, (_, _) {}),
+        container.listen(editorProvider, (_, _) {}),
+        container.listen(fileProvider, (_, _) {}),
+        container.listen(submitProvider, (_, _) {}),
+        container.listen(gateProvider, (_, _) {}),
+        container.listen(transferProvider, (_, _) {}),
+      ];
+      addTearDown(() {
+        for (final subscription in subscriptions) {
+          subscription.close();
+        }
+      });
+      await tester.pump();
+      final abandonedAttempt = container.read(attemptProvider.notifier);
+      final abandonedEditor = container.read(editorProvider.notifier);
+      final abandonedFiles = container.read(fileProvider.notifier);
+      final abandonedSubmit = container.read(submitProvider.notifier);
+      final abandonedGate = container.read(gateProvider.notifier);
+      final abandonedTransfer = container.read(transferProvider.notifier);
+      final writtenQuestion = authoritativeAttempt.questions.first;
+      final fileQuestion = authoritativeAttempt.questions.last;
+      expect(repository.fetches, [_startedAttemptId]);
+      expect(
+        (container.read(editorProvider).questions[writtenQuestion.id]!.draft
+                as StudentShortWrittenDraft)
+            .text,
+        'Previously loaded answer',
+      );
+      expect(
+        container
+            .read(fileProvider)
+            .questions[fileQuestion.id]!
+            .serverFile!
+            .originalName,
+        'previously-loaded.pdf',
+      );
+
+      final router = GoRouter(
+        initialLocation: AppRoutePaths.studentHomeworkAttemptLocation(
+          studentTopicId,
+          _homeworkId,
+          _startedAttemptId,
+        ),
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.studentHomeworkDetail,
+            builder: (_, _) =>
+                StudentHomeworkDetailScreen(target: _startTarget),
+          ),
+          GoRoute(
+            path: AppRoutePaths.studentHomeworkAttempt,
+            builder: (_, _) =>
+                StudentHomeworkAttemptScreen(target: attemptTarget),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.binding.setSurfaceSize(const Size(1100, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Previously loaded answer'), findsOneWidget);
+      expect(find.text('previously-loaded.pdf'), findsOneWidget);
+      await abandonedTransfer.open(fileQuestion.id, studentFileId);
+      expect(
+        container.read(transferProvider).status,
+        StudentSubmissionTransferStatus.failure,
+      );
+      expect(container.read(transferProvider).feedback, isNotNull);
+      abandonedEditor.updateDraft(
+        writtenQuestion.id,
+        const StudentShortWrittenDraft(text: 'Abandoned local draft'),
+      );
+      expect(container.read(editorProvider).hasDirtyDrafts, isTrue);
+      await tester.pump();
+      scopeObserver.disposedProviders.clear();
+      await tester.tap(
+        find.byKey(const Key('studentHomeworkAttemptBackButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('studentHomeworkAttemptLeaveDialog')),
+        findsOneWidget,
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StudentHomeworkDetailScreen), findsOneWidget);
+      expect(container.read(editorProvider).questions, isEmpty);
+      expect(container.read(fileProvider).questions, isEmpty);
+      expect(container.read(attemptProvider).attempt, same(retainedAttempt));
+      expect(container.read(attemptProvider.notifier), same(abandonedAttempt));
+      expect(container.read(editorProvider.notifier), same(abandonedEditor));
+      expect(container.read(fileProvider.notifier), same(abandonedFiles));
+      expect(container.read(submitProvider.notifier), same(abandonedSubmit));
+      expect(container.read(gateProvider.notifier), same(abandonedGate));
+      expect(
+        container.read(transferProvider.notifier),
+        same(abandonedTransfer),
+      );
+      expect(container.read(transferProvider).feedback, isNotNull);
+      for (final provider in resumedProviders) {
+        expect(container.exists(provider), isTrue);
+      }
+      repository.nextFetch = Completer<StudentHomeworkAttempt>();
+      scopeObserver.disposedProviders.clear();
+
+      await tester.tap(
+        find.byKey(const Key('studentHomeworkResumeAttemptButton')),
+      );
+      expect(
+        scopeObserver.disposedProviders,
+        unorderedEquals(resumedProviders),
+      );
+      await tester.pump();
+      final loadingAttempt = container.read(attemptProvider);
+      final resumeFetchCount = repository.fetches.length;
+      repository.nextFetch!.complete(authoritativeAttempt);
+      await tester.pump();
+      await tester.pump();
+
+      final editor = container.read(editorProvider);
+      final files = container.read(fileProvider);
+      final invalidatedProviderCount = resumedProviders
+          .where(scopeObserver.disposedProviders.contains)
+          .length;
+      expect(repository.keys, isEmpty);
+      expect(keys.calls, 0);
+      expect(
+        editor.questions,
+        contains(writtenQuestion.id),
+        reason:
+            'Resume must recreate the retained, cleared answer editor. '
+            'Attempt status after Resume: ${loadingAttempt.status.name}; '
+            'authoritative reads after Resume: $resumeFetchCount; '
+            '$invalidatedProviderCount of ${resumedProviders.length} '
+            'route providers invalidated.',
+      );
+      expect(
+        (editor.questions[writtenQuestion.id]!.draft
+                as StudentShortWrittenDraft)
+            .text,
+        'Persisted answer from server',
+      );
+      expect(editor.questions[writtenQuestion.id]!.isDirty, isFalse);
+      expect(editor.isAuthoritative, isTrue);
+      expect(editor.pendingMutationSnapshot, isNull);
+      expect(editor.hasUncertainMutation, isFalse);
+      expect(
+        files.questions[fileQuestion.id]!.serverFile!.originalName,
+        'persisted-answer.pdf',
+      );
+      expect(files.isAuthoritative, isTrue);
+      expect(files.hasPendingSelection, isFalse);
+      expect(files.hasUncertainUpload, isFalse);
+      final submit = container.read(submitProvider);
+      expect(submit.status, StudentHomeworkSubmitStatus.idle);
+      expect(submit.failure, isNull);
+      expect(submit.notice, isNull);
+      expect(submit.terminalReconciliationReason, isNull);
+      expect(container.read(gateProvider), StudentAttemptRouteOperation.idle);
+      final transfer = container.read(transferProvider);
+      expect(transfer.status, StudentSubmissionTransferStatus.idle);
+      expect(transfer.action, isNull);
+      expect(transfer.questionId, isNull);
+      expect(transfer.fileId, isNull);
+      expect(transfer.receivedBytes, 0);
+      expect(transfer.totalBytes, 0);
+      expect(transfer.feedback, isNull);
+      expect(find.text('Persisted answer from server'), findsOneWidget);
+      expect(find.text('persisted-answer.pdf'), findsOneWidget);
+      expect(find.byType(StudentHomeworkAttemptScreen), findsOneWidget);
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.studentHomeworkAttemptLocation(
+          studentTopicId,
+          _homeworkId,
+          _startedAttemptId,
+        ),
+      );
+      expect(loadingAttempt.status, StudentHomeworkAttemptLoadStatus.loading);
+      expect(loadingAttempt.attempt, isNull);
+      expect(repository.fetches, [_startedAttemptId, _startedAttemptId]);
+      expect(
+        container.read(attemptProvider).attempt,
+        same(authoritativeAttempt),
+      );
+      expect(scopeObserver.disposedProviders, containsAll(resumedProviders));
+      expect(container.read(attemptProvider.notifier), same(abandonedAttempt));
+      expect(container.read(editorProvider.notifier), same(abandonedEditor));
+      expect(container.read(fileProvider.notifier), same(abandonedFiles));
+      expect(container.read(submitProvider.notifier), same(abandonedSubmit));
+      expect(container.read(gateProvider.notifier), same(abandonedGate));
+      expect(
+        container.read(transferProvider.notifier),
+        same(abandonedTransfer),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
     testWidgets(
       '${surface.name} confirmed current Attempt resumes by exact route with no POST',
@@ -1350,6 +1641,96 @@ class _StartRepository implements StudentHomeworkAttemptRepository {
   @override
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) =>
       throw StateError('Homework detail does not load the Attempt.');
+}
+
+class _ResumeRepository extends _StartRepository {
+  _ResumeRepository(this.initialAttempt);
+
+  final StudentHomeworkAttempt initialAttempt;
+  final fetches = <String>[];
+  Completer<StudentHomeworkAttempt>? nextFetch;
+
+  @override
+  Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) {
+    fetches.add(attemptId);
+    return nextFetch?.future ?? Future.value(initialAttempt);
+  }
+}
+
+final class _ResumeScopeObserver extends ProviderObserver {
+  final disposedProviders = <Object>[];
+
+  @override
+  void didDisposeProvider(ProviderObserverContext context) {
+    disposedProviders.add(context.provider);
+  }
+}
+
+class _CountingIdempotencyKeyGenerator implements IdempotencyKeyGenerator {
+  var calls = 0;
+
+  @override
+  String generate() {
+    calls++;
+    return '80000000-0000-4000-8000-000000000001';
+  }
+}
+
+class _UnavailableSubmissionTransfer extends Fake
+    implements ProtectedLearningMaterialTransfer {
+  @override
+  Future<TrustedDownloadedFile> download(
+    String fileId, {
+    ProtectedDownloadProgress? onReceiveProgress,
+  }) async {
+    throw studentLocalFailure(ApiFailureKind.connection);
+  }
+}
+
+StudentHomeworkAttempt _resumeAttempt({
+  required String text,
+  required String filename,
+}) {
+  final questions = _allQuestions()
+      .where(
+        (question) =>
+            question.type == StudentQuestionType.shortWritten ||
+            question.type == StudentQuestionType.fileBased,
+      )
+      .toList();
+  return StudentHomeworkAttempt(
+    id: _startedAttemptId,
+    assessmentId: _homeworkId,
+    attemptNumber: 1,
+    status: StudentHomeworkAttemptStatus.inProgress,
+    startedAt: DateTime.utc(2026, 9, 8, 12),
+    submittedAt: null,
+    finalizedAt: null,
+    finalizationReason: null,
+    deadlineAt: null,
+    questions: questions,
+    answers: [
+      StudentAttemptAnswerState(
+        questionId: questions.first.id,
+        type: StudentQuestionType.shortWritten,
+        value: StudentTextAnswerValue(text: text),
+        updatedAt: DateTime.utc(2026, 9, 8, 12),
+      ),
+      StudentAttemptAnswerState(
+        questionId: questions.last.id,
+        type: StudentQuestionType.fileBased,
+        value: StudentFileAnswerValue(
+          file: StudentSubmissionFile(
+            id: studentFileId,
+            originalName: filename,
+            extension: 'pdf',
+            sizeBytes: 10,
+          ),
+        ),
+        updatedAt: DateTime.utc(2026, 9, 8, 12),
+      ),
+    ],
+  );
 }
 
 StudentHomeworkAttemptStartResult _startResult({

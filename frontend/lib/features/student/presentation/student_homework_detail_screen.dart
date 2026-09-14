@@ -4,11 +4,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
+import '../application/student_attempt_answer_editor_controller.dart';
+import '../application/student_attempt_route_operation_gate.dart';
+import '../application/student_file_answer_controller.dart';
+import '../application/student_homework_attempt_controller.dart';
 import '../application/student_homework_attempt_start_controller.dart';
 import '../application/student_homework_attempt_start_state.dart';
 import '../application/student_homework_detail_controller.dart';
 import '../application/student_homework_detail_state.dart';
+import '../application/student_homework_submit_controller.dart';
+import '../application/student_submission_transfer_controller.dart';
 import '../domain/student_homework.dart';
+import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
 import 'student_homework_formatters.dart';
 import 'student_question_read_view.dart';
@@ -160,6 +167,7 @@ class StudentHomeworkDetailScreen extends ConsumerWidget {
                           onRefresh: controller.refresh,
                           attemptAction: _attemptAction(
                             context,
+                            ref,
                             state,
                             startState,
                             startController,
@@ -175,6 +183,7 @@ class StudentHomeworkDetailScreen extends ConsumerWidget {
 
   Widget? _attemptAction(
     BuildContext context,
+    WidgetRef ref,
     StudentHomeworkDetailState detailState,
     StudentHomeworkAttemptStartState startState,
     StudentHomeworkAttemptStartController controller,
@@ -191,13 +200,38 @@ class StudentHomeworkDetailScreen extends ConsumerWidget {
       final label = 'Resume Attempt ${inProgress.attemptNumber}';
       return FilledButton.icon(
         key: const Key('studentHomeworkResumeAttemptButton'),
-        onPressed: () => context.go(
-          AppRoutePaths.studentHomeworkAttemptLocation(
-            target.topicId,
-            target.homeworkId,
-            inProgress.id,
-          ),
-        ),
+        onPressed: () {
+          final attemptTarget = StudentHomeworkAttemptRouteTarget(
+            topicId: target.topicId,
+            homeworkId: target.homeworkId,
+            attemptId: inProgress.id,
+          );
+          // Retained providers may still own cleared state from route abandonment.
+          // Resume must recreate this scope from a fresh authoritative Attempt read.
+          ref.invalidate(
+            studentHomeworkAttemptControllerProvider(attemptTarget),
+          );
+          ref.invalidate(
+            studentAttemptAnswerEditorControllerProvider(attemptTarget),
+          );
+          ref.invalidate(studentFileAnswerControllerProvider(attemptTarget));
+          ref.invalidate(
+            studentHomeworkSubmitControllerProvider(attemptTarget),
+          );
+          ref.invalidate(
+            studentAttemptRouteOperationGateProvider(attemptTarget),
+          );
+          ref.invalidate(
+            studentSubmissionTransferControllerProvider(attemptTarget),
+          );
+          context.go(
+            AppRoutePaths.studentHomeworkAttemptLocation(
+              target.topicId,
+              target.homeworkId,
+              inProgress.id,
+            ),
+          );
+        },
         icon: const Icon(Icons.play_arrow),
         label: Text(label),
       );

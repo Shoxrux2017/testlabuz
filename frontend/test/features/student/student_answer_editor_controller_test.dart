@@ -1388,6 +1388,106 @@ void main() {
   });
 
   test(
+    'same-session invalidation lets a retained cleared editor synchronize again',
+    () async {
+      final h = _Harness(attempt: _attempt(shortText: 'Persisted answer'));
+      await h.makeUncertain(text: 'Abandoned draft');
+      final retained = h.controller;
+      retained.clearLocalState();
+      expect(h.state.questions, isEmpty);
+      h.parent.publish(
+        const StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.loading,
+        ),
+      );
+      await h.flush();
+      h.container.invalidate(
+        studentAttemptAnswerEditorControllerProvider(h.target),
+      );
+      await h.flush();
+      expect(h.controller, same(retained));
+      expect(h.state.questions, isEmpty);
+      expect(h.state.sourceAttemptPublication, isNull);
+      final authoritative = _parentState(
+        _attempt(shortText: 'Fresh persisted answer'),
+      );
+      h.parent.publish(authoritative);
+      await h.flush();
+      final restored = h.entry(StudentQuestionType.shortWritten);
+      expect(
+        (restored.serverAnswer! as StudentTextAnswerValue).text,
+        'Fresh persisted answer',
+      );
+      expect(restored.isDirty, isFalse);
+      expect(h.state.hasDirtyDrafts, isFalse);
+      expect(h.state.hasUncertainMutation, isFalse);
+      expect(h.state.activeQuestionId, isNull);
+      expect(h.state.pendingMutationSnapshot, isNull);
+      expect(h.state.canEdit(_id(4)), isTrue);
+      expect(
+        h.state.sourceAttemptPublication,
+        same(authoritative.publicationToken),
+      );
+      expect(h.repository.saves, hasLength(1));
+      expect(h.repository.reads, isEmpty);
+    },
+  );
+
+  for (final reconciling in [false, true]) {
+    test(
+      'same-session invalidation drops editor state and rejects old ${reconciling ? 'GET' : 'PUT'}',
+      () async {
+        final h = _Harness(attempt: _attempt(shortText: 'Persisted answer'));
+        await h.flush();
+        final retained = h.controller;
+        final Future<void> obsolete;
+        if (reconciling) {
+          await h.makeUncertain();
+          obsolete = retained.reloadAttempt();
+        } else {
+          h.editText('Abandoned draft');
+          obsolete = retained.saveAnswer(_id(4));
+        }
+        expect(h.state.pendingMutationSnapshot, isNotNull);
+        h.container.invalidate(
+          studentAttemptAnswerEditorControllerProvider(h.target),
+        );
+        await h.flush();
+        expect(h.controller, same(retained));
+        final reset = h.state;
+        final restored = h.entry(StudentQuestionType.shortWritten);
+        expect(
+          (restored.serverAnswer! as StudentTextAnswerValue).text,
+          'Persisted answer',
+        );
+        expect(restored.saveStatus, StudentAnswerSaveStatus.idle);
+        expect(restored.isDirty, isFalse);
+        expect(reset.hasUncertainMutation, isFalse);
+        expect(reset.isReconciling, isFalse);
+        expect(reset.activeQuestionId, isNull);
+        expect(reset.pendingMutationSnapshot, isNull);
+        if (reconciling) {
+          h.repository.reads.single.complete(
+            _attempt(shortText: 'Obsolete recovery answer'),
+          );
+        } else {
+          h.repository.saves.single.complete(
+            _result(
+              answer: const StudentTextAnswerValue(text: 'Abandoned draft'),
+            ),
+          );
+        }
+        await obsolete;
+        await h.flush();
+        expect(h.state, same(reset));
+        expect(h.parent.refreshCalls, 0);
+        expect(h.repository.saves, hasLength(1));
+        expect(h.repository.reads, hasLength(reconciling ? 1 : 0));
+      },
+    );
+  }
+
+  test(
     'Leaving uncertainty clears local state and re-entry never resends old PUT',
     () async {
       final harness = _Harness();

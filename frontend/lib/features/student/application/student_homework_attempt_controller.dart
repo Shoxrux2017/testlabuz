@@ -42,7 +42,7 @@ class StudentHomeworkAttemptController
       _clearOwnership();
       return const StudentHomeworkAttemptState();
     }
-    if (_activeSessionKey == key) {
+    if (_activeSessionKey == key && !ref.isRefresh) {
       return state;
     }
     _clearOwnership();

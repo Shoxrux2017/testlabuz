@@ -32,6 +32,84 @@ const _fileId = '30000000-0000-0000-0000-000000000001';
 const _otherFileId = '30000000-0000-0000-0000-000000000002';
 
 void main() {
+  test(
+    'same-session invalidation clears transfer failure and feedback on retained notifier',
+    () async {
+      final harness = _Harness();
+      final retained = harness.controller;
+      harness.local.openOutcome = LocalFileOpenOutcome.noApplication;
+      await retained.open(_questionId, _fileId);
+      expect(harness.state.status, StudentSubmissionTransferStatus.failure);
+      expect(harness.state.feedback, isNotNull);
+      final retainedState = harness.state;
+
+      harness.parent.publish(_data(_attempt()));
+      await harness.flush();
+      expect(harness.state, same(retainedState));
+
+      harness.container.invalidate(
+        studentSubmissionTransferControllerProvider(_target()),
+      );
+      await harness.flush();
+      expect(harness.controller, same(retained));
+      _expectFreshTransferState(harness.state);
+      expect(harness.adapter.requests, hasLength(1));
+      expect(harness.local.openCalls, 1);
+      expect(harness.local.saveCalls, 0);
+
+      await retained.saveAs(_questionId, _fileId);
+      expect(harness.state.feedback, 'Submitted file saved.');
+      harness.container.invalidate(
+        studentSubmissionTransferControllerProvider(_target()),
+      );
+      await harness.flush();
+      expect(harness.controller, same(retained));
+      _expectFreshTransferState(harness.state);
+      expect(harness.local.saveCalls, 1);
+    },
+  );
+
+  test(
+    'same-session invalidation revokes retained transfer progress and late completion',
+    () async {
+      final response = Completer<ResponseBody>();
+      final harness = _Harness(handler: (_) => response.future);
+      final retained = harness.controller;
+      final pending = retained.open(_questionId, _fileId);
+      await harness.adapter.started.future;
+      await harness.flush();
+      final reportProgress = harness.adapter.requests.single.onReceiveProgress!;
+      reportProgress(2, 3);
+      expect(harness.state.status, StudentSubmissionTransferStatus.downloading);
+      expect(harness.state.receivedBytes, 2);
+      final retainedState = harness.state;
+
+      harness.parent.publish(_data(_attempt()));
+      await harness.flush();
+      expect(harness.state, same(retainedState));
+
+      harness.container.invalidate(
+        studentSubmissionTransferControllerProvider(_target()),
+      );
+      await harness.flush();
+      expect(harness.controller, same(retained));
+      _expectFreshTransferState(harness.state);
+      reportProgress(3, 3);
+      _expectFreshTransferState(harness.state);
+      response.complete(_download());
+      await pending;
+      _expectFreshTransferState(harness.state);
+      expect(harness.local.openCalls, 0);
+      expect(harness.local.saveCalls, 0);
+      expect(harness.adapter.requests, hasLength(1));
+
+      harness.adapter.handler = (_) => _download();
+      await retained.saveAs(_questionId, _fileId);
+      expect(harness.local.saveCalls, 1);
+      expect(harness.state.feedback, 'Submitted file saved.');
+    },
+  );
+
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
     test(
       'current data opens and saves through protected GET on $surface',
@@ -428,6 +506,16 @@ void main() {
       },
     );
   }
+}
+
+void _expectFreshTransferState(StudentSubmissionTransferState state) {
+  expect(state.status, StudentSubmissionTransferStatus.idle);
+  expect(state.action, isNull);
+  expect(state.questionId, isNull);
+  expect(state.fileId, isNull);
+  expect(state.receivedBytes, 0);
+  expect(state.totalBytes, 0);
+  expect(state.feedback, isNull);
 }
 
 class _Harness {

@@ -58,14 +58,14 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       _invalidateOwnership();
       return StudentFileAnswerState();
     }
-    final changedSession = key != _activeSessionKey;
-    if (changedSession) {
+    final resetScope = key != _activeSessionKey || ref.isRefresh;
+    if (resetScope) {
       _invalidateOwnership();
       _activeSessionKey = key;
       _cleared = false;
     }
     if (_cleared) return StudentFileAnswerState();
-    final previous = changedSession ? StudentFileAnswerState() : state;
+    final previous = resetScope ? StudentFileAnswerState() : state;
     final changedParent = !identical(parent, _lastParent);
     _lastParent = parent;
     if (terminal != null &&

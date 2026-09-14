@@ -47,9 +47,10 @@ class StudentHomeworkSubmitController
     // Keep route authority alive without resolving this operation from an
     // unrelated parent refresh or rebuilding on local editor state changes.
     ref.listen(studentHomeworkSubmitReadinessProvider(target), (_, _) {});
-    if (key != null && key == _activeSessionKey) return state;
+    if (!ref.isRefresh && key != null && key == _activeSessionKey) return state;
     _invalidateLogicalOperation();
     _activeSessionKey = key;
+    // Resume also invalidates the route gate, which resets its own state.
     return const StudentHomeworkSubmitState();
   }
 

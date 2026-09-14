@@ -53,7 +53,9 @@ class _StudentHomeworkSubmitControlsState
             ),
             if (snapshot.unansweredCount > 0)
               Text(
-                '${snapshot.unansweredCount} Questions have no saved answer.',
+                snapshot.unansweredCount == 1
+                    ? '1 Question has no saved answer.'
+                    : '${snapshot.unansweredCount} Questions have no saved answer.',
               ),
             const SizedBox(height: 16),
             const Text(

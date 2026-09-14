@@ -51,14 +51,14 @@ class StudentAttemptAnswerEditorController
       _invalidateOwnership();
       return StudentAttemptAnswerEditorState();
     }
-    final changedSession = _activeSessionKey != key;
-    if (changedSession) {
+    final resetScope = _activeSessionKey != key || ref.isRefresh;
+    if (resetScope) {
       _invalidateOwnership();
       _activeSessionKey = key;
       _cleared = false;
     }
     if (_cleared) return StudentAttemptAnswerEditorState();
-    final previous = changedSession ? StudentAttemptAnswerEditorState() : state;
+    final previous = resetScope ? StudentAttemptAnswerEditorState() : state;
     final changedParent = !identical(parent, _lastParent);
     _lastParent = parent;
     if (changedParent &&

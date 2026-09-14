@@ -13,6 +13,7 @@ import 'package:testlabuz_client/app/config/app_config.dart';
 import 'package:testlabuz_client/app/router/app_route_paths.dart';
 import 'package:testlabuz_client/core/files/local_file_actions.dart';
 import 'package:testlabuz_client/core/network/idempotency_key_generator.dart';
+import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_submission_file_picker.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
@@ -34,7 +35,7 @@ const stage7OpenAnswer = "E2E S07 first line\nStudent's second line";
 const stage7BlankAnswer = 'E2E S07 partial blank';
 
 final stage7Uuid = RegExp(
-  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
 
 class Stage7Keys implements IdempotencyKeyGenerator {
@@ -362,8 +363,12 @@ class Stage7Harness {
     picker.releaseRead();
     try {
       if (_loggedIn) {
-        await go(AppRoutePaths.student);
-        await tap(byKey('entryLogoutButton'));
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(TestLabUzApp)),
+          listen: false,
+        );
+        final auth = container.read(authSessionControllerProvider.notifier);
+        await auth.signOut();
         await waitRoute(AppRoutePaths.login);
         _loggedIn = false;
       }
@@ -441,12 +446,14 @@ class Stage7Harness {
 
   Future<void> select<T>(Finder dropdown, T value) async {
     await tap(dropdown);
-    final item = find
-        .byWidgetPredicate(
-          (widget) => widget is DropdownMenuItem<T> && widget.value == value,
-        )
-        .hitTestable();
-    await tap(item);
+    final item = find.byWidgetPredicate(
+      (widget) => widget is DropdownMenuItem<T> && widget.value == value,
+    );
+    await waitWidget(item, 'dropdown item for value $value');
+
+    final child = tester.widget<DropdownMenuItem<T>>(item).child;
+    await tap(find.byWidget(child).last);
+
     await until(
       () => tester.widget<DropdownButton<T>>(dropdown).value == value,
       'selected value for ${dropdown.describeMatch(Plurality.one)}',

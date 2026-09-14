@@ -250,6 +250,71 @@ void main() {
     expect(attempt.read().attempt!.attemptNumber, 2);
   });
 
+  test(
+    'same-session invalidation reloads a retained notifier without prior authority',
+    () async {
+      final harness = _Harness();
+      final attempt = harness.listen();
+      await harness.flush();
+      final controller = harness.controller;
+      harness.repository.requests.single.complete(_attempt());
+      await harness.flush();
+      final publication = attempt.read().publicationToken;
+      expect(attempt.read().status, StudentHomeworkAttemptLoadStatus.data);
+      expect(publication, isNotNull);
+
+      harness.container.invalidate(
+        studentHomeworkAttemptControllerProvider(_target()),
+      );
+
+      expect(harness.controller, same(controller));
+      expect(attempt.read().status, StudentHomeworkAttemptLoadStatus.loading);
+      expect(attempt.read().attempt, isNull);
+      expect(attempt.read().publicationToken, isNull);
+      await harness.flush();
+      expect(harness.repository.requests, hasLength(2));
+      expect(harness.repository.requests.map((request) => request.id), [
+        _attemptId,
+        _attemptId,
+      ]);
+      harness.repository.requests.last.complete(_attempt(number: 2));
+      await harness.flush();
+      expect(attempt.read().status, StudentHomeworkAttemptLoadStatus.data);
+      expect(attempt.read().attempt!.attemptNumber, 2);
+      expect(attempt.read().publicationToken, isNotNull);
+      expect(attempt.read().publicationToken, isNot(same(publication)));
+      expect(harness.repository.requests, hasLength(2));
+    },
+  );
+
+  test(
+    'same-session invalidation revokes an older pending read on the same notifier',
+    () async {
+      final harness = _Harness();
+      final attempt = harness.listen();
+      await harness.flush();
+      final controller = harness.controller;
+      final oldRead = harness.repository.requests.single;
+
+      harness.container.invalidate(
+        studentHomeworkAttemptControllerProvider(_target()),
+      );
+
+      expect(harness.controller, same(controller));
+      await harness.flush();
+      expect(harness.repository.requests, hasLength(2));
+      harness.repository.requests.last.complete(_attempt(number: 2));
+      await harness.flush();
+      final current = attempt.read();
+      expect(current.attempt!.attemptNumber, 2);
+
+      oldRead.complete(_attempt());
+      await harness.flush();
+      expect(attempt.read(), same(current));
+      expect(harness.repository.requests, hasLength(2));
+    },
+  );
+
   for (final status in StudentHomeworkAttemptStatus.values) {
     test('server lifecycle $status remains readable', () async {
       final harness = _Harness();

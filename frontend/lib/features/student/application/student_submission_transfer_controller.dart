@@ -48,7 +48,7 @@ class StudentSubmissionTransferController
     ref.watch(studentHomeworkAttemptControllerProvider(target));
     ref.watch(studentAttemptAnswerEditorControllerProvider(target));
     ref.watch(studentFileAnswerControllerProvider(target));
-    if (key == null || key != _activeSessionKey) {
+    if (ref.isRefresh || key == null || key != _activeSessionKey) {
       _invalidate();
       _activeSessionKey = key;
       return const StudentSubmissionTransferState();
