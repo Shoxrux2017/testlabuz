@@ -296,10 +296,19 @@ The authorized closure bookkeeping branch is `docs/stage7-closure`, created
 from exactly `3d71a58a375ac4473594c3b7fe79a9ca6de7d099` after verifying local
 `main == origin/main`, ahead/behind `0/0`, and a clean working tree.
 
-Delivery is through a new closure-only PR to `main`, titled
-`docs(stage7): close student homework and submission flow`. Codex is explicitly
-assigned the bookkeeping commit, branch push, and PR creation. PR merge is not
-assigned to Codex.
+| Closure-only delivery | Recorded reference |
+|---|---|
+| Branch | `docs/stage7-closure` |
+| Initial closure bookkeeping commit | `496bc11472e9a6303d8ee45dcc5d05286f7e673c` |
+| Pushed branch | `origin/docs/stage7-closure` |
+| Closure-only PR to `main` | [#227](https://github.com/Shoxrux2017/testlabuz/pull/227) |
+| PR title | `docs(stage7): close student homework and submission flow` |
+| PR merge | `Not performed by Codex` |
+
+The recorded commit contains the executed closure record, completed task index,
+and README update. The subsequent delivery-reference update is traceable in
+the same PR's commit history. Codex is explicitly assigned bookkeeping commits,
+branch push, and PR creation; the PR remains open for Project Owner handling.
 
 The closure change is limited to:
 
@@ -312,6 +321,13 @@ three-file diff inspection, placeholder checks, and focused review for
 contradictory Stage 7 statuses. No production/test, `docs/01–09`, dependency,
 lock, platform, integration asset, generated artifact, or secret belongs in this
 closure PR.
+
+Bookkeeping verification result: `PASS`. `git diff --check` and the committed
+baseline-to-HEAD diff check passed. Git status and name-status/diff inspection
+confirmed exactly the three allowed files. The focused self-review found no
+unresolved closure placeholder tokens, contradictory current Stage 7 statuses,
+unsupported factual claims, or out-of-scope changes. README changes are
+additions only, preserving historical Stage 0–6 evidence.
 
 Final post-merge `main` synchronization is a Project Owner/ChatGPT verification
 gate after the closure-only PR merges. That gate verifies the actual resulting
