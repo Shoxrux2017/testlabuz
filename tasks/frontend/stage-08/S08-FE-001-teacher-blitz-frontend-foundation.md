@@ -11,11 +11,11 @@
 | Implementation type | `Flutter Teacher Blitz typed client/read foundation + Topic section + read-only detail routing` |
 | Depends on | `S08-BE-001…010 Accepted / Delivered` **and** `S08-BE-PHASE-2 = PASS` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
-| Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` after Backend Phase 2 PASS + valid owner frontend approval and immediately before Codex execution |
+| Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` after Backend Phase 2 PASS and immediately before Codex execution |
 | Backend contract authority at execution | Delivered Stage 8 backend on audited `main` after Backend Phase 2 PASS |
-| Owner frontend gate | `Required: valid /approve frontend receipt at OWNER_FRONTEND_APPROVAL_REQUIRED` |
+| Current readiness gate | `Required: ChatGPT revalidates this contract and records current readiness as Approved` |
 | Flutter toolchain | Use the repository's current FVM-pinned Flutter version at implementation time |
-| Implementation Readiness Gate | `PASS as planning contract`; execution blocked until Backend Phase 2 PASS + owner frontend approval |
+| Implementation Readiness Gate | `PASS as planning contract`; execution blocked until Backend Phase 2 PASS + current ChatGPT readiness approval |
 | Verification | `Codex — focused frontend verification only` |
 | Delivery execution | `Project Owner` |
 | Frontend block checkpoint | `S08-FE-PHASE-2` after `S08-FE-001…006` are `Accepted / Delivered` |
@@ -26,20 +26,17 @@ Start only when:
 ```text
 S08-BE-001…010 = Accepted / Delivered
 S08-BE-PHASE-2 = PASS
-Orchestrator state previously reached OWNER_FRONTEND_APPROVAL_REQUIRED
-repository owner issued /approve frontend at that gate
-matching owner comment + bot receipt remain valid and unedited
 this contract remains currently Approved by ChatGPT
 ChatGPT has re-checked current origin/main
 Git preflight is safe
 ```
 
-ChatGPT/orchestration, not Codex, verifies the Stage-control comment/receipt
-evidence before this contract is handed off.
+ChatGPT verifies the delivered dependencies, Backend Phase 2 PASS and current
+readiness before this contract is handed off.
 
-Codex must not read the Stage index, control issue, owner comments, receipts or
-Stage history to rediscover authorization. Receiving FE-001 for implementation
-means orchestration already confirmed the owner frontend gate.
+Codex must not read the Stage index or Stage history to rediscover authorization.
+Receiving FE-001 for implementation means ChatGPT already confirmed its current
+readiness.
 
 If Backend Phase 2 changes the final public Blitz API in a way that materially
 conflicts with this contract, stop:
@@ -3112,7 +3109,7 @@ Focused verification                 = RESOLVED
 
 Implementation Readiness Gate        = PASS
 Execution dependency                 = S08-BE-PHASE-2 PASS
-Owner frontend approval              = REQUIRED before Codex handoff
-Owner approval authority             = valid /approve frontend receipt
+Current ChatGPT readiness approval   = REQUIRED before Codex handoff
+Readiness authority                  = ChatGPT re-checks current origin/main and this exact contract
 Next task after acceptance            = S08-FE-002
 ```

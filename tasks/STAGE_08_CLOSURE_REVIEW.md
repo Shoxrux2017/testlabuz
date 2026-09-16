@@ -8,7 +8,7 @@
 | Stage | `Stage 8 — Blitz Task Workflow` |
 | Review mode | `Independent read-only closure audit followed by bookkeeping-only delivery` |
 | Verification model | `Workflow v3 — Lean Verification + Backend/Frontend block checkpoints + Integration Harness Preflight` |
-| Status | `Pending — execute only after S08-INT-001 PASS + valid owner closure approval and all required fixes/delivery` |
+| Status | `Pending — execute only after S08-INT-001 Accepted / Delivered / PASS, all required fixes/delivery and ChatGPT verification of closure entry conditions` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Stage index | `tasks/STAGE_08_TASK_INDEX.md` |
 | Audited accepted product `origin/main` | `Resolve at closure execution` |
@@ -19,9 +19,8 @@
 | Backend Phase 2 | `PASS required` |
 | Frontend Phase 2 | `PASS required` |
 | Integration | `S08-INT-001 — Accepted / Delivered / PASS required` |
-| Owner frontend approval | `valid /approve frontend owner comment + matching unedited bot receipt required` |
-| Owner integration approval | `valid /approve integration owner comment + matching unedited bot receipt required` |
-| Owner closure approval | `valid /approve closure owner comment + matching unedited bot receipt required` |
+| Closure entry review | `ChatGPT verifies all required evidence on current origin/main` |
+| Closure verdict owner | `ChatGPT exclusively` |
 | Open findings | `P1=0, P2=0 required; default P3=0` |
 | Proposed verdict | `Pending` |
 | Next permitted gate on closure PASS | `Stage 9 — Checking and Scoring planning/decomposition only` |
@@ -30,19 +29,7 @@ This file is a **closure-review contract**, not an implementation task.
 
 Stage Closure Review begins only after all implementation, checkpoint,
 integration, focused-fix, delivery, manual-smoke and cleanup work for Stage 8 is
-complete **and** the Orchestrator has reached:
-
-```text
-OWNER_CLOSURE_APPROVAL_REQUIRED
-```
-
-and the repository owner has issued:
-
-```text
-/approve closure
-```
-
-at that exact stopped state with a valid matching bot receipt.
+complete and ChatGPT has verified all entry conditions on current `origin/main`.
 
 Integration PASS alone does not release Closure Review.
 
@@ -89,10 +76,7 @@ All required conditions must pass.
 | `S08-FE-001…006` | all `Accepted / Delivered` |
 | `S08-FE-PHASE-2` | `PASS` |
 | `S08-INT-001` integration assets | `Accepted / Delivered / PASS` |
-| Owner frontend approval evidence | valid `/approve frontend` owner comment + matching unedited receipt |
-| Owner integration approval evidence | valid `/approve integration` owner comment + matching unedited receipt |
-| Owner closure approval evidence | valid `/approve closure` owner comment + matching unedited receipt |
-| Approval invalidation/rejection after receipt | none |
+| ChatGPT closure entry review | all required evidence verified on current `origin/main` |
 | Integration Harness Preflight | `PASS` |
 | Windows real-stack | `PASS` |
 | Android Teacher smoke | `PASS` |
@@ -111,22 +95,12 @@ All required conditions must pass.
 
 Any failed required entry condition blocks closure.
 
-Owner approval authority comes from the Stage Orchestrator's validated source
-comment + receipt chain, not from a manually written INDEX flag or the mere
-existence of this Closure contract.
+ChatGPT verifies the accepted/delivered implementation and focused-fix evidence,
+both Phase 2 PASS records, accepted/delivered Integration PASS, and repository
+synchronization/cleanliness on current `origin/main` before starting Closure
+Review. The mere existence of this contract does not release the review.
 
-Each approval must have been issued only at its applicable stopped state:
-
-```text
-/approve frontend    -> OWNER_FRONTEND_APPROVAL_REQUIRED
-/approve integration -> OWNER_INTEGRATION_APPROVAL_REQUIRED
-/approve closure     -> OWNER_CLOSURE_APPROVAL_REQUIRED
-```
-
-An early/wrong-gate command is not acceptable closure evidence.
-
-ChatGPT verifies this Stage-control evidence. Codex is not used to inspect or
-reconstruct owner-gate authority.
+ChatGPT retains exclusive ownership of the Stage Closure Review verdict.
 
 ---
 
@@ -255,15 +229,8 @@ required.
 Closure must verify every required implementation/fix commit is an ancestor of
 `CLOSURE_AUDITED_MAIN`.
 
-Also record the three validated owner-gate receipts as orchestration evidence:
-
-```text
-frontend approval receipt
-integration approval receipt
-closure approval receipt
-```
-
-These are workflow-authority evidence, not implementation task rows.
+Also record ChatGPT's verification that all closure entry conditions are
+satisfied on `CLOSURE_AUDITED_MAIN`.
 
 ---
 
@@ -1232,10 +1199,7 @@ S08-FE-001…006 accepted/delivered
 S08-FE-PHASE-2 PASS
 S08-INT-001 accepted/delivered/PASS
 
-owner frontend approval receipt VALID
-owner integration approval receipt VALID
-owner closure approval receipt VALID
-no later rejection/invalidation of those approvals
+ChatGPT closure entry conditions verified on current main
 
 roadmap acceptance PASS
 Stage Definition of Done PASS
@@ -1288,7 +1252,7 @@ Do not mark Stage 8 closed when:
 - a task is not delivered;
 - a checkpoint is not PASS;
 - Integration is not PASS;
-- any required owner approval receipt is missing, edited, rejected, invalidated or was issued at the wrong gate;
+- ChatGPT has not verified all closure entry conditions on current main;
 - required Android smoke is missing;
 - required security/oracle evidence is missing;
 - current main differs from accepted audited state without review;
@@ -1323,10 +1287,8 @@ S08-FE-001…006 = Accepted / Delivered
 S08-FE-PHASE-2 = PASS
 S08-INT-001 = Accepted / Delivered / PASS
 
-Owner gates:
-frontend approval = VALID /approve frontend receipt
-integration approval = VALID /approve integration receipt
-closure approval = VALID /approve closure receipt
+Closure entry review:
+ChatGPT verified all required evidence on current main
 
 Evidence:
 Backend Phase 2 = PASS
@@ -1396,11 +1358,9 @@ closure record.
 ```text
 all tasks final
 Backend Phase 2 PASS
-owner frontend approval evidence recorded
 Frontend Phase 2 PASS
-owner integration approval evidence recorded
 S08-INT-001 PASS
-owner closure approval evidence recorded
+ChatGPT closure entry verification recorded
 Stage 8 Closed/PASS
 next gate = Stage 9 planning/decomposition only
 ```
@@ -1546,9 +1506,7 @@ task delivery table
 Backend Phase 2 evidence
 Frontend Phase 2 evidence
 Integration evidence
-owner frontend approval receipt
-owner integration approval receipt
-owner closure approval receipt
+ChatGPT closure entry verification on audited main
 Android Teacher smoke
 Android Student smoke
 cleanup
@@ -1641,7 +1599,7 @@ Evidence rerun policy                  = DEFINED
 Next Stage gate                        = DEFINED
 
 Closure contract readiness              = PASS
-Execution state                         = BLOCKED until S08-INT-001 final PASS + valid /approve closure receipt
-Owner gate evidence                     = all three receipts must be valid at closure
+Execution state                         = BLOCKED until all accepted/delivered work, Phase 2 PASS records, final Integration PASS and required fixes/delivery are complete
+Closure entry evidence                  = ChatGPT verifies all entry conditions on current origin/main
 Next gate after full closure             = Stage 9 planning/decomposition only
 ```
