@@ -4017,9 +4017,12 @@ Possible stable codes:
 blitz_attempt_exception_not_allowed
 blitz_attempt_exception_already_granted
 blitz_normal_attempt_required
+result_closed
 ```
 
 No normal #1 returns `409 blitz_normal_attempt_required`; an existing exception returns `409 blitz_attempt_exception_already_granted`; a disallowed grant returns `409 blitz_attempt_exception_not_allowed` under the lifecycle/locked-state rules above.
+
+A closed Student Topic Result returns `409 result_closed` under the existing result-closure protection.
 
 ## 19.4 Blitz Monitoring
 
@@ -4037,8 +4040,8 @@ GET /api/v1/teacher/blitz/{blitz}/monitoring
       "status": "active",
       "duration_seconds": 600,
       "activated_at": "2026-08-07T15:00:00Z",
-      "timer_start_mode_snapshot": "synchronized",
       "timing": {
+        "mode": "synchronized",
         "synchronized_ends_at": "2026-08-07T15:10:00Z",
         "server_now": "2026-08-07T15:04:00Z"
       }
@@ -4047,7 +4050,8 @@ GET /api/v1/teacher/blitz/{blitz}/monitoring
       "assigned": 25,
       "not_started": 5,
       "in_progress": 8,
-      "finalized": 12,
+      "finalized": 10,
+      "waiting_for_teacher_review": 2,
       "attempt_exceptions_granted": 1
     },
     "students": [
@@ -4062,6 +4066,7 @@ GET /api/v1/teacher/blitz/{blitz}/monitoring
         "deadline_at": "2026-08-07T15:10:00Z",
         "remaining_seconds": 360,
         "finalization_reason": null,
+        "score": null,
         "attempt_exception": null
       }
     ]
@@ -4072,6 +4077,10 @@ GET /api/v1/teacher/blitz/{blitz}/monitoring
 ### Rule
 
 Monitoring exposes authorized execution state: not started, in progress, explicit Submit, timeout-finalized, task-close-finalized, Attempt number/timing and exception state. `submitted` with `student_submit` differs from `submitted` with `task_closed_auto_finalize`; timeout is `timed_out_finalized` with `timeout_auto_submit`. It exposes no Stage 8 score/checking result. Any later-review-pending projection does not persist a review-state transition.
+
+Monitoring exposes `blitz.timing.mode = blitz_tasks.timer_start_mode_snapshot` as a derived projection of the authoritative persisted snapshot, with no fallback to the current Institution setting and no top-level `timer_start_mode_snapshot` in the monitoring Blitz resource.
+
+The summary preserves `assigned = not_started + in_progress + finalized + waiting_for_teacher_review`. The `waiting_for_teacher_review` bucket remains on the wire for Stage 9 compatibility; Stage 8 itself never creates that state through checking. Every monitoring Student row must include `score: null` throughout Stage 8 so the strict frontend parser can verify that no score has leaked.
 
 Monitoring must not allow the Teacher to answer for the Student, mutate answers, award points, check work, create an Attempt, extend deadlines or change timer mode. Any necessary timeout reconciliation reuses the same authoritative finalization engine, with canonical whole-second `server_now`/`snapshotAt`; it never uses a competing transition path or exposes another Institution.
 
@@ -4101,6 +4110,8 @@ GET /api/v1/student/blitz/{blitz}
 
 Correct-answer configuration must never be returned.
 
+Active-list and detail resources expose `timing.mode = blitz_tasks.timer_start_mode_snapshot` as a derived projection of the authoritative persisted snapshot. They never read the current Institution setting for this projection or expose a top-level `timer_start_mode_snapshot`.
+
 Example:
 
 ```json
@@ -4110,10 +4121,11 @@ Example:
     "title": "Topic Blitz",
     "status": "active",
     "duration_seconds": 600,
-    "timer_start_mode_snapshot": "synchronized",
     "timing": {
+      "mode": "synchronized",
       "server_now": "2026-08-07T15:04:00Z",
       "synchronized_ends_at": "2026-08-07T15:10:00Z",
+      "deadline_at": "2026-08-07T15:10:00Z",
       "remaining_seconds": 360
     },
     "attempts": {
@@ -4130,10 +4142,11 @@ For individual mode before the Student starts:
 
 ```json
 {
-  "timer_start_mode_snapshot": "individual",
   "timing": {
+    "mode": "individual",
     "server_now": "2026-08-07T15:04:00Z",
     "synchronized_ends_at": null,
+    "deadline_at": null,
     "remaining_seconds": null
   }
 }
@@ -4209,6 +4222,8 @@ Authorization, active lifecycle and applicable timing requirements remain mandat
 | `start_replacement` | Otherwise structurally valid history has no approved exception/available capacity | `409 attempts_exhausted`. |
 | `start_replacement` | Existing exception graph/capacity is invalid for replacement | `409 blitz_attempt_exception_not_allowed`, preserving the invariant/public-error split. |
 
+Successful Start, Resume and replacement Attempt resources expose `timing.mode = blitz_tasks.timer_start_mode_snapshot`, derived only from the authoritative persisted snapshot, never the current Institution setting. They do not expose a top-level `timer_start_mode_snapshot`.
+
 ### Synchronized Mode Success
 
 ```json
@@ -4219,8 +4234,8 @@ Authorization, active lifecycle and applicable timing requirements remain mandat
     "status": "in_progress",
     "started_at": "2026-08-07T15:04:00Z",
     "deadline_at": "2026-08-07T15:10:00Z",
-    "timer_start_mode_snapshot": "synchronized",
     "timing": {
+      "mode": "synchronized",
       "server_now": "2026-08-07T15:04:00Z",
       "remaining_seconds": 360
     },
@@ -4241,8 +4256,8 @@ A normal #1 uses `started_at = truncate_to_utc_second(server_now)` and `deadline
     "status": "in_progress",
     "started_at": "2026-08-07T15:04:00Z",
     "deadline_at": "2026-08-07T15:14:00Z",
-    "timer_start_mode_snapshot": "individual",
     "timing": {
+      "mode": "individual",
       "server_now": "2026-08-07T15:04:00Z",
       "remaining_seconds": 600
     },
