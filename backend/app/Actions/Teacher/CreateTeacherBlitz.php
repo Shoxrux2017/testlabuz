@@ -6,29 +6,29 @@ use App\Domain\Assessment\AssessmentPointMath;
 use App\Enums\AssessmentAssignmentMode;
 use App\Enums\AssessmentAssignmentSource;
 use App\Enums\AssessmentType;
-use App\Enums\HomeworkStatus;
+use App\Enums\BlitzStatus;
 use App\Enums\TopicStatus;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Assessment;
 use App\Models\AssessmentStudent;
-use App\Models\HomeworkAssignment;
+use App\Models\BlitzTask;
 use App\Models\User;
 use App\Support\Assessment\QuestionConfigurationWriter;
-use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
+use App\Support\Teacher\InstitutionBlitzScheduledAt;
 use App\Support\Teacher\TeacherAssessmentRecipients;
-use App\Support\Teacher\TeacherHomeworkAccess;
+use App\Support\Teacher\TeacherBlitzAccess;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
-final class CreateTeacherHomework
+final class CreateTeacherBlitz
 {
     public function __construct(
-        private readonly TeacherHomeworkAccess $access,
+        private readonly TeacherBlitzAccess $access,
         private readonly TeacherAssessmentRecipients $recipients,
-        private readonly InstitutionHomeworkDeadlineAt $deadlineAt,
+        private readonly InstitutionBlitzScheduledAt $scheduledAt,
         private readonly AssessmentPointMath $pointMath,
         private readonly QuestionConfigurationWriter $questionWriter,
-        private readonly ShowTeacherHomework $showTeacherHomework,
+        private readonly ShowTeacherBlitz $showTeacherBlitz,
     ) {}
 
     /**
@@ -38,7 +38,8 @@ final class CreateTeacherHomework
      *     student_instructions: string,
      *     assignment_mode: string,
      *     student_ids: list<string>,
-     *     deadline_at: ?string,
+     *     scheduled_at: ?string,
+     *     duration_seconds: int,
      *     questions: list<array<string, mixed>>
      * } $attributes
      */
@@ -57,8 +58,8 @@ final class CreateTeacherHomework
             $studentIds = $assignmentMode === AssessmentAssignmentMode::SelectedStudents
                 ? $this->recipients->lockSelected($teacher, $group, $attributes['student_ids'])
                 : [];
-            $deadlineAt = is_string($attributes['deadline_at'])
-                ? $this->deadlineAt->parse($teacher, $attributes['deadline_at'])
+            $scheduledAt = is_string($attributes['scheduled_at'])
+                ? $this->scheduledAt->requireFuture($teacher, $attributes['scheduled_at'], now())
                 : null;
             $totalPoints = $this->pointMath->sum(array_map(
                 static fn (array $question): int|float|string => $question['points'],
@@ -69,7 +70,7 @@ final class CreateTeacherHomework
                 'institution_id' => $teacher->institution_id,
                 'topic_id' => $topic->id,
                 'teacher_id' => $teacher->id,
-                'type' => AssessmentType::Homework,
+                'type' => AssessmentType::Blitz,
                 'title' => $attributes['title'],
                 'description' => $attributes['description'],
                 'student_instructions' => $attributes['student_instructions'],
@@ -77,11 +78,15 @@ final class CreateTeacherHomework
                 'total_possible_points' => $totalPoints,
             ]);
 
-            HomeworkAssignment::query()->create([
+            BlitzTask::query()->create([
                 'assessment_id' => $assessment->id,
                 'institution_id' => $teacher->institution_id,
-                'status' => HomeworkStatus::Draft,
-                'deadline_at' => $deadlineAt,
+                'status' => BlitzStatus::Draft,
+                'duration_seconds' => $attributes['duration_seconds'],
+                'timer_start_mode_snapshot' => null,
+                'synchronized_ends_at' => null,
+                'activated_by_user_id' => null,
+                'scheduled_at' => $scheduledAt,
                 'activated_at' => null,
                 'closed_at' => null,
                 'archived_at' => null,
@@ -103,7 +108,7 @@ final class CreateTeacherHomework
                 $this->questionWriter->create($assessment, $question);
             }
 
-            return ($this->showTeacherHomework)($teacher, $assessment->id);
+            return ($this->showTeacherBlitz)($teacher, $assessment->id);
         });
     }
 }

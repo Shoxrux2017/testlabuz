@@ -12,7 +12,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
-final class TeacherHomeworkRecipients
+final class TeacherAssessmentRecipients
 {
     /**
      * @param  list<string>  $studentIds

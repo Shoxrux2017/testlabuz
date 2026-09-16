@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Persistence;
 
+use App\Models\BlitzTask;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 use Tests\TestCase;
 
 class BlitzPersistenceSchemaInspectionTest extends TestCase
@@ -77,6 +80,73 @@ class BlitzPersistenceSchemaInspectionTest extends TestCase
         }
 
         $this->assertNull($this->column('blitz_tasks', 'duration_seconds')->column_default);
+    }
+
+    public function test_only_teacher_schedule_uses_microsecond_timestamp_precision(): void
+    {
+        foreach (['blitz_tasks', 'blitz_attempt_exceptions', 'assessment_attempts'] as $table) {
+            $timestamps = DB::select(
+                <<<'SQL'
+                    select column_name, datetime_precision
+                    from information_schema.columns
+                    where table_schema = 'public' and table_name = ? and data_type = 'timestamp with time zone'
+                SQL,
+                [$table],
+            );
+            $this->assertNotEmpty($timestamps, "Timestamps for {$table} should exist.");
+
+            foreach ($timestamps as $timestamp) {
+                $expectedPrecision = $table === 'blitz_tasks' && $timestamp->column_name === 'scheduled_at' ? 6 : 0;
+                $this->assertSame($expectedPrecision, (int) $timestamp->datetime_precision, "Precision of {$table}.{$timestamp->column_name}");
+            }
+        }
+
+        $this->assertSame(6, (int) $this->column('blitz_tasks', 'scheduled_at')->datetime_precision);
+    }
+
+    public function test_schedule_precision_migration_preserves_existing_whole_second_and_null_schedules(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-16 09:00:00 UTC'));
+        BlitzTask::factory()->scheduled()->create(['scheduled_at' => '2026-09-17 05:00:00+00']);
+        BlitzTask::factory()->draft()->create();
+        $existingRows = DB::table('blitz_tasks')->orderBy('assessment_id')->get()->all();
+        $migration = require database_path('migrations/2026_09_16_000100_preserve_blitz_scheduled_at_microseconds.php');
+
+        $migration->down();
+
+        $this->assertSame(0, (int) $this->column('blitz_tasks', 'scheduled_at')->datetime_precision);
+        $this->assertEquals($existingRows, DB::table('blitz_tasks')->orderBy('assessment_id')->get()->all());
+
+        $migration->up();
+
+        $this->assertSame(6, (int) $this->column('blitz_tasks', 'scheduled_at')->datetime_precision);
+        $this->assertSame('YES', $this->column('blitz_tasks', 'scheduled_at')->is_nullable);
+        $this->assertEquals($existingRows, DB::table('blitz_tasks')->orderBy('assessment_id')->get()->all());
+    }
+
+    public function test_schedule_precision_rollback_refuses_to_discard_existing_fractional_values(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-16 09:00:00 UTC'));
+        $blitz = BlitzTask::factory()->scheduled()->create();
+        DB::table('blitz_tasks')->where('assessment_id', $blitz->assessment_id)->update([
+            'scheduled_at' => '2026-09-17 05:00:00.250001+00',
+        ]);
+        $existingRows = DB::table('blitz_tasks')->orderBy('assessment_id')->get()->all();
+        $migration = require database_path('migrations/2026_09_16_000100_preserve_blitz_scheduled_at_microseconds.php');
+
+        try {
+            $migration->down();
+            $this->fail('Precision reduction must refuse to discard a fractional scheduled instant.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame(
+                'Cannot reduce blitz_tasks.scheduled_at precision while fractional scheduled values exist.',
+                $exception->getMessage(),
+            );
+        }
+
+        $this->assertSame(6, (int) $this->column('blitz_tasks', 'scheduled_at')->datetime_precision);
+        $this->assertSame('YES', $this->column('blitz_tasks', 'scheduled_at')->is_nullable);
+        $this->assertEquals($existingRows, DB::table('blitz_tasks')->orderBy('assessment_id')->get()->all());
     }
 
     public function test_primary_and_unique_keys_preserve_shared_identity_and_exception_cardinality(): void
@@ -233,7 +303,7 @@ class BlitzPersistenceSchemaInspectionTest extends TestCase
     {
         $definition = DB::selectOne(
             <<<'SQL'
-                select data_type, is_nullable, character_maximum_length, column_default
+                select data_type, is_nullable, character_maximum_length, column_default, datetime_precision
                 from information_schema.columns
                 where table_schema = 'public' and table_name = ? and column_name = ?
             SQL,

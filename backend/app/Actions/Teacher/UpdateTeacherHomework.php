@@ -17,8 +17,8 @@ use App\Models\HomeworkAssignment;
 use App\Models\TopicResultPair;
 use App\Models\User;
 use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
+use App\Support\Teacher\TeacherAssessmentRecipients;
 use App\Support\Teacher\TeacherHomeworkLifecycleAccess;
-use App\Support\Teacher\TeacherHomeworkRecipients;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -34,7 +34,7 @@ final class UpdateTeacherHomework
 
     public function __construct(
         private readonly TeacherHomeworkLifecycleAccess $access,
-        private readonly TeacherHomeworkRecipients $recipients,
+        private readonly TeacherAssessmentRecipients $recipients,
         private readonly InstitutionHomeworkDeadlineAt $deadlineAt,
         private readonly ShowTeacherHomework $showTeacherHomework,
     ) {}

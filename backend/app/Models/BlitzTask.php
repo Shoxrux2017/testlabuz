@@ -6,10 +6,12 @@ use App\Enums\BlitzStatus;
 use App\Enums\BlitzTimerStartMode;
 use Database\Factories\BlitzTaskFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 #[Fillable([
     'assessment_id',
@@ -44,12 +46,22 @@ class BlitzTask extends Model
             'status' => BlitzStatus::class,
             'duration_seconds' => 'integer',
             'timer_start_mode_snapshot' => BlitzTimerStartMode::class,
-            'scheduled_at' => 'datetime',
             'activated_at' => 'datetime',
             'synchronized_ends_at' => 'datetime',
             'closed_at' => 'datetime',
             'archived_at' => 'datetime',
         ];
+    }
+
+    protected function scheduledAt(): Attribute
+    {
+        // Keep teacher-entered microseconds separate from the whole-second execution timestamps.
+        return Attribute::make(
+            get: fn (?string $value): ?Carbon => $value === null ? null : $this->asDateTime($value),
+            set: fn (mixed $value): ?string => $value === null
+                ? null
+                : $this->asDateTime($value)->utc()->format('Y-m-d H:i:s.uP'),
+        )->withoutObjectCaching();
     }
 
     public function assessment(): BelongsTo

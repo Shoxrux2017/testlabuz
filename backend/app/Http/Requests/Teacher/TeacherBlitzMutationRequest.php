@@ -4,7 +4,7 @@ namespace App\Http\Requests\Teacher;
 
 use App\Enums\AssessmentAssignmentMode;
 use App\Support\Assessment\TeacherAssessmentQuestionPayloadValidator;
-use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
+use App\Support\Teacher\InstitutionBlitzScheduledAt;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -12,7 +12,7 @@ use Illuminate\Validation\Validator;
 use JsonException;
 use stdClass;
 
-abstract class TeacherHomeworkMutationRequest extends FormRequest
+abstract class TeacherBlitzMutationRequest extends FormRequest
 {
     protected const COMMON_INPUT_KEYS = [
         'title',
@@ -20,7 +20,7 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
         'student_instructions',
         'assignment_mode',
         'student_ids',
-        'deadline_at',
+        'duration_seconds',
     ];
 
     private bool $rawBodyDecoded = false;
@@ -81,7 +81,7 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
             }
 
             if ($this->requiresAtLeastOneField() && $this->hasJsonObjectBody() && $acceptedJsonKeys === []) {
-                $validator->errors()->add('body', 'At least one Homework field is required.');
+                $validator->errors()->add('body', 'At least one Blitz field is required.');
             }
 
             foreach ($queryKeys as $queryKey) {
@@ -101,16 +101,16 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
 
     protected function commonRules(bool $required): array
     {
-        $presence = $required ? 'required' : 'sometimes';
+        $presence = $required ? ['required'] : ['sometimes', 'required'];
 
         return [
-            'title' => [$presence, 'string', 'min:1', 'max:255'],
+            'title' => [...$presence, 'string', 'min:1', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string', 'max:10000'],
-            'student_instructions' => [$presence, 'string', 'min:1', 'max:10000'],
-            'assignment_mode' => [$presence, 'string', Rule::in(AssessmentAssignmentMode::values())],
+            'student_instructions' => [...$presence, 'string', 'min:1', 'max:10000'],
+            'assignment_mode' => [...$presence, 'string', Rule::in(AssessmentAssignmentMode::values())],
             'student_ids' => [$required ? 'present' : 'sometimes', 'array'],
-            'student_ids.*' => ['string', 'uuid'],
-            'deadline_at' => ['sometimes', 'nullable', 'string', $this->deadlineSyntaxRule()],
+            'student_ids.*' => ['required', 'string', 'uuid'],
+            'duration_seconds' => [...$presence, 'integer', 'min:1', 'max:2147483647'],
         ];
     }
 
@@ -144,11 +144,11 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
         return $attributes;
     }
 
-    private function deadlineSyntaxRule(): Closure
+    protected function scheduledAtSyntaxRule(): Closure
     {
         return static function (string $attribute, mixed $value, Closure $fail): void {
-            if (is_string($value) && ! InstitutionHomeworkDeadlineAt::hasValidSyntax($value)) {
-                $fail('The deadline_at must be an RFC 3339 date-time with an explicit numeric offset.');
+            if (is_string($value) && ! InstitutionBlitzScheduledAt::hasValidSyntax($value)) {
+                $fail('The scheduled_at must be an RFC 3339 date-time with an explicit numeric offset.');
             }
         };
     }
@@ -188,6 +188,10 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
             return;
         }
 
+        if (property_exists($rawBody, 'duration_seconds') && ! is_int($rawBody->duration_seconds)) {
+            $validator->errors()->add('duration_seconds', 'The duration_seconds must be a JSON integer.');
+        }
+
         if (property_exists($rawBody, 'student_ids') && ! is_array($rawBody->student_ids)) {
             $validator->errors()->add('student_ids', 'The student_ids must be a JSON array.');
         }
@@ -210,12 +214,12 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
         $studentIds = $payload['student_ids'] ?? null;
 
         if ($mode === AssessmentAssignmentMode::Group->value && $studentIds !== []) {
-            $validator->errors()->add('student_ids', 'Group Homework requires an empty student_ids array.');
+            $validator->errors()->add('student_ids', 'Group Blitz requires an empty student_ids array.');
         }
 
         if ($mode === AssessmentAssignmentMode::SelectedStudents->value
             && (! is_array($studentIds) || $studentIds === [])) {
-            $validator->errors()->add('student_ids', 'Selected-student Homework requires at least one student ID.');
+            $validator->errors()->add('student_ids', 'Selected-student Blitz requires at least one student ID.');
         }
     }
 
