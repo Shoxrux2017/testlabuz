@@ -17,8 +17,7 @@
 | Verification executor | Project Owner / approved CI |
 | Codex role | None during read-only review; focused fixes only from a later ChatGPT fix contract |
 | Verdict | Pending |
-| Next permitted gate after PASS | `OWNER_INTEGRATION_APPROVAL_REQUIRED` |
-| Required owner command at that gate | `/approve integration` |
+| Next permitted gate after PASS | `ChatGPT current-main/readiness review of S08-INT-001` |
 
 This is a **checkpoint/review contract**, not an implementation task.
 
@@ -1626,8 +1625,8 @@ Verdict:
 PASS | NOT ACCEPTED
 
 If PASS:
-Next required state = OWNER_INTEGRATION_APPROVAL_REQUIRED
-Integration owner approval = NOT YET GRANTED BY THIS PASS
+Next required activity = ChatGPT re-checks current main and S08-INT-001 readiness
+Integration release = after ChatGPT confirms both Phase 2 PASS records and current readiness
 ```
 
 Do not paste enormous passing logs.
@@ -1644,49 +1643,31 @@ After:
 S08-FE-PHASE-2 = PASS
 ```
 
-with Backend Phase 2 PASS still valid, the Stage must stop at:
+with Backend Phase 2 PASS still valid, ChatGPT must:
 
-```text
-OWNER_INTEGRATION_APPROVAL_REQUIRED
-```
+1. re-check current `origin/main`;
+2. confirm both Phase 2 PASS records remain valid;
+3. revalidate `S08-INT-001` against delivered dependencies and the directly
+   relevant implementation/tests;
+4. record current readiness as `Approved` and release only that integration
+   contract to Codex.
 
-The repository owner must then send, at that exact stopped state:
+The integration contract's harness/preflight requirements remain mandatory.
+ChatGPT performs Integration Harness Preflight after harness delivery and before
+the first full real-stack runner.
 
-```text
-/approve integration
-```
-
-The Stage Orchestrator must validate the original owner comment and matching
-bot-created receipt before `S08-INT-001` is released.
-
-An early `/approve integration`, an INDEX flag, or cached issue metadata without
-valid receipt evidence cannot authorize integration.
-
-Only after:
-
-```text
-Backend Phase 2 PASS
-+
-Frontend Phase 2 PASS
-+
-valid current owner integration approval receipt
-```
-
-may ChatGPT/orchestration re-check current `origin/main`, run the Integration
-Harness Preflight and hand the exact integration contract to Codex.
-
-Codex must not inspect the Stage-control issue/comments/receipts to decide gate
-authority.
+Codex receives the approved self-contained contract and must not inspect Stage
+history or the INDEX to infer implementation requirements or readiness.
 
 Frontend Phase 2 PASS does **not** close Stage 8.
 
 Still required:
 
 ```text
-OWNER_INTEGRATION_APPROVAL_REQUIRED
-S08-INT-001
+ChatGPT current-main/readiness review of S08-INT-001
+S08-INT-001 Accepted / Delivered / PASS
 required integration fixes
-OWNER_CLOSURE_APPROVAL_REQUIRED
+ChatGPT verifies closure entry conditions on current main
 STAGE_08_CLOSURE_REVIEW
 ```
 
@@ -1726,6 +1707,6 @@ Focused fix workflow                = DEFINED
 
 Checkpoint contract readiness       = PASS
 Execution state                     = BLOCKED until S08-FE-001…006 are Accepted / Delivered on origin/main
-Next gate after checkpoint PASS      = OWNER_INTEGRATION_APPROVAL_REQUIRED
-Integration release                 = valid /approve integration owner receipt only
+Next gate after checkpoint PASS      = ChatGPT current-main/readiness review of S08-INT-001
+Integration release                 = both Phase 2 PASS records valid + current ChatGPT readiness approval
 ```

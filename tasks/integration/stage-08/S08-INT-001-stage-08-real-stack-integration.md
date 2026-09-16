@@ -7,9 +7,9 @@
 | Task ID | `S08-INT-001` |
 | Stage | `Stage 8 — Blitz Task Workflow` |
 | Area | `Integration / real-stack E2E / security / persistence` |
-| Status | `Approved — execution gated by both Phase 2 PASS + owner integration approval` |
+| Status | `Approved — execution gated by both Phase 2 PASS + current ChatGPT readiness approval` |
 | Depends on | `S08-BE-PHASE-2 = PASS`; `S08-FE-PHASE-2 = PASS` |
-| Owner integration gate | `Required: valid /approve integration receipt at OWNER_INTEGRATION_APPROVAL_REQUIRED` |
+| Current readiness gate | `Required: ChatGPT re-checks current main and integration readiness` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex integration-asset implementation |
 | Harness implementation | `Codex — integration/test assets only` |
@@ -18,48 +18,33 @@
 | Android real-stack manual smoke | `Project Owner` |
 | Final integration review/verdict | `ChatGPT` |
 | Production changes allowed in this task | `No` |
-| Next gate after final PASS | `OWNER_CLOSURE_APPROVAL_REQUIRED` → owner `/approve closure` → valid receipt → `STAGE_08_CLOSURE_REVIEW` |
+| Next gate after final PASS | `ChatGPT verifies closure entry conditions on current main` → `STAGE_08_CLOSURE_REVIEW` |
 
-This task becomes eligible for the owner integration gate only after:
+This task becomes eligible for ChatGPT readiness review only after:
 
 ```text
 S08-BE-PHASE-2 = PASS
 S08-FE-PHASE-2 = PASS
 ```
 
-At that point the Stage must stop at:
-
-```text
-OWNER_INTEGRATION_APPROVAL_REQUIRED
-```
-
-The repository owner must send:
-
-```text
-/approve integration
-```
-
-at that exact stopped state.
-
-The Stage Orchestrator must validate the original owner comment and matching
-bot-created receipt before this contract is handed to Codex.
-
-A cached INDEX/issue-body flag or an early owner command is not approval.
-
 The complete accepted Stage 8 implementation must also be present on current
 `origin/main`.
 
-Before Codex begins integration-asset implementation, ChatGPT/orchestration must:
+Before Codex begins integration-asset implementation, ChatGPT must:
 
 1. confirm both Phase 2 PASS records remain valid;
-2. confirm the Orchestrator has a valid current integration-approval receipt;
-3. re-check current `origin/main`;
+2. re-check current `origin/main`;
+3. revalidate this exact contract against delivered dependencies and directly
+   relevant implementation/tests, and record current readiness as `Approved`;
 4. freeze the implementation SHA;
 5. confirm Git preflight is safe.
 
-Codex must not inspect Stage history, the task index, the control issue, owner
-comments or approval receipts to rediscover this authorization. Receiving this
-contract for implementation means orchestration already confirmed the gate.
+The required integration harness/preflight conditions remain mandatory at their
+defined execution points.
+
+Codex must not inspect Stage history or the task index to rediscover this
+authorization. Receiving this contract for implementation means ChatGPT already
+confirmed its current readiness.
 
 If `origin/main` advances afterward, stop and report the new SHA.
 
@@ -79,11 +64,7 @@ Backend Phase 2 PASS
 +
 Frontend Phase 2 PASS
 ->
-OWNER_INTEGRATION_APPROVAL_REQUIRED
-->
-repository owner: /approve integration
-->
-valid integration approval receipt
+ChatGPT re-checks current main and records integration readiness as Approved
 ->
 freeze current main
 ->
@@ -115,11 +96,7 @@ PASS | NOT ACCEPTED
 
 if PASS:
 ->
-OWNER_CLOSURE_APPROVAL_REQUIRED
-->
-repository owner: /approve closure
-->
-valid closure approval receipt
+ChatGPT verifies closure entry conditions on current main
 ->
 ChatGPT Stage Closure Review may begin
 ```
@@ -3808,8 +3785,8 @@ read-only preflight before the first full runner.
 
 Preflight checks:
 
-- valid `/approve integration` owner comment + matching unedited Orchestrator receipt is still present/current;
-- integration approval was issued only at `OWNER_INTEGRATION_APPROVAL_REQUIRED`;
+- both Phase 2 PASS records remain valid;
+- ChatGPT has re-checked current `origin/main` and integration readiness;
 - exact integration diff scope;
 - no production source changes;
 - runtime guard fail-closed logic;
@@ -4489,24 +4466,11 @@ P3=0
 ```
 
 After all Integration PASS conditions are satisfied and the integration result is
-accepted/delivered, stop.
+accepted/delivered, ChatGPT verifies Stage Closure Review entry conditions on
+current `origin/main` before beginning `STAGE_08_CLOSURE_REVIEW`.
 
-The next state must be:
-
-```text
-OWNER_CLOSURE_APPROVAL_REQUIRED
-```
-
-Do not start Closure Review merely because this task is PASS.
-
-Only a new repository-owner:
-
-```text
-/approve closure
-```
-
-comment at that exact state, with a valid matching bot receipt, releases ChatGPT
-Stage Closure Review.
+Integration PASS alone does not satisfy all closure entry conditions. ChatGPT
+retains exclusive ownership of the Stage Closure Review verdict.
 
 ---
 
@@ -4555,7 +4519,7 @@ Audited integration main: <sha>
 
 Backend Phase 2: PASS
 Frontend Phase 2: PASS
-Owner integration approval receipt: PASS
+ChatGPT current-main/integration readiness review: PASS
 Harness Preflight: PASS
 
 Runtime:
@@ -4642,10 +4606,10 @@ Verdict:
 PASS
 
 Next required gate:
-OWNER_CLOSURE_APPROVAL_REQUIRED
+ChatGPT verifies closure entry conditions on current main
 
-Closure approval:
-NOT YET GRANTED BY THIS PASS
+Closure Review:
+STAGE_08_CLOSURE_REVIEW after ChatGPT confirms all entry conditions
 ```
 
 Do not paste huge successful logs.
@@ -4807,7 +4771,7 @@ Findings/rerun policy               = RESOLVED
 
 Implementation Readiness Gate       = PASS
 Execution dependency                = S08-BE-PHASE-2 PASS + S08-FE-PHASE-2 PASS
-Owner integration approval          = REQUIRED before Codex handoff
-Next gate after final integration PASS = OWNER_CLOSURE_APPROVAL_REQUIRED
-Closure Review release              = valid /approve closure receipt only
+Current ChatGPT readiness approval   = REQUIRED before Codex handoff
+Next gate after final integration PASS = ChatGPT verifies closure entry conditions on current main
+Closure Review release              = all entry conditions verified by ChatGPT
 ```

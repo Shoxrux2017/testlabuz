@@ -341,12 +341,12 @@ excluded from the canonical Stage 8 package.
 
 ---
 
-## 8. Dependency Chain and Owner Approval Gates
+## 8. Dependency Chain and Manual Readiness Gates
 
 Primary execution order:
 
 ```text
-S08-DOC-001
+S08-DOC-001 Accepted / Delivered
     ↓
 S08-BE-001
     ↓
@@ -370,9 +370,7 @@ S08-BE-010
     ↓
 S08-BE-PHASE-2 PASS
     ↓
-OWNER_FRONTEND_APPROVAL_REQUIRED
-    ↓ owner comment: /approve frontend
-valid bot receipt
+ChatGPT re-checks current main and S08-FE-001 readiness
     ↓
 S08-FE-001
     ↓
@@ -388,72 +386,59 @@ S08-FE-006
     ↓
 S08-FE-PHASE-2 PASS
     ↓
-OWNER_INTEGRATION_APPROVAL_REQUIRED
-    ↓ owner comment: /approve integration
-valid bot receipt
+ChatGPT re-checks current main and S08-INT-001 readiness
     ↓
-S08-INT-001 PASS
+S08-INT-001 Accepted / Delivered / PASS
     ↓
-OWNER_CLOSURE_APPROVAL_REQUIRED
-    ↓ owner comment: /approve closure
-valid bot receipt
+ChatGPT verifies closure entry conditions on current main
     ↓
 STAGE_08_CLOSURE_REVIEW
 ```
 
-### 8.1 Exact owner commands
+### 8.1 Manual task workflow
 
-| Orchestrator stopped state | Repository-owner command | What the receipt releases |
-|---|---|---|
-| `OWNER_FRONTEND_APPROVAL_REQUIRED` | `/approve frontend` | first eligible frontend implementation task |
-| `OWNER_INTEGRATION_APPROVAL_REQUIRED` | `/approve integration` | Stage 8 integration task |
-| `OWNER_CLOSURE_APPROVAL_REQUIRED` | `/approve closure` | ChatGPT Stage Closure Review only |
-
-The command is valid only after the Orchestrator has reached its matching stopped
-state. An early, late or wrong-gate approval is not authority for a later gate.
-
-### 8.2 Approval evidence authority
-
-Approval is proven only by the current Stage Orchestrator's validated evidence:
+Work proceeds one task at a time:
 
 ```text
-original repository-owner comment
-+
-matching bot-created receipt
-+
-receipt/comment still present, exact and unedited
+ChatGPT current-main/readiness review
+→ one approved task contract
+→ Codex implementation + focused verification
+→ ChatGPT acceptance/review
+→ GitHub delivery
+→ Stage index bookkeeping
+→ next task
 ```
 
-The following are not approval authority:
+The Project Owner normally executes GitHub delivery unless the current contract
+explicitly assigns it to Codex. The Project Owner may explicitly tell ChatGPT to
+continue at any point; ChatGPT must still verify the next task's readiness.
 
-```text
-a boolean/word in this INDEX
-historical planning approval
-a manually written "approved" note
-an implementation contract merely existing
-a cached issue-body marker without valid receipt evidence
-```
+### 8.2 Readiness authority
 
-The Orchestrator reconstructs approval state from valid receipts/comments.
+Only the exact task whose current readiness/review status is `Approved` may be
+handed to Codex. Historical planning approval or the mere existence of a contract
+does not authorize execution.
+
+ChatGPT changes the exact next task from `Prepared` to `Approved` only after
+re-checking current `origin/main`, delivered dependencies, directly relevant
+implementation/tests, and the exact self-contained contract.
 
 ### 8.3 ChatGPT/Codex boundary
 
-Before handing the first task of a newly approved block to Codex:
+Before handing the first task of a new block to Codex:
 
-1. ChatGPT/orchestration confirms the previous checkpoint/integration evidence;
-2. ChatGPT confirms the Orchestrator is at the required owner gate;
-3. the Project Owner sends the exact applicable `/approve ...` command;
-4. ChatGPT/orchestration confirms the valid receipt;
-5. ChatGPT re-checks current `origin/main` and the exact next contract/readiness;
-6. only then may that contract be handed to Codex.
+1. ChatGPT confirms the previous checkpoint/integration evidence remains valid;
+2. ChatGPT re-checks current `origin/main` and delivered dependencies;
+3. ChatGPT inspects directly relevant implementation/tests and revalidates the
+   exact next contract;
+4. ChatGPT records current readiness as `Approved` for that exact task;
+5. only then may that contract be handed to Codex.
 
-Codex must not inspect the Stage control issue, INDEX, comments, receipts or
-Stage history to decide whether the owner gate passed. The implementation
-handoff itself means orchestration already confirmed the gate.
+Codex receives the approved self-contained contract and must not inspect the
+INDEX or Stage history to infer implementation requirements or readiness.
 
 Implementation contracts may record narrower direct task dependencies where
-safe. Owner approval prose remains outside the machine-parsed `Depends on`
-expressions in Section 7.
+safe.
 
 ---
 
@@ -688,26 +673,14 @@ P1 = 0
 P2 = 0
 ```
 
-the Stage must stop at:
-
-```text
-OWNER_FRONTEND_APPROVAL_REQUIRED
-```
-
-The repository owner must then send, at that exact gate:
-
-```text
-/approve frontend
-```
-
-and the Stage Orchestrator must create/validate the corresponding receipt before
-`S08-FE-001` may be handed off.
+ChatGPT re-checks current `origin/main`, confirms Backend Phase 2 PASS remains
+valid, revalidates `S08-FE-001`, and records its current readiness as `Approved`.
+Only then may `S08-FE-001` be handed to Codex.
 
 Any P3 findings must be explicitly accepted or fixed before the Backend Phase 2
 PASS is considered valid for this transition.
 
-ChatGPT/orchestration verifies the owner gate; Codex does not read control-issue
-comments or receipts.
+ChatGPT owns this readiness review; Codex receives only the approved contract.
 
 ---
 
@@ -830,23 +803,10 @@ P1 = 0
 P2 = 0
 ```
 
-and with Backend Phase 2 PASS still valid, the Stage must stop at:
-
-```text
-OWNER_INTEGRATION_APPROVAL_REQUIRED
-```
-
-The repository owner must send, at that exact gate:
-
-```text
-/approve integration
-```
-
-and the Stage Orchestrator must create/validate the corresponding receipt before
-`S08-INT-001` may be handed off.
-
-ChatGPT/orchestration verifies the owner gate; Codex receives only the already
-released integration contract.
+and with Backend Phase 2 PASS still valid, ChatGPT re-checks current
+`origin/main`, confirms both checkpoint PASS records, and revalidates
+`S08-INT-001`. After ChatGPT records current readiness as `Approved`, Codex may
+receive the released integration contract.
 
 ---
 
@@ -903,22 +863,12 @@ PASS
 
 but Integration PASS alone does not authorize Stage Closure Review.
 
-After accepted/delivered Integration PASS, the Stage must stop at:
+After accepted/delivered Integration PASS, ChatGPT verifies Stage Closure Review
+entry conditions on current `origin/main` before beginning
+`STAGE_08_CLOSURE_REVIEW`.
 
-```text
-OWNER_CLOSURE_APPROVAL_REQUIRED
-```
-
-The repository owner must send, at that exact gate:
-
-```text
-/approve closure
-```
-
-and the Stage Orchestrator must create/validate the corresponding receipt before
-ChatGPT may begin `STAGE_08_CLOSURE_REVIEW`.
-
-Closure approval releases review only; it does not itself mark Stage 8 closed.
+Meeting closure entry conditions releases review only; it does not itself mark
+Stage 8 closed. ChatGPT owns the Stage Closure Review verdict.
 
 ---
 
@@ -934,10 +884,10 @@ Stage 8 can be marked `STAGE CLOSED` only after all of the following are true:
 - `S08-FE-PHASE-2 = PASS`;
 - frontend checkpoint `P1 = 0`, `P2 = 0`;
 - `S08-INT-001 = Accepted / Delivered / PASS`;
-- valid `/approve frontend` owner comment + matching unedited receipt exists;
-- valid `/approve integration` owner comment + matching unedited receipt exists;
-- valid `/approve closure` owner comment + matching unedited receipt exists;
-- none of those approvals has subsequently been rejected/invalidated;
+- all required focused fixes and delivery are complete;
+- current `origin/main` contains the complete accepted Stage 8 result;
+- repository synchronization/cleanliness meets the closure contract;
+- ChatGPT has verified closure entry conditions on current `origin/main`;
 - required real-stack desktop/mobile evidence accepted;
 - required Tenant/security checks pass;
 - technical exception behavior is verified;
@@ -985,10 +935,6 @@ Do not regenerate duplicate task contracts merely because this index previously
 said they were not created.
 
 Saving the planning package to GitHub does **not** make all rows implementation-ready.
-
-Do not send `/approve frontend`, `/approve integration` or `/approve closure`
-during planning. Each command is applicable only after its exact stopped gate is
-reached by the Orchestrator.
 
 Work one implementation task at a time. Before each task reaches Codex, ChatGPT
 must re-check current `origin/main`, delivered dependency state, current code/tests,

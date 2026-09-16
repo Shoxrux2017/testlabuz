@@ -17,8 +17,7 @@
 | Codex role | `None during read-only review; focused fix implementation only if ChatGPT later issues a fix contract` |
 | Verdict | `Pending` |
 | Findings | `Pending` |
-| Next permitted gate after PASS | `OWNER_FRONTEND_APPROVAL_REQUIRED` |
-| Required owner command at that gate | `/approve frontend` |
+| Next permitted gate after PASS | `ChatGPT current-main/readiness review of S08-FE-001` |
 
 This file defines the mandatory Stage 8 Backend Phase 2 checkpoint.
 
@@ -1797,8 +1796,8 @@ Verdict:
 PASS | NOT ACCEPTED
 
 If PASS:
-Next required state = OWNER_FRONTEND_APPROVAL_REQUIRED
-Frontend owner approval = NOT YET GRANTED BY THIS PASS
+Next required activity = ChatGPT re-checks current main and S08-FE-001 readiness
+Frontend release = only S08-FE-001 after ChatGPT records current readiness as Approved
 ```
 
 Do not paste enormous successful test logs.
@@ -1817,55 +1816,35 @@ After:
 S08-BE-PHASE-2 = PASS
 ```
 
-the Stage must stop at:
+ChatGPT must:
 
-```text
-OWNER_FRONTEND_APPROVAL_REQUIRED
-```
+1. re-check current `origin/main`;
+2. confirm Backend Phase 2 PASS remains valid;
+3. revalidate `S08-FE-001` against delivered dependencies and the directly relevant
+   implementation/tests;
+4. record its current readiness as `Approved`;
+5. hand only the exact `S08-FE-001` contract to Codex.
 
-The repository owner must then send, at that exact stopped state:
-
-```text
-/approve frontend
-```
-
-The Stage Orchestrator must validate the original owner comment and its matching
-bot-created receipt before `S08-FE-001` is released.
-
-An early `/approve frontend`, a manually edited INDEX value, or a cached issue
-marker without valid receipt evidence is not authorization.
-
-Only after:
-
-```text
-Backend Phase 2 PASS
-+
-valid current owner frontend approval receipt
-```
-
-may ChatGPT/orchestration re-check current `origin/main`, confirm FE-001 current
-readiness, and hand the exact FE-001 contract to Codex.
-
-Codex must not inspect Stage history, the INDEX, control-issue comments or
-approval receipts to decide whether this gate passed.
+Codex receives the approved self-contained contract and must not inspect Stage
+history or the INDEX to infer implementation requirements or readiness.
 
 Backend PASS means:
 
 > The complete Stage 8 backend block is integrated and trusted enough to become
 > the frontend/API dependency.
 
-It does **not** mean the frontend block is owner-approved, and it does **not**
-mean Stage 8 is closed.
+It does **not** approve the entire frontend block for implementation, and it does
+**not** mean Stage 8 is closed.
 
 Still required later:
 
 ```text
-OWNER_FRONTEND_APPROVAL_REQUIRED
-S08-FE-001…006
-S08-FE-PHASE-2
-OWNER_INTEGRATION_APPROVAL_REQUIRED
-S08-INT-001
-OWNER_CLOSURE_APPROVAL_REQUIRED
+ChatGPT current-main/readiness review of S08-FE-001
+S08-FE-001…006 one task at a time
+S08-FE-PHASE-2 PASS
+ChatGPT current-main/readiness review of S08-INT-001
+S08-INT-001 Accepted / Delivered / PASS
+ChatGPT verifies closure entry conditions on current main
 STAGE_08_CLOSURE_REVIEW
 ```
 
@@ -1902,6 +1881,6 @@ Focused fix workflow                = DEFINED
 
 Checkpoint contract readiness       = PASS
 Execution state                     = BLOCKED until S08-BE-001…010 are Accepted / Delivered on origin/main
-Next gate after checkpoint PASS      = OWNER_FRONTEND_APPROVAL_REQUIRED
-Frontend release                    = valid /approve frontend owner receipt only
+Next gate after checkpoint PASS      = ChatGPT current-main/readiness review of S08-FE-001
+Frontend release                    = only S08-FE-001 after ChatGPT records current readiness as Approved
 ```
