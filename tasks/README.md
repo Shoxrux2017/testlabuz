@@ -79,6 +79,18 @@ GitHub is the source of truth. ChatGPT must re-check current repository state
 when preparing a task, checkpoint review, integration gate, or closure review
 instead of relying only on previous chat memory.
 
+#### ChatGPT review reporting
+
+- When a reviewed PR/task/checkpoint has no findings, ChatGPT reports only the
+  `PASS` status and the exact next action; no long review report by default.
+- When findings exist, ChatGPT reports the status briefly and, when implementation
+  changes are needed, provides the Codex fix prompt directly.
+- Detailed explanation of findings is provided only when the Project Owner
+  explicitly asks for it.
+- This reporting rule changes presentation only; it does not reduce review depth,
+  verification, acceptance criteria, security checks, Phase 2, integration, or
+  closure requirements.
+
 ### 1.3 Codex responsibility
 
 Codex is primarily an implementation agent.
