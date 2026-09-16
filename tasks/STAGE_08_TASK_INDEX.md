@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 8 — Blitz Task Workflow` |
-| Stage status | `Prepared — implementation not authorized` |
+| Stage status | `Approved — implementation proceeds only through current per-task readiness` |
 | Verification model | `Workflow v3 — Lean Verification + Backend/Frontend Phase 2 + Real-Stack Integration` |
 | Decomposition status | `Approved` |
 | Historical planning baseline `origin/main` | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
@@ -14,12 +14,12 @@
 | Previous Stage closure merge | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Current source of truth | `GitHub main — ChatGPT must re-check it before any readiness/handoff decision` |
 | Stage 8 implementation | `Not started` |
-| Detailed task contracts | `Prepared as candidate planning package — not yet implementation authorization` |
+| Detailed task contracts | `Final planning package reviewed and approved; execution remains per-task gated` |
 | Backend Phase 2 | `Not started` |
 | Frontend Phase 2 | `Not started` |
 | Integration | `Not started` |
 | Closure | `Not started` |
-| Next permitted gate | `Finish remaining planning-package review findings and final ChatGPT package review` |
+| Next permitted gate | `S08-DOC-001 implementation handoff` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -27,11 +27,12 @@ The SHA above is the **historical planning baseline**, not permission to rely on
 that revision for implementation. GitHub `main` is the current source of truth
 and must be re-checked by ChatGPT before any task receives current readiness.
 
-Stage 8 implementation has **not** started.
+Stage 8 planning/decomposition is approved. Stage 8 implementation has **not** started.
 
-All detailed Stage 8 task/checkpoint/integration/closure contracts are now
-prepared as candidate planning artifacts. Their existence or historical planning
-approval does **not** authorize Codex execution.
+All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
+reviewed and approved planning package. Their existence or historical planning
+approval does **not** authorize all tasks. Only the exact task whose
+`Current readiness / review status` is `Approved` may be handed to Codex.
 
 Before Codex receives a task, ChatGPT must re-check current `origin/main`,
 confirm delivered dependencies, inspect the directly relevant implementation/tests,
@@ -294,7 +295,7 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 
 | Order | Task ID | Area | Short outcome | Depends on | Historical planning-package contract status | Current readiness / review status | Delivery / execution status | Contract file |
 |---|---|---|---|---|---|---|---|---|
-| `0` | `S08-DOC-001` | `Documentation / Contract alignment` | `Freeze Stage 8 execution contract and Stage 8/9 boundary` | `Stage 7 closed + Stage 8 decomposition approved` | `Approved` | `Prepared` | `Not started` | `tasks/S08-DOC-001-stage-08-blitz-execution-contract-alignment.md` |
+| `0` | `S08-DOC-001` | `Documentation / Contract alignment` | `Freeze Stage 8 execution contract and Stage 8/9 boundary` | `Stage 7 closed + Stage 8 decomposition approved` | `Approved` | `Approved` | `Not started` | `tasks/S08-DOC-001-stage-08-blitz-execution-contract-alignment.md` |
 | `1` | `S08-BE-001` | `Backend` | `Blitz persistence/domain foundation` | `DOC-001 Accepted / Delivered` | `Approved` | `Prepared` | `Not started` | `tasks/backend/stage-08/S08-BE-001-blitz-persistence-domain-foundation.md` |
 | `2` | `S08-BE-002` | `Backend` | `Teacher Blitz authoring/read/update lifecycle API` | `DOC-001 + BE-001 Accepted / Delivered` | `Approved` | `Prepared` | `Not started` | `tasks/backend/stage-08/S08-BE-002-teacher-blitz-authoring-lifecycle-api.md` |
 | `3` | `S08-BE-003` | `Backend` | `Blitz Question authoring integration` | `DOC-001 + BE-001…002 Accepted / Delivered` | `Approved` | `Prepared` | `Not started` | `tasks/backend/stage-08/S08-BE-003-blitz-question-authoring-integration.md` |
@@ -320,8 +321,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 
 - `Historical planning-package contract status` records planning-time contract
   preparation/approval only. It is intentionally non-authoritative for execution.
-- `Current readiness / review status` is the authoritative current readiness
-  field. It begins as `Prepared`, not `Approved`.
+- `Current readiness / review status` is authoritative for task execution.
+  `S08-DOC-001` is currently `Approved`; all later tasks remain `Prepared`.
 - ChatGPT changes the exact next implementation task to current `Approved` only
   after re-checking current `origin/main`, dependency delivery and the final
   self-contained contract.
@@ -960,10 +961,10 @@ Current planning-package state:
 ```text
 Stage 7 closure                  = PASS
 Stage 8 decomposition            = Approved
-Stage 8 Stage status             = Prepared
-Stage 8 implementation           = NOT STARTED / NOT AUTHORIZED
-Detailed task contracts          = PREPARED as candidate planning package
-Current per-task readiness       = Prepared
+Stage 8 Stage status             = Approved
+Stage 8 implementation           = NOT STARTED
+Detailed task contracts          = Final planning package reviewed and approved; execution remains per-task gated
+Current per-task readiness       = S08-DOC-001 Approved; all later tasks Prepared
 Backend Phase 2                  = NOT STARTED
 Frontend Phase 2                 = NOT STARTED
 Integration                      = NOT STARTED
@@ -974,10 +975,7 @@ STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 The next permitted workflow action is:
 
 ```text
-finish remaining planning-package findings
-→ final ChatGPT pre-GitHub package review
-→ re-check current origin/main
-→ only then record current readiness for the exact next task
+S08-DOC-001 implementation handoff
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
