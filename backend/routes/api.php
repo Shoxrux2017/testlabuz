@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Student\StudentHomeworkAttemptAnswerController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkAttemptController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkController;
 use App\Http\Controllers\Api\V1\Student\StudentTopicController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherBlitzController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherHomeworkController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
@@ -106,6 +107,7 @@ Route::prefix('teacher')
         Route::post('topics', [TeacherTopicController::class, 'store']);
         Route::get('topics/{topic}/homework', [TeacherHomeworkController::class, 'index']);
         Route::post('topics/{topic}/homework', [TeacherHomeworkController::class, 'store']);
+        Route::post('topics/{topic}/blitz', [TeacherBlitzController::class, 'store']);
         Route::get('topics/{topic}/result-pair', [TeacherTopicResultPairController::class, 'show']);
         Route::put('topics/{topic}/result-pair', [TeacherTopicResultPairController::class, 'update']);
         Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
@@ -123,6 +125,11 @@ Route::prefix('teacher')
         Route::post('homework/{homework}/activate', [TeacherHomeworkController::class, 'activate']);
         Route::post('homework/{homework}/close', [TeacherHomeworkController::class, 'close']);
         Route::post('homework/{homework}/archive', [TeacherHomeworkController::class, 'archive']);
+        Route::get('blitz', [TeacherBlitzController::class, 'index']);
+        Route::get('blitz/{blitz}', [TeacherBlitzController::class, 'show']);
+        Route::patch('blitz/{blitz}', [TeacherBlitzController::class, 'update']);
+        Route::post('blitz/{blitz}/schedule', [TeacherBlitzController::class, 'schedule']);
+        Route::post('blitz/{blitz}/archive', [TeacherBlitzController::class, 'archive']);
         Route::post('assessments/{assessment}/questions', [TeacherQuestionController::class, 'store']);
         Route::post('assessments/{assessment}/questions/reorder', [TeacherQuestionController::class, 'reorder']);
         Route::patch('questions/{question}', [TeacherQuestionController::class, 'update']);
