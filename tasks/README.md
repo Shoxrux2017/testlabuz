@@ -333,6 +333,34 @@ There is no individual Phase 2 Read-Only Review after every Stage 5+ task.
 
 ### 8.1 A — Git Preflight
 
+Before every new implementation handoff to Codex, ChatGPT must explicitly
+instruct the Project Owner to synchronize local `main` with `origin/main`.
+This also applies after a merged implementation, bookkeeping, or fix PR before
+the next task starts. ChatGPT must write this synchronization step each time it
+is required, explicitly providing all commands below; it must not assume the
+Project Owner remembers the step from an earlier task.
+
+```text
+git switch main
+git fetch --prune origin
+git pull --ff-only origin main
+git status --short
+git rev-parse HEAD
+git rev-parse origin/main
+git rev-list --left-right --count main...origin/main
+```
+
+Implementation may proceed only when:
+
+- the current branch is `main`;
+- local `HEAD == origin/main`;
+- ahead/behind is `0/0`;
+- the working tree is clean.
+
+If any condition does not hold, synchronization must be resolved safely before
+handing the implementation task to Codex. This orchestration/preflight rule
+does not replace Codex's own Git preflight below.
+
 Before editing:
 
 1. verify the task status is `Approved`;
