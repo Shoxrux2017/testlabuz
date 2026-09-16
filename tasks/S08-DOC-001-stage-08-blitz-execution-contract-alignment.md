@@ -916,7 +916,10 @@ Idempotency-Key: <client-generated-uuid>
 
 Activation must be concurrency-safe and DB-backed.
 
-At successful activation capture one authoritative canonical instant:
+At normal first activation from eligible `draft` or `scheduled`, capture one
+authoritative canonical instant. Existing activation eligibility, cohort, timer
+snapshot and timing rules remain unchanged; Section 11.3 governs replay and
+fresh requests for an already-activated Blitz.
 
 ```text
 activatedAt = truncate_to_utc_second(server_now)
@@ -971,24 +974,71 @@ Activation only makes the Blitz available.
 
 Each eligible Student receives a personal deadline when that Student Starts.
 
-## 11.3 Activation replay
+## 11.3 Activation replay and fresh-request lifecycle
 
-Same valid idempotency scope/key/fingerprint:
+Authorization is mandatory before replay or fresh-request execution.
 
-- no second activation;
-- no timestamp churn;
-- no timer restart;
-- no recipient resnapshot;
-- no pair/cohort rewrite;
-- return the same logical activated Blitz.
+### Completed same-key activation replay
+
+A valid completed activation record with matching scope/key/fingerprint,
+valid persisted activation evidence and valid idempotency result metadata
+returns `200` with the current authorized Blitz resource when its current
+lifecycle is `active`, `closed` or `archived`.
+
+For `closed` or `archived`, this confirms the previous activation historically.
+It does not reopen the Blitz, restart its timer or rewrite its lifecycle.
+Replay performs zero activation-domain mutation and must not:
+
+```text
+rewrite activated_at
+rewrite timer_start_mode_snapshot
+rewrite synchronized_ends_at
+resnapshot recipients
+rewrite official cohort
+rewrite pair identity/lock
+reopen closed/archived Blitz
+```
+
+A completed-success record pointing to a current `draft` or `scheduled` Blitz
+is an impossible/inconsistent successful-activation history. Fail closed as an
+internal integrity inconsistency; do not return a successful replay or invent
+a successful public business state. Missing/invalid persisted activation
+evidence or idempotency result metadata must not produce a successful replay.
+
+### Fresh/new-key request for an active Blitz
+
+With a new valid idempotency key and current status `active`, activation is
+naturally idempotent: return `200` with the current authorized Blitz resource.
+The new idempotency claim may complete to that same logical Blitz.
+
+Perform zero activation-domain mutation: no timer restart, no `activated_at`
+rewrite, no recipient resnapshot, no official-cohort rewrite, no
+`synchronized_ends_at` rewrite, no `timer_start_mode_snapshot` rewrite and no
+pair identity/lock rewrite.
+
+### Fresh/new-key request for a closed or archived Blitz
+
+No historical replay exists for the submitted key. Return exactly:
+
+```text
+closed   -> 409 task_closed
+archived -> 409 task_archived
+```
+
+Do not reopen the Blitz. No successful activation idempotency result may remain
+for the failed new request.
+
+### Normal first activation
+
+An eligible `draft` or `scheduled` Blitz follows the ordinary successful
+activation contract in Sections 6–11.2, including the existing eligibility,
+cohort, timer snapshot and timing rules.
 
 Different request fingerprint with reused key:
 
 ```text
 409 idempotency_key_reused
 ```
-
-Authorization is still mandatory on replay.
 
 ---
 
@@ -1075,9 +1125,9 @@ intent
 
 `attempt_id` is forbidden.
 
-`start_normal` may create normal Attempt #1 when capacity is unused. It may
-return the already-existing in-progress #1 as a safe same-path result, but it
-must never create or switch to replacement Attempt #2.
+`start_normal` creates normal Attempt #1 when capacity is unused and all
+preconditions pass, or returns the already-existing editable in-progress #1
+under Section 13.9. It must never create or switch to replacement Attempt #2.
 
 ### Resume exact Attempt
 
@@ -1100,7 +1150,8 @@ attempt_id
 `attempt_id` is required, must be a canonical UUID and identifies the **exact**
 own Attempt the Student intends to continue.
 
-Resume may return only that exact own `in_progress` Attempt.
+For a fresh request, Resume may return only that exact own editable
+`in_progress` Attempt under Section 13.9. Completed replay follows Section 13.3.
 
 Resume must never:
 
@@ -1134,8 +1185,10 @@ intent
 
 `attempt_id` is forbidden.
 
-Only this intent may create/return replacement Attempt #2, and only when the
-Student has the valid unused exception/capacity defined in Section 20.
+Only this intent may create replacement Attempt #2, and only when the Student
+has the valid unused exception/capacity defined in Section 20. It may return an
+existing own editable in-progress #2 under Section 13.9; exact-target Resume
+may also return that #2 under the same matrix.
 
 It never creates another normal #1 and never creates #3.
 
@@ -1195,13 +1248,24 @@ exception availability
 
 in the fingerprint.
 
-Same key + same fingerprint:
+Completed valid same key + same fingerprint takes precedence over the fresh
+request matrix in Section 13.9, after mandatory authorization:
 
 ```text
 replay the same logical Start/Resume/replacement-Start result
 ```
 
-with no timer/history churn.
+with no new Attempt and no timer/history churn. Preserve the original
+successful semantic HTTP status:
+
+```text
+201 if the original operation created that Attempt
+200 if the original logical operation returned an existing Attempt
+```
+
+A later lifecycle transition does not reinterpret the original request into
+another intent or replace its completed logical result with a fresh-request
+decision.
 
 Same key reused with:
 
@@ -1230,7 +1294,7 @@ Starting replacement #2 requires a new logical request/key with:
 
 ## 13.4 Normal synchronized Start
 
-For normal Attempt #1 of an active synchronized Blitz:
+When creating normal Attempt #1 of an active synchronized Blitz:
 
 ```text
 startedAt = truncate_to_utc_second(server_now)
@@ -1255,7 +1319,7 @@ The approved replacement Attempt #2 is the narrow exception defined in Section
 
 ## 13.5 Normal individual Start
 
-For individual mode:
+When creating normal Attempt #1 in individual mode:
 
 ```text
 startedAt = truncate_to_utc_second(server_now)
@@ -1269,7 +1333,8 @@ Later Institution setting changes or client clock changes cannot alter them.
 
 ## 13.6 Resume timing
 
-Resume returns the exact requested own in-progress Attempt.
+For a fresh request, Resume returns the exact requested own in-progress Attempt
+only while it is still editable; due/terminal targets follow Section 13.9.
 
 It must not persist a new "resume time".
 
@@ -1286,7 +1351,7 @@ for current timing projection.
 
 ## 13.7 Replacement Start timing
 
-When `start_replacement` is valid:
+When `start_replacement` creates Attempt #2:
 
 ```text
 replacementStartedAt = truncate_to_utc_second(server_now)
@@ -1310,6 +1375,51 @@ Creating the first Attempt on the official Blitz follows Section 8.3 and may
 atomically set a previously-null pair `locked_at`.
 
 Practice Blitz Start does not mutate the result pair.
+
+## 13.9 Exact fresh-request decision/result matrix
+
+Keep exactly one public Start route: the endpoint at the start of Section 13.
+The strict bodies, validation and fingerprint rules above remain authoritative.
+Completed valid same-key/same-fingerprint results follow Section 13.3 before
+this fresh-request matrix. Authorization, lifecycle and applicable timing
+requirements remain mandatory.
+
+### `start_normal`
+
+| Own normal Attempt #1 state | Exact result |
+|---|---|
+| No #1 exists and all authorization/lifecycle/timing requirements pass | Create #1; `201`. |
+| #1 is `in_progress` and still editable | Return the same #1; `200`. No new Attempt and no `started_at`/`deadline_at` reset. |
+| #1 is `in_progress` and its deadline is reached | Apply authoritative timeout reconciliation when the owning finalization contract is available; then `409 blitz_time_expired`. Never return a stale editable Attempt. |
+| #1 is terminal | `409 attempts_exhausted`. Do not create another normal Attempt. |
+
+`start_normal` never creates #2. Separately granted replacement capacity does
+not reinterpret this intent.
+
+### `resume`
+
+| Exact requested target state/scope | Exact result |
+|---|---|
+| Exact own target is `in_progress` and still editable | Return that exact Attempt; `200`. No new Attempt, timer reset or switching. |
+| Exact own target is `in_progress` and its deadline is reached | Canonically reconcile the deadline, then `409 blitz_time_expired`. |
+| Exact own target is already terminal, including valid terminal execution/checking history as applicable | `409 attempt_not_editable`. |
+| Target belongs to another Student, Blitz or Institution, or is otherwise outside the authenticated Student's allowed target scope | Privacy-safe `404 resource_not_found`. |
+
+Resume never creates #1/#2, switches #1 to #2 or #2 to #1, or automatically
+selects a newer Attempt.
+
+### `start_replacement`
+
+| Own replacement state/capacity | Exact result |
+|---|---|
+| Valid unused approved exception capacity exists and all replacement preconditions/lifecycle/timing requirements pass | Create #2; `201`. |
+| Own #2 exists as `in_progress` and is still editable | Return the same #2; `200`. No #3 and no timer reset. |
+| Existing #2 is `in_progress` and already due | Apply canonical timeout reconciliation; then `409 blitz_time_expired`. |
+| Replacement #2 has been consumed and is terminal | `409 attempts_exhausted`. |
+| Otherwise structurally valid history has no approved replacement exception/available capacity | `409 attempts_exhausted`. |
+| Exception graph/capacity exists but is not valid for replacement | `409 blitz_attempt_exception_not_allowed`, preserving the existing invariant/public-error split. |
+
+Only `start_replacement` may create #2. Never create Attempt #3.
 
 ---
 
@@ -1750,7 +1860,28 @@ Require:
 - no prior exception exists for this Student/Blitz;
 - Attempt #2 does not already exist;
 - exception is for fairness/technical validity, not score improvement;
-- task state permits the approved exception workflow according to the live lifecycle contract.
+- `BlitzTask.status = active`.
+
+A new exception may be granted only while `BlitzTask.status = active`.
+For every other task lifecycle state, reject the new grant exactly:
+
+```text
+draft     -> 409 blitz_attempt_exception_not_allowed
+scheduled -> 409 blitz_attempt_exception_not_allowed
+closed    -> 409 blitz_attempt_exception_not_allowed
+archived  -> 409 blitz_attempt_exception_not_allowed
+```
+
+Teacher Close permanently prevents a new exception grant. The grant must not
+reopen a closed Blitz.
+
+In synchronized mode, `synchronized_ends_at` may already be in the past while
+`BlitzTask.status` remains `active`. That fact alone does not block an otherwise
+valid exception grant: approved Student-specific replacement Attempt #2
+receives its own full compensating duration under Section 20.3.
+
+The pre-deadline, due and already-terminal #1 rules in Section 20.2 still apply;
+every other grant precondition must pass.
 
 If no normal Attempt #1 exists:
 
@@ -1962,7 +2093,7 @@ idempotency_records
 
 model.
 
-Stage 8 documentation must add stable operation codes consistent with the existing naming convention:
+The Stage 8 high-risk operation set is exactly:
 
 ```text
 student.blitz.attempt.start
@@ -1971,7 +2102,10 @@ teacher.blitz.activate
 teacher.blitz.attempt_exception.grant
 ```
 
-If the shared final-submit implementation intentionally uses one operation code independent of Assessment type, preserve that delivered implementation convention instead of creating a conflicting duplicate operation. The live docs must be internally consistent.
+Stage 8 final Submit uses exactly `student.blitz.attempt.submit`. The delivered
+Stage 7 Homework operation remains `student.homework.attempt.submit` unchanged.
+Do not merge Homework and Blitz Submit operation identities or substitute an
+Assessment-type-independent final-submit operation.
 
 Ordinary:
 
@@ -2071,11 +2205,11 @@ Do not restate them with different semantics.
 | `docs/02-user-roles.md` | Keep Teacher/Student authority boundaries; clarify Teacher controls activation/duration/exception but never authoritative clock or Student answers; Stage 8 monitoring does not equal checking/scoring. |
 | `docs/03-features.md` | Align Blitz timeout/close semantics to frozen pending work; remove immediate Stage 8 scoring implication; keep one normal Attempt + one exception; clarify official cohort/timer snapshot and Teacher monitoring. |
 | `docs/04-user-flows.md` | Ensure flow is author → designate official Blitz when applicable → activate → Student Start → save → explicit Submit or timeout/close freeze → Stage 9 checking/review/scoring. Preserve final Stage 10 result flow. |
-| `docs/05-business-rules.md` | Align `BR-BLZ-*` and `BR-ATT-*`: lifecycle, official designation, cohort, synchronized/individual timing, timeout/close terminal states, no immediate checking/scoring, no fake rows, one exception, replacement eligibility. |
+| `docs/05-business-rules.md` | Align `BR-BLZ-*` and `BR-ATT-*`: lifecycle, official designation, cohort, synchronized/individual timing, timeout/close terminal states, no immediate checking/scoring, no fake rows, one exception, replacement eligibility. Freeze Section 20.1 active-only new exception grants: draft/scheduled/closed/archived return `409 blitz_attempt_exception_not_allowed`; Teacher Close permanently prevents new grants; an elapsed synchronized common end alone does not block a valid grant while active. |
 | `docs/06-roadmap.md` | Make Stage 8 completion criteria explicitly execution/finalization only and Stage 9 the owner of checking/scoring; preserve Stage 7 and Stage 10 boundaries; include concurrency/idempotency and result-pair/cohort semantics. |
-| `docs/07-architecture.md` | Separate Blitz execution engine from checking engine; freeze activation/timer/deadline, terminal-state, timeout/close, official pair/cohort, exception, idempotency, and lock/concurrency contracts. Remove wording that Stage 8 immediately checks/scores on timeout. |
-| `docs/08-database.md` | Align Blitz-specific detail table, Attempt lifecycle meaning, timeout/close timestamps/reasons, answer `pending` state, no fabricated answer row, exception eligibility/history, idempotency operation usage, and exact result-pair create/completion/replacement persistence. Blitz-only attach/replacement preserves `designated_by_user_id`/`designated_at`; only the owning Homework replacement may change those fields. Do not redesign already-delivered common tables unnecessarily. |
-| `docs/09-api-contracts.md` | Align Teacher Blitz authoring/lifecycle, result-pair PUT extension including initial atomic pair creation, activation idempotency, exact `timer_start_mode_snapshot` naming, and the final Student execution API. In §2.11 add the stricter Stage 8 server-generated execution-timestamp rule: UTC whole seconds, `YYYY-MM-DDTHH:MM:SSZ`, truncate/floor before timer comparison/arithmetic/persistence/projection, and exact integer `remaining_seconds`. In §18.2 fix the Create Blitz nested `questions[]` example/contract so every nested Question includes required unique `client_key`, `checking_mode`, and canonical `configuration` along with type/prompt/instructions/points/position. In §20.3 replace create-or-resume/empty-body wording with the three exact mandatory intent bodies (`start_normal`, `resume` + exact `attempt_id`, `start_replacement`), strict field rules, no-switch Resume, and idempotency fingerprint identity containing intent plus Resume target. In §20.5 replace `submission_locked` Blitz behavior with exact `blitz_time_expired` vs `attempt_not_editable` rules while preserving successful same-key replay. Align Blitz Attempt projection, answer/file timer enforcement, timeout reconciliation, close, exception, monitoring and stable errors. Exception grant rejects pre-deadline editable #1 and may first timeout-reconcile a due #1. Remove immediate Stage 8 scoring response fields/meaning. |
+| `docs/07-architecture.md` | Separate Blitz execution engine from checking engine; freeze activation/timer/deadline, terminal-state, timeout/close, official pair/cohort, exception, idempotency, and lock/concurrency contracts. Apply Section 20.1 active-only new exception-grant lifecycle, including permanent Teacher Close rejection and the elapsed synchronized-end allowance while active. Remove wording that Stage 8 immediately checks/scores on timeout. |
+| `docs/08-database.md` | Align Blitz-specific detail table, Attempt lifecycle meaning, timeout/close timestamps/reasons, answer `pending` state, no fabricated answer row, exception eligibility/history, idempotency operation usage, and exact result-pair create/completion/replacement persistence. Exception persistence follows Section 20.1 active-only grant preconditions. Use the exact four Stage 8 operations in Section 21, including `student.blitz.attempt.submit`; preserve the separate `student.homework.attempt.submit` identity without an Assessment-type-independent alternative. Blitz-only attach/replacement preserves `designated_by_user_id`/`designated_at`; only the owning Homework replacement may change those fields. Do not redesign already-delivered common tables unnecessarily. |
+| `docs/09-api-contracts.md` | Align Teacher Blitz authoring/lifecycle, result-pair PUT extension including initial atomic pair creation, activation idempotency, exact `timer_start_mode_snapshot` naming, and the final Student execution API. Apply Section 11.3 exactly: authorized completed same-key activation replay returns `200` for current active/closed/archived with valid activation evidence/result metadata and zero activation-domain mutation; current draft/scheduled is an internal integrity inconsistency. Fresh/new-key active returns `200` without activation-domain mutation; fresh closed/archived returns `409 task_closed`/`409 task_archived` with no successful claim; eligible first draft/scheduled activation remains unchanged. In §2.11 add the stricter Stage 8 server-generated execution-timestamp rule: UTC whole seconds, `YYYY-MM-DDTHH:MM:SSZ`, truncate/floor before timer comparison/arithmetic/persistence/projection, and exact integer `remaining_seconds`. In §18.2 fix the Create Blitz nested `questions[]` example/contract so every nested Question includes required unique `client_key`, `checking_mode`, and canonical `configuration` along with type/prompt/instructions/points/position. In §20.3 replace create-or-resume/empty-body wording with the three exact mandatory intent bodies (`start_normal`, `resume` + exact `attempt_id`, `start_replacement`), strict field rules, no-switch Resume, and idempotency fingerprint identity containing intent plus Resume target. Include the exact Section 13.9 result/error matrix and completed-replay precedence preserving original `201`/`200`. In §20.5 use exactly `student.blitz.attempt.submit`, separate from unchanged `student.homework.attempt.submit`, and replace `submission_locked` Blitz behavior with exact `blitz_time_expired` vs `attempt_not_editable` rules while preserving successful same-key replay. Use the exact four Stage 8 operations in Section 21 with no alternative Submit identity. Align Blitz Attempt projection, answer/file timer enforcement, timeout reconciliation, close, exception, monitoring and stable errors. Section 20.1 permits a new exception only while active; draft/scheduled/closed/archived return `409 blitz_attempt_exception_not_allowed`; Teacher Close permanently prevents new grants; elapsed synchronized end alone does not block a valid active grant. Exception grant rejects pre-deadline editable #1, may first timeout-reconcile a due #1 and preserves already-terminal #1 reason/timestamps. Remove immediate Stage 8 scoring response fields/meaning. |
 
 ---
 
@@ -2209,6 +2343,11 @@ attempt_answers
 ```
 
 Do not introduce duplicate Blitz Attempt/Answer tables.
+
+Document the exact Stage 8 idempotency operation set from Section 21.
+Blitz Submit uses `student.blitz.attempt.submit`; preserve the separate delivered
+Homework operation `student.homework.attempt.submit` without an alternative
+Assessment-type-independent Submit identity.
 
 ## 28.1 Blitz detail persistence
 
@@ -2449,6 +2588,21 @@ POST /api/v1/teacher/blitz/{blitz}/activate
 Idempotency-Key required
 ```
 
+Apply Section 11.3 after authorization:
+
+| Request/history | Current Blitz lifecycle | Exact result |
+|---|---|---|
+| Completed same-key/same-fingerprint activation with valid persisted activation evidence and idempotency result metadata | `active`, `closed`, `archived` | `200` current authorized Blitz resource; zero activation-domain mutation. Closed/archived confirms historical activation without reopening, timer restart or lifecycle rewrite. |
+| Completed-success activation record | `draft`, `scheduled` | Fail closed as an internal integrity inconsistency; never a successful replay. |
+| Fresh/new valid key | `active` | Naturally idempotent `200` current resource; new claim may complete to the same Blitz; zero activation-domain mutation. |
+| Fresh/new valid key | `closed` | `409 task_closed`; no successful activation result remains for this request. |
+| Fresh/new valid key | `archived` | `409 task_archived`; no successful activation result remains for this request. |
+| Normal first activation | Eligible `draft`, `scheduled` | Existing successful activation eligibility/cohort/timer rules remain unchanged. |
+
+Replay and fresh active success must not rewrite `activated_at`,
+`timer_start_mode_snapshot`, `synchronized_ends_at`, recipients, official cohort
+or pair identity/lock. No request may reopen closed/archived Blitz.
+
 Response must expose enough authoritative state for frontend timing, including
 the exact frozen activation field:
 
@@ -2553,7 +2707,7 @@ intent
 Resume attempt_id only when intent=resume
 ```
 
-Same key with a different intent/Resume target:
+Same key with a different Blitz, intent or Resume target:
 
 ```text
 409 idempotency_key_reused
@@ -2569,9 +2723,20 @@ deadline_at
 server_now / remaining_seconds timing projection
 ```
 
-New Attempt creation uses `201`; safe existing/same-path Resume result uses
-`200` according to the owning execution contract. A completed same-key replay
-preserves its original logical HTTP result.
+The exact fresh-request matrix is Section 13.9; document every result:
+
+| Intent | Exact results |
+|---|---|
+| `start_normal` | No #1 and all preconditions pass: create #1, `201`. Existing own editable in-progress #1: same #1, `200`, no timer reset. Due in-progress #1: authoritative timeout reconciliation when the owning finalization contract is available, then `409 blitz_time_expired`. Terminal #1: `409 attempts_exhausted`. Never create #2 or reinterpret replacement capacity as normal capacity. |
+| `resume` | Exact own editable in-progress target: `200` exact Attempt, no creation/reset/switching. Due exact in-progress target: canonical deadline reconciliation, then `409 blitz_time_expired`. Already-terminal target, including valid terminal execution/checking history as applicable: `409 attempt_not_editable`. Foreign Student/Blitz/Institution or otherwise out-of-scope target: privacy-safe `404 resource_not_found`. Never create #1/#2 or select another/newer Attempt. |
+| `start_replacement` | Valid unused approved exception capacity and all preconditions pass: create #2, `201`. Existing own editable in-progress #2: same #2, `200`, no timer reset. Due in-progress #2: canonical timeout reconciliation, then `409 blitz_time_expired`. Consumed terminal #2 or otherwise structurally valid history with no approved exception/available capacity: `409 attempts_exhausted`. Existing invalid exception graph/capacity: `409 blitz_attempt_exception_not_allowed` under the existing invariant/public-error split. Never create #3. |
+
+Completed valid same-key/same-fingerprint replay takes precedence after
+authorization: return the original logical result without a new Attempt,
+preserving `201` if it originally created the Attempt or `200` if it originally
+returned an existing Attempt. A later lifecycle transition does not reinterpret
+the original request into another intent. Fresh returns never reset
+`started_at` or `deadline_at` on an existing Attempt.
 
 No score is produced.
 
@@ -2591,6 +2756,9 @@ No awarded points/check result is returned as Stage 8 output.
 POST /api/v1/student/attempts/{attempt}/submit
 Idempotency-Key required
 ```
+
+The Stage 8 operation is exactly `student.blitz.attempt.submit`. Do not merge
+it with or change the delivered `student.homework.attempt.submit` operation.
 
 For Blitz success, response shows frozen execution state, not a final score.
 
@@ -2674,6 +2842,13 @@ Idempotency-Key required
 
 Require reason.
 
+Apply Section 20.1 exactly: a new grant requires `BlitzTask.status = active`.
+Draft/scheduled/closed/archived return `409 blitz_attempt_exception_not_allowed`.
+Teacher Close permanently prevents a new grant; grants never reopen the Blitz.
+An elapsed `synchronized_ends_at` alone does not block a valid active grant
+because #2 receives its own full compensating duration. Preserve Section 20.2
+pre-deadline rejection, due #1 reconciliation and terminal #1 history.
+
 Return durable exception/current attempt-capacity state, not score.
 
 ## 29.11 Monitoring
@@ -2695,20 +2870,39 @@ business_conflict
 institution_settings_incomplete
 idempotency_key_reused
 blitz_not_active
+task_closed
+task_archived
 blitz_time_expired
 attempt_not_editable
+attempts_exhausted
 blitz_attempt_exception_not_allowed
 blitz_attempt_exception_already_granted
 blitz_normal_attempt_required
 ```
 
-Reuse existing generic:
+The Section 13.9 Start matrix is authoritative, with no alternative public
+error convention:
 
-```text
-attempts_exhausted
-```
+| Exact result | Start/Resume/replacement condition |
+|---|---|
+| `201` | Valid fresh `start_normal` creates #1 or valid fresh `start_replacement` creates #2. |
+| `200` | `start_normal` returns own editable in-progress #1, `resume` returns its exact own editable in-progress target, or `start_replacement` returns own editable in-progress #2. No timer reset or new Attempt. |
+| `409 blitz_time_expired` | The selected existing in-progress #1, exact Resume target or #2 is due; reconcile under Section 13.9 before returning. |
+| `409 attempt_not_editable` | Exact own Resume target is already terminal, including valid terminal execution/checking history as applicable. |
+| `404 resource_not_found` | Resume target is outside the authenticated Student's allowed Student/Blitz/Institution scope. |
+| `409 attempts_exhausted` | `start_normal` finds terminal #1; `start_replacement` finds consumed terminal #2 or otherwise structurally valid history with no approved exception/available capacity. |
+| `409 blitz_attempt_exception_not_allowed` | `start_replacement` finds an existing exception graph/capacity invalid for replacement, under the existing invariant/public-error split. |
+| `409 idempotency_key_reused` | Same Start key is reused with another Blitz, intent or Resume `attempt_id`. |
 
-only if that is the current approved API convention for Blitz; otherwise preserve the current Blitz-specific documented code.
+Completed valid Start replay takes precedence after authorization and preserves
+the original logical `201`/`200` result; it never creates a new Attempt or
+reinterprets intent. Only `start_replacement` creates #2; no Attempt #3 exists.
+
+Activation lifecycle errors follow Section 11.3: fresh/new-key closed returns
+`409 task_closed`, and fresh/new-key archived returns `409 task_archived`.
+Neither error invalidates a valid completed historical replay. New exception
+grants outside `active` use `409 blitz_attempt_exception_not_allowed` under
+Section 20.1.
 
 Do not invent duplicate synonymous errors.
 
@@ -2815,12 +3009,25 @@ Do not add/redesign:
 - `resume` requires exact `attempt_id`; both Start intents forbid `attempt_id`;
 - empty/`{}`/unknown/malformed Start bodies are validation failures;
 - `start_normal` never creates replacement #2;
-- `resume` returns only the exact requested own in-progress Attempt and never creates/switches Attempts;
+- fresh `start_normal` creates unused #1 with `201`, returns own editable in-progress #1 with `200` without resetting `started_at`/`deadline_at`, timeout-reconciles due in-progress #1 when the owning finalization contract is available then returns `409 blitz_time_expired`, and rejects terminal #1 with `409 attempts_exhausted`;
+- separately granted replacement capacity never reinterprets `start_normal`;
+- fresh `resume` returns only the exact requested own editable in-progress Attempt with `200` and never creates/switches Attempts;
+- due exact in-progress Resume target is canonically reconciled then returns `409 blitz_time_expired`;
+- already-terminal exact Resume target, including valid terminal execution/checking history as applicable, returns `409 attempt_not_editable`;
+- Resume targets belonging to another Student/Blitz/Institution or otherwise outside allowed scope return privacy-safe `404 resource_not_found`;
 - only `start_replacement` may create replacement #2;
+- fresh `start_replacement` with valid unused approved capacity and all preconditions passing creates #2 with `201`; existing own editable in-progress #2 returns the same #2 with `200` without timer reset;
+- due in-progress #2 is canonically timeout-reconciled then returns `409 blitz_time_expired`;
+- consumed terminal #2 or otherwise structurally valid history with no approved exception/available replacement capacity returns `409 attempts_exhausted`;
+- existing invalid exception graph/capacity returns `409 blitz_attempt_exception_not_allowed` under the existing invariant/public-error split;
 - resume never resets timer;
 - exception permits at most Attempt #2;
 - no Attempt #3;
 - exception requires normal Attempt #1;
+- a new exception grant requires exactly `BlitzTask.status = active`;
+- draft/scheduled/closed/archived new exception grants return `409 blitz_attempt_exception_not_allowed`;
+- Teacher Close permanently prevents a new exception grant; the grant never reopens a closed Blitz;
+- an elapsed `synchronized_ends_at` alone does not block an otherwise valid grant while active because replacement #2 receives its own full compensating duration;
 - pre-deadline editable in-progress #1 rejects grant with `blitz_attempt_exception_not_allowed`;
 - due in-progress #1 is timeout-finalized at exact deadline before grant may continue;
 - already-terminal #1 preserves its terminal reason/timestamps;
@@ -2856,9 +3063,20 @@ Do not add/redesign:
 - Blitz activation requires `Idempotency-Key`;
 - exception grant requires `Idempotency-Key`;
 - Teacher Close does not gain a key requirement;
+- the exact Stage 8 operation set is `student.blitz.attempt.start`, `student.blitz.attempt.submit`, `teacher.blitz.activate`, `teacher.blitz.attempt_exception.grant`;
+- Blitz Submit uses only `student.blitz.attempt.submit`, preserving separate unchanged `student.homework.attempt.submit` with no Assessment-type-independent alternative;
 - same valid request replays without duplicate mutation;
+- authorized completed same-key activation replay with valid persisted activation evidence and idempotency result metadata returns `200` current Blitz for active/closed/archived;
+- closed/archived completed activation replay confirms history without reopening, timer restart or lifecycle rewrite;
+- completed-success activation pointing to current draft/scheduled fails closed as an internal integrity inconsistency, never successful replay;
+- fresh/new-key active activation is naturally idempotent `200` current Blitz and may complete the new claim to the same logical Blitz;
+- completed activation replay and fresh active success perform zero activation-domain mutation, preserving activation time, timer snapshot, synchronized end, recipients, official cohort and pair identity/lock;
+- fresh/new-key closed activation returns `409 task_closed`; archived returns `409 task_archived`; no successful activation result remains for either failed request;
+- eligible first activation from draft/scheduled retains existing eligibility/cohort/timer rules;
 - Student Blitz Start fingerprint includes exact `intent` and Resume `attempt_id`;
+- completed valid same-key/same-fingerprint Start replay precedes the fresh matrix after authorization, creates no new Attempt, and preserves original semantic `201` for creation or `200` for an existing Attempt;
 - a completed old Start/Resume key is never reinterpreted as replacement Start;
+- later lifecycle transitions never reinterpret a completed Start request into another intent;
 - different fingerprint reuse → `409 idempotency_key_reused`;
 - durable DB-backed records remain authoritative;
 - replay does not bypass authorization.
@@ -2869,6 +3087,7 @@ Do not add/redesign:
 - Student Blitz Start docs contain all three exact intent bodies;
 - Start docs do not contain empty-body/create-or-resume ambiguity;
 - Resume docs specify exact target/no-switch semantics;
+- Start docs contain the complete Section 13.9 result/error matrix with no conditional error-code choice;
 - Blitz Submit docs use `blitz_time_expired` for timeout-finalized new requests;
 - Blitz Submit docs use `attempt_not_editable` for other terminal new requests;
 - Blitz Submit docs do not use `submission_locked`;
@@ -2953,6 +3172,17 @@ blitz_assessment_id
 cohort_snapshotted_at
 locked_at
 Idempotency-Key
+student.blitz.attempt.start
+student.blitz.attempt.submit
+teacher.blitz.activate
+teacher.blitz.attempt_exception.grant
+student.homework.attempt.submit
+completed same-key activation replay
+fresh/new-key activation
+valid persisted activation evidence
+valid idempotency result metadata
+internal integrity inconsistency
+BlitzTask.status = active
 start_normal
 resume
 start_replacement
@@ -2961,9 +3191,13 @@ client_key
 checking_mode
 YYYY-MM-DDTHH:MM:SSZ
 remaining_seconds
+resource_not_found
 blitz_not_active
+task_closed
+task_archived
 blitz_time_expired
 attempt_not_editable
+attempts_exhausted
 blitz_attempt_exception_not_allowed
 blitz_attempt_exception_already_granted
 blitz_normal_attempt_required
@@ -2986,15 +3220,40 @@ Student Start body is empty or `{}` for Blitz
 Student Start is implicit create-or-resume without explicit intent
 Student Resume may switch to another current/newer Attempt
 Student Resume may create replacement #2
+start_normal may create another normal Attempt after terminal #1
+replacement capacity reinterprets start_normal as start_replacement
+due in-progress Start/Resume target returns a stale editable Attempt
+terminal exact Resume target returns a code other than 409 attempt_not_editable
+foreign Resume target exposes existence instead of 404 resource_not_found
+terminal normal capacity or consumed terminal #2 uses a code other than 409 attempts_exhausted
+missing approved replacement capacity in structurally valid history uses a code other than 409 attempts_exhausted
+invalid replacement exception graph/capacity uses an alternative public error instead of blitz_attempt_exception_not_allowed
+attempts_exhausted is used only if the current convention says so
+otherwise preserve some Blitz-specific error for exhausted capacity
+completed Start replay changes its original successful 201/200 semantic status
+start_replacement may create Attempt #3
 old Start/Resume key may be reinterpreted as start_replacement
 Student resume restarts the timer
 Create Blitz nested Question may omit client_key
 Create Blitz nested Question may omit checking_mode
 Blitz Submit new terminal request returns submission_locked
+Blitz Submit may use an Assessment-type-independent final-submit operation
+Blitz and Homework Submit may share or merge operation identities
+student.blitz.attempt.submit is optional or replaceable by an implementation convention
 Stage 8 execution timer wire timestamps may contain fractional seconds
 remaining_seconds is computed from hidden fractional/device-local time
 exception resets the synchronized class timer
 exception increases normal attempt count
+task state permits exception according to the live lifecycle contract without exact active-only status
+new exception grant may succeed for draft/scheduled/closed/archived Blitz
+Teacher Close may be reversed by a new exception grant
+elapsed synchronized_ends_at alone prevents an otherwise valid active exception grant
+completed same-key activation replay requires current status active only
+closed/archived historical activation replay must fail
+new activation key may reopen closed/archived Blitz
+completed activation replay may succeed while current Blitz is draft/scheduled
+fresh/new-key active activation restarts timers or resnapshots recipients/cohort
+failed fresh closed/archived activation retains a successful idempotency result
 locked result pair can never fill its previously-null Blitz side
 official Blitz resnapshots later Group membership
 selected-Student Blitz can become official
@@ -3049,6 +3308,10 @@ no Stage 7 behavior regression
 no Stage 9 implementation
 no Stage 10 implementation
 final three-intent Start API fully represented
+exact Start/Resume/replacement result matrix and completed-replay 201/200 precedence represented
+active-only exception grant and permanent Teacher Close boundary represented
+activation completed replay vs fresh-request lifecycle matrix represented
+exact student.blitz.attempt.submit operation with separate unchanged Homework identity represented
 final Blitz Submit terminal error matrix fully represented
 Create Blitz nested Question client_key/checking_mode represented
 whole-second timer convention represented
@@ -3107,6 +3370,10 @@ Attempt lifecycle                  = RESOLVED
 Timeout / close precedence         = RESOLVED
 Answer/file freeze boundary        = RESOLVED
 Student exception                  = RESOLVED
+Active-only exception grants       = RESOLVED
+Activation fresh/replay lifecycle  = RESOLVED
+Start/Resume/replacement matrix    = RESOLVED
+Exact Blitz Submit operation       = RESOLVED
 High-risk idempotency              = RESOLVED
 Tenant/security boundary           = RESOLVED
 Acceptance criteria                = RESOLVED
