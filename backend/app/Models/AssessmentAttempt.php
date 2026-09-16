@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'institution_id',
@@ -76,6 +77,16 @@ class AssessmentAttempt extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(User::class, 'student_id');
+    }
+
+    public function invalidatingBlitzException(): HasOne
+    {
+        return $this->hasOne(BlitzAttemptException::class, 'invalidated_attempt_id');
+    }
+
+    public function replacementBlitzException(): HasOne
+    {
+        return $this->hasOne(BlitzAttemptException::class, 'replacement_attempt_id');
     }
 
     public function answers(): HasMany

@@ -55,6 +55,11 @@ class AssessmentStudent extends Model
         return $this->belongsTo(User::class, 'assigned_by_user_id');
     }
 
+    public function blitzAttemptExceptions(): HasMany
+    {
+        return $this->hasMany(BlitzAttemptException::class, 'assessment_student_id');
+    }
+
     public function attempts(): HasMany
     {
         return $this->hasMany(AssessmentAttempt::class);

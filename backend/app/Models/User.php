@@ -114,6 +114,21 @@ class User extends Authenticatable
         return $this->hasMany(AssessmentAttempt::class, 'student_id');
     }
 
+    public function activatedBlitzTasks(): HasMany
+    {
+        return $this->hasMany(BlitzTask::class, 'activated_by_user_id');
+    }
+
+    public function blitzAttemptExceptions(): HasMany
+    {
+        return $this->hasMany(BlitzAttemptException::class, 'student_id');
+    }
+
+    public function grantedBlitzAttemptExceptions(): HasMany
+    {
+        return $this->hasMany(BlitzAttemptException::class, 'granted_by_user_id');
+    }
+
     public function designatedTopicResultPairs(): HasMany
     {
         return $this->hasMany(TopicResultPair::class, 'designated_by_user_id');
