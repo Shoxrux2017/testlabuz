@@ -244,6 +244,10 @@ Under **individual start**:
 
 The Teacher does not control the authoritative clock. Server time determines start, remaining time, and timeout.
 
+Activation freezes the Institution policy as `timer_start_mode_snapshot`; the Teacher cannot override it or restart a timer through replay. The configured whole-Blitz duration and persisted Attempt deadline remain authoritative. Normal #1 follows the synchronized/individual rules above; approved replacement #2 receives the full configured duration from its own Start in either mode, without extending the class-wide timer.
+
+Stage 8 Teacher monitoring exposes authorized execution/finalization and exception state, without checking answers, awarding points, changing deadlines, or answering for a Student. Checking, Teacher review, and official task scoring belong to Stage 9; final Topic results belong to Stage 10.
+
 ### Blitz attempt exception
 
 Each Student normally has exactly **1 Blitz attempt**.
@@ -251,6 +255,8 @@ Each Student normally has exactly **1 Blitz attempt**.
 If a Student cannot properly complete that attempt because of a valid technical problem or another approved reason, the Teacher may grant **one additional Blitz attempt to that specific Student**.
 
 The Teacher must provide a reason for granting the exception.
+
+A new grant requires `BlitzTask.status = active`; draft, scheduled, closed, and archived reject it with `409 blitz_attempt_exception_not_allowed`. Teacher Close permanently prevents new grants. An elapsed synchronized common end alone does not block a valid active grant. Normal Attempt #1 must exist: a pre-deadline editable #1 rejects the grant; a due #1 is first timeout-finalized at its exact deadline; an already-terminal #1 keeps its reason/timestamps. The grant only authorizes Student replacement Start and never creates #2 on the Student's behalf.
 
 The original interrupted or invalid attempt remains in history and is excluded from official scoring according to the approved exception.
 
@@ -380,13 +386,15 @@ The Student must clearly see the remaining time.
 When the Blitz timer reaches zero:
 
 - The system stops accepting changes.
-- The current saved answers are automatically finalized.
-- Answers saved before the deadline are evaluated normally.
-- Unanswered questions receive zero points.
-- Answers requiring Teacher judgment remain waiting for Teacher review.
+- Stage 8 freezes committed answers/files at the persisted deadline as `timed_out_finalized + timeout_auto_submit`.
+- Saved answers remain `pending`, without awarded points or checking metadata.
+- No unanswered-answer row or Attempt for a never-started Student is fabricated.
+- Stage 9 later checks saved work, treats unanswered work as zero, and performs required Teacher review.
 - Writes received after the authoritative deadline are rejected.
 
 Changing the device clock or device timezone must not give the Student additional time.
+
+The Student explicitly chooses `start_normal`, exact-target `resume` with `attempt_id`, or `start_replacement`. Resume never creates/switches Attempts or resets a timer; only approved replacement Start can create #2, never #3. These actions remain limited to the Student's own Attempts and persisted recipients within the same Institution.
 
 ### Blitz technical exception
 
@@ -791,4 +799,4 @@ The main rule for the MVP is:
 - **Teacher:** may create practice Homework/Blitz for selected Students, but official grading tasks must be whole-group and share one snapshotted Topic cohort. The Teacher may close a Student Topic Result only after that Student reaches a terminal calculated or definitive Not completed state.
 - **Student:** for Multiple-choice, may never select more options than the server-provided `max_selections`; no correct-answer identity is exposed.
 - **Homework task closure:** closing an active Homework freezes currently in-progress Student Attempts from already-committed saved work as immutable `submitted` history. Stage 7 creates no fabricated Attempt or unanswered-answer row and performs no checking or scoring; Stage 9 later checks and scores the frozen work.
-- **Blitz task closure:** closing an active Blitz continues to auto-finalize currently in-progress Student attempts from saved answers; Students who never started receive no fabricated Attempt.
+- **Blitz task closure:** Stage 8 freezes committed pending work without checking/scoring or fabricated Attempt/answer rows. Due Attempts timeout-finalize at their exact deadlines; still-pre-deadline Attempts become `submitted + task_closed_auto_finalize` at the close instant. Existing terminal history is preserved, further Student Starts/writes stop, and no new exception may reopen the Blitz.
