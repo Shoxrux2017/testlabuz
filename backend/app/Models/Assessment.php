@@ -61,6 +61,16 @@ class Assessment extends Model
         return $this->hasOne(HomeworkAssignment::class, 'assessment_id');
     }
 
+    public function blitzTask(): HasOne
+    {
+        return $this->hasOne(BlitzTask::class, 'assessment_id');
+    }
+
+    public function blitzAttemptExceptions(): HasMany
+    {
+        return $this->hasMany(BlitzAttemptException::class);
+    }
+
     public function recipients(): HasMany
     {
         return $this->hasMany(AssessmentStudent::class);

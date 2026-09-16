@@ -76,6 +76,16 @@ class Institution extends Model
         return $this->hasMany(HomeworkAssignment::class);
     }
 
+    public function blitzTasks(): HasMany
+    {
+        return $this->hasMany(BlitzTask::class);
+    }
+
+    public function blitzAttemptExceptions(): HasMany
+    {
+        return $this->hasMany(BlitzAttemptException::class);
+    }
+
     public function assessmentStudents(): HasMany
     {
         return $this->hasMany(AssessmentStudent::class);
