@@ -248,7 +248,7 @@ The teacher should be able to start or activate a Blitz task during class. Stude
 
 The server is authoritative for all Blitz timing.
 
-The teacher should be able to monitor Blitz progress during class. For example, the Teacher should see which Students have access, started, are in progress, were auto-finalized at timeout, submitted, are waiting for manual review, did not complete the task, or have an approved technical-attempt exception.
+The teacher should be able to monitor Blitz execution during class: assigned/not-started Students, in-progress Attempts, explicit Submit, timeout/close finalization, Attempt number, remaining time, and approved technical exceptions. Stage 8 may project that work awaits later review, but does not perform checking, award points, or persist a review-state transition.
 
 The teacher should be able to review student submissions. Some assignment types can be checked automatically by the system, such as tests, true / false questions, matching tasks, ordering tasks, and fill-in-the-blank tasks.
 
@@ -361,7 +361,7 @@ The student should only be able to access a blitz task when the teacher starts o
 
 The Student should clearly see the remaining time for the **whole Blitz task**. The MVP does not use per-question Blitz timers.
 
-The Student should normally receive exactly **1 Blitz attempt**. When the authoritative timer reaches zero, the system must stop accepting changes and **automatically finalize the Student's saved answers**. Answers saved before the deadline are evaluated normally; unanswered questions receive zero points; answers that require Teacher judgment remain waiting for manual review. Writes received after the deadline are rejected.
+The Student should normally receive exactly **1 Blitz attempt**. When the authoritative timer reaches zero, Stage 8 stops accepting changes and freezes committed answers/files at the exact persisted deadline. Saved answers remain `pending`, with no awarded points or checking metadata and no fabricated unanswered-answer row or Attempt for a never-started Student. Stage 9 later evaluates saved work, treats unanswered work as zero, and performs required manual review. Writes received after the deadline are rejected.
 
 If a valid technical or other approved problem prevented proper completion, the Teacher may grant that Student exactly **one additional Blitz attempt**. The Student cannot grant this exception to themselves.
 
@@ -567,7 +567,7 @@ For example, one Topic may include:
 8. Final Topic result
 9. Understanding category
 
-The designated official Homework and official Blitz must belong to the same Topic, both must use whole-group assignment, and selected-Student tasks are practice-only. When the first official task becomes active, the current eligible Topic-group Students are snapshotted as the official cohort and reused for both tasks. Once Student attempt activity begins, the pair and cohort must not be replaced.
+The designated official Homework and official Blitz must belong to the same Topic and Institution, both must use whole-group assignment, and selected-Student tasks are practice-only. The first activated official task establishes the common cohort from its persisted recipient snapshot; later Group changes do not redefine it. Student activity locks designated task/cohort identities, while a previously-null Blitz side may still be completed in the same pair with eligible draft/scheduled whole-group Blitz and no Student activity. This preserves Homework, designation, cohort, and lock history; a populated locked Blitz side cannot be replaced. A valid official Homework is required, but a pre-existing pair row is not: one result-pair PUT may atomically create the initial pair with required Homework and optional eligible Blitz.
 
 The system should make it easy for teachers and students to understand this connection. Students should clearly see which materials, homework assignments, and blitz tasks belong to the same topic.
 
@@ -858,9 +858,17 @@ The Institution Admin chooses one institution-wide timer-start mode:
 
 The server is authoritative for time. Device clocks and device timezones cannot extend the Blitz.
 
+Teacher activation snapshots the configured Institution mode as `timer_start_mode_snapshot`; later settings changes cannot alter the activated Blitz. A null setting blocks activation only. Normal synchronized #1 uses `synchronized_ends_at = activated_at + duration_seconds`; normal individual #1 uses `deadline_at = started_at + duration_seconds`. The persisted Attempt deadline is authoritative. Execution instants are floored to UTC whole seconds before comparison/arithmetic/persistence/projection, serialize as `YYYY-MM-DDTHH:MM:SSZ`, and use `remaining_seconds = max(0, deadline_epoch_second - serverNow_epoch_second)` from the exact serialized operands.
+
 Each Student normally receives exactly **1 Blitz attempt**. If a valid technical or other approved problem prevents proper completion, the Teacher may grant exactly **one additional Blitz attempt to that Student** and must provide a reason. The original interrupted/invalid attempt remains in history and is excluded from official scoring according to the approved exception.
 
-When the timer reaches zero, the system stops accepting changes and **automatically finalizes saved answers**. Unanswered questions receive zero points. Saved answers are evaluated normally, and answers requiring Teacher judgment remain waiting for manual review.
+When the timer reaches zero, Stage 8 stops accepting changes and freezes the committed Attempt as `timed_out_finalized + timeout_auto_submit`, with `submitted_at = null` and `finalized_at = locked_at = deadline_at`. Saved answers remain `checking_status = pending`, with points, feedback, and check metadata null. No missing answer row or never-started Attempt is fabricated. Stage 9 later checks/scores the saved work, treats unanswered work as zero, and performs Teacher review; manual-review work is not wrong merely because it requires review.
+
+Pre-deadline explicit Submit uses `submitted + student_submit` with submission/finalization/lock timestamps equal to the submit instant. Teacher close uses `submitted + task_closed_auto_finalize` with `submitted_at = null` for still-pre-deadline Attempts at one captured close instant. Already-due Attempts timeout-finalize at their own exact deadlines first, including different individual deadlines; terminal history is never rewritten. Answer/file writes and finalization are serialized so no Student mutation can commit after freeze. Close blocks further Starts/writes; archive preserves history.
+
+A new technical exception requires an active Blitz, a required reason, persisted recipient membership, normal #1, and no existing exception/#2. A pre-deadline editable #1 rejects the grant; a due #1 is first timeout-finalized; terminal #1 keeps its reason/timestamps. Other task statuses return `409 blitz_attempt_exception_not_allowed`, and Teacher Close permanently prevents new grants. An elapsed synchronized common end alone does not block a valid active grant. A successful grant preserves #1 and marks it `official_score_eligible = false`, authorizes but does not create #2, and never allows #3. Replacement #2 receives `started_at + duration_seconds` in both timer modes without changing the class-wide synchronized window.
+
+Student execution uses explicit `start_normal`, exact-target `resume` with `attempt_id`, or `start_replacement`; Resume never creates/switches Attempts or resets time. Only replacement Start may create approved #2. Stage 8 requires durable authorized idempotency for Start, Submit, activation, and exception grant; Teacher Close gains no key requirement. Exact request/result and replay matrices are specified in the API contract.
 
 The teacher should be able to keep a blitz task as a draft before class. A draft blitz task should not be visible to students.
 
@@ -874,7 +882,7 @@ The MVP Blitz lifecycle statuses are:
 - Closed
 - Archived
 
-Student-level submission/review states such as in progress, submitted, waiting for Teacher review, checked, auto-finalized at timeout, or not completed are tracked separately from the Blitz lifecycle.
+Attempt state is separate from the Blitz lifecycle. Stage 8 uses `in_progress`, `submitted`, and `timed_out_finalized`; `waiting_for_teacher_review` and `checked` belong to later Stage 9 checking/scoring. Timeout-finalized means frozen execution history, not completed scoring.
 
 During class, the teacher should be able to monitor blitz progress. For example, the teacher should see:
 
@@ -883,16 +891,16 @@ During class, the teacher should be able to monitor blitz progress. For example,
 - Which students are answering
 - Which students submitted
 - Which students did not submit
-- Which submissions need manual checking
+- Which frozen submissions await later Stage 9 review, without performing checking or changing persisted review state
 - Which students had technical or attempt issues if available
 
-This helps the teacher manage the blitz task during the first minutes of the lesson.
+This helps the teacher manage the blitz task during the first minutes of the lesson. Monitoring cannot answer for a Student, change saved work, award points, create Attempts, extend deadlines, or change timer mode; any timeout reconciliation uses the same authoritative finalization behavior.
 
 Students should only see blitz tasks assigned to them. A student should not be able to access a blitz task before the teacher activates it. A student should not be able to answer a closed blitz task or a blitz task from another group.
 
 The Student should be able to open the Teacher-activated Blitz, read the instructions, see the whole-Blitz remaining time, answer questions, and submit before timeout. If the Student does not explicitly submit before time reaches zero, the system automatically finalizes the saved work.
 
-After the student submits the blitz task, the system should record important submission information, such as:
+After the student submits the blitz task, Stage 8 records frozen execution information. The full-MVP record also includes later Stage 9 checking fields, such as:
 
 - Student
 - Institution
@@ -903,11 +911,11 @@ After the student submits the blitz task, the system should record important sub
 - Submitted answers
 - Submission time
 - Time spent
-- Score if available
-- Checking status
-- Teacher feedback if available
+- Score only after Stage 9 scoring
+- Checking status (`pending` throughout Stage 8)
+- Teacher feedback only after Stage 9 review
 
-Some blitz questions can be checked automatically by the system. These may include:
+In Stage 9, some blitz questions can be checked automatically by the system. These may include:
 
 - Single-choice tests
 - Multiple-choice tests
@@ -943,7 +951,7 @@ Institution Admins may be able to view blitz activity and progress inside their 
 
 Blitz tasks should be protected by access rules. Teachers should only manage blitz tasks for their assigned groups. Students should only answer blitz tasks assigned to them. Parents should only view their own child’s blitz progress. Users from another institution must not access the blitz task or its submissions.
 
-In the MVP version, Blitz Task features should include:
+In the MVP version, Blitz Task features should include the following full-MVP capabilities. Stage 8 owns execution/finalization and immutable pending work; checking, partial credit, Teacher review, and official scores belong to Stage 9. Homework–Blitz comparison, final Topic results, and release belong to Stage 10.
 
 1. Create manual blitz tasks
 2. Connect blitz tasks to topics
@@ -968,7 +976,7 @@ In the MVP version, Blitz Task features should include:
 21. Allow Students to answer only after activation
 22. Show whole-Blitz remaining time to Students
 23. Auto-finalize saved answers when time ends
-24. Give zero for unanswered questions at timeout
+24. Freeze unanswered work at timeout without synthetic rows; Stage 9 later applies zero during scoring
 25. Allow Students to submit before timeout
 26. Automatically check supported question types
 27. Apply approved partial-credit rules
@@ -2269,6 +2277,6 @@ The MVP feature contract also includes:
 5. **Official grading scope:** official Homework/Blitz are whole-group only; selected-Student tasks are practice-only; one cohort snapshot is shared by both official tasks.
 6. **New-institution setup:** safe timezone/upload defaults are initialized, while threshold/category/timer/release policies remain unconfigured until the Institution Admin selects them.
 7. **First-login password change:** all administrator-created non-platform accounts must change the initial password before normal use.
-8. **Task close finalization:** closing an active Homework freezes existing in-progress Attempts from already-committed saved work as immutable `submitted` history with `task_closed_auto_finalize`, creates no fabricated Attempt or unanswered-answer row, and performs no Stage 7 checking or scoring. Closing an active Blitz continues to auto-finalize existing in-progress attempts, record its existing close-driven finalization reason, and create no fabricated Attempt for a Student who never started under the existing Blitz finalization, checking, and scoring rules.
+8. **Task close finalization:** closing an active Homework freezes existing in-progress Attempts from already-committed saved work as immutable `submitted` history with `task_closed_auto_finalize`, creates no fabricated Attempt or unanswered-answer row, and performs no Stage 7 checking or scoring. Closing an active Blitz in Stage 8 freezes committed pending work without fabricated Attempt/answer rows or checking/scoring: due Attempts timeout-finalize at their exact deadlines, while still-pre-deadline Attempts use `submitted + task_closed_auto_finalize` at the captured close instant. Stage 9 later checks and scores that immutable history.
 9. **Result closure:** only a terminal calculated or definitive Not completed Student+Topic result can be closed; release remains separate.
 10. **Homework tie:** an exact highest-score tie selects the earliest tied attempt reference.

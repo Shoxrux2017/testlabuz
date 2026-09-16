@@ -552,6 +552,23 @@ student.homework.attempt.start
 student.homework.attempt.submit
 ```
 
+Stage 8 reuses this table with exactly:
+
+```text
+student.blitz.attempt.start
+student.blitz.attempt.submit
+teacher.blitz.activate
+teacher.blitz.attempt_exception.grant
+```
+
+Blitz Submit uses only `student.blitz.attempt.submit`; the delivered `student.homework.attempt.submit` remains separate and unchanged, with no Assessment-type-independent alternative. These four Stage 8 operations require `Idempotency-Key`; ordinary answer/file mutation, Teacher Close, schedule, archive and result-pair PUT gain no key requirement.
+
+All three Blitz Start intents share `student.blitz.attempt.start`. The fingerprint includes the authorized lowercase Blitz UUID, exact submitted `start_normal|resume|start_replacement` intent, and validated lowercase exact `attempt_id` only for Resume, never derived timer, lifecycle or capacity state. Completed authorized same-key/same-fingerprint replay takes precedence over fresh-state decisions, preserves the original semantic `201`/`200`, and creates no Attempt or timer/history changes. Reusing the key for a different Blitz, intent or Resume target returns `409 idempotency_key_reused`; a completed normal/Resume request never becomes replacement Start.
+
+Completed activation replay requires authorization, valid persisted activation evidence and valid result metadata; it returns `200` current resource for active/closed/archived, without reopening or any activation-domain write. Completed-success history pointing to draft/scheduled fails closed as an internal integrity inconsistency, as does missing/invalid evidence or result metadata. Fresh/new-key active returns `200` without timer/recipient/cohort/pair mutation and may complete its claim. Fresh closed/archived returns `409 task_closed`/`409 task_archived`, leaving no successful result. Eligible first draft/scheduled activation follows §12.2.
+
+Blitz Submit and its successful claim commit atomically. A new late request commits required timeout reconciliation but returns `409 blitz_time_expired`, with neither a successful Submit result nor an incomplete new claim. New requests against timeout-finalized history return `409 blitz_time_expired`; other terminal history returns `409 attempt_not_editable`. Completed successful same-key Submit replay remains `200` when the original `student_submit`, non-null `submitted_at`, and equal finalized/locked/submitted times remain, including later review/checked state, without new domain mutation or score exposure.
+
 ### Columns
 
 | Column | Type | Null | Notes |
@@ -1296,6 +1313,10 @@ blitz_tasks.timer_start_mode_snapshot
 
 This prevents a later institution-setting change from changing the meaning of an already-activated Blitz.
 
+A null Institution mode blocks activation with `409 institution_settings_incomplete`, not draft creation/Question authoring or unrelated Homework/administration. Teacher payloads cannot override the setting/snapshot or fixed normal-attempt rule. Duration and the activated snapshot are immutable after activation. Draft/scheduled are not Student-executable; scheduling creates no timer, Attempt, checking or result records. Activation requires valid common Assessment/assignment/content, at least one valid Question, positive total points/duration, eligible lifecycle and recipient/cohort rules. It creates no Student Attempt.
+
+Capture `activatedAt = truncate_to_utc_second(server_now)` once for activation. Stage 8 execution instants used in eligibility/countdown arithmetic, including activation/common end, Attempt start/deadline, response `server_now`/`snapshotAt` and timeout timestamps equal to the deadline, use UTC whole seconds. Floor before comparison, arithmetic, persistence, projection and serialization; never round upward or retain hidden fractional timer values. Successful wire form is exactly `YYYY-MM-DDTHH:MM:SSZ`. `remaining_seconds = max(0, deadline_epoch_second - serverNow_epoch_second)` uses the exact serialized whole-second operands, never device time/timezone. Existing Institution-timezone schedule/deadline input rules are unchanged.
+
 Approved values:
 
 ```text
@@ -1308,11 +1329,11 @@ There are **no per-question timers** in the MVP. `questions.time_limit_seconds` 
 ### Synchronized Mode
 
 ```text
-blitz_tasks.activated_at = server_now
-blitz_tasks.synchronized_ends_at = activated_at + duration
+blitz_tasks.activated_at = activatedAt
+blitz_tasks.synchronized_ends_at = activatedAt + duration_seconds
 ```
 
-Every assigned Student shares this deadline.
+Every normal Attempt #1 uses `deadline_at = blitz_tasks.synchronized_ends_at`. Late normal Start receives only remaining time; at/equal/after that end no normal #1 is created.
 
 ### Individual Mode
 
@@ -1321,11 +1342,14 @@ Teacher activation makes the Blitz available.
 When the Student starts:
 
 ```text
-assessment_attempts.started_at = server_now
+blitz_tasks.synchronized_ends_at = null
+assessment_attempts.started_at = truncate_to_utc_second(server_now)
 assessment_attempts.deadline_at = started_at + blitz.duration_seconds
 ```
 
 The attempt stores its effective deadline explicitly for historical and concurrency safety.
+
+The one approved replacement Attempt #2 uses `started_at = truncate_to_utc_second(server_now)` and `deadline_at = started_at + blitz_tasks.duration_seconds` in both timer modes. It receives the full configured duration from its own Start and does not reuse the synchronized common end as its deadline. Creation/Resume never rewrites `activated_at`, `timer_start_mode_snapshot`, `synchronized_ends_at`, configured duration or other Students' deadlines. Resume preserves its existing start/deadline; no resume-time field is persisted.
 
 ---
 
@@ -1339,19 +1363,21 @@ Persistence must support:
 - Server timeout finalization.
 - Rejection of answer writes after `deadline_at`.
 - Preservation of answers saved before timeout.
-- Zero points for unanswered questions.
-- Manual review for answered questions requiring Teacher judgment.
+- Frozen pending saved answers without Stage 8 checking/scoring.
+- No fabricated Attempt for never-started Students or answer row for unanswered work.
 
 Timeout finalization is represented on `assessment_attempts` with:
 
 ```text
-finalized_at
+status = 'timed_out_finalized'
+submitted_at = null
+finalized_at = locked_at = exact persisted deadline_at
 finalization_reason = 'timeout_auto_submit'
 ```
 
-and an appropriate finalized/review status.
+The historical finalization instant is the persisted deadline, never delayed Scheduler/request processing time. Relevant read/write, Start/Resume, Submit, close, monitoring and Scheduler paths reuse the same finalizer; every write independently checks authoritative time. Existing terminal history is never rewritten.
 
-An automatically finalized timeout attempt is **not** treated as a missing unsubmitted attempt.
+An automatically finalized timeout Attempt is frozen execution history, not a missing/abandoned Attempt or proof of checking/scoring. Stage 9 later interprets missing answers/components as zero, checks objective answers, routes manual work for review and persists points/scores. Stage 8 leaves saved manual work pending and does not mark it wrong because time expired.
 
 ---
 
@@ -1748,8 +1774,11 @@ Stage 7 Homework:
 Stage 9 Homework checking:
   submitted -> waiting_for_teacher_review / checked
 
-Blitz:
-  timed_out_finalized remains reserved for its own contract
+Stage 8 Blitz execution:
+  in_progress -> submitted / timed_out_finalized
+
+Stage 9 Blitz checking:
+  frozen execution -> waiting_for_teacher_review / checked
 ```
 
 For Stage 7 Homework, `submitted` means frozen Student work ready for later checking. Only explicit Student Submit sets `submitted_at`; deadline and Teacher-close finalization leave it null. `timed_out_finalized` and `timeout_auto_submit` are not used for Homework.
@@ -1798,6 +1827,10 @@ attempt_number = 2
 ```
 
 No Blitz attempt number greater than 2 is permitted.
+
+Fresh Blitz execution requires authenticated active Student, same Institution, persisted `assessment_students` recipient, own Attempt, active Blitz and all applicable timing/capacity preconditions; direct UUID possession never bypasses these checks.
+
+Blitz Start requires explicit `start_normal`, `resume` with exact own `attempt_id`, or `start_replacement`; the two Start intents forbid `attempt_id`. No empty/implicit Start or automatic target switching is allowed. Normal intent creates unused #1 (`201`) or returns editable #1 (`200`); terminal #1 returns `409 attempts_exhausted`. Resume returns only its exact editable target (`200`), with terminal target `409 attempt_not_editable` and foreign/out-of-scope target privacy-safe `404 resource_not_found`. Replacement creates #2 only with valid unused approved capacity (`201`) or returns editable #2 (`200`); consumed terminal #2 or structurally valid history without capacity returns `409 attempts_exhausted`, while an existing invalid exception graph/capacity returns `409 blitz_attempt_exception_not_allowed` under the invariant/public-error split. Each intent encountering its due in-progress target reconciles timeout then returns `409 blitz_time_expired`. Existing Attempts never have their timer reset. Completed valid replay follows §5.3 before fresh decisions.
 
 ### Unique
 
@@ -1860,22 +1893,41 @@ locked_at = closedAt
 
 All Attempt transitions and the Homework close commit or roll back together, and unused normal-attempt capacity becomes unavailable. At or after the deadline, the transaction reconciles the deadline first and preserves `homework_deadline_auto_submit` with the exact `deadline_at`; repeated close/finalization must not rewrite an existing terminal reason or timestamp.
 
-### Timeout Rule
+### Blitz Finalization Rules
 
 For Blitz, `deadline_at` is set when the attempt starts:
 
-- synchronized mode → task `synchronized_ends_at`
-- individual mode → `started_at + duration_seconds`
+- normal #1, synchronized mode → task `synchronized_ends_at`
+- normal #1, individual mode → `started_at + duration_seconds`
+- approved replacement #2, both modes → its own `started_at + duration_seconds`
 
-The timeout finalization transaction sets:
+Only an owned assigned `in_progress` Attempt with `finalized_at = locked_at = null`, active Blitz and a not-yet-reached deadline is editable. Explicit pre-deadline Student Submit sets:
 
 ```text
-finalized_at = authoritative deadline/current reconciliation time
-finalization_reason = 'timeout_auto_submit'
-locked_at = finalized_at
+status = 'submitted'
+submitted_at = finalized_at = locked_at = captured server submit instant
+finalization_reason = 'student_submit'
 ```
 
-and records the appropriate status based on whether Teacher review remains.
+At `server_now >= deadline_at`, timeout reconciliation sets:
+
+```text
+status = 'timed_out_finalized'
+submitted_at = null
+finalized_at = locked_at = exact persisted deadline_at
+finalization_reason = 'timeout_auto_submit'
+```
+
+Teacher close captures one authoritative `closedAt`. An Attempt still pre-deadline after locking receives:
+
+```text
+status = 'submitted'
+submitted_at = null
+finalized_at = locked_at = closedAt
+finalization_reason = 'task_closed_auto_finalize'
+```
+
+Close first reconciles already-due Attempts using their exact deadlines and timeout reason, including different individual/replacement deadlines; existing terminal Attempts remain unchanged. Blitz close and required finalizations commit atomically and stop new Starts/writes. Repeated reconciliation/close or later Submit cannot rewrite terminal reason/timestamps. No Stage 8 path populates `earned_points`, `normalized_score`, `scoring_completed_at`, answer points/checking metadata or official scores, or fabricates missing Attempt/answer rows.
 
 ### Concurrency
 
@@ -1886,6 +1938,8 @@ Starting or resuming Homework uses deterministic relevant row locks plus the par
 Student Submit, deadline reconciliation/Scheduler, and Teacher close lock and re-read state and authoritative time, then transition only from `in_progress`, yielding exactly one terminal transition and preserving the first valid reason/timestamps. Repeated reconciliation/close and idempotent replay perform no domain timestamp churn.
 
 Typed/file answer replacement uses the same relevant Homework/Attempt lock boundary and re-checks assignment, lifecycle, authoritative time, and editability after locking. If the Student mutation commits first it is included in the frozen Attempt; if finalization commits first, the Student request performs zero answer/file-domain mutation. No Student write may commit after freeze.
+
+Blitz uses deterministic relevant Blitz/Attempt locks, locked state re-read and canonical authoritative-time re-check for Start, answer/file writes, Submit, timeout, close and exception grant. Transition only from `in_progress`; never allow two simultaneous in-progress Blitz Attempts. Mutation committed first is included in freeze; freeze committed first means zero later answer/file-domain mutation. Rejected file replacement preserves persisted file identity/content. Shared tables do not merge Homework and Blitz lifecycle policies.
 
 ---
 
@@ -1942,17 +1996,11 @@ unique(replacement_attempt_id)
 
 ### Transactional Grant Rule
 
-Granting the exception must atomically:
+Granting requires same Institution, authorized active Teacher in the current Topic/Group scope, persisted recipient Student, `assessments.type = 'blitz'`, exactly `BlitzTask.status = active`, normal #1, no existing exception/#2, and a non-empty valid fairness/technical reason rather than score improvement. New grants in draft/scheduled/closed/archived return `409 blitz_attempt_exception_not_allowed`. Teacher Close permanently prevents a new grant and the grant cannot reopen Blitz. Elapsed `synchronized_ends_at` alone does not block an otherwise valid active grant because #2 gets its own full duration.
 
-1. Verify `assessments.type = 'blitz'`.
-2. Verify the Teacher is authorized for the Student/Topic/Group.
-3. Verify no existing exception exists for this Student/Blitz.
-4. Verify `invalidated_attempt_id` is that Student's normal Blitz Attempt #1.
-5. Insert the exception row with the required reason.
-6. Set `assessment_attempts.official_score_eligible = false` for the invalidated Attempt.
-7. Allow exactly one replacement Attempt #2.
+Under relevant locks, pre-deadline editable #1 returns `409 blitz_attempt_exception_not_allowed` with no insert, eligibility mutation, #2 or synthetic finalization. Due in-progress #1 first uses the authoritative timeout finalizer: `timed_out_finalized`, null `submitted_at`, `finalized_at = locked_at = deadline_at`, `timeout_auto_submit`. An already-terminal valid #1 preserves its reason/timestamps. Missing #1 returns `409 blitz_normal_attempt_required`; an existing exception returns `409 blitz_attempt_exception_already_granted`.
 
-The invalidated Attempt remains in history and must not be deleted.
+If all grant preconditions pass, the atomic workflow inserts exactly one exception with actor/reason/history and `replacement_attempt_id = null`, and sets #1 `official_score_eligible = false`. It preserves #1 and its answers/files; no separate exception finalization reason or second in-progress Attempt is introduced. The grant authorizes exactly #2 but does not create it. Only Student `start_replacement` later creates/links #2; no #3. Stage 9 later considers only an eligible valid replacement as the potential official Blitz score source.
 
 ---
 
@@ -1989,7 +2037,7 @@ waiting_for_teacher_review
 teacher_checked
 ```
 
-Every Stage 7 Homework answer save/replace persists:
+Every Stage 7 Homework and Stage 8 Blitz answer save/replace persists:
 
 ```text
 checking_status = 'pending'
@@ -2000,6 +2048,8 @@ checked_at = null
 ```
 
 If a Student never saves a Question, no `attempt_answers` row is required. Submit/deadline/Teacher-close finalization freezes only existing committed rows and does not create or rewrite answer payloads, correct-answer configuration, checking fields, Teacher-review metadata, or points. Stage 9 later owns Homework checking/scoring and applies the approved missing-answer-as-zero policy without fabricating rows in Stage 7.
+
+Stage 8 Blitz Submit/timeout/Teacher close likewise freezes only committed answer/file state, retaining every saved answer as pending with null checking/points fields. It creates no synthetic empty answer rows. Stage 9 owns Blitz missing-answer/component zero, objective checking, manual review, points and scoring; Stage 8 never moves a saved manual answer to a persisted review state.
 
 ### Unique
 
@@ -2020,6 +2070,8 @@ Upper-bound validation uses the related Question points and is enforced in domai
 After any Attempt final submission/lock, Student-facing operations must not update answer content.
 
 For Stage 7 Homework, Student-facing answer/file mutation is allowed only for an owned, assigned Attempt with `status = 'in_progress'`, `finalized_at = null`, and `locked_at = null` while lifecycle/deadline rules remain valid. Mutation and finalization serialize through the relevant Homework/Attempt locks and re-check editability after locking. After finalization/lock, Student-facing operations must make zero answer/file-domain changes.
+
+Stage 8 Blitz applies the same owned/assigned editable fields plus active Blitz and `server_now < deadline_at`, rechecked under relevant Blitz/Attempt locks. Timeout/Submit/close committed first forbids any later answer/file mutation. Question must belong to the Attempt Assessment, child IDs to that Question, and files remain protected by current Student/Institution authorization; correct-answer/checking configuration is not exposed to Students.
 
 Teacher review may update only:
 
@@ -2211,6 +2263,8 @@ Stage 7 Homework file replacement uses the same Attempt-lock/editability boundar
 Scoring is persisted at Question/Attempt levels.
 
 For Homework, these fields are consumed by Stage 9 only after Stage 7 has frozen the Attempt as `submitted`. Stage 7 does not populate awarded points, Teacher-review metadata, Attempt scores, or official Homework scores.
+
+For Blitz, Stage 8 freezes execution as `submitted` or `timed_out_finalized`; only Stage 9 later performs checking/Teacher review, populates points/Attempt scores and selects official task scores. Stage 10 owns Homework–Blitz comparison, Topic results, categories and release.
 
 No separate duplicated “auto score” table is required.
 
@@ -2407,7 +2461,7 @@ Application/domain validation enforces this transactionally.
 
 Purpose:
 
-Stores the Topic-level official result-bearing pair. The row is created when the official Homework is designated and is completed later when the official Blitz is available.
+Stores the Topic-level official result-bearing pair. A valid official Homework is required, but a pre-existing pair row is not: the canonical PUT may create one row with required eligible Homework and optional eligible Blitz, or complete the nullable Blitz side of the existing row. No second pair, fake Blitz/recipient, Topic `official_blitz_id` or `blitz_tasks.is_official` is introduced.
 
 A Topic may contain multiple Homework and Blitz tasks, but the MVP uses exactly one designated **whole-group Homework** and exactly one designated **whole-group Blitz** to calculate Student Topic results. Selected-Student assessments are practice-only and cannot be designated.
 
@@ -2458,6 +2512,28 @@ locked_at IS NOT NULL
   => cohort_snapshotted_at IS NOT NULL
 ```
 
+New Blitz designation additionally requires current authorized Teacher scope, draft/scheduled lifecycle and no Student Attempt; active/closed/archived or selected-Student practice Blitz cannot be newly designated.
+
+### Pair Creation and Mutation
+
+The canonical PUT keeps `homework_assessment_id` required. Optional `blitz_assessment_id` omission preserves the stored Blitz exactly; a supplied value must be a non-null UUID. There is no null-clear operation, and unknown keys are validation failures.
+
+With no existing row, validate both supplied candidates and atomically create exactly one row:
+
+```text
+homework_assessment_id = requested eligible Homework
+blitz_assessment_id = supplied eligible Blitz or null
+designated_by_user_id = authenticated Teacher
+designated_at = created_at = updated_at = designatedAt
+locked_at = null
+```
+
+For draft Homework, initial `cohort_snapshotted_at = null`. For active Homework with a valid persisted official group-recipient snapshot, initial `cohort_snapshotted_at = designatedAt`. Pair creation alone creates no Blitz recipients or Student Attempts.
+
+For an existing row, unlocked null Blitz permits eligible attachment; unlocked populated Blitz permits eligible pre-activation replacement. Locked null Blitz permits only completion with unchanged Homework and an eligible same-Topic/Institution whole-group candidate that can honor the established cohort. Locked populated Blitz permits only exact same-target replay, never either task's replacement.
+
+Blitz-only null-to-Blitz completion, locked or unlocked, and unlocked Blitz-only replacement preserve exactly `homework_assessment_id`, `designated_by_user_id`, `designated_at`, `cohort_snapshotted_at`, `locked_at`, and `created_at`. Change only `blitz_assessment_id` and `updated_at = changedAt`. A genuine Homework replacement may change designation actor/time/cohort only under the existing Stage 6 Homework replacement rules; optional Blitz attachment must not rewrite those fields again. Exact same-target semantic replay performs zero writes, preserving designation, cohort, lock and `updated_at`. No duplicate Blitz-designation columns are added.
+
 ### Cohort and Lock Rule
 
 The Teacher must designate only whole-group assessments. The first activated official whole-group task establishes the common cohort from its persisted `assessment_students` snapshot and sets `cohort_snapshotted_at`. If an already-active eligible whole-group Homework is designated before any Student Attempt, its existing persisted Group recipient snapshot becomes the official cohort. If only that official Homework exists, the backend does not create a Blitz Assessment or Blitz recipient rows. When the official Blitz is later designated or activated, its recipient snapshot must use exactly the established cohort; a conflicting existing snapshot is rejected rather than silently rewritten. Once snapshotted, later Group membership changes do not rewrite the official cohort. Before `locked_at`, an authorized Teacher may replace the official Homework only when the backend eligibility rules allow it and no existing Student work is reinterpreted.
@@ -2465,6 +2541,10 @@ The Teacher must designate only whole-group assessments. The first activated off
 When creating the first Attempt for `topic_result_pairs.homework_assessment_id`, the same transaction locks the pair in the same Institution/Topic, requires non-null `cohort_snapshotted_at`, and requires the Student to belong to the persisted official Homework recipient cohort. It captures one `startedAt` for the new Attempt and, when pair `locked_at` is null, writes `locked_at = startedAt` and `updated_at = startedAt`; an existing non-null `locked_at` is preserved. A valid staged row may still have `blitz_assessment_id = null`. The operation never replaces official Homework/cohort identity or creates a Blitz, and structural pair/cohort inconsistency fails atomically without repair or resnapshot. Practice Homework does not mutate `topic_result_pairs`.
 
 Stage 8 may fill the null Blitz reference when the official-Blitz and cohort rules pass; this completes the pair and must not clear `locked_at`, replace the official Homework, or change the locked cohort.
+
+If official Blitz activates first while `cohort_snapshotted_at` is null, its valid persisted activation recipient snapshot establishes the cohort and `cohort_snapshotted_at = activatedAt`; preserve official Homework identity and create no Homework Attempts. Later official Homework activation reuses exactly this cohort. If the cohort already exists, official Blitz activation uses exactly that persisted Student set, never current Group membership or silent historical repair. Current account-active/security checks still apply.
+
+First official Blitz Attempt creation resolves/locks the matching same-Institution/Topic pair and requires non-null cohort snapshot and Student cohort membership. If pair `locked_at` is null, set it to the same canonical `startedAt` as the new Attempt; preserve an existing lock. Start never changes official task/cohort identity, and practice Blitz Start never mutates the pair.
 
 ---
 
@@ -2817,7 +2897,8 @@ Lifecycle ownership is:
 ```text
 Stage 7 Homework:          in_progress -> submitted
 Stage 9 Homework checking: submitted -> waiting_for_teacher_review / checked
-Blitz:                     timed_out_finalized remains reserved for its own contract
+Stage 8 Blitz execution:   in_progress -> submitted / timed_out_finalized
+Stage 9 Blitz checking:    frozen execution -> waiting_for_teacher_review / checked
 ```
 
 For Stage 7 Homework, every finalization reason (`student_submit`, `task_closed_auto_finalize`, or `homework_deadline_auto_submit`) produces `status = submitted`; `submitted_at` is non-null only for explicit Student Submit. Saved answers remain `pending` until Stage 9.
@@ -2923,7 +3004,7 @@ When a Blitz exception is granted, the invalidated Attempt remains stored with `
 
 ## 24.9 Answers
 
-Student answer content becomes immutable after explicit final submission **or authoritative Blitz timeout finalization**.
+Student answer content becomes immutable after explicit final submission, authoritative deadline/Blitz timeout finalization, or Teacher task-close finalization.
 
 Teacher scoring metadata may be updated only through authorized review/correction before final result closure.
 
@@ -3557,6 +3638,8 @@ blitz_attempt_exceptions
 
 Exactly one exception may exist per Student/Blitz. It records the invalidated Attempt, required reason, Teacher actor, timestamp, and optional replacement Attempt reference.
 
+New grants require active Blitz and the locked #1 eligibility rules in §15.3. Teacher Close permanently blocks a new grant; an elapsed synchronized end alone does not. Granting creates no #2, preserves #1 history, and marks it ineligible only on successful atomic grant.
+
 ---
 
 ## DEC-03 — Blitz Timer Start Mode
@@ -3592,10 +3675,13 @@ finalization_reason
 Timeout finalization uses:
 
 ```text
+status = 'timed_out_finalized'
+submitted_at = null
+finalized_at = locked_at = exact deadline_at
 finalization_reason = 'timeout_auto_submit'
 ```
 
-Saved answers are finalized; unanswered questions receive zero; manual answers remain reviewable.
+Stage 8 freezes committed saved answers as pending without points/checking metadata or fabricated rows. Stage 9 later applies unanswered zero, objective checking, manual review and scoring. Timeout is not proof of completed scoring.
 
 ---
 
@@ -3665,7 +3751,7 @@ The MVP includes:
 topic_result_pairs
 ```
 
-At most one row exists for each Topic. It first designates the whole-group official Homework and may keep a null Blitz reference until the whole-group official Blitz is added later. The first activated official task establishes the persisted `assessment_students` cohort, and the later official task must reuse it. Selected-Student tasks are practice-only. The first official Homework Attempt atomically locks the existing official work/cohort with its `startedAt`, but does not prevent one-time completion of the absent Blitz side.
+At most one row exists for each Topic. The canonical PUT may create it atomically with required eligible whole-group Homework and optional eligible pre-activation whole-group Blitz, or later complete the same staged row. Blitz-only attach/replacement preserves designation actor/time; exact replay performs zero writes. The first activated official task establishes the persisted `assessment_students` cohort, and the later official task must reuse it. Selected-Student tasks are practice-only. First official Homework or Blitz Attempt locks a null pair lock with its `startedAt`; an existing lock is preserved and does not prevent one-time completion of the absent Blitz side under §20.1.
 
 `topic_results(topic_id, student_id)` is uniquely constrained.
 

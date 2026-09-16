@@ -48,7 +48,7 @@ The main problem **TestLabUz** solves is the lack of a reliable, practical, and 
 
 The Teacher creates a Topic and uploads learning materials in PDF, DOCX, PPT, or PPTX format. Students use those materials to review the lesson independently. The Teacher then creates Homework connected to the same Topic.
 
-For the official result, the Topic uses one designated whole-group Homework and one designated whole-group Blitz as its result-bearing pair. Practice tasks may target the whole group or selected Students, but selected-Student tasks cannot become result-bearing. When the first official task becomes active, the system snapshots the current eligible Students in the Topic group and uses that same cohort for both official tasks. Once Student attempt activity begins, the official pair and cohort are locked.
+For the official result, the Topic uses one designated whole-group Homework and one designated whole-group Blitz as its result-bearing pair. Practice tasks may target the whole group or selected Students, but selected-Student tasks cannot become result-bearing. When the first official task becomes active, its persisted recipient snapshot establishes the cohort used for both official tasks; later Group changes do not redefine it. Student attempt activity locks the designated identities and cohort, while a previously absent Blitz side may still be completed in the same pair with the Homework, designation, cohort, and lock history preserved.
 
 Each Student receives three normal Homework attempts. During Stage 7, explicit Student Submit, the authoritative Homework deadline, or Teacher close freezes only already-committed Student work as an immutable `submitted` Attempt. A Student who never started receives no fabricated Attempt, and an unanswered Question requires no fabricated answer row. Stage 7 performs no Homework checking or scoring. Stage 9 later checks and scores the frozen history, treats missing answers as zero under the approved policy, and selects the highest valid completed Homework score as official.
 
@@ -59,7 +59,7 @@ During approximately the first 5–10 minutes of the next lesson, the Teacher ac
 
 Blitz normally permits one attempt. For a valid technical or other exceptional reason, the Teacher may grant one additional attempt to one affected Student and must record the reason. The original affected attempt remains in history for traceability.
 
-When Blitz time expires, the system automatically finalizes the saved attempt. Answers saved before the deadline are evaluated; unanswered questions receive zero points. Answers requiring Teacher judgment remain waiting for manual review rather than being treated as wrong merely because they need manual checking.
+Stage 8 freezes the committed Blitz answer/file set on explicit Submit, timeout, or Teacher close. Saved answers remain `pending`, without awarded points or checking metadata. It creates no Attempt for a Student who never started and no answer row for an unanswered Question. Stage 9 later checks and scores the frozen work, treats unanswered work as zero, and performs required Teacher review; needing manual review does not itself make a saved answer wrong.
 
 After all required automatic and manual checking is complete, the system compares the official Homework score and official Blitz score. Let `H` be Homework, `B` be Blitz, `D = |H - B|`, and `T` be the institution's acceptable difference threshold:
 
@@ -140,9 +140,9 @@ The core learning process in **TestLabUz** is built around one main goal: to che
 8. During approximately the first 5–10 minutes of the next lesson, the Teacher activates the designated Blitz for the same Topic.
 9. The Blitz timer follows the institution's configured synchronized-start or individual-start mode and the duration chosen by the Teacher.
 10. The Student completes the Blitz in class. Normally there is one attempt; one additional Student-specific attempt may be granted by the Teacher only for an approved valid exception.
-11. If Blitz time expires, the system automatically finalizes saved work, scores answered items according to their checking rules, and gives zero for unanswered items.
-12. Required manual review is completed before the official Homework or Blitz score becomes final.
-13. The system compares the official Homework and Blitz scores using the institution's acceptable-difference threshold.
+11. Stage 8 freezes committed Blitz work on Submit, timeout, or Teacher close, leaving saved answers pending and creating no synthetic Attempt or unanswered-answer row.
+12. Stage 9 checks and scores the frozen Homework and Blitz work, treats missing answers as zero, completes required manual review, and selects official scores.
+13. Stage 10 compares the official Homework and Blitz scores using the institution's acceptable-difference threshold.
 14. If the scores are close, the system uses their arithmetic average. If the difference is too large, the system uses the Blitz score.
 15. The system assigns the appropriate understanding category.
 16. The calculated result becomes visible to the Student and Parent according to the institution's configured release policies.
@@ -229,16 +229,20 @@ Each institution chooses one Blitz timer-start mode:
 
 Server time is authoritative. A Student cannot gain additional time by changing the device clock or timezone.
 
+Activation snapshots the configured Institution mode as `timer_start_mode_snapshot`; later setting changes do not alter it. An unconfigured mode blocks activation only. Normal synchronized Attempt #1 uses the shared end; normal individual #1 uses its own Start plus the configured duration. Execution timing uses UTC whole seconds and persisted Attempt deadlines.
+
 A Student normally receives **one Blitz attempt**. If a valid technical or other exceptional problem prevents proper completion, the Teacher may grant that Student **one additional attempt** and must record a reason. The affected original attempt remains in history and, once the exception is approved, is excluded from the official Blitz score.
+
+A new exception requires an active Blitz and an existing normal Attempt #1 that is already terminal or is first timeout-finalized at its reached deadline; a still-editable pre-deadline #1 cannot be invalidated. Teacher Close permanently prevents new grants. An elapsed synchronized common end alone does not block an otherwise valid active grant. The grant authorizes but does not create replacement #2, which receives a fresh full configured duration from its own Start in both timer modes without changing the class timer. There is no Attempt #3.
 
 When the timer reaches zero:
 
 - the Student can no longer change answers;
-- the system automatically finalizes the saved attempt;
-- answers saved before the deadline are evaluated normally;
-- unanswered questions receive zero points;
-- answers requiring manual Teacher review remain waiting for review;
-- the official Blitz score becomes available only after all required review is complete.
+- Stage 8 freezes the saved Attempt as `timed_out_finalized` with `timeout_auto_submit` at its exact persisted deadline;
+- all saved answers remain `pending`, with no checking/scoring or fabricated missing answer rows;
+- Stage 9 later evaluates saved answers, treats unanswered work as zero, completes required Teacher review, and selects the eligible official Blitz score.
+
+Explicit pre-deadline Submit freezes `submitted + student_submit`. Teacher close freezes still-pre-deadline work as `submitted + task_closed_auto_finalize`; already-due Attempts retain timeout semantics at their exact deadlines. Terminal reason/timestamps remain immutable, and closing creates no Attempt for a never-started Student.
 
 The designated Blitz score is compared with the designated Homework score for the same Topic. A large difference indicates inconsistent home and in-class performance, but the platform must not automatically accuse the Student of cheating.
 
@@ -326,7 +330,7 @@ Student answer files may use PDF, DOCX, PPT, and PPTX and have a platform maximu
 
 A Topic may have multiple Homework and Blitz tasks, but exactly one **whole-group Homework** and one **whole-group Blitz** are designated as the official result-bearing pair. Selected-Student tasks are practice-only. The official Student cohort is snapshotted when the first official task becomes active and reused for both official tasks.
 
-The designated pair and cohort cannot be replaced after Student attempt activity begins.
+Student attempt activity locks designated task/cohort identities. A locked pair may still fill its previously-null Blitz side with an eligible pre-activation whole-group Blitz while preserving Homework, designation, cohort, and lock history. A populated locked Blitz side cannot be replaced. A valid official Homework is required, but the pair need not pre-exist: the canonical result-pair PUT may atomically create one row with required Homework and optional eligible Blitz.
 
 ### Attempts
 
@@ -344,7 +348,7 @@ The Teacher configures each Blitz duration. The Institution Admin selects the in
 - synchronized start; or
 - individual Student start.
 
-At timeout, the backend automatically finalizes saved answers. Unanswered questions receive zero.
+At timeout, Stage 8 freezes committed work without checking/scoring. Saved answers remain pending; Stage 9 later treats unanswered work as zero.
 
 ### Result Calculation
 
@@ -517,7 +521,7 @@ The main success criteria are:
    An institution can use synchronized start or individual Student start, while the Teacher controls the Blitz duration.
 
 9. **Blitz timeout is enforced by the server**  
-   At timeout, further edits are blocked, saved work is automatically finalized, unanswered questions receive zero, and manual-review answers remain pending where required.
+   At timeout, Stage 8 blocks further edits and freezes committed work with saved answers pending and no fabricated rows. Stage 9 later applies unanswered-zero, checking, review, and scoring rules.
 
 10. **The official Topic assessment pair is unambiguous**  
     A Topic may contain supplementary tasks, but exactly one designated Homework and one designated Blitz determine the official Topic result.
@@ -582,5 +586,5 @@ The MVP additionally fixes these behaviors:
 - Draft Homework/Blitz may temporarily total zero points, but activation requires backend-recalculated total points greater than zero.
 - If top Homework attempts tie exactly, the earliest tied attempt is the official attempt reference.
 - For Homework, the authoritative deadline or Teacher close freezes each existing in-progress Attempt from already-committed saved work as immutable `submitted` history. Stage 7 creates neither an Attempt for a Student who never started nor an answer row for an unanswered Question, and performs no checking or scoring; Stage 9 later checks and scores the frozen work and treats missing answers as zero under the approved policy.
-- Closing an active Blitz continues to auto-finalize existing in-progress attempts from saved answers, give zero to unanswered components, and create no fake Attempt for Students who never started.
+- Closing an active Blitz in Stage 8 freezes existing in-progress Attempts from committed pending work: due Attempts use timeout at their exact deadlines, and still-pre-deadline Attempts use `task_closed_auto_finalize` at the captured close instant. No fake Attempt/answer row or checking/scoring is created; Stage 9 later applies unanswered-zero and checking rules.
 - A Student Topic Result can be closed only after a terminal calculated or definitive Not completed state; closure freezes scoring/result data but remains separate from result visibility/release.
