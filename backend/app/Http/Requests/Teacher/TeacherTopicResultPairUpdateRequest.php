@@ -9,7 +9,7 @@ use stdClass;
 
 class TeacherTopicResultPairUpdateRequest extends FormRequest
 {
-    private const ACCEPTED_INPUT_KEYS = ['homework_assessment_id'];
+    private const ACCEPTED_INPUT_KEYS = ['homework_assessment_id', 'blitz_assessment_id'];
 
     public function authorize(): bool
     {
@@ -27,6 +27,7 @@ class TeacherTopicResultPairUpdateRequest extends FormRequest
     {
         return [
             'homework_assessment_id' => ['required', 'string', 'uuid'],
+            'blitz_assessment_id' => ['sometimes', 'required', 'string', 'uuid'],
         ];
     }
 
@@ -54,6 +55,13 @@ class TeacherTopicResultPairUpdateRequest extends FormRequest
     public function homeworkAssessmentId(): string
     {
         return strtolower($this->validated('homework_assessment_id'));
+    }
+
+    public function blitzAssessmentId(): ?string
+    {
+        $blitzId = $this->validated('blitz_assessment_id');
+
+        return $blitzId === null ? null : strtolower($blitzId);
     }
 
     private function hasJsonObjectBody(): bool

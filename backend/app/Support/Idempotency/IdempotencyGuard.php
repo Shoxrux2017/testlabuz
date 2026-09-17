@@ -3,7 +3,7 @@
 namespace App\Support\Idempotency;
 
 use App\Enums\IdempotencyOperation;
-use App\Exceptions\Student\IdempotencyKeyReusedException;
+use App\Exceptions\IdempotencyKeyReusedException;
 use App\Models\IdempotencyRecord;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;

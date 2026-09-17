@@ -86,12 +86,18 @@ final class TeacherBlitzAccess
 
         ['group' => $group, 'topic' => $topic] = $this->lockTopic($teacher, $preliminaryTopic);
 
+        return array_merge(compact('group', 'topic'), $this->lockBlitzInTopic($teacher, $topic, $preliminaryAssessment->id));
+    }
+
+    /** @return array{assessment: Assessment, blitz: BlitzTask} */
+    public function lockBlitzInTopic(User $teacher, Topic $topic, string $assessmentId): array
+    {
         $assessment = Assessment::query()
             ->where('institution_id', $teacher->institution_id)
             ->where('teacher_id', $teacher->id)
             ->where('topic_id', $topic->id)
             ->where('type', AssessmentType::Blitz->value)
-            ->whereKey($preliminaryAssessment->id)
+            ->whereKey($assessmentId)
             ->lockForUpdate()
             ->first();
 
@@ -109,7 +115,7 @@ final class TeacherBlitzAccess
             throw new NotFoundHttpException;
         }
 
-        return compact('group', 'topic', 'assessment', 'blitz');
+        return compact('assessment', 'blitz');
     }
 
     public function resolveGroup(User $teacher, string $groupId): Group

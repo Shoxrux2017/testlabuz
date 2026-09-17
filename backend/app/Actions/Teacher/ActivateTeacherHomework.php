@@ -2,30 +2,26 @@
 
 namespace App\Actions\Teacher;
 
-use App\Domain\Assessment\HomeworkActivationValidator;
-use App\Enums\AssessmentAssignmentMode;
+use App\Domain\Assessment\AssessmentActivationValidator;
 use App\Enums\GroupStatus;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
-use App\Exceptions\Teacher\BusinessConflictException;
 use App\Exceptions\Teacher\DeadlinePassedException;
-use App\Exceptions\Teacher\ResultPairLockedException;
 use App\Exceptions\Teacher\TaskArchivedException;
 use App\Exceptions\Teacher\TaskClosedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Assessment;
-use App\Models\TopicResultPair;
 use App\Models\User;
-use App\Support\Teacher\HomeworkRecipientSnapshotter;
 use App\Support\Teacher\TeacherHomeworkLifecycleAccess;
+use App\Support\Teacher\TeacherOfficialAssessmentCohort;
 use Illuminate\Support\Facades\DB;
 
 final class ActivateTeacherHomework
 {
     public function __construct(
         private readonly TeacherHomeworkLifecycleAccess $access,
-        private readonly HomeworkActivationValidator $activationValidator,
-        private readonly HomeworkRecipientSnapshotter $recipientSnapshotter,
+        private readonly AssessmentActivationValidator $activationValidator,
+        private readonly TeacherOfficialAssessmentCohort $officialCohort,
         private readonly ShowTeacherHomework $showTeacherHomework,
     ) {}
 
@@ -60,40 +56,27 @@ final class ActivateTeacherHomework
             $assignmentMode = $this->activationValidator->validateMetadata($assessment);
             $pair = $this->access->lockResultPair($teacher, $topic, $assessment);
 
-            if ($pair instanceof TopicResultPair && $pair->homework_assessment_id === $assessment->id) {
-                if ($assignmentMode !== AssessmentAssignmentMode::Group) {
-                    throw new BusinessConflictException;
-                }
-
-                if ($pair->locked_at !== null) {
-                    throw new ResultPairLockedException;
-                }
-
-                if ($pair->cohort_snapshotted_at !== null || $pair->blitz_assessment_id !== null) {
-                    throw new BusinessConflictException;
-                }
-            }
-
-            $questions = $this->access->lockQuestions($teacher, $assessment);
-            $totalPossiblePoints = $this->activationValidator->validateQuestions($questions);
-            $lockedRecipientSnapshot = $this->recipientSnapshotter->lock(
+            $lockedCohort = $this->officialCohort->lock(
                 $teacher,
                 $group,
                 $assessment,
                 $assignmentMode,
+                $pair,
             );
+            $questions = $this->access->lockQuestions($teacher, $assessment);
+            $totalPossiblePoints = $this->activationValidator->validateQuestions($questions);
             $transitionedAt = now();
 
             if ($homework->deadline_at !== null && $homework->deadline_at->lessThanOrEqualTo($transitionedAt)) {
                 throw new DeadlinePassedException;
             }
 
-            $this->recipientSnapshotter->snapshot(
+            $preparedCohort = $this->officialCohort->validate($teacher, $assessment, $assignmentMode, $lockedCohort);
+            $this->officialCohort->apply(
                 $teacher,
                 $assessment,
-                $assignmentMode,
                 $transitionedAt,
-                $lockedRecipientSnapshot,
+                $preparedCohort,
             );
 
             $assessment->total_possible_points = $totalPossiblePoints;
@@ -106,12 +89,6 @@ final class ActivateTeacherHomework
             $homework->archived_at = null;
             $homework->updated_at = $transitionedAt;
             $homework->save();
-
-            if ($pair instanceof TopicResultPair && $pair->homework_assessment_id === $assessment->id) {
-                $pair->cohort_snapshotted_at = $transitionedAt;
-                $pair->updated_at = $transitionedAt;
-                $pair->save();
-            }
 
             return ($this->showTeacherHomework)($teacher, $assessment->id);
         });

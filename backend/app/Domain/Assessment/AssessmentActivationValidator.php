@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Collection;
 use InvalidArgumentException;
 use LogicException;
 
-final class HomeworkActivationValidator
+final class AssessmentActivationValidator
 {
     public function __construct(
         private readonly QuestionPositionSetValidator $positionSetValidator,
