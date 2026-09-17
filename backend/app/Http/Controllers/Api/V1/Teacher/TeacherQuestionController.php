@@ -11,7 +11,7 @@ use App\Http\Requests\Teacher\TeacherQuestionCreateRequest;
 use App\Http\Requests\Teacher\TeacherQuestionDeleteRequest;
 use App\Http\Requests\Teacher\TeacherQuestionReorderRequest;
 use App\Http\Requests\Teacher\TeacherQuestionUpdateRequest;
-use App\Http\Resources\Teacher\TeacherHomeworkResource;
+use App\Http\Resources\Teacher\TeacherAssessmentAuthoringResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,9 +25,9 @@ class TeacherQuestionController extends Controller
     ): JsonResponse {
         /** @var User $teacher */
         $teacher = $request->user();
-        $homework = $addQuestion($teacher, $assessment, $request->questionAttributes());
+        $assessment = $addQuestion($teacher, $assessment, $request->questionAttributes());
 
-        return (new TeacherHomeworkResource($homework))
+        return (new TeacherAssessmentAuthoringResource($assessment))
             ->additional(['message' => 'Question created successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
@@ -40,9 +40,9 @@ class TeacherQuestionController extends Controller
     ): JsonResponse {
         /** @var User $teacher */
         $teacher = $request->user();
-        $homework = $updateQuestion($teacher, $question, $request->questionAttributes());
+        $assessment = $updateQuestion($teacher, $question, $request->questionAttributes());
 
-        return (new TeacherHomeworkResource($homework))
+        return (new TeacherAssessmentAuthoringResource($assessment))
             ->additional(['message' => 'Question updated successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
@@ -55,9 +55,9 @@ class TeacherQuestionController extends Controller
     ): JsonResponse {
         /** @var User $teacher */
         $teacher = $request->user();
-        $homework = $deleteQuestion($teacher, $question);
+        $assessment = $deleteQuestion($teacher, $question);
 
-        return (new TeacherHomeworkResource($homework))
+        return (new TeacherAssessmentAuthoringResource($assessment))
             ->additional(['message' => 'Question deleted successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
@@ -70,9 +70,9 @@ class TeacherQuestionController extends Controller
     ): JsonResponse {
         /** @var User $teacher */
         $teacher = $request->user();
-        $homework = $reorderQuestions($teacher, $assessment, $request->questionIds());
+        $assessment = $reorderQuestions($teacher, $assessment, $request->questionIds());
 
-        return (new TeacherHomeworkResource($homework))
+        return (new TeacherAssessmentAuthoringResource($assessment))
             ->additional(['message' => 'Questions reordered successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);

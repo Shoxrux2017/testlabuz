@@ -12,7 +12,6 @@ use App\Models\Question;
 use App\Models\User;
 use App\Support\Assessment\QuestionConfigurationWriter;
 use App\Support\Assessment\QuestionPositionWriter;
-use App\Support\Teacher\TeacherHomeworkAccess;
 use App\Support\Teacher\TeacherQuestionMutationAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,24 +22,23 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 final class UpdateTeacherQuestion
 {
     public function __construct(
-        private readonly TeacherHomeworkAccess $homeworkAccess,
         private readonly TeacherQuestionMutationAccess $mutationAccess,
         private readonly QuestionPositionWriter $positionWriter,
         private readonly QuestionConfigurationValidator $configurationValidator,
         private readonly QuestionConfigurationWriter $configurationWriter,
         private readonly AssessmentPointMath $pointMath,
-        private readonly ShowTeacherHomework $showTeacherHomework,
+        private readonly ShowTeacherAssessmentAuthoring $showTeacherAssessmentAuthoring,
     ) {}
 
     /** @param array<string, mixed> $attributes */
     public function __invoke(User $teacher, string $questionId, array $attributes): Assessment
     {
-        $preliminaryAssessment = $this->homeworkAccess->resolveHomeworkForQuestion($teacher, $questionId);
+        $preliminaryAssessment = $this->mutationAccess->resolveAssessmentForQuestion($teacher, $questionId);
 
         return DB::transaction(function () use ($teacher, $preliminaryAssessment, $questionId, $attributes): Assessment {
             $context = $this->mutationAccess->lock($teacher, $preliminaryAssessment);
             $assessment = $context['assessment'];
-            $homework = $context['homework'];
+            $task = $context['task'];
             $questions = $context['questions'];
             $this->positionWriter->assertContiguous($questions);
             $question = $questions->firstWhere('id', strtolower($questionId));
@@ -102,7 +100,7 @@ final class UpdateTeacherQuestion
                 || $resultingPoints !== $question->points;
 
             if (! $commonFieldsChanged && ! $configurationChanged) {
-                return ($this->showTeacherHomework)($teacher, $assessment->id);
+                return ($this->showTeacherAssessmentAuthoring)($teacher, $assessment);
             }
 
             if ($typeChanged || $checkingModeChanged || $configurationChanged) {
@@ -131,13 +129,13 @@ final class UpdateTeacherQuestion
 
             $totalPossiblePoints = $this->pointMath->sum($questions->pluck('points')->all());
             $this->mutationAccess->ensureActiveResultIsScoreable(
-                $homework,
+                $task,
                 $questions->count(),
                 $totalPossiblePoints,
             );
             $this->persistTotalAndTouch($assessment, $totalPossiblePoints);
 
-            return ($this->showTeacherHomework)($teacher, $assessment->id);
+            return ($this->showTeacherAssessmentAuthoring)($teacher, $assessment);
         });
     }
 

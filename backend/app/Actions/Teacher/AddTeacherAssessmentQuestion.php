@@ -8,7 +8,6 @@ use App\Models\Assessment;
 use App\Models\User;
 use App\Support\Assessment\QuestionConfigurationWriter;
 use App\Support\Assessment\QuestionPositionWriter;
-use App\Support\Teacher\TeacherHomeworkAccess;
 use App\Support\Teacher\TeacherQuestionMutationAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -16,23 +15,22 @@ use Illuminate\Validation\ValidationException;
 final class AddTeacherAssessmentQuestion
 {
     public function __construct(
-        private readonly TeacherHomeworkAccess $homeworkAccess,
         private readonly TeacherQuestionMutationAccess $mutationAccess,
         private readonly QuestionPositionWriter $positionWriter,
         private readonly QuestionConfigurationWriter $configurationWriter,
         private readonly AssessmentPointMath $pointMath,
-        private readonly ShowTeacherHomework $showTeacherHomework,
+        private readonly ShowTeacherAssessmentAuthoring $showTeacherAssessmentAuthoring,
     ) {}
 
     /** @param array<string, mixed> $attributes */
     public function __invoke(User $teacher, string $assessmentId, array $attributes): Assessment
     {
-        $preliminaryAssessment = $this->homeworkAccess->resolveHomework($teacher, $assessmentId);
+        $preliminaryAssessment = $this->mutationAccess->resolveAssessment($teacher, $assessmentId);
 
         return DB::transaction(function () use ($teacher, $preliminaryAssessment, $attributes): Assessment {
             $context = $this->mutationAccess->lock($teacher, $preliminaryAssessment);
             $assessment = $context['assessment'];
-            $homework = $context['homework'];
+            $task = $context['task'];
             $questions = $context['questions'];
             $questionCount = $questions->count();
             $position = $attributes['position'];
@@ -61,13 +59,13 @@ final class AddTeacherAssessmentQuestion
 
             $totalPossiblePoints = $this->pointMath->sum($questions->pluck('points')->all());
             $this->mutationAccess->ensureActiveResultIsScoreable(
-                $homework,
+                $task,
                 $questions->count(),
                 $totalPossiblePoints,
             );
             $this->persistTotalAndTouch($assessment, $totalPossiblePoints);
 
-            return ($this->showTeacherHomework)($teacher, $assessment->id);
+            return ($this->showTeacherAssessmentAuthoring)($teacher, $assessment);
         });
     }
 
