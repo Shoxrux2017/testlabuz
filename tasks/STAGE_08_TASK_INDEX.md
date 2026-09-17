@@ -13,13 +13,13 @@
 | Previous Stage | `Stage 7 — Closed / PASS` |
 | Previous Stage closure merge | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Current source of truth | `GitHub main — ChatGPT must re-check it before any readiness/handoff decision` |
-| Stage 8 implementation | `In progress — S08-DOC-001 and S08-BE-001…004 Accepted / Delivered; backend implementation in progress` |
+| Stage 8 implementation | `In progress — S08-DOC-001 and S08-BE-001…005 Accepted / Delivered; backend implementation in progress` |
 | Detailed task contracts | `Final planning package reviewed and approved; execution remains per-task gated` |
 | Backend Phase 2 | `Not started` |
 | Frontend Phase 2 | `Not started` |
 | Integration | `Not started` |
 | Closure | `Not started` |
-| Next permitted gate | `S08-BE-005 implementation handoff` |
+| Next permitted gate | `S08-BE-006 implementation handoff` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -29,9 +29,10 @@ and must be re-checked by ChatGPT before any task receives current readiness.
 
 Stage 8 planning/decomposition is approved. `S08-DOC-001` documentation alignment,
 `S08-BE-001` persistence/domain foundation, `S08-BE-002` Teacher Blitz authoring,
-`S08-BE-003` Blitz Question authoring integration and `S08-BE-004` Official Blitz
-designation + activation are `Accepted / Delivered`.
-Stage 8 backend implementation is now in progress. `S08-BE-005` is the only
+`S08-BE-003` Blitz Question authoring integration, `S08-BE-004` Official Blitz
+designation + activation and `S08-BE-005` Student Read + Start/Resume are
+`Accepted / Delivered`.
+Stage 8 backend implementation is now in progress. `S08-BE-006` is the only
 currently `Approved` next implementation task.
 
 All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
@@ -305,8 +306,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 | `2` | `S08-BE-002` | `Backend` | `Teacher Blitz authoring/read/update lifecycle API` | `DOC-001 + BE-001 Accepted / Delivered` | `Approved` | `Accepted` | `Delivered — PR #238, merge 87a071dbddd7887b5b61b99a9727754b9839fba7` | `tasks/backend/stage-08/S08-BE-002-teacher-blitz-authoring-lifecycle-api.md` |
 | `3` | `S08-BE-003` | `Backend` | `Blitz Question authoring integration` | `DOC-001 + BE-001…002 Accepted / Delivered` | `Approved` | `Accepted` | `Delivered — PR #241, merge eedb63838e09aa2e122520a4ca706c63076f6a57` | `tasks/backend/stage-08/S08-BE-003-blitz-question-authoring-integration.md` |
 | `4` | `S08-BE-004` | `Backend` | `Official Blitz designation + activation engine` | `DOC-001 + BE-001…003 Accepted / Delivered` | `Approved` | `Accepted` | `Delivered — PR #243, merge be2f246be4342ed87144278217d8f804528fd1c0` | `tasks/backend/stage-08/S08-BE-004-official-blitz-designation-activation-engine.md` |
-| `5` | `S08-BE-005` | `Backend` | `Student Blitz read + explicit Start/Resume + Blitz-first Homework Start compatibility` | `DOC-001 + BE-001…004 Accepted / Delivered` | `Approved` | `Approved` | `Not started` | `tasks/backend/stage-08/S08-BE-005-student-blitz-read-start-resume.md` |
-| `6` | `S08-BE-006` | `Backend` | `Student typed/file answer mutation with timer enforcement` | `DOC-001 + BE-001…005 Accepted / Delivered` | `Approved` | `Prepared` | `Not started` | `tasks/backend/stage-08/S08-BE-006-student-blitz-answer-file-mutation.md` |
+| `5` | `S08-BE-005` | `Backend` | `Student Blitz read + explicit Start/Resume + Blitz-first Homework Start compatibility` | `DOC-001 + BE-001…004 Accepted / Delivered` | `Approved` | `Accepted` | `Delivered — PR #245, merge a392c6e73a8c8ead2ed989a3c02bfa2b63f1e3e3` | `tasks/backend/stage-08/S08-BE-005-student-blitz-read-start-resume.md` |
+| `6` | `S08-BE-006` | `Backend` | `Student typed/file answer mutation with timer enforcement` | `DOC-001 + BE-001…005 Accepted / Delivered` | `Approved` | `Approved` | `Not started` | `tasks/backend/stage-08/S08-BE-006-student-blitz-answer-file-mutation.md` |
 | `7` | `S08-BE-007` | `Backend` | `Timeout/Teacher-close/Scheduler finalization engine` | `DOC-001 + BE-001…006 Accepted / Delivered` | `Approved` | `Prepared` | `Not started` | `tasks/backend/stage-08/S08-BE-007-blitz-finalization-timeout-close-scheduler.md` |
 | `8` | `S08-BE-008` | `Backend` | `Idempotent Student Blitz Submit + finalization races` | `DOC-001 + BE-001…007 Accepted / Delivered` | `Approved` | `Prepared` | `Not started` | `tasks/backend/stage-08/S08-BE-008-idempotent-student-blitz-submit.md` |
 | `9` | `S08-BE-009` | `Backend` | `Student-specific technical exception + replacement Attempt #2` | `DOC-001 + BE-001…008 Accepted / Delivered` | `Approved` | `Prepared` | `Not started` | `tasks/backend/stage-08/S08-BE-009-student-specific-blitz-attempt-exception.md` |
@@ -327,7 +328,7 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 - `Historical planning-package contract status` records planning-time contract
   preparation/approval only. It is intentionally non-authoritative for execution.
 - `Current readiness / review status` is authoritative for task execution.
-  `S08-DOC-001` and `S08-BE-001…004` are `Accepted / Delivered`. `S08-BE-005` is the
+  `S08-DOC-001` and `S08-BE-001…005` are `Accepted / Delivered`. `S08-BE-006` is the
   only current `Approved` implementation task. All later tasks remain
   `Prepared / Not started`.
 - ChatGPT changes the exact next implementation task to current `Approved` only
@@ -360,9 +361,9 @@ S08-BE-003 Accepted / Delivered
     ↓
 S08-BE-004 Accepted / Delivered
     ↓
-S08-BE-005 Approved / Not started
+S08-BE-005 Accepted / Delivered
     ↓
-S08-BE-006
+S08-BE-006 Approved / Not started
     ↓
 S08-BE-007
     ↓
@@ -919,9 +920,9 @@ Current planning-package state:
 Stage 7 closure                  = PASS
 Stage 8 decomposition            = Approved
 Stage 8 Stage status             = Approved
-Stage 8 implementation           = In progress — S08-DOC-001 and S08-BE-001…004 Accepted / Delivered; backend implementation in progress
+Stage 8 implementation           = In progress — S08-DOC-001 and S08-BE-001…005 Accepted / Delivered; backend implementation in progress
 Detailed task contracts          = Final planning package reviewed and approved; execution remains per-task gated
-Current per-task readiness       = S08-DOC-001 and S08-BE-001…004 Accepted / Delivered; S08-BE-005 Approved / Not started; all later tasks Prepared / Not started
+Current per-task readiness       = S08-DOC-001 and S08-BE-001…005 Accepted / Delivered; S08-BE-006 Approved / Not started; all later tasks Prepared / Not started
 Backend Phase 2                  = NOT STARTED
 Frontend Phase 2                 = NOT STARTED
 Integration                      = NOT STARTED
@@ -932,7 +933,7 @@ STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 The next permitted workflow action is:
 
 ```text
-S08-BE-005 implementation handoff
+S08-BE-006 implementation handoff
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
