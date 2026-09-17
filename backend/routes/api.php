@@ -20,6 +20,8 @@ use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
+use App\Http\Controllers\Api\V1\Student\StudentBlitzAttemptController;
+use App\Http\Controllers\Api\V1\Student\StudentBlitzController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkAttemptAnswerController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkAttemptController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkController;
@@ -140,6 +142,9 @@ Route::prefix('teacher')
 Route::prefix('student')
     ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::Student->value])
     ->group(function (): void {
+        Route::get('blitz/active', [StudentBlitzController::class, 'active']);
+        Route::get('blitz/{blitz}', [StudentBlitzController::class, 'show']);
+        Route::post('blitz/{blitz}/attempts', [StudentBlitzAttemptController::class, 'store']);
         Route::get('homework', [StudentHomeworkController::class, 'index']);
         Route::get('homework/{homework}', [StudentHomeworkController::class, 'show']);
         Route::post('homework/{homework}/attempts', [StudentHomeworkAttemptController::class, 'store']);

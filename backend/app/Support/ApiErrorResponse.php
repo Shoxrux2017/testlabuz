@@ -24,6 +24,10 @@ final class ApiErrorResponse
 
     private const CODE_BUSINESS_CONFLICT = 'business_conflict';
 
+    private const CODE_BLITZ_NOT_ACTIVE = 'blitz_not_active';
+
+    private const CODE_BLITZ_TIME_EXPIRED = 'blitz_time_expired';
+
     private const CODE_DEADLINE_PASSED = 'deadline_passed';
 
     private const CODE_TASK_ARCHIVED = 'task_archived';
@@ -401,6 +405,71 @@ final class ApiErrorResponse
         return self::json(
             'This Homework attempt is no longer editable.',
             self::CODE_ATTEMPT_NOT_EDITABLE,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function studentBlitzNotActive(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This Blitz is not active.',
+            self::CODE_BLITZ_NOT_ACTIVE,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function studentBlitzTimeExpired(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The Blitz time has expired.',
+            self::CODE_BLITZ_TIME_EXPIRED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function studentBlitzAttemptsExhausted(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'No Blitz attempts remain.',
+            self::CODE_ATTEMPTS_EXHAUSTED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function studentBlitzAttemptNotEditable(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This Blitz attempt is no longer editable.',
+            self::CODE_ATTEMPT_NOT_EDITABLE,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function studentBlitzAssessmentNotAssigned(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This Blitz is no longer assigned to the current Student.',
+            self::CODE_ASSESSMENT_NOT_ASSIGNED,
             Response::HTTP_CONFLICT,
         );
     }

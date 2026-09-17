@@ -12,6 +12,7 @@ use App\Models\HomeworkAssignment;
 use App\Models\IdempotencyRecord;
 use App\Models\Question;
 use App\Models\QuestionTrueFalseAnswer;
+use App\Models\TopicResultPair;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -128,6 +129,65 @@ class StudentHomeworkAttemptStartConcurrencyTest extends TestCase
             'Start prevents Question mutation' => ['start_before_mutation', 'start', 'mutate', 201, 'business_conflict', null, 1],
             'Start commits before Teacher close' => ['start_before_close', 'start', 'close', 201, 'ok', null, 1],
             'Teacher close prevents Start' => ['close_first', 'close', 'start', null, 'task_closed', null, 0],
+        ];
+    }
+
+    #[DataProvider('officialPairStartRaces')]
+    public function test_official_homework_and_blitz_first_starts_share_one_pair_lock_and_independent_numbering(
+        string $firstOperation,
+        string $secondOperation,
+    ): void {
+        $this->assertSame('pgsql', DB::connection()->getDriverName());
+        $workerPath = tempnam(sys_get_temp_dir(), 's08_be_005_pair_start_worker_');
+        $this->assertIsString($workerPath);
+        file_put_contents($workerPath, $this->workerSource());
+        $ids = json_decode($this->runWorker([$workerPath, base_path(), 'setup_official']), true, flags: JSON_THROW_ON_ERROR);
+
+        try {
+            $pairBefore = TopicResultPair::query()->findOrFail($ids['pair'])->getAttributes();
+            $results = $this->runRace($workerPath, $ids, 'official_pair', $firstOperation, $secondOperation);
+
+            foreach ($results as $result) {
+                $this->assertSame('ok', $result['outcome']);
+                $this->assertSame(201, $result['http_status']);
+            }
+            $this->assertSame(1, $results['first']['pair_updates']);
+            $this->assertSame(0, $results['second']['pair_updates']);
+
+            $homeworkAttempt = AssessmentAttempt::query()->where('assessment_id', $ids['assessment'])->sole();
+            $blitzAttempt = AssessmentAttempt::query()->where('assessment_id', $ids['blitz'])->sole();
+            $this->assertSame(1, $homeworkAttempt->attempt_number);
+            $this->assertSame(1, $blitzAttempt->attempt_number);
+            $this->assertSame(AssessmentAttemptStatus::InProgress, $homeworkAttempt->status);
+            $this->assertSame(AssessmentAttemptStatus::InProgress, $blitzAttempt->status);
+            $this->assertNull($homeworkAttempt->deadline_at);
+            $this->assertTrue($blitzAttempt->started_at->copy()->addSeconds(600)->equalTo($blitzAttempt->deadline_at));
+
+            $firstAttempt = $firstOperation === 'start' ? $homeworkAttempt : $blitzAttempt;
+            $secondAttempt = $secondOperation === 'start' ? $homeworkAttempt : $blitzAttempt;
+            $this->assertSame($firstAttempt->id, $results['first']['attempt_id']);
+            $this->assertSame($secondAttempt->id, $results['second']['attempt_id']);
+            $this->assertSame('2026-09-09 10:00:00', $firstAttempt->started_at->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-09-09 10:01:00', $secondAttempt->started_at->format('Y-m-d H:i:s'));
+
+            $pair = TopicResultPair::query()->findOrFail($ids['pair']);
+            $this->assertTrue($pair->locked_at->equalTo($firstAttempt->started_at));
+            $this->assertTrue($pair->updated_at->equalTo($firstAttempt->started_at));
+            foreach (['institution_id', 'topic_id', 'homework_assessment_id', 'blitz_assessment_id', 'cohort_snapshotted_at'] as $attribute) {
+                $this->assertSame($pairBefore[$attribute], $pair->getRawOriginal($attribute));
+            }
+            $this->assertSame(2, IdempotencyRecord::query()->where('institution_id', $ids['institution'])->count());
+        } finally {
+            $this->runWorker([$workerPath, base_path(), 'cleanup', $ids['institution']]);
+            unlink($workerPath);
+        }
+    }
+
+    public static function officialPairStartRaces(): array
+    {
+        return [
+            'Homework Start wins before Blitz Start' => ['start', 'blitz_start'],
+            'Blitz Start wins before Homework Start' => ['blitz_start', 'start'],
         ];
     }
 
@@ -265,6 +325,7 @@ class StudentHomeworkAttemptStartConcurrencyTest extends TestCase
         return <<<'PHP'
 <?php
 
+use App\Actions\Student\StartStudentBlitzAttempt;
 use App\Actions\Student\StartStudentHomeworkAttempt;
 use App\Actions\Teacher\CloseTeacherHomework;
 use App\Actions\Teacher\UpdateTeacherQuestion;
@@ -276,6 +337,7 @@ use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
 use App\Models\AttemptAnswer;
+use App\Models\BlitzTask;
 use App\Models\Group;
 use App\Models\GroupTeacherMembership;
 use App\Models\HomeworkAssignment;
@@ -285,9 +347,11 @@ use App\Models\InstitutionSetting;
 use App\Models\Question;
 use App\Models\QuestionTrueFalseAnswer;
 use App\Models\Topic;
+use App\Models\TopicResultPair;
 use App\Models\User;
 use App\Support\Assessment\QuestionConfigurationWriter;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -298,7 +362,7 @@ $app->make(Kernel::class)->bootstrap();
 Carbon::setTestNow(Carbon::parse('2026-09-09 09:00:00 UTC'));
 $mode = $argv[2];
 
-if ($mode === 'setup') {
+if ($mode === 'setup' || $mode === 'setup_official') {
     $institution = Institution::factory()->create();
     $teacher = User::factory()->teacher($institution)->create(['must_change_password' => false]);
     $admin = User::factory()->institutionAdmin($institution)->create();
@@ -320,7 +384,7 @@ if ($mode === 'setup') {
         'institution_id' => $institution->id,
         'topic_id' => $topic->id,
         'teacher_id' => $teacher->id,
-        'assignment_mode' => AssessmentAssignmentMode::SelectedStudents,
+        'assignment_mode' => $mode === 'setup_official' ? AssessmentAssignmentMode::Group : AssessmentAssignmentMode::SelectedStudents,
         'total_possible_points' => '2.000000',
     ]);
     HomeworkAssignment::factory()->active()->create([
@@ -332,7 +396,7 @@ if ($mode === 'setup') {
         'institution_id' => $institution->id,
         'assessment_id' => $assessment->id,
         'student_id' => $student->id,
-        'assignment_source' => AssessmentAssignmentSource::Direct,
+        'assignment_source' => $mode === 'setup_official' ? AssessmentAssignmentSource::Group : AssessmentAssignmentSource::Direct,
         'assigned_by_user_id' => $teacher->id,
     ]);
     $question = app(QuestionConfigurationWriter::class)->create($assessment, [
@@ -345,12 +409,46 @@ if ($mode === 'setup') {
         'configuration' => ['correct_value' => true],
     ]);
 
+    $officialIds = [];
+    if ($mode === 'setup_official') {
+        $blitz = Assessment::factory()->blitz()->groupAssignment()->create([
+            'institution_id' => $institution->id,
+            'topic_id' => $topic->id,
+            'teacher_id' => $teacher->id,
+            'total_possible_points' => '2.000000',
+        ]);
+        BlitzTask::factory()->activeIndividual()->create(['assessment_id' => $blitz->id]);
+        AssessmentStudent::factory()->create([
+            'assessment_id' => $blitz->id,
+            'student_id' => $student->id,
+            'assignment_source' => AssessmentAssignmentSource::Group,
+            'assigned_by_user_id' => $teacher->id,
+        ]);
+        app(QuestionConfigurationWriter::class)->create($blitz, [
+            'type' => 'true_false',
+            'prompt' => 'Official Blitz question',
+            'instructions' => null,
+            'points' => 2,
+            'position' => 1,
+            'checking_mode' => 'automatic',
+            'configuration' => ['correct_value' => true],
+        ]);
+        $pair = TopicResultPair::factory()->create([
+            'homework_assessment_id' => $assessment->id,
+            'blitz_assessment_id' => $blitz->id,
+            'designated_by_user_id' => $teacher->id,
+            'cohort_snapshotted_at' => now(),
+        ]);
+        $officialIds = ['blitz' => $blitz->id, 'pair' => $pair->id];
+    }
+
     echo json_encode([
         'institution' => $institution->id,
         'teacher' => $teacher->id,
         'student' => $student->id,
         'assessment' => $assessment->id,
         'question' => $question->id,
+        ...$officialIds,
     ], JSON_THROW_ON_ERROR);
     exit(0);
 }
@@ -360,7 +458,7 @@ if ($mode === 'cleanup') {
     DB::transaction(function () use ($institutionId): void {
         foreach ([IdempotencyRecord::class, AttemptAnswer::class, AssessmentAttempt::class,
             QuestionTrueFalseAnswer::class, Question::class, AssessmentStudent::class,
-            HomeworkAssignment::class, Assessment::class, Topic::class, GroupTeacherMembership::class,
+            TopicResultPair::class, BlitzTask::class, HomeworkAssignment::class, Assessment::class, Topic::class, GroupTeacherMembership::class,
             Group::class, InstitutionSetting::class, User::class] as $model) {
             $model::query()->where('institution_id', $institutionId)->delete();
         }
@@ -384,11 +482,23 @@ if ($hold === 'hold') {
 $outcome = 'ok';
 $attemptId = null;
 $httpStatus = null;
+$pairUpdates = 0;
+DB::listen(function (QueryExecuted $query) use (&$pairUpdates): void {
+    if (str_starts_with($query->sql, 'update "topic_result_pairs"')) {
+        $pairUpdates++;
+    }
+});
 
 try {
     if ($operation === 'start') {
         $student = User::query()->findOrFail($studentId);
         $result = app(StartStudentHomeworkAttempt::class)($student, $assessmentId, $key);
+        $attemptId = $result->attemptId;
+        $httpStatus = $result->httpStatus;
+    } elseif ($operation === 'blitz_start') {
+        $student = User::query()->findOrFail($studentId);
+        $pair = TopicResultPair::query()->where('homework_assessment_id', $assessmentId)->sole();
+        $result = app(StartStudentBlitzAttempt::class)($student, $pair->blitz_assessment_id, $key, 'start_normal');
         $attemptId = $result->attemptId;
         $httpStatus = $result->httpStatus;
     } elseif ($operation === 'mutate') {
@@ -415,7 +525,7 @@ if ($hold === 'hold') {
         clearstatcache(true, $releasePath);
         if (file_exists($releasePath)) {
             DB::commit();
-            echo json_encode(['outcome' => $outcome, 'attempt_id' => $attemptId, 'http_status' => $httpStatus], JSON_THROW_ON_ERROR);
+            echo json_encode(['outcome' => $outcome, 'attempt_id' => $attemptId, 'http_status' => $httpStatus, 'pair_updates' => $pairUpdates], JSON_THROW_ON_ERROR);
             exit(0);
         }
         usleep(5_000);
@@ -424,7 +534,7 @@ if ($hold === 'hold') {
     throw new RuntimeException('Timed out waiting for deterministic Start race release.');
 }
 
-echo json_encode(['outcome' => $outcome, 'attempt_id' => $attemptId, 'http_status' => $httpStatus], JSON_THROW_ON_ERROR);
+echo json_encode(['outcome' => $outcome, 'attempt_id' => $attemptId, 'http_status' => $httpStatus, 'pair_updates' => $pairUpdates], JSON_THROW_ON_ERROR);
 PHP;
     }
 }

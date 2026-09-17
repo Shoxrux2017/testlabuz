@@ -172,6 +172,21 @@ final class StudentHomeworkAttemptAccess
             ->get();
     }
 
+    /** @return Collection<int, AssessmentAttempt> */
+    public function lockOfficialPairAttempts(User $student, TopicResultPair $pair): Collection
+    {
+        return AssessmentAttempt::query()
+            ->where('institution_id', $student->institution_id)
+            ->whereIn('assessment_id', array_filter([$pair->homework_assessment_id, $pair->blitz_assessment_id]))
+            ->with(['assessmentStudent' => fn ($query) => $query
+                ->select(['id', 'institution_id', 'assessment_id', 'student_id'])
+                ->where('institution_id', $student->institution_id)])
+            ->orderBy('assessment_id')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+    }
+
     /** @return Builder<AssessmentAttempt> */
     private function assessmentAttemptsQuery(User $student, Assessment $assessment): Builder
     {
