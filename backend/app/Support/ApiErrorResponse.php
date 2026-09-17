@@ -38,6 +38,10 @@ final class ApiErrorResponse
 
     private const CODE_IDEMPOTENCY_KEY_REUSED = 'idempotency_key_reused';
 
+    private const CODE_INSTITUTION_SETTINGS_INCOMPLETE = 'institution_settings_incomplete';
+
+    private const CODE_OFFICIAL_COHORT_MISMATCH = 'official_cohort_mismatch';
+
     private const CODE_INVALID_CREDENTIALS = 'invalid_credentials';
 
     private const CODE_OFFICIAL_TASK_REQUIRES_GROUP_ASSIGNMENT = 'official_task_requires_group_assignment';
@@ -435,8 +439,36 @@ final class ApiErrorResponse
         }
 
         return self::json(
-            'The topic has open homework that must be resolved before closing or archiving it.',
+            'The topic has open assessments that must be resolved before closing or archiving it.',
             self::CODE_TOPIC_HAS_OPEN_ASSESSMENTS,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    /** @param list<string> $missingFields */
+    public static function institutionSettingsIncomplete(array $missingFields, Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'Required institution settings are incomplete.',
+            self::CODE_INSTITUTION_SETTINGS_INCOMPLETE,
+            Response::HTTP_CONFLICT,
+            meta: ['missing_fields' => $missingFields],
+        );
+    }
+
+    public static function officialCohortMismatch(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The official assessment cohort does not match the established Topic cohort.',
+            self::CODE_OFFICIAL_COHORT_MISMATCH,
             Response::HTTP_CONFLICT,
         );
     }
@@ -526,12 +558,18 @@ final class ApiErrorResponse
     /**
      * @param  array<string, array<int, string>>|stdClass  $errors
      */
-    private static function json(string $message, string $code, int $status, array|stdClass $errors = new stdClass): JsonResponse
+    private static function json(string $message, string $code, int $status, array|stdClass $errors = new stdClass, ?array $meta = null): JsonResponse
     {
-        return response()->json([
+        $payload = [
             'message' => $message,
             'code' => $code,
             'errors' => $errors,
-        ], $status);
+        ];
+
+        if ($meta !== null) {
+            $payload['meta'] = $meta;
+        }
+
+        return response()->json($payload, $status);
     }
 }

@@ -6,6 +6,7 @@ enum IdempotencyOperation: string
 {
     case StudentHomeworkAttemptStart = 'student.homework.attempt.start';
     case StudentHomeworkAttemptSubmit = 'student.homework.attempt.submit';
+    case TeacherBlitzActivate = 'teacher.blitz.activate';
 
     /** @return list<string> */
     public static function values(): array

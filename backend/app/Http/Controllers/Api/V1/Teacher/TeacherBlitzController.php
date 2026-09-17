@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Teacher;
 
+use App\Actions\Teacher\ActivateTeacherBlitz;
 use App\Actions\Teacher\ArchiveTeacherBlitz;
 use App\Actions\Teacher\CreateTeacherBlitz;
 use App\Actions\Teacher\ListTeacherBlitz;
@@ -9,6 +10,7 @@ use App\Actions\Teacher\ScheduleTeacherBlitz;
 use App\Actions\Teacher\ShowTeacherBlitz;
 use App\Actions\Teacher\UpdateTeacherBlitz;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Teacher\TeacherBlitzActivationRequest;
 use App\Http\Requests\Teacher\TeacherBlitzCreateRequest;
 use App\Http\Requests\Teacher\TeacherBlitzIndexRequest;
 use App\Http\Requests\Teacher\TeacherBlitzLifecycleRequest;
@@ -85,6 +87,21 @@ class TeacherBlitzController extends Controller
 
         return (new TeacherBlitzResource($scheduledBlitz))
             ->additional(['message' => 'Blitz task scheduled successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function activate(
+        TeacherBlitzActivationRequest $request,
+        string $blitz,
+        ActivateTeacherBlitz $activateTeacherBlitz,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $activatedBlitz = $activateTeacherBlitz($teacher, $blitz, $request->idempotencyKey());
+
+        return (new TeacherBlitzResource($activatedBlitz))
+            ->additional(['message' => 'Blitz task activated successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
     }

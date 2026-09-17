@@ -38,7 +38,12 @@ class TeacherTopicResultPairController extends Controller
     ): JsonResponse {
         /** @var User $teacher */
         $teacher = $request->user();
-        $pair = $setTeacherTopicResultPair($teacher, $topic, $request->homeworkAssessmentId());
+        $pair = $setTeacherTopicResultPair(
+            $teacher,
+            $topic,
+            $request->homeworkAssessmentId(),
+            $request->blitzAssessmentId(),
+        );
 
         return (new TeacherTopicResultPairResource($pair))
             ->additional(['message' => 'Topic result pair updated successfully.'])

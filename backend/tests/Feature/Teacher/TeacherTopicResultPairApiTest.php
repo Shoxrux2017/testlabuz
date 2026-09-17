@@ -9,6 +9,7 @@ use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
 use App\Models\Assessment;
 use App\Models\AssessmentStudent;
+use App\Models\BlitzTask;
 use App\Models\Topic;
 use App\Models\TopicResultPair;
 use App\Models\User;
@@ -199,6 +200,31 @@ class TeacherTopicResultPairApiTest extends TestCase
             ->assertJsonPath('data.blitz_assessment_id', null)
             ->assertJsonPath('data.cohort_snapshotted_at', '2026-09-03T10:35:00Z')
             ->assertJsonPath('data.locked_at', '2026-09-03T10:40:00Z');
+    }
+
+    public function test_put_accepts_optional_blitz_uuid_and_homework_only_retry_preserves_it(): void
+    {
+        [$institution, $teacher, , , $topic] = $this->homeworkContext();
+        $homework = $this->persistedHomework($institution, $teacher, $topic);
+        $blitz = Assessment::factory()->blitz()->groupAssignment()->create([
+            'institution_id' => $institution->id,
+            'teacher_id' => $teacher->id,
+            'topic_id' => $topic->id,
+        ]);
+        BlitzTask::factory()->draft()->create([
+            'institution_id' => $institution->id,
+            'assessment_id' => $blitz->id,
+        ]);
+
+        $this->homeworkJson($teacher, 'PUT', "/api/v1/teacher/topics/{$topic->id}/result-pair", [
+            'homework_assessment_id' => strtoupper($homework->id),
+            'blitz_assessment_id' => strtoupper($blitz->id),
+        ])->assertOk()->assertJsonPath('data.blitz_assessment_id', $blitz->id);
+
+        $pair = TopicResultPair::query()->where('topic_id', $topic->id)->firstOrFail();
+        $before = $this->pairState($pair);
+        $this->putPair($teacher, $topic, $homework)->assertOk()->assertJsonPath('data.blitz_assessment_id', $blitz->id);
+        $this->assertSame($before, $this->pairState($pair->fresh()));
     }
 
     public function test_put_adopts_an_active_homework_persisted_group_snapshot_without_resnapshotting_membership(): void
@@ -454,6 +480,8 @@ class TeacherTopicResultPairApiTest extends TestCase
             '{"homework_assessment_id":null}',
             '{"homework_assessment_id":"not-a-uuid"}',
             json_encode(['homework_assessment_id' => $homework->id, 'blitz_assessment_id' => null], JSON_THROW_ON_ERROR),
+            json_encode(['homework_assessment_id' => $homework->id, 'blitz_assessment_id' => 'not-a-uuid'], JSON_THROW_ON_ERROR),
+            json_encode(['homework_assessment_id' => $homework->id, 'blitz_assessment_id' => 1], JSON_THROW_ON_ERROR),
             json_encode(['homework_assessment_id' => $homework->id, 'institution_id' => $institution->id], JSON_THROW_ON_ERROR),
         ] as $content) {
             $this->homeworkRaw($teacher, 'PUT', $uri, $content)

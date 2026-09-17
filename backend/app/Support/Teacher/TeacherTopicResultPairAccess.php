@@ -7,6 +7,7 @@ use App\Exceptions\Teacher\BusinessConflictException;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
+use App\Models\BlitzTask;
 use App\Models\Group;
 use App\Models\HomeworkAssignment;
 use App\Models\Topic;
@@ -17,7 +18,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class TeacherTopicResultPairAccess
 {
-    public function __construct(private readonly TeacherHomeworkAccess $homeworkAccess) {}
+    public function __construct(
+        private readonly TeacherHomeworkAccess $homeworkAccess,
+        private readonly TeacherBlitzAccess $blitzAccess,
+    ) {}
 
     public function resolveTopic(User $teacher, string $topicId): Topic
     {
@@ -68,6 +72,31 @@ final class TeacherTopicResultPairAccess
             ->first();
     }
 
+    public function currentPair(User $teacher, Topic $topic): ?TopicResultPair
+    {
+        // The caller holds the Topic lock before discovering the involved Assessment rows.
+        return TopicResultPair::query()
+            ->where('institution_id', $teacher->institution_id)
+            ->where('topic_id', $topic->id)
+            ->first();
+    }
+
+    /** @return array{assessment: Assessment, blitz: BlitzTask} */
+    public function lockBlitzCandidate(User $teacher, Topic $topic, string $assessmentId): array
+    {
+        return $this->blitzAccess->lockBlitzInTopic($teacher, $topic, $assessmentId);
+    }
+
+    /** @return array{assessment: Assessment, blitz: BlitzTask} */
+    public function lockCurrentOfficialBlitz(User $teacher, Topic $topic, string $assessmentId): array
+    {
+        try {
+            return $this->lockBlitzCandidate($teacher, $topic, $assessmentId);
+        } catch (NotFoundHttpException) {
+            throw new BusinessConflictException;
+        }
+    }
+
     /** @return array{assessment: Assessment, homework: HomeworkAssignment} */
     public function lockCurrentOfficial(User $teacher, Topic $topic, string $assessmentId): array
     {
@@ -112,12 +141,16 @@ final class TeacherTopicResultPairAccess
             ->get();
     }
 
-    /** @return Collection<int, AssessmentStudent> */
-    public function lockRecipients(User $teacher, Assessment $assessment): Collection
+    /**
+     * @param  list<string>  $assessmentIds
+     * @return Collection<int, AssessmentStudent>
+     */
+    public function lockRecipients(User $teacher, array $assessmentIds): Collection
     {
         return AssessmentStudent::query()
             ->where('institution_id', $teacher->institution_id)
-            ->where('assessment_id', $assessment->id)
+            ->whereIn('assessment_id', $assessmentIds)
+            ->orderBy('assessment_id')
             ->orderBy('student_id')
             ->orderBy('id')
             ->lockForUpdate()

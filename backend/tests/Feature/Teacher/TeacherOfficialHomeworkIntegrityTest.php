@@ -68,7 +68,7 @@ class TeacherOfficialHomeworkIntegrityTest extends TestCase
         ));
     }
 
-    public function test_designated_draft_activation_rejects_preexisting_pair_lock_or_cohort_without_partial_writes(): void
+    public function test_designated_draft_activation_rejects_lock_without_activity_or_cohort_without_recipients_without_partial_writes(): void
     {
         foreach (['locked', 'cohort'] as $scenario) {
             [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
@@ -99,7 +99,7 @@ class TeacherOfficialHomeworkIntegrityTest extends TestCase
             );
             $response->assertConflict()->assertJsonPath(
                 'code',
-                $scenario === 'locked' ? 'result_pair_locked' : 'business_conflict',
+                $scenario === 'locked' ? 'business_conflict' : 'official_cohort_mismatch',
             );
             $this->assertSame(HomeworkStatus::Draft, $homework->homeworkAssignment()->firstOrFail()->status);
             $this->assertDatabaseCount('assessment_students', 0);

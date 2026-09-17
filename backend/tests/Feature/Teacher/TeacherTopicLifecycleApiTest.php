@@ -3,12 +3,14 @@
 namespace Tests\Feature\Teacher;
 
 use App\Actions\Teacher\ActivateTeacherTopic;
+use App\Enums\BlitzStatus;
 use App\Enums\FileCategory;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
 use App\Enums\UserRole;
 use App\Http\Resources\Teacher\TeacherTopicResource;
 use App\Models\Assessment;
+use App\Models\BlitzTask;
 use App\Models\File;
 use App\Models\Group;
 use App\Models\GroupTeacherMembership;
@@ -437,6 +439,47 @@ class TeacherTopicLifecycleApiTest extends TestCase
         $this->assertSame(HomeworkStatus::Draft, $archivedNoOpChild->fresh()?->status);
     }
 
+    public function test_close_and_archive_observe_blitz_lifecycle_without_mutating_tasks(): void
+    {
+        [$institution, $teacher, , $group] = $this->context();
+
+        foreach (BlitzStatus::cases() as $status) {
+            foreach (['close', 'archive'] as $operation) {
+                $topic = $this->topic($institution, $group, $teacher, $operation === 'close' ? TopicStatus::Active : TopicStatus::Closed);
+                $assessment = Assessment::factory()->blitz()->create([
+                    'institution_id' => $institution->id,
+                    'topic_id' => $topic->id,
+                    'teacher_id' => $teacher->id,
+                ]);
+                $factory = match ($status) {
+                    BlitzStatus::Draft => BlitzTask::factory()->draft(),
+                    BlitzStatus::Scheduled => BlitzTask::factory()->scheduled(),
+                    BlitzStatus::Active => BlitzTask::factory()->activeIndividual(),
+                    BlitzStatus::Closed => BlitzTask::factory()->closedIndividual(),
+                    BlitzStatus::Archived => BlitzTask::factory()->archivedFromDraft(),
+                };
+                $blitz = $factory->create([
+                    'institution_id' => $institution->id,
+                    'assessment_id' => $assessment->id,
+                ]);
+                $originalAssessment = $assessment->fresh()->getAttributes();
+                $originalBlitz = $blitz->fresh()->getAttributes();
+                $originalTopic = $topic->fresh()->getAttributes();
+                $response = $this->requestAs($teacher, $this->lifecycleUri($topic, $operation));
+
+                if (in_array($status, [BlitzStatus::Draft, BlitzStatus::Scheduled, BlitzStatus::Active], true)) {
+                    $this->assertOpenHomeworkConflict($response);
+                    $this->assertSame($originalTopic, $topic->fresh()->getAttributes());
+                } else {
+                    $response->assertOk()->assertJsonPath('data.status', $operation === 'close' ? 'closed' : 'archived');
+                }
+
+                $this->assertSame($originalAssessment, $assessment->fresh()->getAttributes());
+                $this->assertSame($originalBlitz, $blitz->fresh()->getAttributes());
+            }
+        }
+    }
+
     public function test_lifecycle_resource_serialization_issues_no_hidden_queries(): void
     {
         [$institution, $teacher, , $group] = $this->context();
@@ -610,7 +653,7 @@ class TeacherTopicLifecycleApiTest extends TestCase
     private function assertOpenHomeworkConflict(TestResponse $response): void
     {
         $this->assertSame([
-            'message' => 'The topic has open homework that must be resolved before closing or archiving it.',
+            'message' => 'The topic has open assessments that must be resolved before closing or archiving it.',
             'code' => 'topic_has_open_assessments',
             'errors' => [],
         ], $response->assertConflict()->json());
