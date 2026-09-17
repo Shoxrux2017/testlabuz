@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Student;
 
+use App\Enums\AssessmentAttemptStatus;
 use App\Models\InstitutionSetting;
 use App\Models\User;
 use App\Support\Files\PrivateFileStorage;
@@ -92,7 +93,15 @@ class StudentBlitzFileAnswerLifecycleTest extends TestCase
             ->assertConflict()->assertJsonPath('code', $expectedCode);
 
         $this->assertRejectedUpload($storage, $before, $file->storage_key);
-        $this->assertSame($attemptAfterChange, $attempt->fresh()->getAttributes());
+        if (in_array($state, ['exact deadline', 'after deadline'], true)) {
+            $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
+            $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->finalized_at));
+            $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->locked_at));
+            $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+            $this->assertSame(array_diff_key($attemptAfterChange, $transitionFields), array_diff_key($attempt->fresh()->getAttributes(), $transitionFields));
+        } else {
+            $this->assertSame($attemptAfterChange, $attempt->fresh()->getAttributes());
+        }
     }
 
     public static function rejections(): array

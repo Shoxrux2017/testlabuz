@@ -2,6 +2,7 @@
 
 namespace App\Actions\Student;
 
+use App\Actions\Blitz\FinalizeTimedOutBlitzAttempts;
 use App\Enums\AssessmentAssignmentMode;
 use App\Enums\AssessmentAssignmentSource;
 use App\Enums\AssessmentAttemptStatus;
@@ -13,6 +14,7 @@ use App\Exceptions\Student\StudentBlitzAttemptNotEditableException;
 use App\Exceptions\Student\StudentBlitzAttemptsExhaustedException;
 use App\Exceptions\Student\StudentBlitzConflictException;
 use App\Exceptions\Student\StudentBlitzNotActiveException;
+use App\Exceptions\Student\StudentBlitzTimeExpiredException;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
@@ -41,6 +43,7 @@ final class StartStudentBlitzAttempt
         private readonly IdempotencyRequestFingerprint $fingerprints,
         private readonly IdempotencyGuard $idempotency,
         private readonly ShowStudentBlitzAttempt $showAttempt,
+        private readonly FinalizeTimedOutBlitzAttempts $finalizeTimeouts,
     ) {}
 
     public function __invoke(User $student, string $blitzId, string $idempotencyKey, string $intent, ?string $attemptId = null): StudentBlitzAttemptStartResult
@@ -58,7 +61,7 @@ final class StartStudentBlitzAttempt
 
         $fingerprint = $this->fingerprints->make($student, $operation, ['blitz_id' => strtolower($authorized->id)], $body);
 
-        return DB::transaction(function () use ($student, $authorized, $operation, $idempotencyKey, $fingerprint, $intent, $attemptId): StudentBlitzAttemptStartResult {
+        $result = DB::transaction(function () use ($student, $authorized, $operation, $idempotencyKey, $fingerprint, $intent, $attemptId): ?StudentBlitzAttemptStartResult {
             ['topic' => $topic, 'assessment' => $assessment, 'blitz' => $blitz] = $this->attemptAccess->lockBlitz($student, $authorized);
             $pair = $this->attemptAccess->lockPair($student, $topic);
             $recipient = $this->attemptAccess->lockRecipient($student, $assessment, $authorized->getAttribute('student_recipient_id'));
@@ -100,11 +103,25 @@ final class StartStudentBlitzAttempt
                     throw new NotFoundHttpException;
                 }
 
+                if ($current->status === AssessmentAttemptStatus::TimedOutFinalized) {
+                    throw new StudentBlitzTimeExpiredException;
+                }
+
                 if ($current->status !== AssessmentAttemptStatus::InProgress) {
                     throw new StudentBlitzAttemptNotEditableException;
                 }
             } elseif ($current !== null && $current->status !== AssessmentAttemptStatus::InProgress) {
+                if ($current->status === AssessmentAttemptStatus::TimedOutFinalized) {
+                    throw new StudentBlitzTimeExpiredException;
+                }
+
                 throw new StudentBlitzAttemptsExhaustedException;
+            }
+
+            if ($current !== null && $serverNow->gte($current->deadline_at)) {
+                $this->idempotency->abandon($claim);
+
+                return null;
             }
 
             $this->timing->assertExecutable($blitz, $current, $serverNow);
@@ -149,6 +166,27 @@ final class StartStudentBlitzAttempt
                 ($this->showAttempt)($student, $assessment, $blitz, $attempt, $serverNow), 201,
             );
         });
+
+        if ($result === null) {
+            // Release Start's pair, recipient and activity locks before aggregate reconciliation.
+            ($this->finalizeTimeouts)($student->institution_id, $authorized->id);
+
+            throw new StudentBlitzTimeExpiredException;
+        }
+
+        if ($result->attempt->status === AssessmentAttemptStatus::InProgress
+            && $this->timing->now()->gte($result->attempt->deadline_at)) {
+            ($this->finalizeTimeouts)($student->institution_id, $authorized->id);
+            $attempt = $this->attemptAccess->resolveAttempt($student, $result->attemptId);
+            $assessment = $this->access->readQuery($student)->whereKey($authorized->id)->firstOrFail();
+
+            return new StudentBlitzAttemptStartResult(
+                ($this->showAttempt)($student, $assessment, $assessment->getRelation('blitzTask'), $attempt, $this->timing->now()),
+                $result->httpStatus,
+            );
+        }
+
+        return $result;
     }
 
     private function assertReplay(IdempotencyRecord $record, ?AssessmentAttempt $attempt, string $intent, ?string $attemptId): void

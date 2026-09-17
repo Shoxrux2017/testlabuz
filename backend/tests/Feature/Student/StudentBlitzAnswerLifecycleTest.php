@@ -108,7 +108,7 @@ class StudentBlitzAnswerLifecycleTest extends TestCase
     }
 
     #[DataProvider('expiredMutations')]
-    public function test_expired_write_never_mutates_answers_or_finalizes_any_attempt(string $timerMode, int $offset, string $mutation): void
+    public function test_expired_write_reconciles_due_attempts_without_mutating_answers(string $timerMode, int $offset, string $mutation): void
     {
         [$student, $blitz, $attempt] = $this->answerContext($timerMode);
         $question = $this->answerQuestion($blitz, 'short_written');
@@ -131,16 +131,26 @@ class StudentBlitzAnswerLifecycleTest extends TestCase
                 ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
             foreach (DB::getQueryLog() as $query) {
                 if (preg_match('/^\s*(insert|update|delete)\b/i', $query['query']) === 1) {
-                    $this->assertDoesNotMatchRegularExpression('/"(?:attempt_answers|answer_[a-z_]+|assessment_attempts|blitz_tasks)"/', $query['query']);
+                    $this->assertDoesNotMatchRegularExpression('/"(?:attempt_answers|answer_[a-z_]+|blitz_tasks)"/', $query['query']);
                 }
             }
         } finally {
             DB::disableQueryLog();
         }
         $this->assertSame($answersBefore, $this->answerSnapshot());
-        $this->assertSame($attemptsBefore, AssessmentAttempt::query()->orderBy('id')->get()->map->getAttributes()->all());
+        $attemptsAfter = AssessmentAttempt::query()->orderBy('id')->get();
+        $this->assertCount(count($attemptsBefore), $attemptsAfter);
+        foreach ($attemptsAfter as $index => $finalized) {
+            $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+            $this->assertSame(array_diff_key($attemptsBefore[$index], $transitionFields), array_diff_key($finalized->getAttributes(), $transitionFields));
+            $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $finalized->status);
+            $this->assertSame(AssessmentAttemptFinalizationReason::TimeoutAutoSubmit, $finalized->finalization_reason);
+            $this->assertNull($finalized->submitted_at);
+            $this->assertTrue($finalized->deadline_at->equalTo($finalized->finalized_at));
+            $this->assertTrue($finalized->deadline_at->equalTo($finalized->locked_at));
+        }
         $this->assertSame($blitzBefore, $blitz->fresh()->getAttributes());
-        $this->assertSame(AssessmentAttemptStatus::InProgress, $attempt->fresh()->status);
+        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
     }
 
     public static function expiredMutations(): array

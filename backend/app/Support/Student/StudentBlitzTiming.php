@@ -60,6 +60,11 @@ final class StudentBlitzTiming
     public function assertExecutable(BlitzTask $blitz, ?AssessmentAttempt $attempt, CarbonInterface $serverNow): void
     {
         $this->assertWholeSecond($serverNow);
+
+        if ($attempt?->status === AssessmentAttemptStatus::TimedOutFinalized) {
+            throw new StudentBlitzTimeExpiredException;
+        }
+
         $deadline = $blitz->timer_start_mode_snapshot === BlitzTimerStartMode::Synchronized
             ? $blitz->synchronized_ends_at
             : ($attempt?->status === AssessmentAttemptStatus::InProgress ? $attempt->deadline_at : null);
@@ -88,7 +93,8 @@ final class StudentBlitzTiming
             'server_now' => $this->serialize($serverNow),
             'synchronized_ends_at' => $blitz->synchronized_ends_at === null ? null : $this->serialize($blitz->synchronized_ends_at),
             'deadline_at' => $deadline === null ? null : $this->serialize($deadline),
-            'remaining_seconds' => $deadline === null ? null : max(0, $deadline->getTimestamp() - $serverNow->getTimestamp()),
+            'remaining_seconds' => $attempt !== null && $attempt->status !== AssessmentAttemptStatus::InProgress
+                ? 0 : ($deadline === null ? null : max(0, $deadline->getTimestamp() - $serverNow->getTimestamp())),
         ];
     }
 
