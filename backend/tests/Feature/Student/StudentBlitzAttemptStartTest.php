@@ -7,6 +7,7 @@ use App\Enums\FileExtension;
 use App\Enums\UserRole;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
+use App\Models\AttemptAnswer;
 use App\Models\BlitzTask;
 use App\Models\Institution;
 use App\Models\InstitutionSetting;
@@ -14,15 +15,17 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Student\Concerns\BuildsStudentBlitzContext;
+use Tests\Feature\Student\Concerns\BuildsStudentHomeworkFileAnswerContext;
 use Tests\TestCase;
 
 class StudentBlitzAttemptStartTest extends TestCase
 {
-    use BuildsStudentBlitzContext, RefreshDatabase;
+    use BuildsStudentBlitzContext, BuildsStudentHomeworkFileAnswerContext, RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -108,7 +111,7 @@ class StudentBlitzAttemptStartTest extends TestCase
         $attempt = AssessmentAttempt::query()->sole();
         $deadline = $mode === 'synchronized' ? '2026-09-17T12:05:00Z' : '2026-09-17T12:10:00Z';
         $this->assertSame(['data', 'message'], array_keys($response->json()));
-        $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'deadline_at', 'timing', 'questions'], array_keys($response->json('data')));
+        $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'deadline_at', 'timing', 'questions', 'answers'], array_keys($response->json('data')));
         $response->assertJsonPath('data.id', $attempt->id)->assertJsonPath('data.assessment_id', $assessment->id)
             ->assertJsonPath('data.attempt_number', 1)->assertJsonPath('data.status', 'in_progress')
             ->assertJsonPath('data.started_at', '2026-09-17T12:00:00Z')->assertJsonPath('data.deadline_at', $deadline)
@@ -118,7 +121,8 @@ class StudentBlitzAttemptStartTest extends TestCase
             ->assertJsonPath('data.questions.0.answer_ui.options.0.text', 'Secret option seven')
             ->assertJsonPath('data.questions.1.id', $file->id)
             ->assertJsonPath('data.questions.1.answer_ui.allowed_extensions', FileExtension::values())
-            ->assertJsonPath('data.questions.1.answer_ui.max_size_bytes', 6 * 1024 * 1024);
+            ->assertJsonPath('data.questions.1.answer_ui.max_size_bytes', 6 * 1024 * 1024)
+            ->assertJsonPath('data.answers', []);
         $this->assertDatabaseHas('assessment_attempts', [
             'id' => $attempt->id, 'institution_id' => $student->institution_id, 'assessment_id' => $assessment->id,
             'assessment_student_id' => AssessmentStudent::query()->where('assessment_id', $assessment->id)->sole()->id,
@@ -132,7 +136,7 @@ class StudentBlitzAttemptStartTest extends TestCase
             $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $response->json('data.'.$field));
         }
         foreach (['is_correct', 'correct_value', 'accepted_answers', 'checking_mode', 'correct_position',
-            'institution_id', 'teacher_id', 'student_id', 'assessment_student_id', 'earned_points', 'score', 'answers'] as $hidden) {
+            'institution_id', 'teacher_id', 'student_id', 'assessment_student_id', 'earned_points', 'score'] as $hidden) {
             $this->assertStringNotContainsString('"'.$hidden.'"', $response->getContent());
         }
         $this->assertDatabaseCount('attempt_answers', 0);
@@ -189,6 +193,94 @@ class StudentBlitzAttemptStartTest extends TestCase
         }
         $this->assertSame($before, $attempt->fresh()->getAttributes());
         $this->assertDatabaseCount('idempotency_records', 3);
+    }
+
+    #[DataProvider('timerModes')]
+    public function test_start_and_resume_return_saved_typed_and_file_answers_in_question_order_without_exposing_secrets(string $mode): void
+    {
+        Storage::fake('local');
+        $student = $this->studentBlitzActor();
+        $assessment = $this->studentBlitz($student, $mode);
+        [$choice, $fileQuestion] = $this->studentBlitzQuestions($assessment);
+        $textQuestion = $this->answerQuestion($assessment->blitzTask, 'short_written', 3);
+        $unanswered = $this->answerQuestion($assessment->blitzTask, 'open_written', 4);
+        $started = $this->startStudentBlitz($student, $assessment)->assertCreated()->assertJsonPath('data.answers', []);
+        $attempt = AssessmentAttempt::query()->findOrFail($started->json('data.id'));
+        $before = $attempt->getAttributes();
+        $this->travelTo(now()->addSeconds(30));
+        $exactText = "  DNS\u{00A0}\nExact text  ";
+        $textState = $this->answerRequest($student, $attempt, $textQuestion,
+            ['type' => 'short_written', 'text' => $exactText])->assertOk()->assertJsonPath('data.answer.text', $exactText)->json('data');
+        $fileState = $this->fileAnswerRequest($student, $attempt, $fileQuestion, $this->fileAnswerUpload('Мой ответ.PDF'))
+            ->assertOk()->assertJsonPath('data.answer.file.original_name', 'Мой ответ.PDF')->json('data');
+        $optionId = $choice->choiceOptions()->orderBy('position')->firstOrFail()->id;
+        $choiceState = $this->answerRequest($student, $attempt, $choice,
+            ['type' => 'single_choice', 'selected_option_ids' => [$optionId]])->assertOk()->json('data');
+        $savedSnapshot = $this->fileAnswerSnapshot();
+        $this->travelTo(now()->addSeconds(30));
+
+        foreach ([['start_normal', null], ['resume', $attempt->id]] as [$intent, $target]) {
+            $response = $this->startStudentBlitz($student, $assessment, intent: $intent, attemptId: $target)->assertOk()
+                ->assertJsonPath('data.id', $attempt->id)
+                ->assertJsonPath('data.deadline_at', $started->json('data.deadline_at'))
+                ->assertJsonPath('data.answers', [$choiceState, $fileState, $textState])
+                ->assertJsonPath('data.questions.0.answer_ui.options.0.text', 'Secret option seven')
+                ->assertJsonPath('data.questions.3.id', $unanswered->id);
+            $this->assertNoAnswerSecrets($response->json('data'));
+            $this->assertNoFileAnswerSecrets($response->json('data'));
+            $this->assertSame(['id', 'original_name', 'extension', 'size_bytes'], array_keys($response->json('data.answers.1.answer.file')));
+            $this->assertSame($savedSnapshot, $this->fileAnswerSnapshot());
+            $this->assertSame($before, $attempt->fresh()->getAttributes());
+        }
+        $this->assertDatabaseCount('assessment_attempts', 1);
+        $this->assertDatabaseCount('attempt_answers', 3);
+    }
+
+    public function test_resume_rejects_a_persisted_answer_outside_the_authorized_question_set(): void
+    {
+        $student = $this->studentBlitzActor();
+        $assessment = $this->studentBlitz($student);
+        $question = $this->answerQuestion($assessment->blitzTask, 'short_written');
+        $attemptId = $this->startStudentBlitz($student, $assessment)->assertCreated()->json('data.id');
+        $attempt = AssessmentAttempt::query()->findOrFail($attemptId);
+        $this->answerRequest($student, $attempt, $question, ['type' => 'short_written', 'text' => 'DNS'])->assertOk();
+        $otherAssessment = $this->studentBlitz($student);
+        $otherQuestion = $this->answerQuestion($otherAssessment->blitzTask, 'short_written');
+        AttemptAnswer::query()->where('attempt_id', $attempt->id)->update(['question_id' => $otherQuestion->id]);
+        $snapshot = $this->answerSnapshot();
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->startStudentBlitz($student, $assessment, intent: 'resume', attemptId: $attempt->id);
+            $this->fail('Resume must reject answers outside the authorized Question set.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Persisted Student answer does not belong to the authorized Question set.', $exception->getMessage());
+            $this->assertSame($snapshot, $this->answerSnapshot());
+            $this->assertDatabaseCount('idempotency_records', 1);
+        }
+    }
+
+    public function test_resume_rejects_a_saved_file_with_corrupted_uploader_ownership(): void
+    {
+        Storage::fake('local');
+        $student = $this->studentBlitzActor();
+        $assessment = $this->studentBlitz($student);
+        [, $question] = $this->studentBlitzQuestions($assessment);
+        $attemptId = $this->startStudentBlitz($student, $assessment)->assertCreated()->json('data.id');
+        $attempt = AssessmentAttempt::query()->findOrFail($attemptId);
+        [, , $file] = $this->savedFileAnswer($attempt, $question);
+        $file->update(['uploaded_by_user_id' => $this->studentBlitzActor($student->institution)->id]);
+        $snapshot = $this->fileAnswerSnapshot();
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->startStudentBlitz($student, $assessment, intent: 'resume', attemptId: $attempt->id);
+            $this->fail('Resume must validate saved File ownership before serialization.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Persisted Student answer integrity failed.', $exception->getMessage());
+            $this->assertSame($snapshot, $this->fileAnswerSnapshot());
+            $this->assertDatabaseCount('idempotency_records', 1);
+        }
     }
 
     #[DataProvider('timerModes')]

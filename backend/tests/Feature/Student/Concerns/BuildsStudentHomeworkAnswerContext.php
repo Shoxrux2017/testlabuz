@@ -6,6 +6,7 @@ use App\Enums\QuestionType;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
+use App\Models\BlitzTask;
 use App\Models\HomeworkAssignment;
 use App\Models\Institution;
 use App\Models\InstitutionSetting;
@@ -47,7 +48,7 @@ trait BuildsStudentHomeworkAnswerContext
         return [$student, $homework, $attempt->fresh()];
     }
 
-    protected function answerQuestion(HomeworkAssignment $homework, string $type, int $position = 1): Question
+    protected function answerQuestion(HomeworkAssignment|BlitzTask $homework, string $type, int $position = 1): Question
     {
         $state = match ($type) {
             'single_choice' => 'singleChoice', 'multiple_choice' => 'multipleChoice',

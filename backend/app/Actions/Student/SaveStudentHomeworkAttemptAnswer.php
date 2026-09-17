@@ -17,11 +17,11 @@ use App\Models\AssessmentAttempt;
 use App\Models\AttemptAnswer;
 use App\Models\Question;
 use App\Models\User;
+use App\Support\Student\StudentAttemptAnswerMutationResult;
 use App\Support\Student\StudentHomeworkAnswerIntegrity;
 use App\Support\Student\StudentHomeworkAnswerValue;
 use App\Support\Student\StudentHomeworkAnswerWriter;
 use App\Support\Student\StudentHomeworkAttemptAccess;
-use App\Support\Student\StudentHomeworkAttemptAnswerMutationResult;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -40,7 +40,7 @@ class SaveStudentHomeworkAttemptAnswer
     ) {}
 
     /** @param array<string, mixed> $payload */
-    public function __invoke(User $student, string $attemptId, string $questionId, array $payload): StudentHomeworkAttemptAnswerMutationResult
+    public function __invoke(User $student, string $attemptId, string $questionId, array $payload): StudentAttemptAnswerMutationResult
     {
         $preliminaryAttempt = $this->access->resolveAttempt($student, $attemptId);
 
@@ -56,7 +56,7 @@ class SaveStudentHomeworkAttemptAnswer
             ->where('institution_id', $student->institution_id)
             ->whereKey($preliminaryAttempt->assessment_id)->firstOrFail();
 
-        $result = DB::transaction(function () use ($student, $preliminaryAssessment, $preliminaryAttempt, $questionId, $payload): ?StudentHomeworkAttemptAnswerMutationResult {
+        $result = DB::transaction(function () use ($student, $preliminaryAssessment, $preliminaryAttempt, $questionId, $payload): ?StudentAttemptAnswerMutationResult {
             ['topic' => $topic, 'assessment' => $assessment, 'homework' => $homework] = $this->access->shareHomeworkForAnswer($student, $preliminaryAssessment);
             $attempt = AssessmentAttempt::query()
                 ->where('institution_id', $student->institution_id)
@@ -124,7 +124,7 @@ class SaveStudentHomeworkAttemptAnswer
 
             $answer?->setAttribute('student_answer_value', $value);
 
-            return new StudentHomeworkAttemptAnswerMutationResult($question, $answer);
+            return new StudentAttemptAnswerMutationResult($question, $answer);
         });
 
         if ($result === null) {

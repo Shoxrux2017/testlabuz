@@ -11,7 +11,7 @@ use Illuminate\Validation\Validator;
 use JsonException;
 use stdClass;
 
-class StudentHomeworkAttemptAnswerRequest extends FormRequest
+class StudentAttemptAnswerRequest extends FormRequest
 {
     private ?stdClass $rawBody = null;
 

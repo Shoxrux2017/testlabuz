@@ -17,7 +17,7 @@ final class StudentHomeworkAttemptAnswerStates
 
     /**
      * @param  Collection<int, Question>  $questions  Authorized current Assessment Questions ordered by position, then ID.
-     * @return SupportCollection<int, StudentHomeworkAttemptAnswerMutationResult>
+     * @return SupportCollection<int, StudentAttemptAnswerMutationResult>
      */
     public function __invoke(string $institutionId, AssessmentAttempt $attempt, Collection $questions): SupportCollection
     {
@@ -41,7 +41,7 @@ final class StudentHomeworkAttemptAnswerStates
 
         return $questions
             ->filter(fn (Question $question): bool => $answersByQuestion->has($question->id))
-            ->map(fn (Question $question): StudentHomeworkAttemptAnswerMutationResult => new StudentHomeworkAttemptAnswerMutationResult(
+            ->map(fn (Question $question): StudentAttemptAnswerMutationResult => new StudentAttemptAnswerMutationResult(
                 $question, $answersByQuestion->get($question->id),
             ))->values();
     }
