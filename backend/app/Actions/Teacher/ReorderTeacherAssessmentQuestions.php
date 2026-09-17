@@ -5,7 +5,6 @@ namespace App\Actions\Teacher;
 use App\Models\Assessment;
 use App\Models\User;
 use App\Support\Assessment\QuestionPositionWriter;
-use App\Support\Teacher\TeacherHomeworkAccess;
 use App\Support\Teacher\TeacherQuestionMutationAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -13,16 +12,15 @@ use Illuminate\Validation\ValidationException;
 final class ReorderTeacherAssessmentQuestions
 {
     public function __construct(
-        private readonly TeacherHomeworkAccess $homeworkAccess,
         private readonly TeacherQuestionMutationAccess $mutationAccess,
         private readonly QuestionPositionWriter $positionWriter,
-        private readonly ShowTeacherHomework $showTeacherHomework,
+        private readonly ShowTeacherAssessmentAuthoring $showTeacherAssessmentAuthoring,
     ) {}
 
     /** @param list<string> $questionIds */
     public function __invoke(User $teacher, string $assessmentId, array $questionIds): Assessment
     {
-        $preliminaryAssessment = $this->homeworkAccess->resolveHomework($teacher, $assessmentId);
+        $preliminaryAssessment = $this->mutationAccess->resolveAssessment($teacher, $assessmentId);
 
         return DB::transaction(function () use ($teacher, $preliminaryAssessment, $questionIds): Assessment {
             $context = $this->mutationAccess->lock($teacher, $preliminaryAssessment);
@@ -45,7 +43,7 @@ final class ReorderTeacherAssessmentQuestions
                 $assessment->touch();
             }
 
-            return ($this->showTeacherHomework)($teacher, $assessment->id);
+            return ($this->showTeacherAssessmentAuthoring)($teacher, $assessment);
         });
     }
 }
