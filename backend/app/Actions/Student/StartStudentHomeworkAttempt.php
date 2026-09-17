@@ -72,8 +72,9 @@ final class StartStudentHomeworkAttempt
             $this->assertActive($topic, $homework);
             $pair = $this->attemptAccess->lockPair($student, $topic);
             $official = $pair !== null && $pair->homework_assessment_id === $assessment->id;
-            $attempts = $official
-                ? $this->attemptAccess->lockAllAttempts($student, $assessment)
+            $officialPairAttempts = $official ? $this->attemptAccess->lockOfficialPairAttempts($student, $pair) : null;
+            $attempts = $officialPairAttempts !== null
+                ? $officialPairAttempts->where('assessment_id', $assessment->id)->values()
                 : $this->attemptAccess->lockStudentAttempts($student, $assessment);
             $studentAttempts = $this->validateHistory($student, $assessment, $recipient, $attempts);
 
@@ -95,7 +96,7 @@ final class StartStudentHomeworkAttempt
             }
 
             if ($official) {
-                $this->assertOfficialPair($pair, $assessment, $recipient, $attempts);
+                $this->assertOfficialPair($pair, $assessment, $recipient, $officialPairAttempts->isNotEmpty());
             }
 
             if ($assessment->total_possible_points <= 0) {
@@ -253,14 +254,13 @@ final class StartStudentHomeworkAttempt
         }
     }
 
-    /** @param Collection<int, AssessmentAttempt> $attempts */
-    private function assertOfficialPair(TopicResultPair $pair, Assessment $assessment, AssessmentStudent $recipient, Collection $attempts): void
+    private function assertOfficialPair(TopicResultPair $pair, Assessment $assessment, AssessmentStudent $recipient, bool $officialPairHasActivity): void
     {
         if ($pair->cohort_snapshotted_at === null
             || $assessment->assignment_mode !== AssessmentAssignmentMode::Group
             || $recipient->assignment_source !== AssessmentAssignmentSource::Group
-            || ($pair->locked_at === null && $attempts->isNotEmpty())
-            || ($pair->locked_at !== null && $attempts->isEmpty())) {
+            || ($pair->locked_at === null && $officialPairHasActivity)
+            || ($pair->locked_at !== null && ! $officialPairHasActivity)) {
             throw new StudentHomeworkConflictException;
         }
     }

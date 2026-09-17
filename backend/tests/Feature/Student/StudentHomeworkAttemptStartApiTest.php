@@ -11,6 +11,7 @@ use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
 use App\Models\AttemptAnswer;
+use App\Models\BlitzTask;
 use App\Models\GroupStudentMembership;
 use App\Models\HomeworkAssignment;
 use App\Models\Institution;
@@ -180,6 +181,108 @@ class StudentHomeworkAttemptStartApiTest extends TestCase
             ->assertJsonPath('message', 'No Homework attempts remain.');
         $this->assertSame([1, 2, 3], AssessmentAttempt::query()->orderBy('attempt_number')->pluck('attempt_number')->all());
         $this->assertDatabaseCount('idempotency_records', $recordsBefore);
+    }
+
+    #[DataProvider('officialBlitzActivityStudents')]
+    public function test_blitz_first_official_activity_preserves_pair_timestamps_and_independent_homework_capacity(bool $anotherStudent): void
+    {
+        $student = $this->student();
+        $homework = $this->homework($student);
+        $blitzStudent = $anotherStudent ? $this->student($student->institution) : $student;
+        $blitzRecipient = $this->officialBlitzRecipient($homework, $blitzStudent);
+        if ($anotherStudent) {
+            AssessmentStudent::factory()->create([
+                'assessment_id' => $homework->assessment_id,
+                'student_id' => $blitzStudent->id,
+                'assigned_by_user_id' => $homework->assessment->teacher_id,
+            ]);
+            AssessmentStudent::factory()->create([
+                'assessment_id' => $blitzRecipient->assessment_id,
+                'student_id' => $student->id,
+                'assigned_by_user_id' => $homework->assessment->teacher_id,
+            ]);
+        }
+        $blitzAttempt = AssessmentAttempt::factory()->create([
+            'assessment_student_id' => $blitzRecipient->id,
+            'started_at' => now()->subMinute(),
+            'deadline_at' => now()->addMinutes(9),
+            'possible_points' => '7.250000',
+        ]);
+        $pair = TopicResultPair::factory()->create([
+            'homework_assessment_id' => $homework->assessment_id,
+            'blitz_assessment_id' => $blitzRecipient->assessment_id,
+            'designated_at' => now()->subMinutes(3),
+            'cohort_snapshotted_at' => now()->subMinutes(2),
+            'locked_at' => $blitzAttempt->started_at,
+            'updated_at' => $blitzAttempt->started_at,
+        ]);
+        $pairBefore = $pair->fresh()->getAttributes();
+        $blitzBefore = $blitzAttempt->fresh()->getAttributes();
+
+        foreach ([1, 2, 3] as $number) {
+            $response = $this->start($student, $homework)->assertCreated()->assertJsonPath('data.attempt_number', $number);
+            $attempt = AssessmentAttempt::query()->findOrFail($response->json('data.id'));
+            $this->assertSame($homework->assessment_id, $attempt->assessment_id);
+            $this->assertNull($attempt->deadline_at);
+            $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
+            $this->assertSame($blitzBefore, $blitzAttempt->fresh()->getAttributes());
+            $attempt->update($this->completedAttributes());
+        }
+
+        $this->start($student, $homework)->assertConflict()->assertJsonPath('code', 'attempts_exhausted');
+        $this->assertSame([1, 2, 3], AssessmentAttempt::query()->where('assessment_id', $homework->assessment_id)
+            ->orderBy('attempt_number')->pluck('attempt_number')->all());
+        $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
+        $this->assertSame($blitzBefore, $blitzAttempt->fresh()->getAttributes());
+        $this->assertDatabaseCount('idempotency_records', 3);
+    }
+
+    public static function officialBlitzActivityStudents(): array
+    {
+        return [
+            'same Student started Blitz' => [false],
+            'another cohort Student started Blitz' => [true],
+        ];
+    }
+
+    #[DataProvider('officialPairActivityCorruption')]
+    public function test_official_pair_lock_activity_corruption_does_not_create_homework_repair_pair_or_claim(bool $locked, bool $hasBlitzAttempt): void
+    {
+        $student = $this->student();
+        $homework = $this->homework($student);
+        $blitzRecipient = $this->officialBlitzRecipient($homework, $student);
+        $pair = TopicResultPair::factory()->create([
+            'homework_assessment_id' => $homework->assessment_id,
+            'blitz_assessment_id' => $blitzRecipient->assessment_id,
+            'designated_at' => now()->subMinutes(3),
+            'cohort_snapshotted_at' => now()->subMinutes(2),
+            'locked_at' => $locked ? now()->subMinute() : null,
+        ]);
+        if ($hasBlitzAttempt) {
+            AssessmentAttempt::factory()->create([
+                'assessment_student_id' => $blitzRecipient->id,
+                'started_at' => now()->subMinute(),
+                'deadline_at' => now()->addMinutes(9),
+                'possible_points' => '7.250000',
+            ]);
+        }
+        $pairBefore = $pair->fresh()->getAttributes();
+        $attemptsBefore = AssessmentAttempt::query()->orderBy('id')->get()->map->getAttributes()->all();
+
+        $this->start($student, $homework)->assertConflict()->assertJsonPath('code', 'business_conflict');
+
+        $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
+        $this->assertSame($attemptsBefore, AssessmentAttempt::query()->orderBy('id')->get()->map->getAttributes()->all());
+        $this->assertDatabaseMissing('assessment_attempts', ['assessment_id' => $homework->assessment_id]);
+        $this->assertDatabaseCount('idempotency_records', 0);
+    }
+
+    public static function officialPairActivityCorruption(): array
+    {
+        return [
+            'locked pair without activity on either Assessment' => [true, false],
+            'unlocked pair with official Blitz activity' => [false, true],
+        ];
     }
 
     #[DataProvider('corruptedHistory')]
@@ -420,6 +523,27 @@ class StudentHomeworkAttemptStartApiTest extends TestCase
     private function recipientFor(HomeworkAssignment $homework, User $student): AssessmentStudent
     {
         return AssessmentStudent::query()->where('assessment_id', $homework->assessment_id)->where('student_id', $student->id)->sole();
+    }
+
+    private function officialBlitzRecipient(HomeworkAssignment $homework, User $student): AssessmentStudent
+    {
+        $blitz = Assessment::factory()->blitz()->groupAssignment()->create([
+            'institution_id' => $student->institution_id,
+            'topic_id' => $homework->assessment->topic_id,
+            'teacher_id' => $homework->assessment->teacher_id,
+            'total_possible_points' => '7.250000',
+        ]);
+        BlitzTask::factory()->activeIndividual()->create([
+            'assessment_id' => $blitz->id,
+            'created_at' => now()->subMinutes(3),
+            'activated_at' => now()->subMinutes(2),
+        ]);
+
+        return AssessmentStudent::factory()->create([
+            'assessment_id' => $blitz->id,
+            'student_id' => $student->id,
+            'assigned_by_user_id' => $blitz->teacher_id,
+        ]);
     }
 
     private function attempt(HomeworkAssignment $homework, User $student, int $number = 1, bool $completed = false): AssessmentAttempt
