@@ -24,6 +24,29 @@ final class BlitzAttemptFinalizer
         $this->assertUnfinalized($attempt);
     }
 
+    public function finalizeByStudentSubmit(AssessmentAttempt $attempt, CarbonInterface $submittedAt): bool
+    {
+        if ($attempt->status !== AssessmentAttemptStatus::InProgress) {
+            return false;
+        }
+
+        $this->assertUnfinalized($attempt);
+
+        if ($submittedAt->gte($attempt->deadline_at)) {
+            throw new LogicException('A due Blitz Attempt cannot be finalized by Student Submit.');
+        }
+
+        $attempt->status = AssessmentAttemptStatus::Submitted;
+        $attempt->submitted_at = $submittedAt;
+        $attempt->finalized_at = $submittedAt;
+        $attempt->locked_at = $submittedAt;
+        $attempt->finalization_reason = AssessmentAttemptFinalizationReason::StudentSubmit;
+        $attempt->updated_at = $submittedAt;
+        $attempt->save();
+
+        return true;
+    }
+
     public function finalizeAtTimeout(AssessmentAttempt $attempt): bool
     {
         if ($attempt->status !== AssessmentAttemptStatus::InProgress) {

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-final class StudentAttemptAnswerTarget
+final class StudentAttemptTarget
 {
     public function resolve(User $student, string $attemptId): AssessmentType
     {

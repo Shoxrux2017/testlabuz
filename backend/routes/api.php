@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
 use App\Http\Controllers\Api\V1\Student\StudentAttemptAnswerController;
+use App\Http\Controllers\Api\V1\Student\StudentAttemptSubmissionController;
 use App\Http\Controllers\Api\V1\Student\StudentBlitzAttemptController;
 use App\Http\Controllers\Api\V1\Student\StudentBlitzController;
 use App\Http\Controllers\Api\V1\Student\StudentHomeworkAttemptController;
@@ -150,7 +151,7 @@ Route::prefix('student')
         Route::get('homework/{homework}', [StudentHomeworkController::class, 'show']);
         Route::post('homework/{homework}/attempts', [StudentHomeworkAttemptController::class, 'store']);
         Route::get('attempts/{attempt}', [StudentHomeworkAttemptController::class, 'show']);
-        Route::post('attempts/{attempt}/submit', [StudentHomeworkAttemptController::class, 'submit']);
+        Route::post('attempts/{attempt}/submit', [StudentAttemptSubmissionController::class, '__invoke']);
         Route::put('attempts/{attempt}/answers/{question}', [StudentAttemptAnswerController::class, 'update']);
         Route::get('topics', [StudentTopicController::class, 'index']);
         Route::get('topics/{topic}', [StudentTopicController::class, 'show']);

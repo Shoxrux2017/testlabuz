@@ -4,6 +4,7 @@ namespace App\Actions\Student;
 
 use App\Actions\Homework\FinalizeHomeworkAttemptsAtDeadline;
 use App\Enums\AssessmentAttemptStatus;
+use App\Enums\AssessmentType;
 use App\Enums\HomeworkStatus;
 use App\Enums\IdempotencyOperation;
 use App\Enums\TopicStatus;
@@ -20,9 +21,9 @@ use App\Models\User;
 use App\Support\Assessment\HomeworkAttemptFinalizer;
 use App\Support\Idempotency\IdempotencyGuard;
 use App\Support\Idempotency\IdempotencyRequestFingerprint;
+use App\Support\Student\StudentAttemptSubmitResult;
 use App\Support\Student\StudentHomeworkAttemptAccess;
 use App\Support\Student\StudentHomeworkAttemptAnswerStates;
-use App\Support\Student\StudentHomeworkAttemptSubmitResult;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -37,7 +38,7 @@ final class SubmitStudentHomeworkAttempt
         private readonly FinalizeHomeworkAttemptsAtDeadline $finalizeAtDeadline,
     ) {}
 
-    public function __invoke(User $student, string $attemptId, string $idempotencyKey): StudentHomeworkAttemptSubmitResult
+    public function __invoke(User $student, string $attemptId, string $idempotencyKey): StudentAttemptSubmitResult
     {
         $preliminaryAttempt = $this->access->resolveAttempt($student, $attemptId);
         $preliminaryAssessment = Assessment::query()
@@ -52,7 +53,7 @@ final class SubmitStudentHomeworkAttempt
         $operation = IdempotencyOperation::StudentHomeworkAttemptSubmit;
         $fingerprint = $this->fingerprints->make($student, $operation, ['attempt_id' => strtolower($preliminaryAttempt->id)]);
 
-        $result = DB::transaction(function () use ($student, $preliminaryAssessment, $preliminaryAttempt, $operation, $idempotencyKey, $fingerprint): StudentHomeworkAttemptSubmitResult|array {
+        $result = DB::transaction(function () use ($student, $preliminaryAssessment, $preliminaryAttempt, $operation, $idempotencyKey, $fingerprint): StudentAttemptSubmitResult|array {
             ['topic' => $topic, 'assessment' => $assessment, 'homework' => $homework, 'attempt' => $attempt] = $this->access->lockForSubmit($student, $preliminaryAssessment, $preliminaryAttempt);
             $replay = $this->idempotency->completedReplay($student, $operation, $idempotencyKey, $fingerprint);
 
@@ -107,7 +108,7 @@ final class SubmitStudentHomeworkAttempt
 
             $this->idempotency->complete($claim, 'assessment_attempt', $attempt->id, 200);
 
-            return new StudentHomeworkAttemptSubmitResult($attempt->id);
+            return new StudentAttemptSubmitResult($attempt->id, AssessmentType::Homework);
         });
 
         if (is_array($result)) {
@@ -120,7 +121,7 @@ final class SubmitStudentHomeworkAttempt
         return $result;
     }
 
-    private function replay(User $student, Assessment $assessment, AssessmentAttempt $attempt, IdempotencyRecord $record): StudentHomeworkAttemptSubmitResult
+    private function replay(User $student, Assessment $assessment, AssessmentAttempt $attempt, IdempotencyRecord $record): StudentAttemptSubmitResult
     {
         $this->access->assertValidAnswerAttempt($student, $assessment, $attempt);
 
@@ -130,6 +131,6 @@ final class SubmitStudentHomeworkAttempt
             throw new LogicException('Completed Submit must reference the same successful Homework Attempt.');
         }
 
-        return new StudentHomeworkAttemptSubmitResult($attempt->id);
+        return new StudentAttemptSubmitResult($attempt->id, AssessmentType::Homework);
     }
 }

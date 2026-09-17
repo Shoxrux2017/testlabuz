@@ -7,7 +7,7 @@ use Illuminate\Validation\Validator;
 use JsonException;
 use stdClass;
 
-class StudentHomeworkAttemptSubmitRequest extends FormRequest
+class StudentAttemptSubmitRequest extends FormRequest
 {
     public function authorize(): bool
     {

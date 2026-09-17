@@ -141,7 +141,6 @@ class StudentBlitzFileAnswerConcurrencyTest extends TestCase
         $holderReady = $this->signalPath();
         $saveReady = $this->signalPath();
         $saveStored = $this->signalPath();
-        $before = $this->attemptSnapshot();
         $holder = $this->startWorker($winnerMode, $this->saveArguments('first', 'first', $holderReady, $release));
         $save = null;
         try {
@@ -168,7 +167,12 @@ class StudentBlitzFileAnswerConcurrencyTest extends TestCase
         $this->assertPersistedGraph('first', 'initial-first', $this->ids['first_key']);
         $this->assertCount(2, $this->disk()->allFiles());
         if ($winnerMode === 'hold') {
-            $this->assertSame($before, $this->attemptSnapshot());
+            $attempt = AssessmentAttempt::query()->findOrFail($this->ids['first_attempt']);
+            $this->assertSame('timed_out_finalized', $attempt->status->value);
+            $this->assertNull($attempt->submitted_at);
+            $this->assertEquals($attempt->deadline_at, $attempt->finalized_at);
+            $this->assertEquals($attempt->deadline_at, $attempt->locked_at);
+            $this->assertSame('timeout_auto_submit', $attempt->finalization_reason->value);
         } else {
             $attempt = AssessmentAttempt::query()->findOrFail($this->ids['first_attempt']);
             $this->assertSame('submitted', $attempt->status->value);
