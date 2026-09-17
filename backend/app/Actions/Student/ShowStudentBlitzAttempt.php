@@ -8,6 +8,7 @@ use App\Models\BlitzTask;
 use App\Models\InstitutionSetting;
 use App\Models\User;
 use App\Support\Student\StudentBlitzTiming;
+use App\Support\Student\StudentHomeworkAttemptAnswerStates;
 use App\Support\Student\StudentQuestionAnswerUi;
 use Carbon\CarbonInterface;
 use LogicException;
@@ -17,6 +18,7 @@ final class ShowStudentBlitzAttempt
     public function __construct(
         private readonly StudentQuestionAnswerUi $answerUi,
         private readonly StudentBlitzTiming $timing,
+        private readonly StudentHomeworkAttemptAnswerStates $answerStates,
     ) {}
 
     public function __invoke(User $student, Assessment $assessment, BlitzTask $blitz, AssessmentAttempt $attempt, CarbonInterface $serverNow): AssessmentAttempt
@@ -46,6 +48,9 @@ final class ShowStudentBlitzAttempt
         $assessment->setRelation('blitzTask', $blitz);
         $attempt->setRelation('assessment', $assessment);
         $attempt->setAttribute('student_blitz_timing', $this->timing->project($blitz, $attempt, $serverNow));
+        $attempt->setAttribute('student_answer_states', ($this->answerStates)(
+            $student->institution_id, $attempt, $assessment->getRelation('questions'),
+        ));
 
         return $attempt;
     }

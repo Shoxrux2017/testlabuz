@@ -2,12 +2,12 @@
 
 namespace App\Http\Resources\Student;
 
-use App\Support\Student\StudentHomeworkAttemptAnswerMutationResult;
+use App\Support\Student\StudentAttemptAnswerMutationResult;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use LogicException;
 
-/** @mixin StudentHomeworkAttemptAnswerMutationResult */
+/** @mixin StudentAttemptAnswerMutationResult */
 class StudentAttemptAnswerStateResource extends JsonResource
 {
     /** @return array<string, mixed> */

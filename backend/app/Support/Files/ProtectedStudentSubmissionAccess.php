@@ -3,6 +3,7 @@
 namespace App\Support\Files;
 
 use App\Enums\AssessmentType;
+use App\Enums\BlitzStatus;
 use App\Enums\FileCategory;
 use App\Enums\HomeworkStatus;
 use App\Enums\QuestionType;
@@ -106,9 +107,20 @@ class ProtectedStudentSubmissionAccess
             ->where('questions.type', QuestionType::FileBased->value)
             ->join('assessments', 'assessments.id', '=', 'assessment_attempts.assessment_id')
             ->where('assessments.institution_id', $actor->institution_id)
-            ->where('assessments.type', AssessmentType::Homework->value)
-            ->join('homework_assignments', 'homework_assignments.assessment_id', '=', 'assessments.id')
-            ->where('homework_assignments.institution_id', $actor->institution_id)
-            ->whereIn('homework_assignments.status', [HomeworkStatus::Active->value, HomeworkStatus::Closed->value, HomeworkStatus::Archived->value]);
+            ->where(function (Builder $query) use ($actor): void {
+                $query->where(function (Builder $homework) use ($actor): void {
+                    $homework->where('assessments.type', AssessmentType::Homework->value)
+                        ->whereExists(fn (Builder $detail) => $detail->selectRaw('1')->from('homework_assignments')
+                            ->whereColumn('homework_assignments.assessment_id', 'assessments.id')
+                            ->where('homework_assignments.institution_id', $actor->institution_id)
+                            ->whereIn('homework_assignments.status', [HomeworkStatus::Active->value, HomeworkStatus::Closed->value, HomeworkStatus::Archived->value]));
+                })->orWhere(function (Builder $blitz) use ($actor): void {
+                    $blitz->where('assessments.type', AssessmentType::Blitz->value)
+                        ->whereExists(fn (Builder $detail) => $detail->selectRaw('1')->from('blitz_tasks')
+                            ->whereColumn('blitz_tasks.assessment_id', 'assessments.id')
+                            ->where('blitz_tasks.institution_id', $actor->institution_id)
+                            ->whereIn('blitz_tasks.status', [BlitzStatus::Active->value, BlitzStatus::Closed->value, BlitzStatus::Archived->value]));
+                });
+            });
     }
 }
