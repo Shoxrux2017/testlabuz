@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Student;
 
+use App\Enums\AssessmentAttemptStatus;
 use App\Enums\BlitzStatus;
 use App\Enums\FileExtension;
 use App\Enums\UserRole;
@@ -111,7 +112,7 @@ class StudentBlitzAttemptStartTest extends TestCase
         $attempt = AssessmentAttempt::query()->sole();
         $deadline = $mode === 'synchronized' ? '2026-09-17T12:05:00Z' : '2026-09-17T12:10:00Z';
         $this->assertSame(['data', 'message'], array_keys($response->json()));
-        $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'deadline_at', 'timing', 'questions', 'answers'], array_keys($response->json('data')));
+        $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'deadline_at', 'submitted_at', 'finalized_at', 'finalization_reason', 'timing', 'questions', 'answers'], array_keys($response->json('data')));
         $response->assertJsonPath('data.id', $attempt->id)->assertJsonPath('data.assessment_id', $assessment->id)
             ->assertJsonPath('data.attempt_number', 1)->assertJsonPath('data.status', 'in_progress')
             ->assertJsonPath('data.started_at', '2026-09-17T12:00:00Z')->assertJsonPath('data.deadline_at', $deadline)
@@ -191,7 +192,10 @@ class StudentBlitzAttemptStartTest extends TestCase
             $this->startStudentBlitz($student, $assessment, intent: $intent, attemptId: $intent === 'resume' ? $attemptId : null)
                 ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
         }
-        $this->assertSame($before, $attempt->fresh()->getAttributes());
+        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
+        $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->finalized_at));
+        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+        $this->assertSame(array_diff_key($before, $transitionFields), array_diff_key($attempt->fresh()->getAttributes(), $transitionFields));
         $this->assertDatabaseCount('idempotency_records', 3);
     }
 

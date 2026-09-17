@@ -20,12 +20,14 @@ final class ListStudentActiveBlitz
         private readonly StudentBlitzAccess $access,
         private readonly StudentBlitzAttemptSummary $attemptSummary,
         private readonly StudentBlitzTiming $timing,
+        private readonly ReconcileStudentBlitzTimeouts $reconcileTimeouts,
     ) {}
 
     /** @return Collection<int, Assessment> */
     public function __invoke(User $student): Collection
     {
         $readAt = $this->timing->now();
+        $this->reconcileTimeouts->all($student, $readAt);
         $assessments = $this->access->activeQuery($student, $readAt)->get();
         $eligible = new Collection;
 

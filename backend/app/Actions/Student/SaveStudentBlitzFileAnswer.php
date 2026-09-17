@@ -2,6 +2,8 @@
 
 namespace App\Actions\Student;
 
+use App\Actions\Blitz\FinalizeTimedOutBlitzAttempts;
+use App\Exceptions\Student\StudentBlitzTimeExpiredException;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AttemptAnswer;
@@ -19,6 +21,7 @@ final class SaveStudentBlitzFileAnswer
     public function __construct(
         private readonly StudentBlitzAttemptAccess $access,
         private readonly StudentSubmissionAnswerFiles $files,
+        private readonly FinalizeTimedOutBlitzAttempts $finalizeTimeouts,
     ) {}
 
     public function __invoke(User $student, string $attemptId, string $questionId, UploadedFile $upload): StudentAttemptAnswerMutationResult
@@ -29,8 +32,8 @@ final class SaveStudentBlitzFileAnswer
             ->select(['id', 'topic_id'])->where('institution_id', $student->institution_id)
             ->whereKey($preliminaryAttempt->assessment_id)->firstOrFail();
 
-        return $this->files->withStagedUpload($student, $preliminaryAttempt, $questionId, $upload,
-            function (LearningMaterialFileMetadata $metadata, string $diskName, string $storageKey, Closure $cleanupNewBlob) use ($student, $preliminaryAssessment, $preliminaryAttempt, $questionId): StudentAttemptAnswerMutationResult {
+        $result = $this->files->withStagedUpload($student, $preliminaryAttempt, $questionId, $upload,
+            function (LearningMaterialFileMetadata $metadata, string $diskName, string $storageKey, Closure $cleanupNewBlob) use ($student, $preliminaryAssessment, $preliminaryAttempt, $questionId): ?StudentAttemptAnswerMutationResult {
                 ['topic' => $topic, 'assessment' => $assessment, 'blitz' => $blitz] = $this->access->shareBlitzForAnswer($student, $preliminaryAssessment);
                 $attempt = AssessmentAttempt::query()
                     ->where('institution_id', $student->institution_id)->where('student_id', $student->id)
@@ -43,9 +46,22 @@ final class SaveStudentBlitzFileAnswer
 
                 $answer = AttemptAnswer::query()->where('attempt_id', $attempt->id)
                     ->where('question_id', $question->id)->lockForUpdate()->first();
-                $this->access->assertAnswerEditable($student, $topic, $assessment, $blitz, $attempt);
+                try {
+                    $this->access->assertAnswerEditable($student, $topic, $assessment, $blitz, $attempt);
+                } catch (StudentBlitzTimeExpiredException) {
+                    return null;
+                }
 
                 return $this->files->save($student, $attempt, $question, $answer, $metadata, $diskName, $storageKey, $cleanupNewBlob);
             });
+
+        if ($result === null) {
+            // withStagedUpload compensates the new blob before aggregate reconciliation.
+            ($this->finalizeTimeouts)($student->institution_id, $preliminaryAssessment->id);
+
+            throw new StudentBlitzTimeExpiredException;
+        }
+
+        return $result;
     }
 }

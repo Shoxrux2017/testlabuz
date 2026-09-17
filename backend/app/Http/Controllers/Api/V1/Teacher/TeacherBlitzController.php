@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Teacher;
 
 use App\Actions\Teacher\ActivateTeacherBlitz;
 use App\Actions\Teacher\ArchiveTeacherBlitz;
+use App\Actions\Teacher\CloseTeacherBlitz;
 use App\Actions\Teacher\CreateTeacherBlitz;
 use App\Actions\Teacher\ListTeacherBlitz;
 use App\Actions\Teacher\ScheduleTeacherBlitz;
@@ -102,6 +103,21 @@ class TeacherBlitzController extends Controller
 
         return (new TeacherBlitzResource($activatedBlitz))
             ->additional(['message' => 'Blitz task activated successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function close(
+        TeacherBlitzLifecycleRequest $request,
+        string $blitz,
+        CloseTeacherBlitz $closeTeacherBlitz,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $closedBlitz = $closeTeacherBlitz($teacher, $blitz);
+
+        return (new TeacherBlitzResource($closedBlitz))
+            ->additional(['message' => 'Blitz task closed successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
     }

@@ -33,6 +33,9 @@ class StudentBlitzAttemptResource extends JsonResource
             'status' => $this->status->value,
             'started_at' => $this->started_at->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
             'deadline_at' => $timing['deadline_at'],
+            'submitted_at' => $this->submitted_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
+            'finalized_at' => $this->finalized_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
+            'finalization_reason' => $this->finalization_reason?->value,
             'timing' => [
                 'server_now' => $timing['server_now'],
                 'mode' => $timing['mode'],

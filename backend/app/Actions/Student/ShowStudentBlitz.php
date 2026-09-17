@@ -20,12 +20,14 @@ final class ShowStudentBlitz
         private readonly StudentBlitzAccess $access,
         private readonly StudentBlitzAttemptSummary $attemptSummary,
         private readonly StudentBlitzTiming $timing,
+        private readonly ReconcileStudentBlitzTimeouts $reconcileTimeouts,
     ) {}
 
     public function __invoke(User $student, string $blitzId): Assessment
     {
         $authorized = $this->access->resolveAssigned($student, $blitzId);
         $readAt = $this->timing->now();
+        $this->reconcileTimeouts->one($student, $authorized, $readAt);
         $assessment = $this->access->readQuery($student)->whereKey($authorized->id)->first();
 
         if ($assessment === null) {

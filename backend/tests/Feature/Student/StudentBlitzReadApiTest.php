@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Student;
 
+use App\Enums\AssessmentAttemptStatus;
 use App\Enums\BlitzStatus;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
@@ -66,7 +67,10 @@ class StudentBlitzReadApiTest extends TestCase
         $this->assertSame(['data'], array_keys($response->json()));
         $this->assertSame([...array_reverse($expected), $older->id], array_column($response->json('data'), 'id'));
         $this->assertStudentBlitzMetadataIsSecret($response);
-        $this->assertSame($before, $expiredAttempt->fresh()->getAttributes());
+        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $expiredAttempt->fresh()->status);
+        $this->assertTrue($expiredAttempt->deadline_at->equalTo($expiredAttempt->fresh()->finalized_at));
+        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+        $this->assertSame(array_diff_key($before, $transitionFields), array_diff_key($expiredAttempt->fresh()->getAttributes(), $transitionFields));
         $this->assertDatabaseCount('idempotency_records', 0);
     }
 
@@ -103,7 +107,7 @@ class StudentBlitzReadApiTest extends TestCase
     }
 
     #[DataProvider('timerModes')]
-    public function test_detail_uses_own_persisted_attempt_and_rejects_expiry_without_finalizing(string $mode): void
+    public function test_detail_uses_own_persisted_attempt_and_reconciles_before_rejecting_expiry(string $mode): void
     {
         $student = $this->studentBlitzActor();
         $assessment = $this->studentBlitz($student, $mode);
@@ -119,7 +123,11 @@ class StudentBlitzReadApiTest extends TestCase
         $this->travelTo($attempt->deadline_at);
         $this->studentBlitzRequest($student, 'GET', '/api/v1/student/blitz/'.$assessment->id)->assertConflict()
             ->assertJsonPath('code', 'blitz_time_expired')->assertJsonPath('message', 'The Blitz time has expired.');
-        $this->assertSame($before, $attempt->fresh()->getAttributes());
+        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
+        $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->finalized_at));
+        $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->locked_at));
+        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+        $this->assertSame(array_diff_key($before, $transitionFields), array_diff_key($attempt->fresh()->getAttributes(), $transitionFields));
     }
 
     public function test_terminal_normal_attempt_remains_visible_in_active_detail_with_no_resume_capacity(): void

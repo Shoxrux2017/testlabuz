@@ -2,7 +2,9 @@
 
 namespace App\Actions\Student;
 
+use App\Actions\Blitz\FinalizeTimedOutBlitzAttempts;
 use App\Exceptions\Student\StudentBlitzConflictException;
+use App\Exceptions\Student\StudentBlitzTimeExpiredException;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AttemptAnswer;
@@ -27,6 +29,7 @@ class SaveStudentBlitzAttemptAnswer
         private readonly StudentHomeworkAnswerValue $values,
         private readonly StudentHomeworkAnswerIntegrity $integrity,
         private readonly StudentHomeworkAnswerWriter $writer,
+        private readonly FinalizeTimedOutBlitzAttempts $finalizeTimeouts,
     ) {}
 
     /** @param array<string, mixed> $payload */
@@ -45,7 +48,7 @@ class SaveStudentBlitzAttemptAnswer
             ->where('institution_id', $student->institution_id)
             ->whereKey($preliminaryAttempt->assessment_id)->firstOrFail();
 
-        return DB::transaction(function () use ($student, $preliminaryAssessment, $preliminaryAttempt, $questionId, $payload): StudentAttemptAnswerMutationResult {
+        $result = DB::transaction(function () use ($student, $preliminaryAssessment, $preliminaryAttempt, $questionId, $payload): ?StudentAttemptAnswerMutationResult {
             ['topic' => $topic, 'assessment' => $assessment, 'blitz' => $blitz] = $this->access->shareBlitzForAnswer($student, $preliminaryAssessment);
             $attempt = AssessmentAttempt::query()->where('institution_id', $student->institution_id)
                 ->where('student_id', $student->id)->whereKey($preliminaryAttempt->id)->lockForUpdate()->first();
@@ -60,7 +63,11 @@ class SaveStudentBlitzAttemptAnswer
             // The authorized Attempt scopes this read without hiding corrupt Answer ownership.
             $answer = AttemptAnswer::query()->where('attempt_id', $attempt->id)
                 ->where('question_id', $question->id)->lockForUpdate()->first();
-            $this->access->assertAnswerEditable($student, $topic, $assessment, $blitz, $attempt);
+            try {
+                $this->access->assertAnswerEditable($student, $topic, $assessment, $blitz, $attempt);
+            } catch (StudentBlitzTimeExpiredException) {
+                return null;
+            }
 
             if ($payload['type'] !== $question->type->value) {
                 throw ValidationException::withMessages(['type' => ['The answer type does not match the Question type.']]);
@@ -89,5 +96,13 @@ class SaveStudentBlitzAttemptAnswer
 
             return new StudentAttemptAnswerMutationResult($question, $answer);
         });
+
+        if ($result === null) {
+            ($this->finalizeTimeouts)($student->institution_id, $preliminaryAssessment->id);
+
+            throw new StudentBlitzTimeExpiredException;
+        }
+
+        return $result;
     }
 }
