@@ -130,6 +130,7 @@ Route::prefix('teacher')
         Route::post('homework/{homework}/archive', [TeacherHomeworkController::class, 'archive']);
         Route::get('blitz', [TeacherBlitzController::class, 'index']);
         Route::get('blitz/{blitz}', [TeacherBlitzController::class, 'show']);
+        Route::get('blitz/{blitz}/monitoring', [TeacherBlitzController::class, 'monitoring']);
         Route::patch('blitz/{blitz}', [TeacherBlitzController::class, 'update']);
         Route::post('blitz/{blitz}/schedule', [TeacherBlitzController::class, 'schedule']);
         Route::post('blitz/{blitz}/activate', [TeacherBlitzController::class, 'activate']);
