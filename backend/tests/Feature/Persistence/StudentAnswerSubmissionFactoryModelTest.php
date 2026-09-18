@@ -38,8 +38,12 @@ class StudentAnswerSubmissionFactoryModelTest extends TestCase
             'teacher_checked',
         ], AttemptAnswerCheckingStatus::values());
         $this->assertSame([
+            'student.blitz.attempt.start',
+            'student.blitz.attempt.submit',
             'student.homework.attempt.start',
             'student.homework.attempt.submit',
+            'teacher.blitz.attempt_exception.grant',
+            'teacher.blitz.activate',
         ], IdempotencyOperation::values());
     }
 
