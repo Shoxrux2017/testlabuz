@@ -3,9 +3,12 @@
 namespace Tests\Feature\Student;
 
 use App\Models\AssessmentAttempt;
+use App\Models\AssessmentStudent;
 use App\Models\BlitzAttemptException;
 use App\Models\IdempotencyRecord;
+use App\Support\Student\StudentBlitzAttemptAccess;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use LogicException;
@@ -92,6 +95,64 @@ class StudentBlitzReplacementAttemptStartTest extends TestCase
         $this->startStudentBlitz($student, $assessment, intent: 'start_replacement')->assertCreated()->assertJsonPath('data.attempt_number', 2);
         $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
         $this->assertSame($recipients, $assessment->recipients()->get()->map->getAttributes()->all());
+    }
+
+    public function test_official_replacement_start_resume_and_completed_replay_accept_reverse_uuid_history(): void
+    {
+        $student = $this->studentBlitzActor();
+        [$assessment, $pair] = $this->officialStudentBlitz($student);
+        $normal = $this->studentBlitzAttempt($assessment, $student, [
+            'id' => '00000000-0000-4000-8000-000000000002',
+            'official_score_eligible' => false,
+        ]);
+        $this->terminateStudentBlitzAttempt($normal);
+        $pair->update(['locked_at' => $normal->started_at]);
+        $replacement = $this->studentBlitzAttempt($assessment, $student, [
+            'id' => '00000000-0000-4000-8000-000000000001',
+            'attempt_number' => 2,
+            'started_at' => now(),
+            'deadline_at' => now()->addSeconds($assessment->blitzTask->duration_seconds),
+        ]);
+        $exception = BlitzAttemptException::factory()->create([
+            'assessment_id' => $assessment->id,
+            'assessment_student_id' => $normal->assessment_student_id,
+            'invalidated_attempt_id' => $normal->id,
+            'replacement_attempt_id' => $replacement->id,
+        ]);
+        $this->assertDatabaseCount('assessment_attempts', 2);
+        $this->assertSame([$replacement->id, $normal->id], DB::transaction(fn () => app(StudentBlitzAttemptAccess::class)
+            ->lockAttempts($student, $assessment, $pair)->modelKeys()));
+        $pairBefore = $pair->fresh()->getAttributes();
+        $cohort = AssessmentStudent::query()->whereIn('assessment_id', [$pair->homework_assessment_id, $pair->blitz_assessment_id]);
+        $cohortBefore = $cohort->orderBy('id')->get()->map->getAttributes()->all();
+        $normalBefore = $normal->fresh()->getAttributes();
+        $replacementBefore = $replacement->getAttributes();
+        $exceptionBefore = $exception->fresh()->getAttributes();
+
+        $key = (string) Str::uuid();
+        $this->startStudentBlitz($student, $assessment, $key, 'start_replacement')
+            ->assertOk()->assertJsonPath('data.id', $replacement->id)
+            ->assertJsonPath('data.attempt_number', 2)->assertJsonPath('data.status', 'in_progress');
+        $this->startStudentBlitz($student, $assessment, intent: 'resume', attemptId: $replacement->id)
+            ->assertOk()->assertJsonPath('data.id', $replacement->id)
+            ->assertJsonPath('data.attempt_number', 2)->assertJsonPath('data.status', 'in_progress');
+        $this->assertSame($replacementBefore, $replacement->fresh()->getAttributes());
+
+        $this->terminateStudentBlitzAttempt($replacement);
+        $terminalBefore = $replacement->fresh()->getAttributes();
+        $this->startStudentBlitz($student, $assessment, $key, 'start_replacement')
+            ->assertOk()->assertJsonPath('data.id', $replacement->id)
+            ->assertJsonPath('data.attempt_number', 2)->assertJsonPath('data.status', 'submitted');
+        $this->assertSame($terminalBefore, $replacement->fresh()->getAttributes());
+        $this->assertSame($normalBefore, $normal->fresh()->getAttributes());
+        $this->assertDatabaseCount('assessment_attempts', 2);
+        $this->assertDatabaseMissing('assessment_attempts', ['assessment_id' => $assessment->id, 'attempt_number' => 3]);
+        $this->assertDatabaseCount('idempotency_records', 2);
+        $this->assertSame($exceptionBefore, $exception->fresh()->getAttributes());
+        $this->assertSame($normal->id, $exception->fresh()->invalidated_attempt_id);
+        $this->assertSame($replacement->id, $exception->fresh()->replacement_attempt_id);
+        $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
+        $this->assertSame($cohortBefore, $cohort->get()->map->getAttributes()->all());
     }
 
     public function test_replacement_input_and_exact_resume_target_cannot_be_reinterpreted(): void

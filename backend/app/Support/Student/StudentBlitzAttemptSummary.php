@@ -24,7 +24,10 @@ final class StudentBlitzAttemptSummary
             throw new LogicException('Blitz history permits one normal and one replacement Attempt.');
         }
 
-        foreach ($attempts->values() as $index => $attempt) {
+        // Official pair locks use assessment_id/id order; normalize numbered history in memory.
+        $attempts = $attempts->sortBy([['attempt_number', 'asc'], ['id', 'asc']])->values();
+
+        foreach ($attempts as $index => $attempt) {
             if ($attempt->institution_id !== $student->institution_id
                 || $attempt->assessment_id !== $assessment->id || $attempt->student_id !== $student->id
                 || $attempt->assessment_student_id !== $recipientId || $attempt->attempt_number !== $index + 1
