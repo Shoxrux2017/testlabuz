@@ -133,6 +133,7 @@ Route::prefix('teacher')
         Route::patch('blitz/{blitz}', [TeacherBlitzController::class, 'update']);
         Route::post('blitz/{blitz}/schedule', [TeacherBlitzController::class, 'schedule']);
         Route::post('blitz/{blitz}/activate', [TeacherBlitzController::class, 'activate']);
+        Route::post('blitz/{blitz}/students/{student}/attempt-exception', [TeacherBlitzController::class, 'grantAttemptException']);
         Route::post('blitz/{blitz}/close', [TeacherBlitzController::class, 'close']);
         Route::post('blitz/{blitz}/archive', [TeacherBlitzController::class, 'archive']);
         Route::post('assessments/{assessment}/questions', [TeacherQuestionController::class, 'store']);

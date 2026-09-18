@@ -32,7 +32,7 @@ class StudentBlitzAttemptStartRequest extends FormRequest
     {
         return [
             'idempotency_key' => ['required', 'string', 'uuid'],
-            'intent' => ['required', 'string', Rule::in(['start_normal', 'resume'])],
+            'intent' => ['required', 'string', Rule::in(['start_normal', 'resume', 'start_replacement'])],
             'attempt_id' => ['required_if:intent,resume', 'nullable', 'string', 'uuid', 'regex:/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i'],
         ];
     }

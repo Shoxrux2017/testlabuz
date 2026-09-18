@@ -8,6 +8,7 @@ enum IdempotencyOperation: string
     case StudentBlitzAttemptSubmit = 'student.blitz.attempt.submit';
     case StudentHomeworkAttemptStart = 'student.homework.attempt.start';
     case StudentHomeworkAttemptSubmit = 'student.homework.attempt.submit';
+    case TeacherBlitzAttemptExceptionGrant = 'teacher.blitz.attempt_exception.grant';
     case TeacherBlitzActivate = 'teacher.blitz.activate';
 
     /** @return list<string> */
