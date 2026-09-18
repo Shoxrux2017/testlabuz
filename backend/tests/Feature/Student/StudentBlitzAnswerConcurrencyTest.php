@@ -60,6 +60,8 @@ class StudentBlitzAnswerConcurrencyTest extends TestCase
                 $this->assertSame(AssessmentAttemptStatus::Submitted, $attempt->status);
                 $this->assertSame('2026-09-17 12:01:00', $attempt->finalized_at->format('Y-m-d H:i:s'));
             } elseif ($scenario === 'deadline') {
+                $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+                $this->assertSame(array_diff_key($attemptBefore, $transitionFields), array_diff_key($attempt->getAttributes(), $transitionFields));
                 $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->status);
                 $this->assertNull($attempt->submitted_at);
                 $this->assertEquals($attempt->deadline_at, $attempt->finalized_at);
