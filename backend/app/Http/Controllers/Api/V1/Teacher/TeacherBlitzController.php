@@ -10,6 +10,7 @@ use App\Actions\Teacher\GrantTeacherBlitzAttemptException;
 use App\Actions\Teacher\ListTeacherBlitz;
 use App\Actions\Teacher\ScheduleTeacherBlitz;
 use App\Actions\Teacher\ShowTeacherBlitz;
+use App\Actions\Teacher\ShowTeacherBlitzMonitoring;
 use App\Actions\Teacher\UpdateTeacherBlitz;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teacher\TeacherBlitzActivationRequest;
@@ -22,6 +23,7 @@ use App\Http\Requests\Teacher\TeacherBlitzShowRequest;
 use App\Http\Requests\Teacher\TeacherBlitzUpdateRequest;
 use App\Http\Resources\Teacher\TeacherBlitzAttemptExceptionResource;
 use App\Http\Resources\Teacher\TeacherBlitzCollection;
+use App\Http\Resources\Teacher\TeacherBlitzMonitoringResource;
 use App\Http\Resources\Teacher\TeacherBlitzResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +31,14 @@ use Symfony\Component\HttpFoundation\Response;
 
 class TeacherBlitzController extends Controller
 {
+    public function monitoring(
+        TeacherBlitzShowRequest $request,
+        string $blitz,
+        ShowTeacherBlitzMonitoring $showMonitoring,
+    ): TeacherBlitzMonitoringResource {
+        return new TeacherBlitzMonitoringResource($showMonitoring($request->user(), $blitz));
+    }
+
     public function index(
         TeacherBlitzIndexRequest $request,
         ListTeacherBlitz $listTeacherBlitz,
