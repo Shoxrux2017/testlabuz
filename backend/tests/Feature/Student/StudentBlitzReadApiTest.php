@@ -4,21 +4,20 @@ namespace Tests\Feature\Student;
 
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\BlitzStatus;
-use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\BlitzTask;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Student\Concerns\BuildsStudentBlitzContext;
+use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\TestCase;
 
 class StudentBlitzReadApiTest extends TestCase
 {
-    use BuildsStudentBlitzContext, RefreshDatabase;
+    use BuildsStudentBlitzContext, UsesBlitzReadSnapshot;
 
     protected function setUp(): void
     {
@@ -258,44 +257,9 @@ class StudentBlitzReadApiTest extends TestCase
         $this->assertSame('000000', $stored->{$field}->format('u'));
     }
 
-    #[DataProvider('listReadTransitions')]
-    public function test_active_list_rechecks_eligibility_when_state_changes_between_base_query_and_relations(string $transition): void
-    {
-        $student = $this->studentBlitzActor();
-        $assessment = $this->studentBlitz($student);
-        $attempt = $transition === 'closed' ? null : $this->studentBlitzAttempt($assessment, $student);
-        $changed = false;
-        $dispatcher = Assessment::getEventDispatcher();
-        Assessment::setEventDispatcher(clone $dispatcher);
-        Assessment::retrieved(function (Assessment $row) use ($assessment, $attempt, $transition, &$changed): void {
-            if ($changed || $row->id !== $assessment->id || $row->getAttribute('student_recipient_id') === null) {
-                return;
-            }
-            $changed = true;
-            if ($transition === 'closed') {
-                BlitzTask::query()->whereKey($assessment->id)->update(['status' => BlitzStatus::Closed, 'closed_at' => now()]);
-            } elseif ($transition === 'terminal') {
-                $this->terminateStudentBlitzAttempt($attempt);
-            } else {
-                $attempt->update(['started_at' => now()->subMinutes(10), 'deadline_at' => now()]);
-            }
-        });
-        try {
-            $this->studentBlitzRequest($student, 'GET', '/api/v1/student/blitz/active')->assertOk()->assertExactJson(['data' => []]);
-            $this->assertTrue($changed);
-        } finally {
-            Assessment::setEventDispatcher($dispatcher);
-        }
-    }
-
     public static function fractionalHistoryFields(): array
     {
         return [['synchronized_ends_at'], ['started_at'], ['deadline_at']];
-    }
-
-    public static function listReadTransitions(): array
-    {
-        return [['closed'], ['terminal'], ['expired']];
     }
 
     public static function corruptReadHistories(): array

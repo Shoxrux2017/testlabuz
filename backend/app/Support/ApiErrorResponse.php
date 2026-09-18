@@ -292,6 +292,27 @@ final class ApiErrorResponse
         );
     }
 
+    public static function blitzAttemptExceptionNotAllowed(Request $request): ?JsonResponse
+    {
+        return self::isApiRequest($request)
+            ? self::json('A Blitz attempt exception cannot be granted in the current state.', 'blitz_attempt_exception_not_allowed', Response::HTTP_CONFLICT)
+            : null;
+    }
+
+    public static function blitzAttemptExceptionAlreadyGranted(Request $request): ?JsonResponse
+    {
+        return self::isApiRequest($request)
+            ? self::json('An additional Blitz attempt has already been granted to this Student.', 'blitz_attempt_exception_already_granted', Response::HTTP_CONFLICT)
+            : null;
+    }
+
+    public static function blitzNormalAttemptRequired(Request $request): ?JsonResponse
+    {
+        return self::isApiRequest($request)
+            ? self::json('The Student must have a normal Blitz attempt before an exception can be granted.', 'blitz_normal_attempt_required', Response::HTTP_CONFLICT)
+            : null;
+    }
+
     public static function businessConflict(Request $request): ?JsonResponse
     {
         if (! self::isApiRequest($request)) {

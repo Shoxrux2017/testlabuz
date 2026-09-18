@@ -6,18 +6,21 @@ use App\Actions\Teacher\ActivateTeacherBlitz;
 use App\Actions\Teacher\ArchiveTeacherBlitz;
 use App\Actions\Teacher\CloseTeacherBlitz;
 use App\Actions\Teacher\CreateTeacherBlitz;
+use App\Actions\Teacher\GrantTeacherBlitzAttemptException;
 use App\Actions\Teacher\ListTeacherBlitz;
 use App\Actions\Teacher\ScheduleTeacherBlitz;
 use App\Actions\Teacher\ShowTeacherBlitz;
 use App\Actions\Teacher\UpdateTeacherBlitz;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teacher\TeacherBlitzActivationRequest;
+use App\Http\Requests\Teacher\TeacherBlitzAttemptExceptionRequest;
 use App\Http\Requests\Teacher\TeacherBlitzCreateRequest;
 use App\Http\Requests\Teacher\TeacherBlitzIndexRequest;
 use App\Http\Requests\Teacher\TeacherBlitzLifecycleRequest;
 use App\Http\Requests\Teacher\TeacherBlitzScheduleRequest;
 use App\Http\Requests\Teacher\TeacherBlitzShowRequest;
 use App\Http\Requests\Teacher\TeacherBlitzUpdateRequest;
+use App\Http\Resources\Teacher\TeacherBlitzAttemptExceptionResource;
 use App\Http\Resources\Teacher\TeacherBlitzCollection;
 use App\Http\Resources\Teacher\TeacherBlitzResource;
 use App\Models\User;
@@ -105,6 +108,19 @@ class TeacherBlitzController extends Controller
             ->additional(['message' => 'Blitz task activated successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function grantAttemptException(
+        TeacherBlitzAttemptExceptionRequest $request,
+        string $blitz,
+        string $student,
+        GrantTeacherBlitzAttemptException $grant,
+    ): JsonResponse {
+        $exception = $grant($request->user(), $blitz, $student, $request->idempotencyKey(), $request->reasonAttributes());
+
+        return (new TeacherBlitzAttemptExceptionResource($exception))
+            ->additional(['message' => 'One additional Blitz attempt has been granted.'])
+            ->response()->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function close(

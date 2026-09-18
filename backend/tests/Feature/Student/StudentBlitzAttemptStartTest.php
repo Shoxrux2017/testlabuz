@@ -13,7 +13,6 @@ use App\Models\BlitzTask;
 use App\Models\Institution;
 use App\Models\InstitutionSetting;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -22,11 +21,12 @@ use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Student\Concerns\BuildsStudentBlitzContext;
 use Tests\Feature\Student\Concerns\BuildsStudentHomeworkFileAnswerContext;
+use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\TestCase;
 
 class StudentBlitzAttemptStartTest extends TestCase
 {
-    use BuildsStudentBlitzContext, BuildsStudentHomeworkFileAnswerContext, RefreshDatabase;
+    use BuildsStudentBlitzContext, BuildsStudentHomeworkFileAnswerContext, UsesBlitzReadSnapshot;
 
     protected function setUp(): void
     {
@@ -81,7 +81,7 @@ class StudentBlitzAttemptStartTest extends TestCase
             'missing key' => [null, '{"intent":"start_normal"}'],
             'malformed key' => ['bad-key', '{"intent":"start_normal"}'],
             'empty body' => ['', ''], 'empty object' => ['', '{}'],
-            'unknown intent' => ['', '{"intent":"start_replacement"}'],
+            'unknown intent' => ['', '{"intent":"start_third"}'],
             'missing resume target' => ['', '{"intent":"resume"}'],
             'malformed resume target' => ['', '{"intent":"resume","attempt_id":"bad"}'],
             'null resume target' => ['', '{"intent":"resume","attempt_id":null}'],

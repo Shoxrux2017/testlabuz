@@ -47,7 +47,7 @@ final class StudentBlitzTiming
 
         $this->assertWholeSecond($attempt->started_at);
         $this->assertWholeSecond($attempt->deadline_at);
-        $expectedDeadline = $blitz->timer_start_mode_snapshot === BlitzTimerStartMode::Synchronized
+        $expectedDeadline = $attempt->attempt_number === 1 && $blitz->timer_start_mode_snapshot === BlitzTimerStartMode::Synchronized
             ? $blitz->synchronized_ends_at
             : $attempt->started_at->copy()->addSeconds($blitz->duration_seconds);
 
@@ -57,17 +57,20 @@ final class StudentBlitzTiming
         }
     }
 
-    public function assertExecutable(BlitzTask $blitz, ?AssessmentAttempt $attempt, CarbonInterface $serverNow): void
+    public function assertExecutable(BlitzTask $blitz, ?AssessmentAttempt $attempt, CarbonInterface $serverNow, bool $replacementAvailable = false): void
     {
         $this->assertWholeSecond($serverNow);
+
+        if ($replacementAvailable) {
+            return;
+        }
 
         if ($attempt?->status === AssessmentAttemptStatus::TimedOutFinalized) {
             throw new StudentBlitzTimeExpiredException;
         }
 
-        $deadline = $blitz->timer_start_mode_snapshot === BlitzTimerStartMode::Synchronized
-            ? $blitz->synchronized_ends_at
-            : ($attempt?->status === AssessmentAttemptStatus::InProgress ? $attempt->deadline_at : null);
+        $deadline = $attempt?->attempt_number === 2 || $attempt?->status === AssessmentAttemptStatus::InProgress
+            ? $attempt->deadline_at : $blitz->synchronized_ends_at;
 
         if ($deadline !== null && $serverNow->gte($deadline)) {
             throw new StudentBlitzTimeExpiredException;
@@ -75,7 +78,7 @@ final class StudentBlitzTiming
     }
 
     /** @return array<string, mixed> */
-    public function project(BlitzTask $blitz, ?AssessmentAttempt $attempt, CarbonInterface $serverNow): array
+    public function project(BlitzTask $blitz, ?AssessmentAttempt $attempt, CarbonInterface $serverNow, bool $replacementAvailable = false): array
     {
         $this->assertValidTask($blitz);
         $this->assertWholeSecond($serverNow);
@@ -84,17 +87,15 @@ final class StudentBlitzTiming
             $this->assertValidAttempt($blitz, $attempt);
         }
 
-        $deadline = $blitz->timer_start_mode_snapshot === BlitzTimerStartMode::Synchronized
-            ? $blitz->synchronized_ends_at
-            : $attempt?->deadline_at;
+        $deadline = $replacementAvailable ? null : ($attempt?->deadline_at ?? $blitz->synchronized_ends_at);
 
         return [
             'mode' => $blitz->timer_start_mode_snapshot->value,
             'server_now' => $this->serialize($serverNow),
             'synchronized_ends_at' => $blitz->synchronized_ends_at === null ? null : $this->serialize($blitz->synchronized_ends_at),
             'deadline_at' => $deadline === null ? null : $this->serialize($deadline),
-            'remaining_seconds' => $attempt !== null && $attempt->status !== AssessmentAttemptStatus::InProgress
-                ? 0 : ($deadline === null ? null : max(0, $deadline->getTimestamp() - $serverNow->getTimestamp())),
+            'remaining_seconds' => $replacementAvailable ? null : ($attempt !== null && $attempt->status !== AssessmentAttemptStatus::InProgress
+                ? 0 : ($deadline === null ? null : max(0, $deadline->getTimestamp() - $serverNow->getTimestamp()))),
         ];
     }
 

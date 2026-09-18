@@ -74,7 +74,7 @@ class StudentBlitzAttemptStartHistoricalReplayTest extends TestCase
     }
 
     #[DataProvider('replacementReplayIntents')]
-    public function test_replacement_and_resume_number_two_support_proof_preserves_exact_identity_without_public_replacement_runtime(string $intent, string $status): void
+    public function test_replacement_and_resume_number_two_proof_and_public_replay_preserve_exact_identity(string $intent, string $status): void
     {
         $student = $this->studentBlitzActor();
         $assessment = $this->studentBlitz($student);
@@ -109,7 +109,14 @@ class StudentBlitzAttemptStartHistoricalReplayTest extends TestCase
         $this->assertDatabaseCount('assessment_attempts', 2);
         $this->assertDatabaseCount('blitz_attempt_exceptions', 1);
         $this->assertDatabaseCount('idempotency_records', 1);
-        $this->startStudentBlitz($student, $assessment, $key, 'start_replacement')->assertUnprocessable()->assertJsonPath('code', 'validation_failed');
+        $this->startStudentBlitz($student, $assessment, $key, $intent, $resumeId)->assertStatus($record->response_status)
+            ->assertJsonPath('data.id', $replacement->id)->assertJsonPath('data.status', $status)
+            ->assertJsonPath('data.answers.1.answer.file.id', $file->id);
+        $this->assertSame($before, $this->historicalReplaySnapshot());
+        if ($intent === 'resume') {
+            $this->startStudentBlitz($student, $assessment, $key, 'start_replacement')
+                ->assertConflict()->assertJsonPath('code', 'idempotency_key_reused');
+        }
         foreach ([['resume', $original->id], ['start_normal', null], ['resume', $replacement->id === $resumeId ? $original->id : $replacement->id]] as [$changedIntent, $changedTarget]) {
             try {
                 StudentBlitzHistoricalAnswerReadProof::forStart($student, $assessment, $replacement, $record, $key, $fingerprint, $changedIntent, $changedTarget);

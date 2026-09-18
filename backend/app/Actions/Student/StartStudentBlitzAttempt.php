@@ -18,6 +18,7 @@ use App\Exceptions\Student\StudentBlitzTimeExpiredException;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
+use App\Models\BlitzAttemptException;
 use App\Models\IdempotencyRecord;
 use App\Models\TopicResultPair;
 use App\Models\User;
@@ -56,7 +57,7 @@ final class StartStudentBlitzAttempt
         if ($intent === 'resume' && $attemptId !== null) {
             $attemptId = strtolower($attemptId);
             $body['attempt_id'] = $attemptId;
-        } elseif ($intent !== 'start_normal' || $attemptId !== null) {
+        } elseif (! in_array($intent, ['start_normal', 'start_replacement'], true) || $attemptId !== null) {
             throw new LogicException('Blitz Start requires a validated explicit execution intent.');
         }
 
@@ -81,7 +82,14 @@ final class StartStudentBlitzAttempt
             }
 
             $studentAttempts = $attempts->where('assessment_id', $assessment->id)->where('student_id', $student->id)->values();
-            $current = $this->attemptSummary->validateHistory($student, $assessment, $blitz, $recipient->id, $studentAttempts);
+            $exception = BlitzAttemptException::query()->where('institution_id', $student->institution_id)
+                ->where('assessment_id', $assessment->id)->where('student_id', $student->id)->lockForUpdate()->first();
+            $this->attemptSummary->validateHistory($student, $assessment, $blitz, $recipient->id, $studentAttempts, $exception);
+            $current = match ($intent) {
+                'resume' => $studentAttempts->firstWhere('id', $attemptId),
+                'start_normal' => $studentAttempts->firstWhere('attempt_number', 1),
+                'start_replacement' => $studentAttempts->firstWhere('attempt_number', 2),
+            };
 
             // Every parent, idempotency and activity lock wait precedes the authoritative decision instant.
             $serverNow = $this->timing->now();
@@ -115,10 +123,19 @@ final class StartStudentBlitzAttempt
                     throw new StudentBlitzAttemptNotEditableException;
                 }
             } elseif ($current !== null && $current->status !== AssessmentAttemptStatus::InProgress) {
+                if ($intent === 'start_normal' && $exception !== null) {
+                    throw new StudentBlitzAttemptsExhaustedException;
+                }
+
                 if ($current->status === AssessmentAttemptStatus::TimedOutFinalized) {
                     throw new StudentBlitzTimeExpiredException;
                 }
 
+                throw new StudentBlitzAttemptsExhaustedException;
+            }
+
+            $replacementStart = $intent === 'start_replacement' && $current === null;
+            if ($replacementStart && ! $this->attemptSummary->replacementAvailable($studentAttempts->first(), $exception, $blitz)) {
                 throw new StudentBlitzAttemptsExhaustedException;
             }
 
@@ -128,7 +145,7 @@ final class StartStudentBlitzAttempt
                 return null;
             }
 
-            $this->timing->assertExecutable($blitz, $current, $serverNow);
+            $this->timing->assertExecutable($blitz, $current, $serverNow, $replacementStart);
 
             if ($current !== null) {
                 $this->idempotency->complete($claim, 'assessment_attempt', $current->id, 200);
@@ -149,10 +166,10 @@ final class StartStudentBlitzAttempt
                 'assessment_id' => $assessment->id,
                 'assessment_student_id' => $recipient->id,
                 'student_id' => $student->id,
-                'attempt_number' => 1,
+                'attempt_number' => $replacementStart ? 2 : 1,
                 'status' => AssessmentAttemptStatus::InProgress,
                 'started_at' => $serverNow,
-                'deadline_at' => $blitz->timer_start_mode_snapshot === BlitzTimerStartMode::Synchronized
+                'deadline_at' => ! $replacementStart && $blitz->timer_start_mode_snapshot === BlitzTimerStartMode::Synchronized
                     ? $blitz->synchronized_ends_at : $serverNow->addSeconds($blitz->duration_seconds),
                 'submitted_at' => null,
                 'finalized_at' => null,
@@ -164,6 +181,11 @@ final class StartStudentBlitzAttempt
                 'normalized_score' => null,
                 'scoring_completed_at' => null,
             ]);
+            if ($replacementStart) {
+                $exception->replacement_attempt_id = $attempt->id;
+                $exception->updated_at = $serverNow;
+                $exception->save();
+            }
             $this->idempotency->complete($claim, 'assessment_attempt', $attempt->id, 201);
 
             return new StudentBlitzAttemptStartResult(
@@ -200,6 +222,7 @@ final class StartStudentBlitzAttempt
             || ! in_array($record->response_status, [200, 201], true) || $record->completed_at === null
             || $attempt === null || $attempt->id !== $record->result_resource_id
             || ($intent === 'start_normal' && $attempt->attempt_number !== 1)
+            || ($intent === 'start_replacement' && $attempt->attempt_number !== 2)
             || ($intent === 'resume' && ($attempt->id !== $attemptId || $record->response_status !== 200))) {
             throw new LogicException('Completed Blitz Start must reference its authorized intent-specific Attempt.');
         }

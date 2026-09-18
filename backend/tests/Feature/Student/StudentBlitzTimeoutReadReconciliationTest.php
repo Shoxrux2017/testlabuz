@@ -7,15 +7,15 @@ use App\Enums\AssessmentAttemptStatus;
 use App\Enums\BlitzStatus;
 use App\Models\AssessmentAttempt;
 use App\Models\AttemptAnswer;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Student\Concerns\BuildsStudentBlitzAnswerContext;
+use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\TestCase;
 
 class StudentBlitzTimeoutReadReconciliationTest extends TestCase
 {
-    use BuildsStudentBlitzAnswerContext, RefreshDatabase;
+    use BuildsStudentBlitzAnswerContext, UsesBlitzReadSnapshot;
 
     protected function setUp(): void
     {

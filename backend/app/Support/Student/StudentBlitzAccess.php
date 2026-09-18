@@ -59,10 +59,14 @@ final class StudentBlitzAccess
                 ->where('institution_id', $student->institution_id),
             'attempts' => fn ($query) => $query
                 ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id', 'attempt_number',
-                    'status', 'started_at', 'deadline_at', 'possible_points', 'submitted_at', 'finalized_at', 'finalization_reason', 'locked_at'])
+                    'status', 'started_at', 'deadline_at', 'possible_points', 'official_score_eligible', 'submitted_at', 'finalized_at', 'finalization_reason', 'locked_at'])
                 ->where('institution_id', $student->institution_id)
                 ->where('student_id', $student->id)
                 ->orderBy('attempt_number')->orderBy('id'),
+            'blitzAttemptExceptions' => fn ($query) => $query
+                ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id',
+                    'invalidated_attempt_id', 'replacement_attempt_id'])
+                ->where('institution_id', $student->institution_id)->where('student_id', $student->id),
         ]);
     }
 
@@ -75,24 +79,21 @@ final class StudentBlitzAccess
         return $this->readQuery($student)
             ->where('blitz_tasks.status', BlitzStatus::Active->value)
             ->where(fn (Builder $query) => $query
-                ->where('blitz_tasks.timer_start_mode_snapshot', BlitzTimerStartMode::Individual->value)
-                ->orWhere('blitz_tasks.synchronized_ends_at', '>', $readAt)
-                ->orWhereNull('blitz_tasks.timer_start_mode_snapshot')
-                ->orWhere(fn (Builder $query) => $query
-                    ->where('blitz_tasks.timer_start_mode_snapshot', BlitzTimerStartMode::Synchronized->value)
-                    ->whereNull('blitz_tasks.synchronized_ends_at')))
-            ->where(fn (Builder $query) => $query
-                ->whereDoesntHave('attempts', $ownAttempts)
+                ->where(fn (Builder $unused) => $unused->whereDoesntHave('attempts', $ownAttempts)
+                    ->where(fn (Builder $timer) => $timer
+                        ->where('blitz_tasks.timer_start_mode_snapshot', BlitzTimerStartMode::Individual->value)
+                        ->orWhere('blitz_tasks.synchronized_ends_at', '>', $readAt)
+                        ->orWhereNull('blitz_tasks.timer_start_mode_snapshot')
+                        ->orWhereNull('blitz_tasks.synchronized_ends_at')))
+                ->orWhereHas('blitzAttemptExceptions', fn (Builder $exceptions) => $exceptions
+                    ->where('institution_id', $student->institution_id)->where('student_id', $student->id))
                 ->orWhereHas('attempts', fn (Builder $attempts) => $ownAttempts($attempts)
                     ->where(fn (Builder $history) => $history
-                        ->where(fn (Builder $current) => $current
-                            ->where('status', AssessmentAttemptStatus::InProgress->value)
-                            ->where('deadline_at', '>', $readAt))
+                        ->where('status', AssessmentAttemptStatus::InProgress->value)
                         ->orWhere('attempt_number', '<>', 1)
+                        ->orWhere('official_score_eligible', false)
                         ->orWhereNull('deadline_at')))
-                // Corrupt multi-row history must reach validation instead of silently losing capacity.
                 ->orWhereHas('attempts', $ownAttempts, '>', 1))
-            ->orderByDesc('blitz_tasks.activated_at')
-            ->orderByDesc('assessments.id');
+            ->orderByDesc('blitz_tasks.activated_at')->orderByDesc('assessments.id');
     }
 }
