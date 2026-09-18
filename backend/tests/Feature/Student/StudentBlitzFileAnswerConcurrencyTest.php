@@ -137,11 +137,11 @@ class StudentBlitzFileAnswerConcurrencyTest extends TestCase
 
     private function assertLockedRejection(string $winnerMode, string $code, array $extra = []): void
     {
+        $attemptsBefore = $this->attemptSnapshot();
         $release = $this->signalPath();
         $holderReady = $this->signalPath();
         $saveReady = $this->signalPath();
         $saveStored = $this->signalPath();
-        $before = $this->attemptSnapshot();
         $holder = $this->startWorker($winnerMode, $this->saveArguments('first', 'first', $holderReady, $release));
         $save = null;
         try {
@@ -168,7 +168,17 @@ class StudentBlitzFileAnswerConcurrencyTest extends TestCase
         $this->assertPersistedGraph('first', 'initial-first', $this->ids['first_key']);
         $this->assertCount(2, $this->disk()->allFiles());
         if ($winnerMode === 'hold') {
-            $this->assertSame($before, $this->attemptSnapshot());
+            $attemptsAfter = AssessmentAttempt::query()->where('assessment_id', $this->ids['assessment'])->orderBy('id')->get();
+            $this->assertCount(count($attemptsBefore), $attemptsAfter);
+            $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+            foreach ($attemptsAfter as $index => $attempt) {
+                $this->assertSame(array_diff_key($attemptsBefore[$index], $transitionFields), array_diff_key($attempt->getAttributes(), $transitionFields));
+                $this->assertSame('timed_out_finalized', $attempt->status->value);
+                $this->assertNull($attempt->submitted_at);
+                $this->assertEquals($attempt->deadline_at, $attempt->finalized_at);
+                $this->assertEquals($attempt->deadline_at, $attempt->locked_at);
+                $this->assertSame('timeout_auto_submit', $attempt->finalization_reason->value);
+            }
         } else {
             $attempt = AssessmentAttempt::query()->findOrFail($this->ids['first_attempt']);
             $this->assertSame('submitted', $attempt->status->value);

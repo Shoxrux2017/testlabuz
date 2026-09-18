@@ -49,12 +49,27 @@ final class StudentHomeworkAnswerIntegrity
     /** @return array<string, mixed> */
     public function canonical(AttemptAnswer $answer, AssessmentAttempt $attempt, Question $question): array
     {
-        $this->requireValid($answer->institution_id === $attempt->institution_id
-            && $answer->attempt_id === $attempt->id && $answer->question_id === $question->id
-            && $question->assessment_id === $attempt->assessment_id
-            && $answer->getRawOriginal('checking_status') === AttemptAnswerCheckingStatus::Pending->value
+        $this->requireValid($answer->getRawOriginal('checking_status') === AttemptAnswerCheckingStatus::Pending->value
             && $answer->awarded_points === null && $answer->feedback === null
             && $answer->checked_by_user_id === null && $answer->checked_at === null);
+
+        return $this->canonicalStructure($answer, $attempt, $question);
+    }
+
+    /** @return array<string, mixed> */
+    public function canonicalForHistoricalRead(AttemptAnswer $answer, AssessmentAttempt $attempt, Question $question): array
+    {
+        $this->requireValid(in_array($answer->getRawOriginal('checking_status'), AttemptAnswerCheckingStatus::values(), true));
+
+        return $this->canonicalStructure($answer, $attempt, $question);
+    }
+
+    /** @return array<string, mixed> */
+    private function canonicalStructure(AttemptAnswer $answer, AssessmentAttempt $attempt, Question $question): array
+    {
+        $this->requireValid($answer->institution_id === $attempt->institution_id
+            && $answer->attempt_id === $attempt->id && $answer->question_id === $question->id
+            && $question->assessment_id === $attempt->assessment_id);
 
         $family = match ($question->type) {
             QuestionType::SingleChoice, QuestionType::MultipleChoice => 'selectedOptions',

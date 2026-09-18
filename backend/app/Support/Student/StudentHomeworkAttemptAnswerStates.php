@@ -21,6 +21,24 @@ final class StudentHomeworkAttemptAnswerStates
      */
     public function __invoke(string $institutionId, AssessmentAttempt $attempt, Collection $questions): SupportCollection
     {
+        return $this->project($institutionId, $attempt, $questions, $this->answerIntegrity->canonical(...));
+    }
+
+    /**
+     * @param  Collection<int, Question>  $questions
+     * @return SupportCollection<int, StudentAttemptAnswerMutationResult>
+     */
+    public function historicalRead(string $institutionId, AssessmentAttempt $attempt, Collection $questions): SupportCollection
+    {
+        return $this->project($institutionId, $attempt, $questions, $this->answerIntegrity->canonicalForHistoricalRead(...));
+    }
+
+    /**
+     * @param  Collection<int, Question>  $questions
+     * @return SupportCollection<int, StudentAttemptAnswerMutationResult>
+     */
+    private function project(string $institutionId, AssessmentAttempt $attempt, Collection $questions, \Closure $canonicalize): SupportCollection
+    {
         $this->answerValues->loadQuestions($questions, $institutionId);
         // Scope by the authorized Attempt, but do not hide corrupt Answer ownership or Question IDs.
         $answers = $attempt->answers()->get();
@@ -34,7 +52,7 @@ final class StudentHomeworkAttemptAnswerStates
                 throw new LogicException('Persisted Student answer does not belong to the authorized Question set.');
             }
 
-            $answer->setAttribute('student_answer_value', $this->answerIntegrity->canonical($answer, $attempt, $question));
+            $answer->setAttribute('student_answer_value', $canonicalize($answer, $attempt, $question));
         }
 
         $answersByQuestion = $answers->keyBy('question_id');

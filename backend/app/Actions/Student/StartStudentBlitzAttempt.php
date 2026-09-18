@@ -27,6 +27,7 @@ use App\Support\Student\StudentBlitzAccess;
 use App\Support\Student\StudentBlitzAttemptAccess;
 use App\Support\Student\StudentBlitzAttemptStartResult;
 use App\Support\Student\StudentBlitzAttemptSummary;
+use App\Support\Student\StudentBlitzHistoricalAnswerReadProof;
 use App\Support\Student\StudentBlitzTiming;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -87,9 +88,12 @@ final class StartStudentBlitzAttempt
 
             if (! $claim->new) {
                 $this->assertReplay($claim->record, $current, $intent, $attemptId);
+                $historicalReadProof = in_array($current->status, [AssessmentAttemptStatus::WaitingForTeacherReview, AssessmentAttemptStatus::Checked], true)
+                    ? StudentBlitzHistoricalAnswerReadProof::forStart($student, $assessment, $current, $claim->record, $idempotencyKey, $fingerprint, $intent, $attemptId)
+                    : null;
 
                 return new StudentBlitzAttemptStartResult(
-                    ($this->showAttempt)($student, $assessment, $blitz, $current, $serverNow),
+                    ($this->showAttempt)($student, $assessment, $blitz, $current, $serverNow, $historicalReadProof),
                     $claim->record->response_status,
                 );
             }
@@ -193,8 +197,9 @@ final class StartStudentBlitzAttempt
     {
         if ($record->result_resource_type !== 'assessment_attempt'
             || ! is_string($record->result_resource_id) || ! Str::isUuid($record->result_resource_id)
-            || ! in_array($record->response_status, [200, 201], true)
+            || ! in_array($record->response_status, [200, 201], true) || $record->completed_at === null
             || $attempt === null || $attempt->id !== $record->result_resource_id
+            || ($intent === 'start_normal' && $attempt->attempt_number !== 1)
             || ($intent === 'resume' && ($attempt->id !== $attemptId || $record->response_status !== 200))) {
             throw new LogicException('Completed Blitz Start must reference its authorized intent-specific Attempt.');
         }

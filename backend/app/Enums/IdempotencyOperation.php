@@ -5,6 +5,7 @@ namespace App\Enums;
 enum IdempotencyOperation: string
 {
     case StudentBlitzAttemptStart = 'student.blitz.attempt.start';
+    case StudentBlitzAttemptSubmit = 'student.blitz.attempt.submit';
     case StudentHomeworkAttemptStart = 'student.homework.attempt.start';
     case StudentHomeworkAttemptSubmit = 'student.homework.attempt.submit';
     case TeacherBlitzActivate = 'teacher.blitz.activate';

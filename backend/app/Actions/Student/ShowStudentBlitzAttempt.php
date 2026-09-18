@@ -7,6 +7,7 @@ use App\Models\AssessmentAttempt;
 use App\Models\BlitzTask;
 use App\Models\InstitutionSetting;
 use App\Models\User;
+use App\Support\Student\StudentBlitzHistoricalAnswerReadProof;
 use App\Support\Student\StudentBlitzTiming;
 use App\Support\Student\StudentHomeworkAttemptAnswerStates;
 use App\Support\Student\StudentQuestionAnswerUi;
@@ -21,8 +22,9 @@ final class ShowStudentBlitzAttempt
         private readonly StudentHomeworkAttemptAnswerStates $answerStates,
     ) {}
 
-    public function __invoke(User $student, Assessment $assessment, BlitzTask $blitz, AssessmentAttempt $attempt, CarbonInterface $serverNow): AssessmentAttempt
+    public function __invoke(User $student, Assessment $assessment, BlitzTask $blitz, AssessmentAttempt $attempt, CarbonInterface $serverNow, ?StudentBlitzHistoricalAnswerReadProof $historicalReadProof = null): AssessmentAttempt
     {
+        $historicalReadProof?->assertMatches($student, $assessment, $attempt);
         $assessment->load(['questions' => fn ($query) => $query
             ->select(['id', 'assessment_id', 'type', 'prompt', 'instructions', 'points', 'position'])
             ->where('institution_id', $student->institution_id)->orderBy('position')->orderBy('id')
@@ -48,9 +50,9 @@ final class ShowStudentBlitzAttempt
         $assessment->setRelation('blitzTask', $blitz);
         $attempt->setRelation('assessment', $assessment);
         $attempt->setAttribute('student_blitz_timing', $this->timing->project($blitz, $attempt, $serverNow));
-        $attempt->setAttribute('student_answer_states', ($this->answerStates)(
-            $student->institution_id, $attempt, $assessment->getRelation('questions'),
-        ));
+        $attempt->setAttribute('student_answer_states', $historicalReadProof === null
+            ? ($this->answerStates)($student->institution_id, $attempt, $assessment->getRelation('questions'))
+            : $this->answerStates->historicalRead($student->institution_id, $attempt, $assessment->getRelation('questions')));
 
         return $attempt;
     }

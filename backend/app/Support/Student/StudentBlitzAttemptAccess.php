@@ -61,6 +61,12 @@ final class StudentBlitzAttemptAccess
     }
 
     /** @return array{topic: Topic, assessment: Assessment, blitz: BlitzTask} */
+    public function shareBlitzForSubmit(User $student, Assessment $authorized): array
+    {
+        return $this->lockBlitzRows($student, $authorized, exclusive: false);
+    }
+
+    /** @return array{topic: Topic, assessment: Assessment, blitz: BlitzTask} */
     private function lockBlitzRows(User $student, Assessment $authorized, bool $exclusive): array
     {
         $topic = Topic::query()->where('institution_id', $student->institution_id)

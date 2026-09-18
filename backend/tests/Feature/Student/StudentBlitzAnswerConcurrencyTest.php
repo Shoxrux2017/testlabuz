@@ -35,11 +35,19 @@ class StudentBlitzAnswerConcurrencyTest extends TestCase
                 $this->assertSame($expectedFailure, $results['second']['body']['code']);
             }
             foreach ([$results['second'], ...($scenario === 'terminal' ? [] : [$results['first']])] as $result) {
-                $this->assertSame([
+                $expectedLocks = [
                     ['table' => 'topics', 'mode' => 'share'], ['table' => 'assessments', 'mode' => 'share'],
                     ['table' => 'blitz_tasks', 'mode' => 'share'], ['table' => 'assessment_attempts', 'mode' => 'update'],
                     ['table' => 'questions', 'mode' => 'share'], ['table' => 'attempt_answers', 'mode' => 'update'],
-                ], $result['locks']);
+                ];
+                if ($scenario === 'deadline' && $result['status'] === 409) {
+                    array_push($expectedLocks,
+                        ['table' => 'assessments', 'mode' => 'update'],
+                        ['table' => 'blitz_tasks', 'mode' => 'update'],
+                        ['table' => 'assessment_attempts', 'mode' => 'update'],
+                    );
+                }
+                $this->assertSame($expectedLocks, $result['locks']);
             }
             $firstExpected = match ($scenario) {
                 'clear-last' => [], 'terminal' => $ids['initial_options'],
@@ -51,6 +59,14 @@ class StudentBlitzAnswerConcurrencyTest extends TestCase
             if ($scenario === 'terminal') {
                 $this->assertSame(AssessmentAttemptStatus::Submitted, $attempt->status);
                 $this->assertSame('2026-09-17 12:01:00', $attempt->finalized_at->format('Y-m-d H:i:s'));
+            } elseif ($scenario === 'deadline') {
+                $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+                $this->assertSame(array_diff_key($attemptBefore, $transitionFields), array_diff_key($attempt->getAttributes(), $transitionFields));
+                $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->status);
+                $this->assertNull($attempt->submitted_at);
+                $this->assertEquals($attempt->deadline_at, $attempt->finalized_at);
+                $this->assertEquals($attempt->deadline_at, $attempt->locked_at);
+                $this->assertSame('timeout_auto_submit', $attempt->finalization_reason->value);
             } else {
                 $this->assertSame($attemptBefore, $attempt->getAttributes());
             }

@@ -5,14 +5,14 @@ namespace App\Actions\Student;
 use App\Enums\AssessmentType;
 use App\Models\User;
 use App\Support\Student\StudentAttemptAnswerMutationResult;
-use App\Support\Student\StudentAttemptAnswerTarget;
+use App\Support\Student\StudentAttemptTarget;
 use Illuminate\Http\UploadedFile;
 use LogicException;
 
 final class SaveStudentAttemptAnswer
 {
     public function __construct(
-        private readonly StudentAttemptAnswerTarget $target,
+        private readonly StudentAttemptTarget $target,
         private readonly SaveStudentHomeworkAttemptAnswer $homeworkAnswer,
         private readonly SaveStudentHomeworkFileAnswer $homeworkFile,
         private readonly SaveStudentBlitzAttemptAnswer $blitzAnswer,
