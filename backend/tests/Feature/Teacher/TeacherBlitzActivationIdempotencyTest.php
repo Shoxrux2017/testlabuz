@@ -183,7 +183,8 @@ class TeacherBlitzActivationIdempotencyTest extends TestCase
         try {
             app(ActivateTeacherBlitz::class)($teacher, $assessment->id, $key);
             $this->fail('A completed activation must not replay over a Blitz without activation history.');
-        } catch (LogicException) {
+        } catch (LogicException $exception) {
+            $this->assertSame('Completed Blitz activation requires persisted activation history.', $exception->getMessage());
             $this->assertSame($before, $this->activationSnapshot($assessment));
             $this->assertSame($recordBefore, IdempotencyRecord::query()->sole()->getAttributes());
         }

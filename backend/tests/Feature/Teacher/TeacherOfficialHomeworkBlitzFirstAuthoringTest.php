@@ -38,6 +38,7 @@ class TeacherOfficialHomeworkBlitzFirstAuthoringTest extends TestCase
         $this->studentPost($student, '/api/v1/student/homework/'.$homework->id.'/attempts', '')->assertCreated();
         $this->blitzJson($teacher, 'POST', '/api/v1/teacher/assessments/'.$homework->id.'/questions',
             $this->homeworkQuestionPayload(2))->assertConflict()->assertJsonPath('code', 'result_pair_locked');
+        $this->assertSame(1, Question::query()->where('assessment_id', $homework->id)->count());
     }
 
     #[DataProvider('existingQuestionMutations')]
@@ -57,6 +58,12 @@ class TeacherOfficialHomeworkBlitzFirstAuthoringTest extends TestCase
         };
 
         $response->assertOk()->assertJsonPath('data.id', $homework->id);
+        $persisted = Question::query()->where('assessment_id', $homework->id)->orderBy('position')->get(['id', 'prompt']);
+        match ($mutation) {
+            'update' => $this->assertSame('Is the updated statement correct?', $persisted->firstWhere('id', $first->id)?->prompt),
+            'reorder' => $this->assertSame([$second->id, $first->id], $persisted->pluck('id')->all()),
+            'delete' => $this->assertSame([$first->id], $persisted->pluck('id')->all()),
+        };
     }
 
     /** @return array<string, array{string}> */
