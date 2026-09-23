@@ -13,6 +13,7 @@ use App\Exceptions\Teacher\TaskArchivedException;
 use App\Exceptions\Teacher\TaskClosedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Assessment;
+use App\Models\BlitzTask;
 use App\Models\IdempotencyRecord;
 use App\Models\User;
 use App\Support\Idempotency\IdempotencyGuard;
@@ -46,13 +47,13 @@ final class ActivateTeacherBlitz
             $replay = $this->idempotency->completedReplay($teacher, $operation, $idempotencyKey, $fingerprint);
 
             if ($replay !== null) {
-                return $this->replay($teacher, $assessment, $replay);
+                return $this->replay($teacher, $assessment, $blitz, $replay);
             }
 
             $claim = $this->idempotency->claim($teacher, $operation, $idempotencyKey, $fingerprint);
 
             if (! $claim->new) {
-                return $this->replay($teacher, $assessment, $claim->record);
+                return $this->replay($teacher, $assessment, $blitz, $claim->record);
             }
 
             if ($blitz->status === BlitzStatus::Active) {
@@ -113,8 +114,15 @@ final class ActivateTeacherBlitz
         });
     }
 
-    private function replay(User $teacher, Assessment $assessment, IdempotencyRecord $record): Assessment
+    private function replay(User $teacher, Assessment $assessment, BlitzTask $blitz, IdempotencyRecord $record): Assessment
     {
+        if (! in_array($blitz->status, [BlitzStatus::Active, BlitzStatus::Closed, BlitzStatus::Archived], true)
+            || $blitz->activated_at === null
+            || $blitz->activated_by_user_id === null
+            || $blitz->timer_start_mode_snapshot === null) {
+            throw new LogicException('Completed Blitz activation requires persisted activation history.');
+        }
+
         if ($record->result_resource_type !== 'blitz'
             || $record->result_resource_id !== $assessment->id
             || $record->response_status !== 200) {
