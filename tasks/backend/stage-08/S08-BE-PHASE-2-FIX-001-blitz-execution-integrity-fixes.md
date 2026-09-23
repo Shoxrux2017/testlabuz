@@ -89,6 +89,9 @@ public API shape, error code, route, schema or unrelated behavior:
   (Students receive these IDs; time-ordered IDs reveal authoring order and thus the key).
 - Every other model keeps its current UUID generation.
 - Wire format, validation (`uuid` rule), answer persistence and display ordering are unchanged.
+- Do not use Laravel's `HasVersion4Uuids`: it generates `Str::orderedUuid()` (timestamp-first),
+  which carries the version-4 bits but is still ordered by creation time and would reintroduce the
+  leak. The attacker-style test, not only a version check, must guard this.
 
 ### 5.2 `P2-1` — official Homework authoring under a Blitz-first pair lock
 
@@ -121,6 +124,11 @@ In `TeacherQuestionMutationAccess::lock()`, for a Homework whose official pair h
 - All other callers keep calling without `$dueAt`.
 - The progress guard stays: if the same Attempt is still due + `in_progress` in the next
   snapshot, throw the existing `LogicException`.
+- Accepted consequence (review note, 2026-09-23): with the DB clock ahead of the app clock by Δ,
+  a snapshot-driven reconciliation may finalize other in-progress Attempts of the same Blitz up to
+  Δ before their app-clock deadline. Writes stay serialized by the existing locks, persisted
+  `finalized_at`/`locked_at` stay `deadline_at`, and the only artefacts are Δ-bounded `updated_at` /
+  `closed_at` orderings that nothing relies on today.
 
 ### 5.4 `P3-2` — activation replay fails closed
 
@@ -188,8 +196,10 @@ queries removed or the EXISTS query added by 5.5.
       result-pair PUT still returns `409 result_pair_locked`.
 - [ ] Homework with its own Attempts under a locked pair still returns `409 result_pair_locked`;
       an unexplained lock (no Attempts on either side) still returns `409 result_pair_locked`.
-- [ ] A final Student read and a Teacher monitoring read with the DB clock ahead of the app clock
-      at the deadline return `200` with the Attempt finalized at exactly `deadline_at`; no 500.
+- [ ] With the DB clock ahead of the app clock at the deadline no read returns HTTP 500: the
+      Student active list returns `200` without the timed-out Blitz, the Student detail returns the
+      existing `409 blitz_time_expired`, Teacher monitoring returns `200` with the Attempt finalized,
+      and `finalized_at = locked_at = deadline_at`.
 - [ ] The progress guard still throws the exact `LogicException` for a truly repeated due Attempt.
 - [ ] Activation replay against `draft` / `scheduled` Blitz or missing activation evidence returns
       `500 server_error` with zero mutation; valid replays unchanged.
