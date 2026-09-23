@@ -42,7 +42,7 @@ final class ReadStudentBlitz
 
         $reconciled = [];
         do {
-            [$assessments, $due] = $this->snapshots->read(function (CarbonImmutable $snapshotAt) use ($student, $blitzId): array {
+            [$assessments, $due, $dueAt] = $this->snapshots->read(function (CarbonImmutable $snapshotAt) use ($student, $blitzId): array {
                 $assessments = $blitzId === null
                     ? $this->access->activeQuery($student, $snapshotAt)->get()
                     : $this->access->readQuery($student)->whereKey($blitzId)->get();
@@ -63,7 +63,7 @@ final class ReadStudentBlitz
                     }
                 }
                 if ($due !== []) {
-                    return [new Collection, $due];
+                    return [new Collection, $due, $snapshotAt];
                 }
 
                 $eligible = new Collection;
@@ -97,7 +97,7 @@ final class ReadStudentBlitz
                     $eligible->push($assessment);
                 }
 
-                return [$eligible, []];
+                return [$eligible, [], $snapshotAt];
             });
             if ($due === []) {
                 return $assessments;
@@ -107,7 +107,7 @@ final class ReadStudentBlitz
             }
             $reconciled += $due;
             foreach (array_unique($due) as $assessmentId) {
-                ($this->finalizeTimeouts)($student->institution_id, $assessmentId);
+                ($this->finalizeTimeouts)($student->institution_id, $assessmentId, $dueAt);
             }
         } while (true);
     }

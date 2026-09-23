@@ -7,13 +7,14 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Student\Concerns\RevertsBlitzAttemptConcurrently;
 use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\Feature\Teacher\Concerns\BuildsTeacherBlitzMonitoringContext;
 use Tests\TestCase;
 
 class TeacherBlitzMonitoringTimeoutReconciliationTest extends TestCase
 {
-    use BuildsTeacherBlitzMonitoringContext, UsesBlitzReadSnapshot;
+    use BuildsTeacherBlitzMonitoringContext, RevertsBlitzAttemptConcurrently, UsesBlitzReadSnapshot;
 
     protected function setUp(): void
     {
@@ -143,7 +144,7 @@ class TeacherBlitzMonitoringTimeoutReconciliationTest extends TestCase
         }
     }
 
-    public function test_reconciliation_without_progress_fails_instead_of_looping(): void
+    public function test_database_clock_ahead_of_app_clock_at_deadline_reconciles_at_the_snapshot_instant(): void
     {
         [$student, $assessment, $teacher] = $this->monitoringContext();
         $attempt = $this->studentBlitzAttempt($assessment, $student);
@@ -157,7 +158,37 @@ class TeacherBlitzMonitoringTimeoutReconciliationTest extends TestCase
                 $this->travelTo($attempt->deadline_at);
             }
             if (str_contains($query->sql, 'AS snapshot_at')) {
+                // The database clock observed the deadline; the app clock is still one second behind.
                 $this->travelTo($attempt->deadline_at->copy()->subSecond());
+            }
+        });
+        try {
+            $this->monitor($teacher, $assessment)->assertOk()
+                ->assertJsonPath('data.students.0.status', 'finalized')
+                ->assertJsonPath('data.students.0.finalization_reason', 'timeout_auto_submit');
+            $this->assertSame(2, $snapshots);
+            $this->assertTrue($attempt->fresh()->finalized_at->equalTo($attempt->deadline_at));
+            $this->assertTrue($attempt->fresh()->locked_at->equalTo($attempt->deadline_at));
+        } finally {
+            DB::connection()->setEventDispatcher($dispatcher);
+        }
+    }
+
+    public function test_reconciliation_without_progress_fails_instead_of_looping(): void
+    {
+        [$student, $assessment, $teacher] = $this->monitoringContext();
+        $attempt = $this->studentBlitzAttempt($assessment, $student);
+        $this->travelTo($attempt->deadline_at->copy()->subSecond());
+        $snapshots = 0;
+        $dispatcher = DB::connection()->getEventDispatcher();
+        DB::connection()->setEventDispatcher(clone $dispatcher);
+        DB::listen(function (QueryExecuted $query) use (&$snapshots, $attempt): void {
+            if (str_starts_with($query->sql, 'SET TRANSACTION')) {
+                $snapshots++;
+                $this->travelTo($attempt->deadline_at);
+                if ($snapshots === 2) {
+                    $this->revertAttemptToInProgressConcurrently($attempt);
+                }
             }
         });
         $this->withoutExceptionHandling();

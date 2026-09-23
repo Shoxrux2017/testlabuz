@@ -9,15 +9,20 @@ use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\BlitzTask;
 use App\Support\Assessment\BlitzAttemptFinalizer;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 final class FinalizeTimedOutBlitzAttempts
 {
     public function __construct(private readonly BlitzAttemptFinalizer $finalizer) {}
 
-    public function __invoke(string $institutionId, string $assessmentId): int
+    /**
+     * $dueAt is the instant a final read snapshot observed due Attempts; deciding no earlier keeps
+     * database-clock reads and app-clock reconciliation consistent.
+     */
+    public function __invoke(string $institutionId, string $assessmentId, ?CarbonInterface $dueAt = null): int
     {
-        return DB::transaction(function () use ($institutionId, $assessmentId): int {
+        return DB::transaction(function () use ($institutionId, $assessmentId, $dueAt): int {
             $assessment = Assessment::query()
                 ->where('institution_id', $institutionId)
                 ->whereKey($assessmentId)
@@ -35,6 +40,9 @@ final class FinalizeTimedOutBlitzAttempts
                 ->lockForUpdate()
                 ->first();
             $observedAt = now();
+            if ($dueAt !== null && $dueAt->gt($observedAt)) {
+                $observedAt = $dueAt;
+            }
 
             if ($blitz === null || $blitz->status !== BlitzStatus::Active) {
                 return 0;

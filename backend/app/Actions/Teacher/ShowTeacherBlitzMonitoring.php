@@ -45,8 +45,8 @@ final class ShowTeacherBlitzMonitoring
 
         $reconciled = [];
         do {
-            [$projection, $due] = $this->snapshots->read(
-                fn (CarbonImmutable $snapshotAt): array => $this->read($teacher, $authorized->id, $snapshotAt),
+            [$projection, $due, $dueAt] = $this->snapshots->read(
+                fn (CarbonImmutable $snapshotAt): array => [...$this->read($teacher, $authorized->id, $snapshotAt), $snapshotAt],
             );
             if ($due === []) {
                 return $projection;
@@ -55,7 +55,7 @@ final class ShowTeacherBlitzMonitoring
                 throw new LogicException('Blitz timeout reconciliation made no progress between final snapshots.');
             }
             $reconciled += $due;
-            ($this->finalizeTimeouts)($teacher->institution_id, $authorized->id);
+            ($this->finalizeTimeouts)($teacher->institution_id, $authorized->id, $dueAt);
         } while (true);
     }
 

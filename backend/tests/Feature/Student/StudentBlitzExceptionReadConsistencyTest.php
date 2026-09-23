@@ -11,13 +11,14 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Student\Concerns\BuildsBlitzExceptionContext;
+use Tests\Feature\Student\Concerns\RevertsBlitzAttemptConcurrently;
 use Tests\Feature\Student\Concerns\RunsBlitzExceptionWorkers;
 use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\TestCase;
 
 class StudentBlitzExceptionReadConsistencyTest extends TestCase
 {
-    use BuildsBlitzExceptionContext, RunsBlitzExceptionWorkers, UsesBlitzReadSnapshot;
+    use BuildsBlitzExceptionContext, RevertsBlitzAttemptConcurrently, RunsBlitzExceptionWorkers, UsesBlitzReadSnapshot;
 
     protected function setUp(): void
     {
@@ -202,7 +203,8 @@ class StudentBlitzExceptionReadConsistencyTest extends TestCase
         $this->assertSame(0, DB::transactionLevel());
     }
 
-    public function test_repeated_due_attempt_after_reconciliation_fails_instead_of_looping(): void
+    #[DataProvider('readPaths')]
+    public function test_database_clock_ahead_of_app_clock_at_deadline_reconciles_at_the_snapshot_instant(bool $list): void
     {
         [$student, $assessment, , , $replacement] = $this->replacementContext();
         $this->travelTo($replacement->deadline_at->copy()->subSecond());
@@ -215,8 +217,37 @@ class StudentBlitzExceptionReadConsistencyTest extends TestCase
                 $this->travelTo($replacement->deadline_at);
             }
             if (str_contains($query->sql, 'AS snapshot_at')) {
-                // Simulate a reconciler clock unable to advance past the observed due boundary.
+                // The database clock observed the deadline; the app clock is still one second behind.
                 $this->travelTo($replacement->deadline_at->copy()->subSecond());
+            }
+        });
+        try {
+            $response = $this->studentBlitzRequest($student, 'GET', '/api/v1/student/blitz/'.($list ? 'active' : $assessment->id));
+            $list ? $response->assertOk()->assertJsonCount(0, 'data') : $response->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
+            $this->assertSame(2, $snapshots);
+            $finalized = $replacement->fresh();
+            $this->assertSame('timeout_auto_submit', $finalized->finalization_reason->value);
+            $this->assertTrue($replacement->deadline_at->equalTo($finalized->finalized_at));
+            $this->assertTrue($replacement->deadline_at->equalTo($finalized->locked_at));
+        } finally {
+            DB::connection()->setEventDispatcher($dispatcher);
+        }
+    }
+
+    public function test_repeated_due_attempt_after_reconciliation_fails_instead_of_looping(): void
+    {
+        [$student, $assessment, , , $replacement] = $this->replacementContext();
+        $this->travelTo($replacement->deadline_at->copy()->subSecond());
+        $snapshots = 0;
+        $dispatcher = DB::connection()->getEventDispatcher();
+        DB::connection()->setEventDispatcher(clone $dispatcher);
+        DB::listen(function (QueryExecuted $query) use (&$snapshots, $replacement): void {
+            if (str_starts_with($query->sql, 'SET TRANSACTION')) {
+                $snapshots++;
+                $this->travelTo($replacement->deadline_at);
+                if ($snapshots === 2) {
+                    $this->revertAttemptToInProgressConcurrently($replacement);
+                }
             }
         });
         $this->withoutExceptionHandling();
