@@ -4205,20 +4205,28 @@ After mandatory authorization, a valid completed same-key/same-fingerprint resul
 
 Authorization, active lifecycle and applicable timing requirements remain mandatory.
 
+A selected terminal Attempt with status `timed_out_finalized` answers `409 blitz_time_expired` (amended
+2026-09-23, `S08-BE-PHASE-2-FIX-002`), so the code does not depend on whether the Scheduler or the request path
+finalized it first. The only exception is `start_normal` for a Student with an approved exception, which keeps
+`409 attempts_exhausted` for any terminal #1.
+
 | Intent | Current own state/capacity | Exact result |
 |---|---|---|
 | `start_normal` | No #1 and all preconditions pass | Create #1; `201`. |
 | `start_normal` | #1 is in progress and editable | Same #1; `200`, no new Attempt or timer reset. |
 | `start_normal` | In-progress #1 is due | Authoritative timeout reconciliation when the owning finalization contract is available; then `409 blitz_time_expired`, never stale editable state. |
-| `start_normal` | #1 is terminal | `409 attempts_exhausted`. Replacement capacity never reinterprets this intent or creates #2. |
+| `start_normal` | #1 is terminal with status `timed_out_finalized` and no approved exception exists | `409 blitz_time_expired`. No new Attempt. |
+| `start_normal` | #1 is otherwise terminal, or an approved exception exists | `409 attempts_exhausted`. Replacement capacity never reinterprets this intent or creates #2. |
 | `resume` | Exact own target is in progress and editable | That exact Attempt; `200`, no creation, reset or switch. |
 | `resume` | Exact in-progress target is due | Canonical deadline reconciliation; then `409 blitz_time_expired`. |
-| `resume` | Exact own target is already terminal, including valid later checking history | `409 attempt_not_editable`. |
+| `resume` | Exact own target is terminal with status `timed_out_finalized` | `409 blitz_time_expired`. |
+| `resume` | Exact own target is otherwise terminal, including valid later checking history | `409 attempt_not_editable`. |
 | `resume` | Target belongs to another Student, Blitz or Institution, or is otherwise outside allowed scope | Privacy-safe `404 resource_not_found`. |
 | `start_replacement` | Valid unused approved exception capacity; all replacement preconditions pass | Create #2; `201`. |
 | `start_replacement` | Own #2 is in progress and editable | Same #2; `200`, no #3 or timer reset. |
 | `start_replacement` | In-progress #2 is due | Canonical timeout reconciliation; then `409 blitz_time_expired`. |
-| `start_replacement` | #2 is consumed and terminal | `409 attempts_exhausted`. |
+| `start_replacement` | #2 is terminal with status `timed_out_finalized` | `409 blitz_time_expired`. |
+| `start_replacement` | #2 is consumed and otherwise terminal | `409 attempts_exhausted`. |
 | `start_replacement` | Otherwise structurally valid history has no approved exception/available capacity | `409 attempts_exhausted`. |
 | `start_replacement` | Existing exception graph/capacity is invalid for replacement | `409 blitz_attempt_exception_not_allowed`, preserving the invariant/public-error split. |
 
