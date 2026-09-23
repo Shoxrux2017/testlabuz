@@ -144,6 +144,29 @@ class TeacherBlitzMonitoringTimeoutReconciliationTest extends TestCase
         }
     }
 
+    public function test_poll_without_due_attempts_takes_no_row_locks(): void
+    {
+        [$student, $assessment, $teacher] = $this->monitoringContext();
+        $attempt = $this->studentBlitzAttempt($assessment, $student);
+        $this->travelTo($attempt->deadline_at->copy()->subSecond());
+        $lockingQueries = [];
+        $dispatcher = DB::connection()->getEventDispatcher();
+        DB::connection()->setEventDispatcher(clone $dispatcher);
+        DB::listen(function (QueryExecuted $query) use (&$lockingQueries): void {
+            if (preg_match('/\bfor (update|share)\b/i', $query->sql) === 1) {
+                $lockingQueries[] = $query->sql;
+            }
+        });
+        try {
+            $this->monitor($teacher, $assessment)->assertOk()->assertJsonPath('data.students.0.status', 'in_progress');
+        } finally {
+            DB::connection()->setEventDispatcher($dispatcher);
+        }
+
+        $this->assertSame([], $lockingQueries);
+        $this->assertSame('in_progress', $attempt->fresh()->status->value);
+    }
+
     public function test_database_clock_ahead_of_app_clock_at_deadline_reconciles_at_the_snapshot_instant(): void
     {
         [$student, $assessment, $teacher] = $this->monitoringContext();
