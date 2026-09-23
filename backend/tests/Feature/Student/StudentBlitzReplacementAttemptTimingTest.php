@@ -5,6 +5,7 @@ namespace Tests\Feature\Student;
 use App\Actions\Blitz\FinalizeTimedOutBlitzAttempts;
 use App\Actions\Teacher\CloseTeacherBlitz;
 use App\Models\AssessmentAttempt;
+use App\Models\IdempotencyRecord;
 use App\Models\InstitutionSetting;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -21,6 +22,31 @@ class StudentBlitzReplacementAttemptTimingTest extends TestCase
     {
         parent::setUp();
         $this->travelTo(Carbon::parse('2026-09-17 12:00:00 UTC'));
+    }
+
+    #[DataProvider('timerModes')]
+    public function test_new_start_requests_on_a_timed_out_replacement_return_time_expired_without_a_third_attempt(string $mode): void
+    {
+        [$student, $assessment, , , $replacement] = $this->replacementContext($mode);
+        $this->travelTo($replacement->deadline_at);
+        $this->assertSame(1, app(FinalizeTimedOutBlitzAttempts::class)($student->institution_id, $assessment->id));
+        $frozen = $replacement->fresh()->getAttributes();
+        $claimsBefore = IdempotencyRecord::query()->count();
+
+        $this->startStudentBlitz($student, $assessment, intent: 'resume', attemptId: $replacement->id)
+            ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
+        $this->startStudentBlitz($student, $assessment, intent: 'start_replacement')
+            ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
+
+        $this->assertSame($frozen, $replacement->fresh()->getAttributes());
+        $this->assertSame(2, AssessmentAttempt::query()->where('assessment_id', $assessment->id)
+            ->where('student_id', $student->id)->count());
+        $this->assertSame($claimsBefore, IdempotencyRecord::query()->count());
+    }
+
+    public static function timerModes(): array
+    {
+        return [['synchronized'], ['individual']];
     }
 
     #[DataProvider('replacementWindows')]
