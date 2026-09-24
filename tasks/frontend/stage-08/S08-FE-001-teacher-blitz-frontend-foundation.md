@@ -11,13 +11,13 @@
 | Implementation type | `Flutter Teacher Blitz typed client/read foundation + Topic section + read-only detail routing` |
 | Depends on | `S08-BE-001…010 Accepted / Delivered` **and** `S08-BE-PHASE-2 = PASS` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
-| Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` after Backend Phase 2 PASS and immediately before Codex execution |
+| Runtime implementation baseline | Re-check/freeze current `origin/main` (at or after `1c56cde`) immediately before implementation starts |
 | Backend contract authority at execution | Delivered Stage 8 backend on audited `main` after Backend Phase 2 PASS |
-| Current readiness gate | `Required: ChatGPT revalidates this contract and records current readiness as Approved` |
+| Current readiness gate | `Approved — revalidated 2026-09-24 on main 1c56cde after S08-BE-PHASE-2 run #2 PASS (STAGE_08_TASK_INDEX §17); corrections marked "revalidation 2026-09-24"` |
 | Flutter toolchain | Use the repository's current FVM-pinned Flutter version at implementation time |
-| Implementation Readiness Gate | `PASS as planning contract`; execution blocked until Backend Phase 2 PASS + current ChatGPT readiness approval |
-| Verification | `Codex — focused frontend verification only` |
-| Delivery execution | `Project Owner` |
+| Implementation Readiness Gate | `PASS` — Backend Phase 2 PASS recorded; current readiness Approved |
+| Verification | `Implementer (Claude, from 2026-09-23) — focused frontend verification only` |
+| Delivery execution | `Implementer opens the branch/commits/PR; Project Owner reviews and merges` |
 | Frontend block checkpoint | `S08-FE-PHASE-2` after `S08-FE-001…006` are `Accepted / Delivered` |
 | Blocks | `S08-FE-002` |
 
@@ -289,8 +289,8 @@ It must send:
 topic_id = current Topic ID
 ```
 
-and may optionally also send the confirmed Topic Group ID if the final delivered
-backend/client architecture cleanly supports it.
+FE-001 does not send `group_id` (revalidation 2026-09-24: the delivered backend accepts it, but
+the Topic filter alone is authoritative and keeps the request deterministic).
 
 It must **not** send:
 
@@ -519,7 +519,8 @@ Create a full read model equivalent to:
 TeacherBlitz
 ```
 
-Required fields:
+Required fields (revalidation 2026-09-24: `description` is a nullable String; `title` and
+`studentInstructions` are non-blank Strings, as in the Teacher Homework DTO):
 
 ```text
 id
@@ -660,9 +661,6 @@ row.topic_id == requested Topic ID
 
 case-insensitively.
 
-If the list request also includes a known Group ID, every row must likewise match
-that Group ID.
-
 A malformed successful list payload becomes:
 
 ```text
@@ -674,6 +672,11 @@ through the existing failure boundary.
 ---
 
 # 16. Full Blitz DTO Exact Keys
+
+`scheduled_at` is `timestamptz(6)`: the backend serializes it with a `.uuuuuu` fraction when
+the stored instant has a non-zero fraction (`InstitutionBlitzScheduledAt`), for example
+`2026-09-18T04:00:00.123456Z`. The existing UTC parser accepts this. Every other timestamp is
+whole-second `YYYY-MM-DDTHH:MM:SSZ`.
 
 Expected exact full resource keys:
 
@@ -806,7 +809,7 @@ closedAt = null
 archivedAt = null
 ```
 
-`scheduleAt` may be:
+`scheduledAt` may be:
 
 ```text
 null
@@ -1175,7 +1178,7 @@ Require:
 200
 ```
 
-Parse exact:
+Parse the exact `{"data": {...}}` envelope (as `TeacherHomeworkDetailDto`) into:
 
 ```text
 TeacherBlitzDetailDto
@@ -1610,8 +1613,14 @@ Builder:
 authoring = false
 ```
 
-Therefore the read-only route is available on both supported desktop and mobile
-Teacher surfaces.
+`authoring = false` alone does not make the route reachable (revalidation 2026-09-24). The
+implementation must also add the Blitz detail path predicate to:
+
+- `AppRoutePaths.isTeacherApprovedLocation` (desktop approval);
+- the mobile Teacher allowlist in `_authRedirect` (today Topic detail and Homework detail only);
+- `_keepsLocationDuringBootstrap` for desktop and mobile, so a deep link survives bootstrap.
+
+Only then is the read-only route available on both supported desktop and mobile Teacher surfaces.
 
 Do not add authoring routes in FE-001.
 
@@ -1648,7 +1657,9 @@ Update Teacher approved-location checks so a valid Blitz detail route survives:
 
 Query/fragment remains unsupported.
 
-Malformed nested routes must fail through existing TechnicalRoot-safe behavior.
+Malformed Blitz paths, or any query/fragment, redirect an authenticated Teacher to the Teacher
+workspace without a Blitz GET (existing Homework behavior); during bootstrap they fall back to
+`/`.
 
 Do not weaken other role/device routing.
 
@@ -1809,7 +1820,7 @@ scheduled time / Not scheduled
 If result-pair state is confirmed and:
 
 ```text
-pair.blitzAssessmentId == blitz.id
+lowercase(pair.blitzAssessmentId) == lowercase(blitz.id), only when hasConfirmedData
 ```
 
 show:
@@ -1844,7 +1855,7 @@ Do not create another result-pair repository/controller.
 
 Rules:
 
-- confirmed pair + exact Blitz ID -> show Official chip;
+- confirmed pair + case-insensitively equal Blitz ID -> show Official chip;
 - confirmed pair + different/null Blitz ID -> no Official chip;
 - pair loading/error/unconfirmed -> no Official chip;
 - do not locally infer official status from assignment mode;
@@ -1907,16 +1918,14 @@ Create:
 TeacherBlitzDetailScreen
 ```
 
-Properties:
+Property:
 
 ```text
-topicId
-blitzId
+TeacherBlitzRouteTarget target
 ```
 
-or one route target according to current screen conventions.
-
-Use a canonical `TeacherBlitzRouteTarget` for controller ownership.
+The route builder passes the canonical target and keys the screen with `ValueKey(target)`, as
+the Homework edit route does. Use the same target for controller ownership.
 
 ---
 
@@ -2372,11 +2381,13 @@ Any strict DTO failure must become:
 
 ```text
 ApiFailure.local(
-  kind: invalidResponse
+  kind: invalidResponse,
+  message: <safe generic message>
 )
 ```
 
-through existing repository/data-source patterns.
+through the existing `_mapFailures` pattern of the Teacher Homework remote data source
+(`message` is a required parameter).
 
 UI displays a safe generic load failure.
 
@@ -2489,6 +2500,12 @@ frontend/lib/app/router/app_router.dart
 
 A narrow existing shared Question-list parser extraction is allowed if necessary.
 
+Test support (revalidation 2026-09-24): add `FakeTeacherBlitzRepository` and Blitz fixtures to
+`frontend/test/features/teacher/teacher_test_support.dart` (existing fake-repository pattern;
+`teacherHomeworkQuestions()` provides an all-nine-type fixture), and add the Blitz repository
+override to full-app Topic detail tests that override repositories one by one, so no test
+reaches the real Dio client.
+
 Do not modify:
 
 ```text
@@ -2536,6 +2553,7 @@ Cover:
 
 - Draft with null schedule;
 - Draft with non-null schedule;
+- Draft with fractional `scheduled_at` (for example `2026-09-18T04:00:00.123456Z`);
 - Scheduled canonical state;
 - Active synchronized;
 - Active individual;
@@ -2796,10 +2814,17 @@ Because Topic detail and routing are changed, run directly affected tests such a
 the current equivalents of:
 
 ```text
-teacher_topic_detail_screen_test.dart
-teacher_homework_routing_screen_test.dart
-teacher_homework_section_test.dart
+test/features/teacher/teacher_topic_routing_screen_test.dart
+test/features/teacher/teacher_learning_material_screen_test.dart
+test/features/teacher/teacher_homework_routing_screen_test.dart
+test/features/teacher/teacher_homework_section_test.dart
+test/features/teacher/teacher_homework_dto_test.dart
+test/features/teacher/teacher_homework_detail_screen_test.dart
+test/router_bootstrap_test.dart
 ```
+
+(revalidation 2026-09-24: `teacher_topic_detail_screen_test.dart` does not exist; the Topic
+detail screen is exercised by the routing and learning-material screen tests.)
 
 Required:
 

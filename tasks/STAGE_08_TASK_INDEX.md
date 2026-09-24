@@ -13,13 +13,13 @@
 | Previous Stage | `Stage 7 — Closed / PASS` |
 | Previous Stage closure merge | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Current source of truth | `GitHub main — ChatGPT must re-check it before any readiness/handoff decision` |
-| Stage 8 implementation | `In progress — S08-DOC-001 and S08-BE-001…010 Accepted / Delivered; S08-BE-PHASE-2 run #1 NOT ACCEPTED; S08-BE-PHASE-2-FIX-001…003 Approved; all frontend/integration/closure tasks Prepared / Not started` |
+| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started` |
 | Detailed task contracts | `Final planning package reviewed and approved; execution remains per-task gated` |
-| Backend Phase 2 | `Run #1 on 232ebcd: NOT ACCEPTED — fix cycle FIX-001…003 (see §17)` |
+| Backend Phase 2 | `PASS — run #2 on 1c56cde (run #1 on 232ebcd NOT ACCEPTED; fixes FIX-001…003 delivered; see §17)` |
 | Frontend Phase 2 | `Not started` |
 | Integration | `Not started` |
 | Closure | `Not started` |
-| Next permitted gate | `S08-BE-PHASE-2-FIX-001…003 delivery, then refreshed S08-BE-PHASE-2` |
+| Next permitted gate | `S08-FE-001 implementation` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -34,10 +34,11 @@ designation + activation, `S08-BE-005` Student Read + Start/Resume,
 `S08-BE-006` Student Answer/File Mutation, `S08-BE-007` Finalization Engine,
 `S08-BE-008` Student Submit, `S08-BE-009` Technical Attempt Exception and
 `S08-BE-010` Teacher Monitoring are `Accepted / Delivered`.
-`S08-BE-PHASE-2` run #1 (2026-09-23, audited `232ebcd`) is `NOT ACCEPTED`; the
-focused fixes `S08-BE-PHASE-2-FIX-001…003` are `Approved`, and a refreshed
-`S08-BE-PHASE-2` verdict is required after they are delivered (see §17).
-All frontend/integration/closure tasks remain `Prepared / Not started`.
+`S08-BE-PHASE-2` run #1 (2026-09-23, audited `232ebcd`) was `NOT ACCEPTED`; the
+focused fixes `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`, and run #2
+(2026-09-24, audited `1c56cde`) is `PASS` (see §17). `S08-FE-001` was revalidated and is
+`Approved / Not started`; the other frontend/integration/closure tasks remain
+`Prepared / Not started`.
 
 All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
 reviewed and approved planning package. Their existence or historical planning
@@ -316,11 +317,11 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 | `8` | `S08-BE-008` | `Backend` | `Idempotent Student Blitz Submit + finalization races` | `DOC-001 + BE-001…007 Accepted / Delivered` | `Approved` | `Accepted` | `Delivered — PR #251, merge 2aaeccba1738fe0d1fce1d04b6e2ad9caeb65716` | `tasks/backend/stage-08/S08-BE-008-idempotent-student-blitz-submit.md` |
 | `9` | `S08-BE-009` | `Backend` | `Student-specific technical exception + replacement Attempt #2` | `DOC-001 + BE-001…008 Accepted / Delivered` | `Approved` | `Accepted` | `Delivered — PR #253, merge b93f62c92590fbb12a977393fce0f286f5421b3a` | `tasks/backend/stage-08/S08-BE-009-student-specific-blitz-attempt-exception.md` |
 | `10` | `S08-BE-010` | `Backend` | `Teacher Blitz live monitoring API` | `DOC-001 + BE-001…009 Accepted / Delivered` | `Approved` | `Accepted` | `Delivered — PR #255, merge c80c2af4d0889aaabe06dc64b3db0243bb94600c` | `tasks/backend/stage-08/S08-BE-010-teacher-blitz-monitoring-api.md` |
-| `11` | `S08-BE-PHASE-2` | `Backend review` | `Full Stage 8 backend review + full backend regression` | `BE-001…010 Accepted / Delivered` | `Approved` | `Run #1 NOT ACCEPTED — refreshed verdict pending` | `Run #1 on 232ebcd: NOT ACCEPTED — P1=1, P2=2, P3=9 + §40 memory failure (see §17)` | `tasks/backend/stage-08/S08-BE-PHASE-2-backend-block-review.md` |
-| `11a` | `S08-BE-PHASE-2-FIX-001` | `Backend fix` | `Item-ID key leak, Blitz-first Homework authoring, one decision clock, activation replay fail-closed, monitoring lock pre-check` | `Phase 2 run #1 + owner decisions D1/D2/D3/D5` | `Approved` | `Approved` | `Not started` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-001-blitz-execution-integrity-fixes.md` |
-| `11b` | `S08-BE-PHASE-2-FIX-002` | `Documentation fix` | `Start error matrix for timeout-finalized Attempts; scheduled_at precision; item-ID convention exception` | `Phase 2 run #1 + owner decisions D1/D3/D5` | `Approved` | `Approved` | `Implemented in the run #1 bookkeeping PR` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-002-start-error-and-schema-docs.md` |
-| `11c` | `S08-BE-PHASE-2-FIX-003` | `Test config fix` | `phpunit.xml memory_limit 512M for the §40 full-suite gate` | `Phase 2 run #1 + owner decision D4` | `Approved` | `Approved` | `Not started` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-003-phpunit-memory-limit.md` |
-| `12` | `S08-FE-001` | `Frontend` | `Teacher Blitz frontend foundation` | `Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-001-teacher-blitz-frontend-foundation.md` |
+| `11` | `S08-BE-PHASE-2` | `Backend review` | `Full Stage 8 backend review + full backend regression` | `BE-001…010 Accepted / Delivered` | `Approved` | `PASS` | `Run #1 on 232ebcd NOT ACCEPTED; run #2 on 1c56cde PASS — P1=0, P2=0, P3 fixed/accepted, §40 suite 2354 passed (see §17)` | `tasks/backend/stage-08/S08-BE-PHASE-2-backend-block-review.md` |
+| `11a` | `S08-BE-PHASE-2-FIX-001` | `Backend fix` | `Item-ID key leak, Blitz-first Homework authoring, one decision clock, activation replay fail-closed, monitoring lock pre-check` | `Phase 2 run #1 + owner decisions D1/D2/D3/D5` | `Approved` | `Accepted` | `Delivered — PR #260, merge 1c56cde0e2d32883866f9f68fa3445ed8232d839` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-001-blitz-execution-integrity-fixes.md` |
+| `11b` | `S08-BE-PHASE-2-FIX-002` | `Documentation fix` | `Start error matrix for timeout-finalized Attempts; scheduled_at precision; item-ID convention exception` | `Phase 2 run #1 + owner decisions D1/D3/D5` | `Approved` | `Accepted` | `Delivered — PR #258, merge edb3be86aa855fff1f87245ec367117cc9554a24` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-002-start-error-and-schema-docs.md` |
+| `11c` | `S08-BE-PHASE-2-FIX-003` | `Test config fix` | `phpunit.xml memory_limit 512M for the §40 full-suite gate` | `Phase 2 run #1 + owner decision D4` | `Approved` | `Accepted` | `Delivered — PR #259, merge 2bb5b406ae9f77ed6b1e85a2ca56bea19623fbe5` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-003-phpunit-memory-limit.md` |
+| `12` | `S08-FE-001` | `Frontend` | `Teacher Blitz frontend foundation` | `Backend Phase 2 PASS` | `Approved` | `Approved — revalidated 2026-09-24 on 1c56cde` | `Not started` | `tasks/frontend/stage-08/S08-FE-001-teacher-blitz-frontend-foundation.md` |
 | `13` | `S08-FE-002` | `Frontend` | `Teacher Blitz Builder` | `FE-001 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-002-teacher-blitz-builder.md` |
 | `14` | `S08-FE-003` | `Frontend` | `Teacher official designation, scheduling and lifecycle UX` | `FE-001…002 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-003-teacher-blitz-lifecycle-ux.md` |
 | `15` | `S08-FE-004` | `Frontend` | `Student active detail, Start/Resume/replacement and authoritative countdown` | `FE-001…003 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-004-student-active-detail-start-resume-countdown.md` |
@@ -335,8 +336,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 - `Historical planning-package contract status` records planning-time contract
   preparation/approval only. It is intentionally non-authoritative for execution.
 - `Current readiness / review status` is authoritative for task execution.
-  `S08-DOC-001` and `S08-BE-001…010` are `Accepted / Delivered`. `S08-BE-PHASE-2` run #1
-  is `NOT ACCEPTED`; `S08-BE-PHASE-2-FIX-001…003` are `Approved` (see §17).
+  `S08-DOC-001`, `S08-BE-001…010` and `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`.
+  `S08-BE-PHASE-2` is `PASS` (run #2, see §17). `S08-FE-001` is `Approved / Not started`.
   All frontend/integration/closure tasks remain `Prepared / Not started`.
 - ChatGPT changes the exact next implementation task to current `Approved` only
   after re-checking current `origin/main`, dependency delivery and the final
@@ -383,13 +384,13 @@ S08-BE-010 Accepted / Delivered
     ↓
 S08-BE-PHASE-2 run #1 NOT ACCEPTED (2026-09-23, audited 232ebcd)
     ↓
-S08-BE-PHASE-2-FIX-001…003 Approved (focused fixes; delivery pending)
+S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered (PRs #258–#260)
     ↓
-S08-BE-PHASE-2 refreshed verdict (PASS required before proceeding)
+S08-BE-PHASE-2 run #2 PASS (2026-09-24, audited 1c56cde)
     ↓
 ChatGPT re-checks current main and S08-FE-001 readiness
     ↓
-S08-FE-001 Prepared / Not started
+S08-FE-001 Approved / Not started (revalidated 2026-09-24 on 1c56cde)
     ↓
 S08-FE-002 Prepared / Not started
     ↓
@@ -646,9 +647,9 @@ Teacher observes Student execution but never writes answers for the Student.
 
 ## 11. Backend Phase 2 Gate
 
-`S08-BE-001…010` are `Accepted / Delivered`. `S08-BE-PHASE-2` run #1 was executed on
-2026-09-23 and is `NOT ACCEPTED` (§17). The next permitted gate is delivery of
-`S08-BE-PHASE-2-FIX-001…003`, then a refreshed read-only verdict; frontend work stays blocked:
+`S08-BE-001…010` are `Accepted / Delivered`. `S08-BE-PHASE-2` run #1 (2026-09-23) was
+`NOT ACCEPTED`; after `S08-BE-PHASE-2-FIX-001…003` were delivered, run #2 (2026-09-24,
+audited `1c56cde`) is `PASS` (§17). `S08-FE-001` was revalidated on `1c56cde` and released:
 
 ```text
 S08-BE-PHASE-2
@@ -934,10 +935,10 @@ Current planning-package state:
 Stage 7 closure                  = PASS
 Stage 8 decomposition            = Approved
 Stage 8 Stage status             = Approved
-Stage 8 implementation           = In progress — S08-DOC-001 and S08-BE-001…010 Accepted / Delivered; S08-BE-PHASE-2 run #1 NOT ACCEPTED; S08-BE-PHASE-2-FIX-001…003 Approved; all frontend/integration/closure tasks Prepared / Not started
+Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
 Detailed task contracts          = Final planning package reviewed and approved; execution remains per-task gated
-Current per-task readiness       = S08-DOC-001 and S08-BE-001…010 Accepted / Delivered; S08-BE-PHASE-2 run #1 NOT ACCEPTED; S08-BE-PHASE-2-FIX-001…003 Approved; all frontend/integration/closure tasks Prepared / Not started
-Backend Phase 2                  = RUN #1 NOT ACCEPTED (232ebcd) — fix cycle in progress
+Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
+Backend Phase 2                  = PASS (run #2, 1c56cde; run #1 on 232ebcd NOT ACCEPTED)
 Frontend Phase 2                 = NOT STARTED
 Integration                      = NOT STARTED
 Closure                          = NOT STARTED
@@ -947,7 +948,7 @@ STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 The next permitted workflow action is:
 
 ```text
-S08-BE-PHASE-2-FIX-001…003 delivery → refreshed S08-BE-PHASE-2 verdict
+S08-FE-001 implementation
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
@@ -1026,3 +1027,45 @@ longer recoverable; Homework authoring allowed after Blitz-first activity); focu
 FIX-001; exact §40 command once on the new main; targeted read-only re-review of the fix diff.
 Frontend (S08-FE-001) stays blocked until the refreshed verdict is PASS.
 ```
+
+### Run #2 (2026-09-24) — refreshed verdict
+
+```text
+Audited main       = 1c56cde0e2d32883866f9f68fa3445ed8232d839
+Delivered fixes    = FIX-002 + run #1 record: PR #258 (edb3be8) · FIX-003: PR #259 (2bb5b40) ·
+                     FIX-001: PR #260 (1c56cde)
+Merge integrity    = 232ebcd..1c56cde touches exactly the 24 files of #258/#259/#260
+                     (7 + 1 + 16); no merge-resolution changes
+Git state          = main == origin/main, 0/0, clean
+```
+
+| Check | Result |
+|---|---|
+| §40 `php artisan test` (exact command) | PASS — 2354 passed, 55,701 assertions, 2279 s, exit 0; no failed/skipped/incomplete/risky test (the 2 pre-existing PHPUnit notices from Stage 5 `ProtectedLearningMaterialDownloadApiTest` mocks remain, as in run #1) |
+| `pint --test` | PASS (733 files) |
+| `git diff --check 232ebcd..1c56cde` and `e0e8bad..1c56cde` | PASS |
+| P1-1 review proof rerun (sort item IDs from Start payload) | Key no longer recoverable (pairs and order random) |
+| P2-1 review proof rerun (Blitz-first) | Homework Question add `201`, Homework activation `200`, Homework replacement still `409 result_pair_locked` |
+| FIX-001 independent fresh-context review (pre-merge, identical diff) | P1 = 0, P2 = 0; three P3 notes resolved; `HasVersion4Uuids` suggestion rejected (timestamp-first ordered UUIDs would re-leak) |
+
+Evidence validity: FIX-001 changed the shared timeout reconciler, Question mutation access,
+monitoring, activation replay and two item models, so the full suite was rerun (above). Lock
+order is unchanged (one unlocked read under the held Topic lock; one lock-free monitoring
+pre-check), so the run #1 §31/§32 concurrency conclusions remain valid. No route, request,
+resource shape or schema changed.
+
+```text
+S08-BE-PHASE-2 run #2 = PASS
+P1 = 0, P2 = 0
+P3: P3-1, P3-2, P3-3 fixed (FIX-001); P3-7 documentation part fixed (FIX-002);
+    P3-4, P3-5, P3-6, P3-7 scope note, remaining P3-8, P3-9 accepted as follow-ups (decision D5)
+```
+
+### S08-FE-001 readiness revalidation (2026-09-24, main 1c56cde)
+
+Revalidated against the delivered backend and the current Flutter code: every endpoint, query
+key, resource key, envelope, enum and error status in scope matches; every named frontend
+class/helper exists; no undelivered dependency. Twelve contract corrections were applied (three
+behavior-relevant: explicit mobile allowlist + bootstrap keep-location for the Blitz detail
+route; malformed route redirects to the Teacher workspace, not TechnicalRoot; `group_id` is not
+sent). Current readiness: `Approved / Not started`.
