@@ -1,3 +1,5 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/core/network/api_error_response.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
@@ -6,6 +8,10 @@ import 'package:testlabuz_client/features/auth/application/auth_session_state.da
 import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list_query.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_list_query.dart';
@@ -29,8 +35,34 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list_quer
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_list_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_repository.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
+
+/// Mutable device surface for tests that change it after providers exist.
+///
+/// Override `appDeviceSurfaceProvider` with
+/// `(ref) => ref.watch(teacherTestSurfaceProvider)` to use it.
+final teacherTestSurfaceProvider =
+    NotifierProvider<TeacherTestSurfaceController, AppDeviceSurface>(
+      TeacherTestSurfaceController.new,
+    );
+
+class TeacherTestSurfaceController extends Notifier<AppDeviceSurface> {
+  TeacherTestSurfaceController([
+    this.initialSurface = AppDeviceSurface.desktop,
+  ]);
+
+  final AppDeviceSurface initialSurface;
+
+  @override
+  AppDeviceSurface build() => initialSurface;
+
+  void change(AppDeviceSurface surface) {
+    state = surface;
+  }
+}
 
 Future<void> flushTeacherControllers() async {
   await Future<void>.delayed(Duration.zero);
@@ -432,6 +464,122 @@ List<TeacherQuestion> teacherHomeworkQuestions() {
   ];
 }
 
+TeacherBlitzSummary teacherBlitzSummary({
+  String id = '80000000-0000-0000-0000-000000000001',
+  String topicId = '10000000-0000-0000-0000-000000000001',
+  String title = 'Equation Blitz',
+  TeacherBlitzAssignmentMode assignmentMode = TeacherBlitzAssignmentMode.group,
+  double totalPossiblePoints = 12,
+  int questionCount = 3,
+  int durationSeconds = 600,
+  DateTime? scheduledAt,
+  TeacherBlitzStatus status = TeacherBlitzStatus.draft,
+}) {
+  return TeacherBlitzSummary(
+    id: id,
+    topicId: topicId,
+    groupId: '00000000-0000-0000-0000-000000000001',
+    title: title,
+    assignmentMode: assignmentMode,
+    totalPossiblePoints: totalPossiblePoints,
+    questionCount: questionCount,
+    durationSeconds: durationSeconds,
+    scheduledAt: scheduledAt,
+    institutionTimezone: 'Asia/Tashkent',
+    status: status,
+    createdAt: DateTime.utc(2026, 9, 17, 10),
+    updatedAt: DateTime.utc(2026, 9, 17, 11),
+  );
+}
+
+TeacherBlitzList teacherBlitzList({
+  List<TeacherBlitzSummary>? items,
+  int page = 1,
+  int perPage = TeacherBlitzListQuery.defaultPerPage,
+  int total = 0,
+  int lastPage = 1,
+}) {
+  return TeacherBlitzList(
+    items: items ?? const [],
+    pagination: TeacherListPagination(
+      page: page,
+      perPage: perPage,
+      total: total,
+      lastPage: lastPage,
+    ),
+  );
+}
+
+/// A canonical Blitz whose lifecycle timestamps match [status].
+TeacherBlitz teacherBlitz({
+  String id = '80000000-0000-0000-0000-000000000001',
+  String topicId = '10000000-0000-0000-0000-000000000001',
+  String title = 'Equation Blitz',
+  String? description = 'A short timed review.',
+  String studentInstructions = 'Answer quickly and carefully.',
+  TeacherBlitzAssignmentMode assignmentMode = TeacherBlitzAssignmentMode.group,
+  List<String>? studentIds,
+  double totalPossiblePoints = 12,
+  int durationSeconds = 600,
+  DateTime? scheduledAt,
+  TeacherBlitzStatus status = TeacherBlitzStatus.draft,
+  TeacherBlitzTimerStartMode timerStartMode =
+      TeacherBlitzTimerStartMode.synchronized,
+  bool archivedBeforeActivation = false,
+  List<TeacherQuestion>? questions,
+}) {
+  final activatedAt = switch (status) {
+    TeacherBlitzStatus.draft || TeacherBlitzStatus.scheduled => null,
+    TeacherBlitzStatus.active ||
+    TeacherBlitzStatus.closed => DateTime.utc(2026, 9, 18, 4, 1),
+    TeacherBlitzStatus.archived =>
+      archivedBeforeActivation ? null : DateTime.utc(2026, 9, 18, 4, 1),
+  };
+  final closedAt = activatedAt != null && status != TeacherBlitzStatus.active
+      ? DateTime.utc(2026, 9, 18, 4, 30)
+      : null;
+  final recipients = switch (assignmentMode) {
+    TeacherBlitzAssignmentMode.group => const <String>[],
+    TeacherBlitzAssignmentMode.selectedStudents =>
+      studentIds ?? const ['60000000-0000-0000-0000-000000000001'],
+  };
+
+  return TeacherBlitz(
+    id: id,
+    topicId: topicId,
+    groupId: '00000000-0000-0000-0000-000000000001',
+    title: title,
+    description: description,
+    studentInstructions: studentInstructions,
+    assignmentMode: assignmentMode,
+    studentIds: recipients,
+    totalPossiblePoints: totalPossiblePoints,
+    durationSeconds: durationSeconds,
+    scheduledAt: scheduledAt,
+    institutionTimezone: 'Asia/Tashkent',
+    status: status,
+    timerStartModeSnapshot: activatedAt == null ? null : timerStartMode,
+    attemptPolicy: const TeacherBlitzAttemptPolicy(
+      normalAttempts: TeacherBlitzAttemptPolicy.requiredNormalAttempts,
+      maxAdditionalExceptionAttempts:
+          TeacherBlitzAttemptPolicy.requiredMaxAdditionalExceptionAttempts,
+    ),
+    activatedAt: activatedAt,
+    synchronizedEndsAt:
+        activatedAt != null &&
+            timerStartMode == TeacherBlitzTimerStartMode.synchronized
+        ? activatedAt.add(Duration(seconds: durationSeconds))
+        : null,
+    closedAt: closedAt,
+    archivedAt: status == TeacherBlitzStatus.archived
+        ? DateTime.utc(2026, 9, 18, 6)
+        : null,
+    createdAt: DateTime.utc(2026, 9, 17, 10),
+    updatedAt: DateTime.utc(2026, 9, 17, 11),
+    questions: questions ?? const [],
+  );
+}
+
 TeacherGroupListPage teacherGroupPage({
   List<TeacherGroupSummary>? groups,
   int page = 1,
@@ -730,6 +878,79 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     updateQuestionRequests.add((questionId: questionId, request: request));
     return onUpdateQuestion?.call(questionId, request) ??
         Future.value(teacherHomework());
+  }
+}
+
+class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
+  FakeTeacherBlitzRepository({this.onFetchList, this.onFetch});
+
+  Future<TeacherBlitzList> Function(
+    String topicId,
+    TeacherBlitzListQuery query,
+  )?
+  onFetchList;
+  Future<TeacherBlitz> Function(String blitzId)? onFetch;
+
+  final listRequests = <({String topicId, TeacherBlitzListQuery query})>[];
+  final fetchIds = <String>[];
+
+  @override
+  Future<TeacherBlitzList> fetchBlitzList(
+    String topicId,
+    TeacherBlitzListQuery query,
+  ) {
+    listRequests.add((topicId: topicId, query: query));
+    return onFetchList?.call(topicId, query) ??
+        Future.value(
+          teacherBlitzList(page: query.page, perPage: query.perPage),
+        );
+  }
+
+  @override
+  Future<TeacherBlitz> fetchBlitz(String blitzId) {
+    fetchIds.add(blitzId);
+    return onFetch?.call(blitzId) ?? Future.value(teacherBlitz(id: blitzId));
+  }
+}
+
+TeacherTopicResultPair teacherResultPair({
+  String topicId = '10000000-0000-0000-0000-000000000001',
+  String homeworkAssessmentId = '50000000-0000-0000-0000-000000000001',
+  String? blitzAssessmentId,
+}) {
+  return TeacherTopicResultPair(
+    id: '95000000-0000-0000-0000-000000000001',
+    topicId: topicId,
+    homeworkAssessmentId: homeworkAssessmentId,
+    blitzAssessmentId: blitzAssessmentId,
+    cohortSnapshottedAt: null,
+    lockedAt: null,
+    designatedAt: DateTime.utc(2026, 9, 17, 12),
+    createdAt: DateTime.utc(2026, 9, 17, 12),
+    updatedAt: DateTime.utc(2026, 9, 17, 12),
+  );
+}
+
+/// Read-only result-pair fake; official designation is not a Blitz read path.
+class FakeTeacherTopicResultPairRepository
+    implements TeacherTopicResultPairRepository {
+  FakeTeacherTopicResultPairRepository({this.onFetch});
+
+  Future<TeacherTopicResultPair?> Function(String topicId)? onFetch;
+  final fetchTopicIds = <String>[];
+
+  @override
+  Future<TeacherTopicResultPair?> fetchResultPair(String topicId) {
+    fetchTopicIds.add(topicId);
+    return onFetch?.call(topicId) ?? Future.value(null);
+  }
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialHomework(
+    String topicId,
+    String homeworkId,
+  ) {
+    throw StateError('Result-pair mutation is not part of Blitz reads.');
   }
 }
 

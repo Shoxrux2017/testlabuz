@@ -33,6 +33,7 @@ import '../../features/student/presentation/student_homework_detail_screen.dart'
 import '../../features/student/presentation/student_learning_workspace_screen.dart';
 import '../../features/student/presentation/student_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_learning_workspace_screen.dart';
+import '../../features/teacher/presentation/teacher_blitz_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_create_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_edit_screen.dart';
@@ -40,6 +41,7 @@ import '../../features/teacher/presentation/teacher_question_builder_screen.dart
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
+import '../../features/teacher/application/teacher_blitz_route_target.dart';
 import '../../features/teacher/application/teacher_homework_route_target.dart';
 import '../../features/teacher/application/teacher_session_key.dart';
 import 'app_route_paths.dart';
@@ -409,6 +411,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                 ],
               ),
+              GoRoute(
+                name: AppRouteNames.teacherBlitzDetail,
+                path:
+                    '${AppRoutePaths.teacherBlitzSegment}/'
+                    ':${AppRoutePaths.teacherBlitzIdParameter}',
+                builder: (context, state) {
+                  final target = TeacherBlitzRouteTarget(
+                    topicId:
+                        state.pathParameters[AppRoutePaths
+                            .teacherTopicIdParameter] ??
+                        '',
+                    blitzId:
+                        state.pathParameters[AppRoutePaths
+                            .teacherBlitzIdParameter] ??
+                        '',
+                  );
+                  return _buildTeacherDestination(
+                    TeacherBlitzDetailScreen(
+                      key: ValueKey<TeacherBlitzRouteTarget>(target),
+                      target: target,
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ],
@@ -679,7 +705,8 @@ String? _authRedirect(
     }
     if (surface == AppDeviceSurface.mobile) {
       if (AppRoutePaths.isTeacherTopicDetailPath(location) ||
-          AppRoutePaths.isTeacherHomeworkDetailPath(location)) {
+          AppRoutePaths.isTeacherHomeworkDetailPath(location) ||
+          AppRoutePaths.isTeacherBlitzDetailPath(location)) {
         return null;
       }
       if (AppRoutePaths.isTeacherHomeworkEditPath(location)) {
@@ -768,6 +795,9 @@ bool _keepsLocationDuringBootstrap(
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       (AppRoutePaths.isTeacherHomeworkDetailPath(location) &&
+          (surface == AppDeviceSurface.desktop ||
+              surface == AppDeviceSurface.mobile)) ||
+      (AppRoutePaths.isTeacherBlitzDetailPath(location) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       ((AppRoutePaths.isStudentTopicDetailPath(location) ||
