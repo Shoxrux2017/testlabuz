@@ -11,12 +11,13 @@
 | Implementation type | `Flutter desktop Teacher Blitz create/edit + assignment/duration authoring + shared nine-type Question Builder` |
 | Depends on | `S08-FE-001 Accepted / Delivered`; `S08-BE-PHASE-2 = PASS` remains valid |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
-| Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex execution |
+| Runtime implementation baseline | Re-check/freeze current `origin/main` (at or after `15508f3`) immediately before implementation starts |
 | Backend API dependency | Final delivered Stage 8 Teacher Blitz authoring + shared Question mutation API after Backend Phase 2 PASS |
 | Flutter toolchain | Use the repository's current FVM-pinned Flutter version at implementation time |
-| Implementation Readiness Gate | `PASS — planning contract`; execution remains dependency-gated |
-| Verification | `Codex — focused frontend verification only` |
-| Delivery execution | `Project Owner` |
+| Current readiness gate | `Approved — revalidated 2026-09-24 on main 15508f3 after S08-FE-001 Accepted / Delivered (STAGE_08_TASK_INDEX §17); corrections marked "revalidation 2026-09-24"` |
+| Implementation Readiness Gate | `PASS` — S08-FE-001 Accepted / Delivered; current readiness Approved |
+| Verification | `Implementer (Claude, from 2026-09-23) — focused frontend verification only` |
+| Delivery execution | `Implementer opens the branch/commits/PR; Project Owner reviews and merges` |
 | Frontend block checkpoint | `S08-FE-PHASE-2` after `S08-FE-001…006` are `Accepted / Delivered` |
 | Blocks | `S08-FE-003` |
 
@@ -327,6 +328,14 @@ TeacherQuestionConfigurationFields
 
 Do not duplicate the all-nine Question domain/configuration hierarchy.
 
+Revalidation 2026-09-24: FE-001 delivered no detail `acceptAuthoritativeBlitz` and no list
+`refreshAfterMutation`; add them per §71/§72. Test support in
+`frontend/test/features/teacher/teacher_test_support.dart` already provides
+`FakeTeacherBlitzRepository` (extend it with the new repository methods),
+`FakeTeacherTopicResultPairRepository`, `teacherResultPair()`, `teacherBlitz()` and
+`teacherTestSurfaceProvider`. The current Question editor dialog/controller are keyed by
+`TeacherHomeworkRouteTarget`, so §64's shared presentation extraction is expected.
+
 ---
 
 # 7. Existing Selected-Student Infrastructure
@@ -449,6 +458,10 @@ Blitz task created successfully.
 At implementation start inspect the delivered backend response envelope and keep
 strict parsing aligned with the accepted backend.
 
+Revalidation 2026-09-24: `TeacherBlitzController::store` returns exactly `201` with the envelope
+`{"data": <TeacherBlitzResource>, "message": "Blitz task created successfully."}`. The created
+Blitz is always `draft`. A Topic that is not `draft|active` returns `409 topic_not_editable`.
+
 If final Backend Phase 2 changed this exact public envelope, stop and return
 `BLOCKED`; do not silently broaden parser acceptance.
 
@@ -540,11 +553,14 @@ Success:
 
 with the complete authoritative Teacher Blitz resource.
 
-Do not require a human-readable success message unless the final accepted backend
-actually defines one.
+Revalidation 2026-09-24: the delivered backend does define one.
+`TeacherBlitzController::update` returns exactly `200` with the envelope
+`{"data": <TeacherBlitzResource>, "message": "Blitz task updated successfully."}`; parse it as
+strictly as Create. The message is a transport-envelope check only, never UI control flow.
 
-A strict valid `200 + authoritative resource` is sufficient update success
-evidence.
+The backend rejects an empty body and any key outside the six allowed fields (including
+`scheduled_at`) with `422`, so the no-op rule in §37/§38 must prevent those requests. A PATCH whose
+resulting values equal the current ones returns the same envelope without writing.
 
 ---
 
@@ -575,6 +591,10 @@ TeacherBlitz
 ```
 
 for a Blitz target.
+
+Revalidation 2026-09-24: all four actions return `TeacherAssessmentAuthoringResource`, which for a
+Blitz assessment renders exactly `TeacherBlitzResource`, inside `{"data": ..., "message": ...}` with
+the messages above.
 
 Do not call Blitz metadata PATCH to mutate Questions.
 
@@ -1730,6 +1750,9 @@ causes:
 
 Common auth/session failure follows existing Teacher session reconciliation.
 
+Revalidation 2026-09-24: ineligible, duplicate or missing selected Students return
+`422 validation_failed` with `errors.student_ids` (see §32).
+
 ---
 
 # 48. Edit Controller
@@ -1867,6 +1890,21 @@ official_task_requires_group_assignment
 ```
 
 Use machine codes, not human messages.
+
+Revalidation 2026-09-24 — delivered PATCH conflict matrix (`UpdateTeacherBlitz`,
+`TeacherBlitzPreparationGuard`):
+
+```text
+Blitz closed                                   -> 409 task_closed
+Blitz archived                                 -> 409 task_archived
+Blitz active, existing Attempts, or
+non-direct recipients                          -> 409 business_conflict
+Topic closed/archived                          -> 409 topic_not_editable
+official Blitz whose resulting mode is not
+group                                          -> 409 official_task_requires_group_assignment
+resulting mode/student_ids mismatch,
+ineligible or duplicate Students               -> 422 validation_failed (errors.student_ids)
+```
 
 On lifecycle conflict:
 
@@ -2317,6 +2355,11 @@ Do not locally disable Questions merely because:
 pair.lockedAt != null
 ```
 
+Revalidation 2026-09-24 — delivered Blitz Question conflict matrix
+(`TeacherQuestionMutationAccess`): Topic closed/archived → `topic_not_editable`; Blitz `active` →
+`business_conflict`; `closed` → `task_closed`; `archived` → `task_archived`. `result_pair_locked`
+and `assessment_has_no_scoreable_points` are Homework-only and never apply to a Blitz.
+
 ---
 
 # 69. Question Mutation Outcome Uncertainty
@@ -2476,7 +2519,9 @@ At minimum:
 - a Question mutation success cannot close/navigate a newer editor/session.
 
 A shared route mutation-activity lease may be reused/extracted where current
-Homework Question Builder already has a proven pattern.
+Homework Question Builder already has a proven pattern (revalidation 2026-09-24: the current
+patterns are `application/teacher_homework_route_mutation_activity.dart` and
+`application/teacher_question_mutation_activity.dart`).
 
 Do not create a global mutable singleton.
 
@@ -2663,6 +2708,9 @@ official_task_requires_group_assignment
 ```
 
 if not already present from earlier frontend stages.
+
+Revalidation 2026-09-24: all five codes above already exist in `ApiErrorCodes`; add none unless the
+implementation consumes a code that is genuinely missing.
 
 Do not duplicate constants in feature files.
 
@@ -3123,6 +3171,12 @@ Also verify:
 - malformed IDs safe;
 - FE-001 Blitz detail still desktop/mobile;
 - existing Homework routing remains unchanged.
+
+Revalidation 2026-09-24: the delivered FE-001 `teacher_blitz_routing_screen_test.dart` asserts that
+`/blitz/new` and `/blitz/<id>/edit` are malformed (helpers reject them; the Teacher is redirected to
+the workspace without a GET). FE-002 intentionally changes exactly that behavior, so update exactly
+those route-helper and redirect assertions to the new desktop/mobile behavior. `/blitz/<id>/monitoring`,
+extra segments, trailing slashes, malformed IDs and any query/fragment must stay rejected.
 
 ---
 
