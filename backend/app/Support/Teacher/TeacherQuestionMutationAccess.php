@@ -125,7 +125,8 @@ final class TeacherQuestionMutationAccess
 
         if ($task instanceof HomeworkAssignment
             && $resultPair instanceof TopicResultPair
-            && $resultPair->locked_at !== null) {
+            && $resultPair->locked_at !== null
+            && ($attempts->isNotEmpty() || ! $this->officialBlitzActivityExists($teacher, $resultPair))) {
             throw new ResultPairLockedException;
         }
 
@@ -165,5 +166,19 @@ final class TeacherQuestionMutationAccess
                     ->whereHas('blitzTask', fn (Builder $query) => $query
                         ->where('institution_id', $teacher->institution_id))))
             ->with('topic:id,institution_id,group_id,teacher_id,status');
+    }
+
+    /**
+     * A pair lock explained only by official Blitz activity leaves the unattempted Homework editable.
+     * The held Topic lock serializes official Blitz Attempt creation and Attempts are never deleted,
+     * so this read needs no row locks (which would contend with Student answer saves).
+     */
+    private function officialBlitzActivityExists(User $teacher, TopicResultPair $resultPair): bool
+    {
+        return $resultPair->blitz_assessment_id !== null
+            && AssessmentAttempt::query()
+                ->where('institution_id', $teacher->institution_id)
+                ->where('assessment_id', $resultPair->blitz_assessment_id)
+                ->exists();
     }
 }

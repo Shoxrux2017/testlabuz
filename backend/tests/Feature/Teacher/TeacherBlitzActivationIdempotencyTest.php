@@ -167,6 +167,38 @@ class TeacherBlitzActivationIdempotencyTest extends TestCase
         }
     }
 
+    #[DataProvider('impossibleReplayLifecycles')]
+    public function test_completed_replay_fails_closed_when_the_blitz_lacks_activation_history(array $lifecycle): void
+    {
+        [, $teacher, , , , , $assessment] = $this->readyBlitzActivation();
+        $key = (string) Str::uuid();
+        $this->activateBlitz($teacher, $assessment->id, $key)->assertOk();
+        BlitzTask::query()->whereKey($assessment->id)->update(array_merge([
+            'timer_start_mode_snapshot' => null, 'activated_at' => null, 'synchronized_ends_at' => null,
+            'closed_at' => null, 'archived_at' => null, 'activated_by_user_id' => null,
+        ], $lifecycle));
+        $recordBefore = IdempotencyRecord::query()->sole()->getAttributes();
+        $before = $this->activationSnapshot($assessment);
+
+        try {
+            app(ActivateTeacherBlitz::class)($teacher, $assessment->id, $key);
+            $this->fail('A completed activation must not replay over a Blitz without activation history.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Completed Blitz activation requires persisted activation history.', $exception->getMessage());
+            $this->assertSame($before, $this->activationSnapshot($assessment));
+            $this->assertSame($recordBefore, IdempotencyRecord::query()->sole()->getAttributes());
+        }
+    }
+
+    public static function impossibleReplayLifecycles(): array
+    {
+        return [
+            'draft' => [['status' => 'draft']],
+            'scheduled' => [['status' => 'scheduled', 'scheduled_at' => '2026-09-18 09:00:00']],
+            'archived without activation' => [['status' => 'archived', 'archived_at' => '2026-09-17 12:05:00']],
+        ];
+    }
+
     public static function invalidReplayMetadata(): array
     {
         return [

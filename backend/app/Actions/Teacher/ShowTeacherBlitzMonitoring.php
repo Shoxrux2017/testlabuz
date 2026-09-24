@@ -39,14 +39,14 @@ final class ShowTeacherBlitzMonitoring
     public function __invoke(User $teacher, string $blitzId): TeacherBlitzMonitoring
     {
         $authorized = $this->access->resolveBlitz($teacher, $blitzId);
-        if ($this->task($teacher, $authorized)->status === BlitzStatus::Active) {
+        if ($this->task($teacher, $authorized)->status === BlitzStatus::Active && $this->hasDueAttempt($teacher, $authorized)) {
             ($this->finalizeTimeouts)($teacher->institution_id, $authorized->id);
         }
 
         $reconciled = [];
         do {
-            [$projection, $due] = $this->snapshots->read(
-                fn (CarbonImmutable $snapshotAt): array => $this->read($teacher, $authorized->id, $snapshotAt),
+            [$projection, $due, $dueAt] = $this->snapshots->read(
+                fn (CarbonImmutable $snapshotAt): array => [...$this->read($teacher, $authorized->id, $snapshotAt), $snapshotAt],
             );
             if ($due === []) {
                 return $projection;
@@ -55,7 +55,7 @@ final class ShowTeacherBlitzMonitoring
                 throw new LogicException('Blitz timeout reconciliation made no progress between final snapshots.');
             }
             $reconciled += $due;
-            ($this->finalizeTimeouts)($teacher->institution_id, $authorized->id);
+            ($this->finalizeTimeouts)($teacher->institution_id, $authorized->id, $dueAt);
         } while (true);
     }
 
@@ -144,6 +144,16 @@ final class ShowTeacherBlitzMonitoring
                 'server_now' => $this->serialize($snapshotAt),
             ],
         ], $summary, $rows), []];
+    }
+
+    // An unlocked pre-check keeps routine polls from row-locking the class's answer saves and Submits.
+    private function hasDueAttempt(User $teacher, Assessment $assessment): bool
+    {
+        return AssessmentAttempt::query()->where('institution_id', $teacher->institution_id)
+            ->where('assessment_id', $assessment->id)
+            ->where('status', AssessmentAttemptStatus::InProgress->value)
+            ->where('deadline_at', '<=', $this->timing->now())
+            ->exists();
     }
 
     private function task(User $teacher, Assessment $assessment): BlitzTask
