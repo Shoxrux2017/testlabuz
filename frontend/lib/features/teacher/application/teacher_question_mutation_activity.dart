@@ -3,14 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/device/app_device_surface.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../domain/teacher_question_mutation.dart';
-import 'teacher_homework_route_target.dart';
+import 'teacher_question_authoring_route_target.dart';
 import 'teacher_session_key.dart';
 
 final teacherQuestionMutationActivityProvider = NotifierProvider.autoDispose
     .family<
       TeacherQuestionMutationActivityController,
       TeacherQuestionMutationActivityState,
-      TeacherHomeworkRouteTarget
+      TeacherQuestionAuthoringRouteTarget
     >(TeacherQuestionMutationActivityController.new);
 
 class TeacherQuestionMutationLease {
@@ -21,7 +21,7 @@ class TeacherQuestionMutationLease {
     required this.generation,
   });
 
-  final TeacherHomeworkRouteTarget target;
+  final TeacherQuestionAuthoringRouteTarget target;
   final TeacherSessionKey sessionKey;
   final TeacherQuestionMutationOperation operation;
   final int generation;
@@ -45,7 +45,7 @@ class TeacherQuestionMutationActivityController
     extends Notifier<TeacherQuestionMutationActivityState> {
   TeacherQuestionMutationActivityController(this.target);
 
-  final TeacherHomeworkRouteTarget target;
+  final TeacherQuestionAuthoringRouteTarget target;
   TeacherSessionKey? _activeSessionKey;
   void Function()? _releaseRetention;
   var _generation = 0;

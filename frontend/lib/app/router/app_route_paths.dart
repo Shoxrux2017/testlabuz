@@ -30,6 +30,9 @@ abstract final class AppRouteNames {
   static const teacherHomeworkEdit = 'teacher-homework-edit';
   static const teacherHomeworkQuestions = 'teacher-homework-questions';
   static const teacherBlitzDetail = 'teacher-blitz-detail';
+  static const teacherBlitzCreate = 'teacher-blitz-create';
+  static const teacherBlitzEdit = 'teacher-blitz-edit';
+  static const teacherBlitzQuestions = 'teacher-blitz-questions';
   static const student = 'student';
   static const studentTopicDetail = 'student-topic-detail';
   static const studentHomeworkDetail = 'student-homework-detail';
@@ -97,6 +100,9 @@ abstract final class AppRoutePaths {
   static const teacherHomeworkIdParameter = 'homeworkId';
   static const teacherBlitzSegment = 'blitz';
   static const teacherBlitzIdParameter = 'blitzId';
+  static const teacherBlitzCreateSegment = 'new';
+  static const teacherBlitzEditSegment = 'edit';
+  static const teacherBlitzQuestionsSegment = 'questions';
   static const teacherTopicCreate =
       '$teacher/$teacherTopicsSegment/$teacherTopicCreateSegment';
   static const teacherTopicDetail =
@@ -113,8 +119,14 @@ abstract final class AppRoutePaths {
       '$teacherHomeworkDetail/$teacherHomeworkEditSegment';
   static const teacherHomeworkQuestions =
       '$teacherHomeworkDetail/$teacherHomeworkQuestionsSegment';
+  static const teacherBlitzCreate =
+      '$teacherTopicDetail/$teacherBlitzSegment/$teacherBlitzCreateSegment';
   static const teacherBlitzDetail =
       '$teacherTopicDetail/$teacherBlitzSegment/:$teacherBlitzIdParameter';
+  static const teacherBlitzEdit =
+      '$teacherBlitzDetail/$teacherBlitzEditSegment';
+  static const teacherBlitzQuestions =
+      '$teacherBlitzDetail/$teacherBlitzQuestionsSegment';
   static const student = '/student';
   static const studentTopicsSegment = 'topics';
   static const studentTopicIdParameter = 'topicId';
@@ -418,6 +430,41 @@ abstract final class AppRoutePaths {
         _teacherBlitzIdPattern.hasMatch(segments[2]);
   }
 
+  static bool isTeacherBlitzCreatePath(String path) {
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 3 &&
+        _teacherTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == teacherBlitzSegment &&
+        segments[2] == teacherBlitzCreateSegment;
+  }
+
+  static bool isTeacherBlitzEditPath(String path) {
+    return _isTeacherBlitzChildPath(path, teacherBlitzEditSegment);
+  }
+
+  static bool isTeacherBlitzQuestionsPath(String path) {
+    return _isTeacherBlitzChildPath(path, teacherBlitzQuestionsSegment);
+  }
+
+  static bool _isTeacherBlitzChildPath(String path, String childSegment) {
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 4 &&
+        _teacherTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == teacherBlitzSegment &&
+        _teacherBlitzIdPattern.hasMatch(segments[2]) &&
+        segments[3] == childSegment;
+  }
+
   static bool isTeacherApprovedLocation(String path) {
     return path == teacher ||
         isTeacherTopicCreatePath(path) ||
@@ -427,7 +474,10 @@ abstract final class AppRoutePaths {
         isTeacherHomeworkDetailPath(path) ||
         isTeacherHomeworkEditPath(path) ||
         isTeacherHomeworkQuestionsPath(path) ||
-        isTeacherBlitzDetailPath(path);
+        isTeacherBlitzCreatePath(path) ||
+        isTeacherBlitzDetailPath(path) ||
+        isTeacherBlitzEditPath(path) ||
+        isTeacherBlitzQuestionsPath(path);
   }
 
   static String? teacherTopicIdFromPath(String path) {
@@ -463,10 +513,20 @@ abstract final class AppRoutePaths {
         segments[1] == teacherHomeworkSegment &&
         _teacherHomeworkIdPattern.hasMatch(segments[2]) &&
         segments[3] == teacherHomeworkQuestionsSegment;
+    final isBlitzCreate =
+        segments.length == 3 &&
+        segments[1] == teacherBlitzSegment &&
+        segments[2] == teacherBlitzCreateSegment;
     final isBlitzDetail =
         segments.length == 3 &&
         segments[1] == teacherBlitzSegment &&
         _teacherBlitzIdPattern.hasMatch(segments[2]);
+    final isBlitzChild =
+        segments.length == 4 &&
+        segments[1] == teacherBlitzSegment &&
+        _teacherBlitzIdPattern.hasMatch(segments[2]) &&
+        (segments[3] == teacherBlitzEditSegment ||
+            segments[3] == teacherBlitzQuestionsSegment);
 
     return isDetail ||
             isEdit ||
@@ -474,9 +534,22 @@ abstract final class AppRoutePaths {
             isHomeworkDetail ||
             isHomeworkEdit ||
             isHomeworkQuestions ||
-            isBlitzDetail
+            isBlitzCreate ||
+            isBlitzDetail ||
+            isBlitzChild
         ? segments.first
         : null;
+  }
+
+  static String? teacherBlitzIdFromPath(String path) {
+    if (!isTeacherBlitzDetailPath(path) &&
+        !isTeacherBlitzEditPath(path) &&
+        !isTeacherBlitzQuestionsPath(path)) {
+      return null;
+    }
+
+    const prefix = '$teacher/$teacherTopicsSegment/';
+    return path.substring(prefix.length).split('/')[2];
   }
 
   static String? teacherHomeworkIdFromPath(String path) {
@@ -562,6 +635,21 @@ abstract final class AppRoutePaths {
 
     return '${teacherTopicDetailLocation(topicId)}/$teacherBlitzSegment/'
         '${Uri.encodeComponent(blitzId)}';
+  }
+
+  static String teacherBlitzCreateLocation(String topicId) {
+    return '${teacherTopicDetailLocation(topicId)}/$teacherBlitzSegment/'
+        '$teacherBlitzCreateSegment';
+  }
+
+  static String teacherBlitzEditLocation(String topicId, String blitzId) {
+    return '${teacherBlitzDetailLocation(topicId, blitzId)}/'
+        '$teacherBlitzEditSegment';
+  }
+
+  static String teacherBlitzQuestionsLocation(String topicId, String blitzId) {
+    return '${teacherBlitzDetailLocation(topicId, blitzId)}/'
+        '$teacherBlitzQuestionsSegment';
   }
 
   static bool isStudentSegment(String path) {

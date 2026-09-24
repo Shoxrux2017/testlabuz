@@ -33,7 +33,10 @@ import '../../features/student/presentation/student_homework_detail_screen.dart'
 import '../../features/student/presentation/student_learning_workspace_screen.dart';
 import '../../features/student/presentation/student_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_learning_workspace_screen.dart';
+import '../../features/teacher/presentation/teacher_blitz_create_screen.dart';
 import '../../features/teacher/presentation/teacher_blitz_detail_screen.dart';
+import '../../features/teacher/presentation/teacher_blitz_edit_screen.dart';
+import '../../features/teacher/presentation/teacher_blitz_question_builder_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_create_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_edit_screen.dart';
@@ -411,22 +414,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                 ],
               ),
+              // The static `new` route must precede `:blitzId` to win the match.
+              GoRoute(
+                name: AppRouteNames.teacherBlitzCreate,
+                path:
+                    '${AppRoutePaths.teacherBlitzSegment}/'
+                    '${AppRoutePaths.teacherBlitzCreateSegment}',
+                builder: (context, state) {
+                  final topicId =
+                      state.pathParameters[AppRoutePaths
+                          .teacherTopicIdParameter] ??
+                      '';
+                  return _buildTeacherDestination(
+                    TeacherBlitzCreateScreen(
+                      key: ValueKey<String>(
+                        '${AppRouteNames.teacherBlitzCreate}:'
+                        '${topicId.toLowerCase()}',
+                      ),
+                      topicId: topicId,
+                    ),
+                    authoring: true,
+                  );
+                },
+              ),
               GoRoute(
                 name: AppRouteNames.teacherBlitzDetail,
                 path:
                     '${AppRoutePaths.teacherBlitzSegment}/'
                     ':${AppRoutePaths.teacherBlitzIdParameter}',
                 builder: (context, state) {
-                  final target = TeacherBlitzRouteTarget(
-                    topicId:
-                        state.pathParameters[AppRoutePaths
-                            .teacherTopicIdParameter] ??
-                        '',
-                    blitzId:
-                        state.pathParameters[AppRoutePaths
-                            .teacherBlitzIdParameter] ??
-                        '',
-                  );
+                  final target = _teacherBlitzRouteTarget(state);
                   return _buildTeacherDestination(
                     TeacherBlitzDetailScreen(
                       key: ValueKey<TeacherBlitzRouteTarget>(target),
@@ -434,6 +451,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
                   );
                 },
+                routes: [
+                  GoRoute(
+                    name: AppRouteNames.teacherBlitzEdit,
+                    path: AppRoutePaths.teacherBlitzEditSegment,
+                    builder: (context, state) {
+                      final target = _teacherBlitzRouteTarget(state);
+                      return _buildTeacherDestination(
+                        TeacherBlitzEditScreen(
+                          key: ValueKey<TeacherBlitzRouteTarget>(target),
+                          topicId: target.topicId,
+                          blitzId: target.blitzId,
+                        ),
+                        authoring: true,
+                      );
+                    },
+                  ),
+                  GoRoute(
+                    name: AppRouteNames.teacherBlitzQuestions,
+                    path: AppRoutePaths.teacherBlitzQuestionsSegment,
+                    builder: (context, state) {
+                      final target = _teacherBlitzRouteTarget(state);
+                      return _buildTeacherDestination(
+                        TeacherBlitzQuestionBuilderScreen(
+                          key: ValueKey<TeacherBlitzRouteTarget>(target),
+                          topicId: target.topicId,
+                          blitzId: target.blitzId,
+                        ),
+                        authoring: true,
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -533,6 +582,13 @@ Widget _buildInstitutionAdminShell(GoRouterState state, Widget child) {
   return InstitutionAdminShell(locationPath: state.uri.path, child: child);
 }
 
+TeacherBlitzRouteTarget _teacherBlitzRouteTarget(GoRouterState state) {
+  return TeacherBlitzRouteTarget(
+    topicId: state.pathParameters[AppRoutePaths.teacherTopicIdParameter] ?? '',
+    blitzId: state.pathParameters[AppRoutePaths.teacherBlitzIdParameter] ?? '',
+  );
+}
+
 Widget _buildTeacherDestination(Widget child, {bool authoring = false}) {
   return _TeacherDestinationGate(authoring: authoring, child: child);
 }
@@ -627,6 +683,16 @@ String? _authRedirect(
         return AppRoutePaths.teacherHomeworkDetailLocation(topicId, homeworkId);
       }
       if (AppRoutePaths.isTeacherHomeworkCreatePath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location)!;
+        return AppRoutePaths.teacherTopicDetailLocation(topicId);
+      }
+      if (AppRoutePaths.isTeacherBlitzEditPath(location) ||
+          AppRoutePaths.isTeacherBlitzQuestionsPath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location)!;
+        final blitzId = AppRoutePaths.teacherBlitzIdFromPath(location)!;
+        return AppRoutePaths.teacherBlitzDetailLocation(topicId, blitzId);
+      }
+      if (AppRoutePaths.isTeacherBlitzCreatePath(location)) {
         final topicId = AppRoutePaths.teacherTopicIdFromPath(location)!;
         return AppRoutePaths.teacherTopicDetailLocation(topicId);
       }
@@ -729,6 +795,20 @@ String? _authRedirect(
             ? AppRoutePaths.teacher
             : AppRoutePaths.teacherTopicDetailLocation(topicId);
       }
+      if (AppRoutePaths.isTeacherBlitzEditPath(location) ||
+          AppRoutePaths.isTeacherBlitzQuestionsPath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location);
+        final blitzId = AppRoutePaths.teacherBlitzIdFromPath(location);
+        return topicId == null || blitzId == null
+            ? AppRoutePaths.teacher
+            : AppRoutePaths.teacherBlitzDetailLocation(topicId, blitzId);
+      }
+      if (AppRoutePaths.isTeacherBlitzCreatePath(location)) {
+        final topicId = AppRoutePaths.teacherTopicIdFromPath(location);
+        return topicId == null
+            ? AppRoutePaths.teacher
+            : AppRoutePaths.teacherTopicDetailLocation(topicId);
+      }
       if (AppRoutePaths.isTeacherTopicEditPath(location)) {
         final topicId = AppRoutePaths.teacherTopicIdFromPath(location);
         return topicId == null
@@ -810,7 +890,10 @@ bool _keepsLocationDuringBootstrap(
               AppRoutePaths.isTeacherTopicEditPath(location) ||
               AppRoutePaths.isTeacherHomeworkCreatePath(location) ||
               AppRoutePaths.isTeacherHomeworkEditPath(location) ||
-              AppRoutePaths.isTeacherHomeworkQuestionsPath(location)));
+              AppRoutePaths.isTeacherHomeworkQuestionsPath(location) ||
+              AppRoutePaths.isTeacherBlitzCreatePath(location) ||
+              AppRoutePaths.isTeacherBlitzEditPath(location) ||
+              AppRoutePaths.isTeacherBlitzQuestionsPath(location)));
 }
 
 bool _canUseTeacherDestinations(UserRole role, AppDeviceSurface surface) {

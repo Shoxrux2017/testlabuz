@@ -1,7 +1,8 @@
 import '../domain/teacher_blitz.dart';
 import '../domain/teacher_topic.dart';
+import 'teacher_question_authoring_route_target.dart';
 
-class TeacherBlitzRouteTarget {
+class TeacherBlitzRouteTarget implements TeacherQuestionAuthoringRouteTarget {
   TeacherBlitzRouteTarget({required this.topicId, required this.blitzId}) {
     if (!isCanonicalTeacherTopicId(topicId)) {
       throw ArgumentError.value(
@@ -19,8 +20,12 @@ class TeacherBlitzRouteTarget {
     }
   }
 
+  @override
   final String topicId;
   final String blitzId;
+
+  @override
+  String get assessmentId => blitzId;
 
   @override
   bool operator ==(Object other) {

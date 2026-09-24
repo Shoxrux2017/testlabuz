@@ -11,6 +11,7 @@ import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_detail_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_detail_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_session_key.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 
@@ -413,6 +414,74 @@ void main() {
       },
     );
 
+    test(
+      'accepts an authoritative Blitz only for the same session and target',
+      () async {
+        final pending = Completer<TeacherBlitz>();
+        final harness = _Harness(
+          repository: FakeTeacherBlitzRepository(
+            onFetch: (_) => pending.future,
+          ),
+        );
+        final subscription = harness.listen();
+        await flushTeacherControllers();
+        final sessionKey = harness.sessionKey;
+
+        harness.controller.acceptAuthoritativeBlitz(
+          teacherBlitz(id: _otherBlitzId, title: 'Other Blitz'),
+          sessionKey,
+        );
+        harness.controller.acceptAuthoritativeBlitz(
+          teacherBlitz(topicId: _otherTopicId, title: 'Other Topic'),
+          sessionKey,
+        );
+        expect(subscription.read().status, TeacherBlitzDetailStatus.loading);
+
+        harness.controller.acceptAuthoritativeBlitz(
+          teacherBlitz(title: 'Accepted Blitz'),
+          sessionKey,
+        );
+        expect(subscription.read().status, TeacherBlitzDetailStatus.data);
+        expect(subscription.read().blitz!.title, 'Accepted Blitz');
+
+        pending.complete(teacherBlitz(title: 'Older read'));
+        await flushTeacherControllers();
+        expect(subscription.read().blitz!.title, 'Accepted Blitz');
+      },
+    );
+
+    test(
+      'ignores an authoritative Blitz or notFound from another session',
+      () async {
+        final auth = FakeTeacherAuthSessionController.authenticated(
+          teacherUser('teacher-a'),
+        );
+        final harness = _Harness(
+          repository: FakeTeacherBlitzRepository(),
+          auth: auth,
+        );
+        final subscription = harness.listen();
+        await flushTeacherControllers();
+        final oldSession = harness.sessionKey;
+
+        auth.replaceUser(teacherUser('teacher-b'));
+        await flushTeacherControllers();
+        harness.controller
+          ..acceptAuthoritativeBlitz(
+            teacherBlitz(title: 'Old session'),
+            oldSession,
+          )
+          ..markNotFound(oldSession);
+
+        expect(subscription.read().status, TeacherBlitzDetailStatus.data);
+        expect(subscription.read().blitz!.title, isNot('Old session'));
+
+        harness.controller.markNotFound(harness.sessionKey);
+        expect(subscription.read().status, TeacherBlitzDetailStatus.notFound);
+        expect(subscription.read().blitz, isNull);
+      },
+    );
+
     test('an ineligible session performs no read', () async {
       final repository = FakeTeacherBlitzRepository();
       final harness = _Harness(
@@ -470,6 +539,11 @@ class _Harness {
   void setSurface(AppDeviceSurface surface) {
     container.read(teacherTestSurfaceProvider.notifier).change(surface);
   }
+
+  TeacherSessionKey get sessionKey => TeacherSessionSnapshot.fromSession(
+    container.read(authSessionControllerProvider),
+    container.read(appDeviceSurfaceProvider),
+  ).eligibleKey!;
 
   ProviderSubscription<TeacherBlitzDetailState> listen({
     TeacherBlitzRouteTarget? target,

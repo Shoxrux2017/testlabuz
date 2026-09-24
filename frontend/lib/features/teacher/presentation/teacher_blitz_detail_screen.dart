@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/teacher_blitz_detail_controller.dart';
@@ -9,12 +10,14 @@ import '../application/teacher_blitz_detail_state.dart';
 import '../application/teacher_blitz_route_target.dart';
 import '../application/teacher_topic_result_pair_controller.dart';
 import '../domain/teacher_blitz.dart';
+import '../domain/teacher_blitz_form.dart';
 import 'teacher_blitz_formatters.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_question_read_view.dart';
 import 'teacher_topic_formatters.dart';
 
-/// Read-only Blitz detail; Blitz mutations belong to later tasks.
+/// Blitz detail with desktop authoring entries; lifecycle actions belong
+/// to later tasks.
 class TeacherBlitzDetailScreen extends ConsumerWidget {
   const TeacherBlitzDetailScreen({required this.target, super.key});
 
@@ -34,6 +37,14 @@ class TeacherBlitzDetailScreen extends ConsumerWidget {
         pairState.hasConfirmedData &&
         pairState.pair?.blitzAssessmentId?.toLowerCase() ==
             blitz.id.toLowerCase();
+
+    // Authoring needs a confirmed current Draft/Scheduled Blitz on desktop.
+    final showAuthoring =
+        ref.watch(appDeviceSurfaceProvider) == AppDeviceSurface.desktop &&
+        blitz != null &&
+        detail.status == TeacherBlitzDetailStatus.data &&
+        !detail.isStale &&
+        isTeacherBlitzAuthoringStatus(blitz.status);
 
     // The nested route normally pops to its Topic; `go` covers an empty stack.
     void backToTopic() {
@@ -55,6 +66,30 @@ class TeacherBlitzDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
         ),
         actions: [
+          if (showAuthoring)
+            TextButton.icon(
+              key: const Key('teacherBlitzManageQuestionsButton'),
+              onPressed: () => context.go(
+                AppRoutePaths.teacherBlitzQuestionsLocation(
+                  target.topicId,
+                  target.blitzId,
+                ),
+              ),
+              icon: const Icon(Icons.quiz_outlined),
+              label: const Text('Manage Questions'),
+            ),
+          if (showAuthoring)
+            TextButton.icon(
+              key: const Key('teacherBlitzEditButton'),
+              onPressed: () => context.go(
+                AppRoutePaths.teacherBlitzEditLocation(
+                  target.topicId,
+                  target.blitzId,
+                ),
+              ),
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Edit'),
+            ),
           if (blitz != null)
             IconButton(
               key: const Key('teacherBlitzDetailRefreshButton'),

@@ -439,6 +439,81 @@ void main() {
     expect(find.byType(FilledButton), findsNothing);
   });
 
+  testWidgets('desktop Draft and Scheduled Blitz offer authoring entries', (
+    tester,
+  ) async {
+    for (final (status, surface, visible) in [
+      (TeacherBlitzStatus.draft, AppDeviceSurface.desktop, true),
+      (TeacherBlitzStatus.scheduled, AppDeviceSurface.desktop, true),
+      (TeacherBlitzStatus.active, AppDeviceSurface.desktop, false),
+      (TeacherBlitzStatus.closed, AppDeviceSurface.desktop, false),
+      (TeacherBlitzStatus.archived, AppDeviceSurface.desktop, false),
+      (TeacherBlitzStatus.draft, AppDeviceSurface.mobile, false),
+    ]) {
+      await _pumpDetail(
+        tester,
+        FakeTeacherBlitzRepository(
+          onFetch: (blitzId) async => teacherBlitz(
+            id: blitzId,
+            status: status,
+            scheduledAt: status == TeacherBlitzStatus.scheduled
+                ? DateTime.utc(2026, 9, 18, 4)
+                : null,
+          ),
+        ),
+        surface: surface,
+      );
+      await tester.pumpAndSettle();
+
+      final matcher = visible ? findsOneWidget : findsNothing;
+      final reason = '${status.value} on ${surface.name}';
+      expect(
+        find.byKey(const Key('teacherBlitzEditButton')),
+        matcher,
+        reason: reason,
+      );
+      expect(
+        find.byKey(const Key('teacherBlitzManageQuestionsButton')),
+        matcher,
+        reason: reason,
+      );
+      for (final lifecycle in ['Schedule', 'Activate', 'Close', 'Archive']) {
+        expect(find.text(lifecycle), findsNothing, reason: lifecycle);
+      }
+    }
+  });
+
+  testWidgets('a stale Blitz hides authoring entries', (tester) async {
+    var reads = 0;
+    await _pumpDetail(
+      tester,
+      FakeTeacherBlitzRepository(
+        onFetch: (blitzId) async {
+          reads += 1;
+          if (reads > 1) {
+            throw teacherLocalFailure(ApiFailureKind.connection);
+          }
+          return teacherBlitz(id: blitzId);
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('teacherBlitzEditButton')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('teacherBlitzDetailRefreshButton')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('teacherBlitzDetailStaleMessage')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('teacherBlitzEditButton')), findsNothing);
+    expect(
+      find.byKey(const Key('teacherBlitzManageQuestionsButton')),
+      findsNothing,
+    );
+  });
+
   testWidgets('a reused screen widget shows only its current target', (
     tester,
   ) async {

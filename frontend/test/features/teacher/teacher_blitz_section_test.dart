@@ -13,6 +13,7 @@ import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_blitz_section.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_topic_detail_screen.dart';
@@ -85,7 +86,9 @@ void main() {
       find.text('No Blitz has been created for this Topic yet.'),
       findsOneWidget,
     );
-    expect(find.textContaining('Create'), findsNothing);
+    // The empty state adds no create shortcut beyond the header entry.
+    expect(find.textContaining('Create'), findsOneWidget);
+    expect(find.byKey(const Key('teacherBlitzCreateButton')), findsOneWidget);
     expect(find.text('Page 1 of 1'), findsOneWidget);
   });
 
@@ -278,7 +281,49 @@ void main() {
     expect(repository.listRequests.last.query.page, 1);
   });
 
-  testWidgets('no create, edit, lifecycle, exception, or monitor controls', (
+  testWidgets(
+    'Create Blitz needs desktop and a confirmed Draft or Active Topic',
+    (tester) async {
+      for (final (status, surface, visible) in [
+        (TeacherTopicStatus.draft, AppDeviceSurface.desktop, true),
+        (TeacherTopicStatus.active, AppDeviceSurface.desktop, true),
+        (TeacherTopicStatus.closed, AppDeviceSurface.desktop, false),
+        (TeacherTopicStatus.archived, AppDeviceSurface.desktop, false),
+        (TeacherTopicStatus.draft, AppDeviceSurface.mobile, false),
+      ]) {
+        await _pumpSection(
+          tester,
+          FakeTeacherBlitzRepository(),
+          surface: surface,
+          topics: FakeTeacherTopicRepository(
+            onFetch: (id) async => teacherTopic(id: id, status: status),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('teacherBlitzCreateButton')),
+          visible ? findsOneWidget : findsNothing,
+          reason: '${status.value} on ${surface.name}',
+        );
+      }
+
+      final pending = Completer<TeacherTopic>();
+      await _pumpSection(
+        tester,
+        FakeTeacherBlitzRepository(),
+        topics: FakeTeacherTopicRepository(onFetch: (_) => pending.future),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('teacherBlitzCreateButton')), findsNothing);
+
+      pending.completeError(teacherLocalFailure(ApiFailureKind.connection));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('teacherBlitzCreateButton')), findsNothing);
+    },
+  );
+
+  testWidgets('no edit, lifecycle, exception, or monitor controls', (
     tester,
   ) async {
     await _pumpSection(
@@ -291,8 +336,6 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final label in [
-      'Create Blitz',
-      'Create',
       'Edit',
       'Schedule',
       'Activate',
@@ -422,6 +465,7 @@ Future<void> _pumpSection(
   WidgetTester tester,
   FakeTeacherBlitzRepository repository, {
   FakeTeacherTopicResultPairRepository? pairs,
+  FakeTeacherTopicRepository? topics,
   AppDeviceSurface surface = AppDeviceSurface.desktop,
   TextScaler textScaler = TextScaler.noScaling,
 }) async {
@@ -436,6 +480,9 @@ Future<void> _pumpSection(
         ),
         appDeviceSurfaceProvider.overrideWithValue(surface),
         teacherBlitzRepositoryProvider.overrideWithValue(repository),
+        teacherTopicRepositoryProvider.overrideWithValue(
+          topics ?? FakeTeacherTopicRepository(),
+        ),
         teacherTopicResultPairRepositoryProvider.overrideWithValue(
           pairs ?? FakeTeacherTopicResultPairRepository(),
         ),

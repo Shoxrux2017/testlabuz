@@ -1,5 +1,6 @@
 import 'teacher_dto_parse.dart';
 import 'teacher_homework_dto.dart';
+import 'teacher_question_mutation_messages.dart';
 import '../../domain/teacher_homework_lifecycle.dart';
 
 class TeacherHomeworkMutationDto {
@@ -27,11 +28,14 @@ class TeacherHomeworkMutationDto {
 
   static const createSuccessMessage = 'Homework created successfully.';
   static const updateSuccessMessage = 'Homework updated successfully.';
-  static const addQuestionSuccessMessage = 'Question created successfully.';
-  static const updateQuestionSuccessMessage = 'Question updated successfully.';
-  static const deleteQuestionSuccessMessage = 'Question deleted successfully.';
+  static const addQuestionSuccessMessage =
+      TeacherQuestionMutationMessages.added;
+  static const updateQuestionSuccessMessage =
+      TeacherQuestionMutationMessages.updated;
+  static const deleteQuestionSuccessMessage =
+      TeacherQuestionMutationMessages.deleted;
   static const reorderQuestionsSuccessMessage =
-      'Questions reordered successfully.';
+      TeacherQuestionMutationMessages.reordered;
 
   static String lifecycleSuccessMessage(TeacherHomeworkLifecycleAction action) {
     return action.successMessage;

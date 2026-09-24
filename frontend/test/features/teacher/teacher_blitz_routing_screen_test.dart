@@ -62,10 +62,8 @@ void main() {
     for (final invalid in [
       '/teacher/topics/not-a-uuid/blitz/$_blitzId',
       '/teacher/topics/$_topicId/blitz/not-a-uuid',
-      '/teacher/topics/$_topicId/blitz/new',
       '/teacher/topics/$_topicId/blitz',
       '/teacher/topics/$_topicId/blitz/$_blitzId/',
-      '/teacher/topics/$_topicId/blitz/$_blitzId/edit',
       '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring',
       '/teacher/topics/$_topicId/blitz/$_blitzId/extra',
       '/teacher/topics/$_topicId/blitz/$_blitzId?private=1',
@@ -89,6 +87,169 @@ void main() {
       );
     }
   });
+
+  test('Blitz authoring route helpers accept only canonical paths', () {
+    final create = AppRoutePaths.teacherBlitzCreateLocation(_topicId);
+    final edit = AppRoutePaths.teacherBlitzEditLocation(_topicId, _blitzId);
+    final questions = AppRoutePaths.teacherBlitzQuestionsLocation(
+      _topicId,
+      _blitzId,
+    );
+
+    expect(create, '/teacher/topics/$_topicId/blitz/new');
+    expect(edit, '/teacher/topics/$_topicId/blitz/$_blitzId/edit');
+    expect(questions, '/teacher/topics/$_topicId/blitz/$_blitzId/questions');
+    expect(AppRouteNames.teacherBlitzCreate, 'teacher-blitz-create');
+    expect(AppRouteNames.teacherBlitzEdit, 'teacher-blitz-edit');
+    expect(AppRouteNames.teacherBlitzQuestions, 'teacher-blitz-questions');
+    expect(
+      AppRoutePaths.teacherBlitzCreate,
+      '/teacher/topics/:topicId/blitz/new',
+    );
+    expect(
+      AppRoutePaths.teacherBlitzEdit,
+      '/teacher/topics/:topicId/blitz/:blitzId/edit',
+    );
+    expect(
+      AppRoutePaths.teacherBlitzQuestions,
+      '/teacher/topics/:topicId/blitz/:blitzId/questions',
+    );
+
+    expect(AppRoutePaths.isTeacherBlitzCreatePath(create), isTrue);
+    expect(AppRoutePaths.isTeacherBlitzDetailPath(create), isFalse);
+    expect(AppRoutePaths.teacherBlitzIdFromPath(create), isNull);
+    expect(AppRoutePaths.isTeacherBlitzEditPath(edit), isTrue);
+    expect(AppRoutePaths.isTeacherBlitzQuestionsPath(questions), isTrue);
+    for (final location in [create, edit, questions]) {
+      expect(AppRoutePaths.isTeacherApprovedLocation(location), isTrue);
+      expect(AppRoutePaths.teacherTopicIdFromPath(location), _topicId);
+      expect(AppRoutePaths.teacherHomeworkIdFromPath(location), isNull);
+    }
+    expect(AppRoutePaths.teacherBlitzIdFromPath(edit), _blitzId);
+    expect(AppRoutePaths.teacherBlitzIdFromPath(questions), _blitzId);
+
+    for (final invalid in [
+      '/teacher/topics/not-a-uuid/blitz/new',
+      '/teacher/topics/$_topicId/blitz/new/',
+      '/teacher/topics/$_topicId/blitz/new/edit',
+      '/teacher/topics/$_topicId/blitz/not-a-uuid/edit',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/edit/',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/questions/extra',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/new',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/edit?private=1',
+      '/teacher/topics/$_topicId/blitz/new#fragment',
+    ]) {
+      expect(AppRoutePaths.isTeacherApprovedLocation(invalid), isFalse);
+      expect(AppRoutePaths.teacherTopicIdFromPath(invalid), isNull);
+      expect(AppRoutePaths.teacherBlitzIdFromPath(invalid), isNull);
+    }
+  });
+
+  testWidgets('desktop opens every Blitz authoring route', (tester) async {
+    for (final (location, screenKey) in [
+      (
+        AppRoutePaths.teacherBlitzCreateLocation(_topicId),
+        'teacherBlitzCreateScreen',
+      ),
+      (
+        AppRoutePaths.teacherBlitzEditLocation(_topicId, _blitzId),
+        'teacherBlitzEditScreen',
+      ),
+      (
+        AppRoutePaths.teacherBlitzQuestionsLocation(_topicId, _blitzId),
+        'teacherBlitzQuestionBuilderScreen',
+      ),
+    ]) {
+      await _pumpApp(
+        tester,
+        location: location,
+        blitz: FakeTeacherBlitzRepository(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(Key(screenKey)), findsOneWidget, reason: location);
+      expect(_routerPath(tester), location);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('mobile Blitz authoring routes redirect to read-only screens', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final blitzDetail = AppRoutePaths.teacherBlitzDetailLocation(
+      _topicId,
+      _blitzId,
+    );
+    for (final (location, expected) in [
+      (
+        AppRoutePaths.teacherBlitzCreateLocation(_topicId),
+        AppRoutePaths.teacherTopicDetailLocation(_topicId),
+      ),
+      (AppRoutePaths.teacherBlitzEditLocation(_topicId, _blitzId), blitzDetail),
+      (
+        AppRoutePaths.teacherBlitzQuestionsLocation(_topicId, _blitzId),
+        blitzDetail,
+      ),
+    ]) {
+      await _pumpApp(
+        tester,
+        location: location,
+        blitz: FakeTeacherBlitzRepository(),
+        surface: AppDeviceSurface.mobile,
+      );
+      await tester.pumpAndSettle();
+
+      expect(_routerPath(tester), expected, reason: location);
+      expect(find.byKey(const Key('teacherBlitzCreateScreen')), findsNothing);
+      expect(find.byKey(const Key('teacherBlitzEditScreen')), findsNothing);
+      expect(
+        find.byKey(const Key('teacherBlitzQuestionBuilderScreen')),
+        findsNothing,
+      );
+    }
+  });
+
+  for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
+    testWidgets(
+      '${surface.name} Blitz authoring deep links survive bootstrap',
+      (tester) async {
+        if (surface == AppDeviceSurface.mobile) {
+          await tester.binding.setSurfaceSize(const Size(390, 844));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+        }
+        final edit = AppRoutePaths.teacherBlitzEditLocation(_topicId, _blitzId);
+        final auth = FakeTeacherAuthSessionController(
+          const AuthSessionState.bootstrapping(),
+        );
+        await _pumpApp(
+          tester,
+          location: edit,
+          blitz: FakeTeacherBlitzRepository(),
+          auth: auth,
+          surface: surface,
+        );
+        await tester.pump();
+
+        expect(find.byKey(const Key('teacherBlitzEditScreen')), findsNothing);
+
+        auth.replaceUser(teacherUser('teacher-a'));
+        await tester.pumpAndSettle();
+
+        expect(
+          _routerPath(tester),
+          surface == AppDeviceSurface.desktop
+              ? edit
+              : AppRoutePaths.teacherBlitzDetailLocation(_topicId, _blitzId),
+        );
+        expect(
+          find.byKey(const Key('teacherBlitzEditScreen')),
+          surface == AppDeviceSurface.desktop ? findsOneWidget : findsNothing,
+        );
+      },
+    );
+  }
 
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
     testWidgets(
@@ -188,10 +349,8 @@ void main() {
       for (final location in [
         '/teacher/topics/not-a-uuid/blitz/$_blitzId',
         '/teacher/topics/$_topicId/blitz/not-a-uuid',
-        '/teacher/topics/$_topicId/blitz/new',
         '/teacher/topics/$_topicId/blitz',
         '/teacher/topics/$_topicId/blitz/$_blitzId/extra',
-        '/teacher/topics/$_topicId/blitz/$_blitzId/edit',
         '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring',
         '/teacher/topics/$_topicId/blitz/$_blitzId?private=1',
         '/teacher/topics/$_topicId/blitz/$_blitzId#fragment',

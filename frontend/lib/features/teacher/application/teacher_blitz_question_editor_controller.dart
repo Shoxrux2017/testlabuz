@@ -7,33 +7,36 @@ import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../auth/application/auth_session_controller.dart';
-import '../data/teacher_homework_repository_impl.dart';
-import '../domain/teacher_homework.dart';
+import '../data/teacher_blitz_repository_impl.dart';
+import '../domain/teacher_blitz.dart';
+import '../domain/teacher_blitz_form.dart';
 import '../domain/teacher_question.dart';
 import '../domain/teacher_question_authoring.dart';
 import '../domain/teacher_question_mutation.dart';
-import 'teacher_homework_detail_controller.dart';
-import 'teacher_homework_detail_state.dart';
-import 'teacher_question_builder_controller.dart';
+import 'teacher_blitz_detail_controller.dart';
+import 'teacher_blitz_detail_state.dart';
+import 'teacher_blitz_question_builder_controller.dart';
+import 'teacher_blitz_question_editor_target.dart';
 import 'teacher_question_draft_commands.dart';
 import 'teacher_question_editor_state.dart';
 import 'teacher_question_mutation_activity.dart';
 import 'teacher_question_server_validation.dart';
 import 'teacher_session_key.dart';
 
-final teacherQuestionEditorControllerProvider = NotifierProvider.autoDispose
+final teacherBlitzQuestionEditorControllerProvider = NotifierProvider
+    .autoDispose
     .family<
-      TeacherQuestionEditorController,
+      TeacherBlitzQuestionEditorController,
       TeacherQuestionEditorState,
-      TeacherQuestionEditorTarget
-    >(TeacherQuestionEditorController.new);
+      TeacherBlitzQuestionEditorTarget
+    >(TeacherBlitzQuestionEditorController.new);
 
-class TeacherQuestionEditorController
+class TeacherBlitzQuestionEditorController
     extends Notifier<TeacherQuestionEditorState>
     with TeacherQuestionDraftCommands {
-  TeacherQuestionEditorController(this.target);
+  TeacherBlitzQuestionEditorController(this.target);
 
-  final TeacherQuestionEditorTarget target;
+  final TeacherBlitzQuestionEditorTarget target;
   final TeacherQuestionLocalIdSequence _localIds =
       TeacherQuestionLocalIdSequence();
   TeacherSessionKey? _activeSessionKey;
@@ -50,10 +53,10 @@ class TeacherQuestionEditorController
       ref.watch(appDeviceSurfaceProvider),
     ).eligibleKey;
     final detail = ref.watch(
-      teacherHomeworkDetailControllerProvider(target.routeTarget),
+      teacherBlitzDetailControllerProvider(target.routeTarget),
     );
     final builder = ref.watch(
-      teacherQuestionBuilderControllerProvider(target.routeTarget),
+      teacherBlitzQuestionBuilderControllerProvider(target.routeTarget),
     );
     ref.watch(teacherQuestionMutationActivityProvider(target.routeTarget));
 
@@ -89,22 +92,21 @@ class TeacherQuestionEditorController
             state.shouldClose)) {
       return state;
     }
-    if (detail.status == TeacherHomeworkDetailStatus.notFound) {
+    if (detail.status == TeacherBlitzDetailStatus.notFound) {
       _initialized = true;
       return TeacherQuestionEditorState(
         status: TeacherQuestionEditorStatus.unavailable,
-        formError: 'This Homework is no longer available.',
+        formError: 'This Blitz is no longer available.',
       );
     }
-    final homework =
-        detail.status == TeacherHomeworkDetailStatus.data && !detail.isStale
-        ? detail.homework
+    final blitz =
+        detail.status == TeacherBlitzDetailStatus.data && !detail.isStale
+        ? detail.blitz
         : null;
-    if (homework == null || !_matchesTarget(homework)) {
+    if (blitz == null || !_matchesTarget(blitz)) {
       return _initialized ? state : TeacherQuestionEditorState();
     }
-    if (homework.status == TeacherHomeworkStatus.closed ||
-        homework.status == TeacherHomeworkStatus.archived) {
+    if (!isTeacherBlitzAuthoringStatus(blitz.status)) {
       final retainedDraft = _initialized ? state.draft : null;
       final retainedInitialDraft = _initialized ? state.initialDraft : null;
       _initialized = true;
@@ -112,9 +114,7 @@ class TeacherQuestionEditorController
         status: TeacherQuestionEditorStatus.lockedReview,
         draft: retainedDraft,
         initialDraft: retainedInitialDraft,
-        formError: homework.status == TeacherHomeworkStatus.closed
-            ? 'This Homework is closed.'
-            : 'This Homework is archived.',
+        formError: _lifecycleLockMessage(blitz.status),
       );
     }
     if (builder.serverLocked) {
@@ -130,7 +130,7 @@ class TeacherQuestionEditorController
     }
 
     final question = target.mode == TeacherQuestionEditorMode.edit
-        ? _findQuestion(homework, target.questionId!)
+        ? _findQuestion(blitz, target.questionId!)
         : null;
     if (target.mode == TeacherQuestionEditorMode.edit && question == null) {
       _initialized = true;
@@ -154,7 +154,7 @@ class TeacherQuestionEditorController
         initialDraft: draft,
         formError:
             target.mode == TeacherQuestionEditorMode.add &&
-                homework.questions.length >=
+                blitz.questions.length >=
                     TeacherQuestionAuthoringLimits.maxQuestionsPerAssessment
             ? 'Maximum 100 Questions.'
             : null,
@@ -187,18 +187,18 @@ class TeacherQuestionEditorController
     final draft = state.draft;
     final sessionKey = _activeSessionKey;
     final detail = ref.read(
-      teacherHomeworkDetailControllerProvider(target.routeTarget),
+      teacherBlitzDetailControllerProvider(target.routeTarget),
     );
-    final homework =
-        detail.status == TeacherHomeworkDetailStatus.data && !detail.isStale
-        ? detail.homework
+    final blitz =
+        detail.status == TeacherBlitzDetailStatus.data && !detail.isStale
+        ? detail.blitz
         : null;
     if (!state.canSubmit ||
         state.pendingOperation != null ||
         draft == null ||
         sessionKey == null ||
-        homework == null ||
-        !_canMutate(homework, sessionKey)) {
+        blitz == null ||
+        !_canMutate(blitz, sessionKey)) {
       return;
     }
 
@@ -220,7 +220,7 @@ class TeacherQuestionEditorController
     TeacherQuestionEditRequest? editRequest;
     String? questionId;
     if (operation == TeacherQuestionMutationOperation.add) {
-      if (homework.questions.length >=
+      if (blitz.questions.length >=
           TeacherQuestionAuthoringLimits.maxQuestionsPerAssessment) {
         state = state.copyWith(
           status: TeacherQuestionEditorStatus.definiteFailure,
@@ -230,11 +230,11 @@ class TeacherQuestionEditorController
       }
       createRequest = TeacherQuestionCreateRequest.fromValidated(
         validatedDraft: validated,
-        position: homework.questions.length + 1,
+        position: blitz.questions.length + 1,
       );
     } else {
       questionId = target.questionId!;
-      final currentQuestion = _findQuestion(homework, questionId);
+      final currentQuestion = _findQuestion(blitz, questionId);
       if (currentQuestion == null) {
         state = state.copyWith(
           status: TeacherQuestionEditorStatus.unavailable,
@@ -280,10 +280,10 @@ class TeacherQuestionEditorController
     try {
       final returned = operation == TeacherQuestionMutationOperation.add
           ? await ref
-                .read(teacherHomeworkRepositoryProvider)
-                .addQuestion(target.routeTarget.homeworkId, createRequest!)
+                .read(teacherBlitzRepositoryProvider)
+                .addQuestion(target.routeTarget.blitzId, createRequest!)
           : await ref
-                .read(teacherHomeworkRepositoryProvider)
+                .read(teacherBlitzRepositoryProvider)
                 .updateQuestion(questionId!, editRequest!);
       if (!_canPublish(pending, generation)) {
         return;
@@ -311,7 +311,7 @@ class TeacherQuestionEditorController
     }
   }
 
-  Future<void> checkCurrentHomework() async {
+  Future<void> checkCurrentBlitz() async {
     final pending = state.pendingOperation;
     if (state.status != TeacherQuestionEditorStatus.outcomeReview ||
         pending == null) {
@@ -379,8 +379,8 @@ class TeacherQuestionEditorController
     );
     try {
       final current = await ref
-          .read(teacherHomeworkRepositoryProvider)
-          .fetchHomework(target.routeTarget.homeworkId);
+          .read(teacherBlitzRepositoryProvider)
+          .fetchBlitz(target.routeTarget.blitzId);
       if (!_canPublish(pending, generation)) {
         return;
       }
@@ -392,7 +392,7 @@ class TeacherQuestionEditorController
         );
         state = state.copyWith(
           status: TeacherQuestionEditorStatus.closeForReview,
-          formError: 'This Homework is no longer available.',
+          formError: 'This Blitz is no longer available.',
           pendingOperation: null,
         );
         return;
@@ -403,10 +403,10 @@ class TeacherQuestionEditorController
         if (conflictCode == ApiErrorCodes.resourceNotFound) {
           final message =
               pending.operation == TeacherQuestionMutationOperation.add
-              ? 'The Question could not be created because the target is no longer available. Review the current Homework.'
-              : 'This Question is no longer available. Review the current Homework.';
-          _builder.acceptEditorAuthoritativeHomework(
-            homework: current,
+              ? 'The Question could not be created because the target is no longer available. Review the current Blitz.'
+              : 'This Question is no longer available. Review the current Blitz.';
+          _builder.acceptEditorAuthoritativeBlitz(
+            blitz: current,
             sessionKey: pending.lease.sessionKey,
             ownerGeneration: target.routeOwnerGeneration,
             notice: message,
@@ -419,13 +419,11 @@ class TeacherQuestionEditorController
           );
           return;
         }
-        final locked =
-            conflictCode == ApiErrorCodes.businessConflict ||
-            conflictCode == ApiErrorCodes.resultPairLocked;
+        final locked = conflictCode == ApiErrorCodes.businessConflict;
         final topicNotEditable = conflictCode == ApiErrorCodes.topicNotEditable;
         final message = _editorConflictMessage(conflictCode);
-        _builder.acceptEditorAuthoritativeHomework(
-          homework: current,
+        _builder.acceptEditorAuthoritativeBlitz(
+          blitz: current,
           sessionKey: pending.lease.sessionKey,
           ownerGeneration: target.routeOwnerGeneration,
           notice: message,
@@ -434,9 +432,7 @@ class TeacherQuestionEditorController
         );
         _release(pending);
         state = state.copyWith(
-          status: conflictCode == ApiErrorCodes.assessmentHasNoScoreablePoints
-              ? TeacherQuestionEditorStatus.definiteFailure
-              : TeacherQuestionEditorStatus.lockedReview,
+          status: TeacherQuestionEditorStatus.lockedReview,
           formError: message,
           pendingOperation: null,
         );
@@ -451,8 +447,8 @@ class TeacherQuestionEditorController
       if (pending.operation == TeacherQuestionMutationOperation.add) {
         const message =
             'The Question creation result could not be confirmed. Review the current Question list before adding another Question.';
-        _builder.acceptEditorAuthoritativeHomework(
-          homework: current,
+        _builder.acceptEditorAuthoritativeBlitz(
+          blitz: current,
           sessionKey: pending.lease.sessionKey,
           ownerGeneration: target.routeOwnerGeneration,
           notice: message,
@@ -473,10 +469,10 @@ class TeacherQuestionEditorController
         return;
       }
       final message = currentQuestion == null
-          ? 'This Question is no longer available. Review the current Homework.'
+          ? 'This Question is no longer available. Review the current Blitz.'
           : 'The Question update result could not be confirmed. Review the current Question before editing again.';
-      _builder.acceptEditorAuthoritativeHomework(
-        homework: current,
+      _builder.acceptEditorAuthoritativeBlitz(
+        blitz: current,
         sessionKey: pending.lease.sessionKey,
         ownerGeneration: target.routeOwnerGeneration,
         notice: message,
@@ -505,7 +501,7 @@ class TeacherQuestionEditorController
         );
         state = state.copyWith(
           status: TeacherQuestionEditorStatus.closeForReview,
-          formError: 'This Homework is no longer available.',
+          formError: 'This Blitz is no longer available.',
           pendingOperation: null,
         );
         return;
@@ -519,14 +515,14 @@ class TeacherQuestionEditorController
   }
 
   void _publishConfirmed(
-    TeacherHomework homework,
+    TeacherBlitz blitz,
     TeacherQuestionEditorPendingOperation pending,
   ) {
     final message = pending.operation == TeacherQuestionMutationOperation.add
         ? 'Question created successfully.'
         : 'Question updated successfully.';
-    _builder.acceptEditorAuthoritativeHomework(
-      homework: homework,
+    _builder.acceptEditorAuthoritativeBlitz(
+      blitz: blitz,
       sessionKey: pending.lease.sessionKey,
       ownerGeneration: target.routeOwnerGeneration,
       notice: message,
@@ -548,7 +544,7 @@ class TeacherQuestionEditorController
     state = state.copyWith(
       status: TeacherQuestionEditorStatus.outcomeReview,
       formError:
-          'The current Homework could not be confirmed. Check the current Homework before taking another action.',
+          'The current Blitz could not be confirmed. Check the current Blitz before taking another action.',
       pendingOperation: pending,
     );
   }
@@ -572,17 +568,16 @@ class TeacherQuestionEditorController
     );
   }
 
-  bool _canMutate(TeacherHomework homework, TeacherSessionKey sessionKey) {
+  bool _canMutate(TeacherBlitz blitz, TeacherSessionKey sessionKey) {
     final builderState = ref.read(
-      teacherQuestionBuilderControllerProvider(target.routeTarget),
+      teacherBlitzQuestionBuilderControllerProvider(target.routeTarget),
     );
     return _builder.isCurrentRouteOwner(
           sessionKey,
           ownerGeneration: target.routeOwnerGeneration,
         ) &&
-        _matchesTarget(homework) &&
-        (homework.status == TeacherHomeworkStatus.draft ||
-            homework.status == TeacherHomeworkStatus.active) &&
+        _matchesTarget(blitz) &&
+        isTeacherBlitzAuthoringStatus(blitz.status) &&
         !builderState.serverLocked &&
         !builderState.topicNotEditable &&
         !builderState.authoritativeReloadPending &&
@@ -637,22 +632,20 @@ class TeacherQuestionEditorController
     }
   }
 
-  TeacherQuestionBuilderController get _builder => ref.read(
-    teacherQuestionBuilderControllerProvider(target.routeTarget).notifier,
+  TeacherBlitzQuestionBuilderController get _builder => ref.read(
+    teacherBlitzQuestionBuilderControllerProvider(target.routeTarget).notifier,
   );
 
-  bool _matchesTarget(TeacherHomework homework) {
-    return homework.id.toLowerCase() ==
-            target.routeTarget.homeworkId.toLowerCase() &&
-        homework.topicId.toLowerCase() ==
-            target.routeTarget.topicId.toLowerCase();
+  bool _matchesTarget(TeacherBlitz blitz) {
+    return blitz.id.toLowerCase() == target.routeTarget.blitzId.toLowerCase() &&
+        blitz.topicId.toLowerCase() == target.routeTarget.topicId.toLowerCase();
   }
 
   bool _detailAuthorityUnchanged(
     TeacherQuestionEditorPendingOperation pending,
   ) {
     return identical(
-      ref.read(teacherHomeworkDetailControllerProvider(target.routeTarget)),
+      ref.read(teacherBlitzDetailControllerProvider(target.routeTarget)),
       pending.authorityStateAtStart,
     );
   }
@@ -682,8 +675,8 @@ class TeacherQuestionEditorController
   }
 }
 
-TeacherQuestion? _findQuestion(TeacherHomework homework, String questionId) {
-  for (final question in homework.questions) {
+TeacherQuestion? _findQuestion(TeacherBlitz blitz, String questionId) {
+  for (final question in blitz.questions) {
     if (question.id.toLowerCase() == questionId.toLowerCase()) {
       return question;
     }
@@ -691,24 +684,30 @@ TeacherQuestion? _findQuestion(TeacherHomework homework, String questionId) {
   return null;
 }
 
+// `result_pair_locked` and `assessment_has_no_scoreable_points` are
+// Homework-only; a Draft/Scheduled official Blitz stays authorable.
 bool _isQuestionConflict(String? code) {
   return code == ApiErrorCodes.topicNotEditable ||
       code == ApiErrorCodes.taskClosed ||
       code == ApiErrorCodes.taskArchived ||
-      code == ApiErrorCodes.businessConflict ||
-      code == ApiErrorCodes.resultPairLocked ||
-      code == ApiErrorCodes.assessmentHasNoScoreablePoints;
+      code == ApiErrorCodes.businessConflict;
 }
 
 String _editorConflictMessage(String code) {
   return switch (code) {
-    ApiErrorCodes.businessConflict || ApiErrorCodes.resultPairLocked =>
-      'Question editing is locked by the current server state. Review the current Homework before continuing.',
-    ApiErrorCodes.taskClosed => 'This Homework is closed.',
-    ApiErrorCodes.taskArchived => 'This Homework is archived.',
+    ApiErrorCodes.businessConflict =>
+      'Question editing is locked by the current server state. Review the current Blitz before continuing.',
+    ApiErrorCodes.taskClosed => 'This Blitz is closed.',
+    ApiErrorCodes.taskArchived => 'This Blitz is archived.',
     ApiErrorCodes.topicNotEditable => 'The Topic is no longer editable.',
-    ApiErrorCodes.assessmentHasNoScoreablePoints =>
-      'An active Homework must keep at least one scoreable Question.',
     _ => 'The Question could not be saved.',
+  };
+}
+
+String _lifecycleLockMessage(TeacherBlitzStatus status) {
+  return switch (status) {
+    TeacherBlitzStatus.closed => 'This Blitz is closed.',
+    TeacherBlitzStatus.archived => 'This Blitz is archived.',
+    _ => 'Question editing is no longer available for this Blitz.',
   };
 }
