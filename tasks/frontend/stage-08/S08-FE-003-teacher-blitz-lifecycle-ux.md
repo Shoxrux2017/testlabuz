@@ -9,7 +9,7 @@
 | Area | `Frontend` |
 | Status | `Approved` |
 | Implementation type | `Flutter desktop Teacher Blitz Schedule/Official Designation/Activate/Close/Archive UX` |
-| Depends on | `S08-FE-001`, `S08-FE-002` — both `Accepted / Delivered`; `S08-BE-PHASE-2 = PASS` remains valid |
+| Depends on | `S08-FE-001` (PR #262, 15508f3), `S08-FE-002` (PR #264, b5b24b1) — both `Accepted / Delivered`; `S08-BE-PHASE-2 = PASS` remains valid; revalidated 2026-09-24 on `b5b24b1` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex execution |
 | Backend API dependency | Final delivered Stage 8 Schedule/Archive, result-pair, Activate and Close APIs after Backend Phase 2 PASS |
@@ -272,6 +272,19 @@ Blitz task closed successfully.
 ```
 
 Returns complete authoritative Blitz.
+
+## 4.7 Delivered facts (revalidation 2026-09-24)
+
+Confirmed on `b5b24b1`:
+
+- every success body is exactly `{data, message}` with the messages above; the
+  result-pair success message is also returned by a server-side no-op PUT;
+- error envelopes are `{message, code, errors}` (`errors` defaults to `{}`), with no
+  `request_id`; only `institution_settings_incomplete` adds `meta` (see Section 69);
+- Schedule/Close/Archive/Activate require an empty body or `{}` and no query string;
+  unknown keys are rejected with `422 validation_failed`;
+- no scheduler, job or command activates a Blitz; the only Blitz scheduled command
+  reconciles timeouts of `active` Blitz.
 
 ---
 
@@ -801,6 +814,34 @@ Do not compare against device `DateTime.now()` to decide future eligibility.
 
 Keep dialog/form editable.
 
+Revalidation 2026-09-24 — delivered Schedule matrix (`ScheduleTeacherBlitz`,
+`TeacherBlitzPreparationGuard`, `InstitutionBlitzScheduledAt`):
+
+```text
+422 validation_failed, errors.scheduled_at -> not strictly after server now,
+                                              offset not equal to the Institution
+                                              offset at that instant, or bad syntax
+                                              (`Z` rejected; numeric offset required)
+409 task_closed        -> Blitz closed
+409 task_archived      -> Blitz archived
+409 business_conflict  -> Blitz active, or any existing Attempt
+409 topic_not_editable -> Topic not draft|active
+```
+
+The server also no-ops a Scheduled Blitz whose instant is unchanged; the Section 16
+client no-op remains required. For the definite 409 codes, refresh the Blitz detail
+and show:
+
+```text
+task_closed        -> This Blitz is closed.
+task_archived      -> This Blitz is archived.
+topic_not_editable -> The Topic is no longer editable.
+business_conflict  -> Scheduling is not available in the current server state.
+                      Refresh the Blitz before trying again.
+```
+
+No automatic Schedule replay.
+
 ---
 
 # 21. Result-Pair Repository Extension
@@ -1190,6 +1231,27 @@ Privacy-safe unavailable copy.
 
 No human-message parsing.
 
+Revalidation 2026-09-24 — delivered result-pair rules (`SetTeacherTopicResultPair`,
+`TeacherTopicResultPairUpdateRequest`):
+
+- `blitz_assessment_id` is optional but never nullable: an explicit `null` is
+  `422`; omitting it preserves the existing Blitz side. Never send `null`.
+- A Homework-only body with a different Homework ID while a Blitz side exists is
+  `result_pair_locked`; the delivered Stage 6 controller already treats a populated
+  Blitz side as non-replaceable, so no Stage 6 change is required.
+- Candidate checks in order: not group -> `official_task_requires_group_assignment`;
+  Attempts -> `result_pair_locked`; status not `draft|scheduled` or recipient rows
+  present -> `business_conflict`; candidate outside the Topic -> `404`.
+- Locked pair + null Blitz side -> fill allowed. Locked pair + another Blitz ->
+  `result_pair_locked`. Unlocked pair + another Blitz -> replacement allowed only
+  while the current official Blitz is still `draft|scheduled`, group-assigned and
+  without Attempts; otherwise `result_pair_locked`.
+- Activation sets `cohort_snapshotted_at` only; `locked_at` is set by the first
+  Student Attempt. An unlocked pair whose official Blitz is already Active can
+  therefore still show `Replace Official Blitz` per Section 58; the server rejects
+  it with `result_pair_locked`, which is handled by the mapping above. Do not add a
+  local Blitz-status inference for the other Blitz.
+
 ---
 
 # 33. Archive Visibility — Draft / Scheduled
@@ -1350,6 +1412,25 @@ On uncertain response:
 4. show current state.
 
 No automatic Archive replay.
+
+Revalidation 2026-09-24 — delivered Archive matrix (`ArchiveTeacherBlitz`):
+
+```text
+already archived                               -> 200 no-op (same message)
+active                                         -> 409 business_conflict
+official draft|scheduled (pair Blitz side)     -> 409 business_conflict
+draft|scheduled with any Attempt               -> 409 business_conflict
+closed with an in-progress Attempt             -> 409 business_conflict
+practice draft|scheduled, closed (official or not) -> archived
+```
+
+The Topic status is not checked by Archive. For `409 business_conflict`, refresh the
+Blitz detail and the Topic result pair and show:
+
+```text
+This Blitz cannot be archived in the current server state.
+Refresh the Blitz and official pair before trying again.
+```
 
 ---
 
@@ -1721,6 +1802,25 @@ Refresh the Blitz before starting another activation.
 
 Do not generate a new key automatically.
 
+Revalidation 2026-09-24 — delivered Activation behavior (`ActivateTeacherBlitz`,
+`IdempotencyGuard`, `TeacherOfficialAssessmentCohort`):
+
+- `Idempotency-Key` must be a UUID (stored lowercase); missing/invalid -> `422
+  validation_failed` (`errors.idempotency_key`). The frontend never omits it.
+- A completed key replays the **current** Blitz with `200` and the same message
+  (Section 46.2). The same key for another Blitz -> `409 idempotency_key_reused`.
+- A **new** key on an already-Active Blitz returns `200` with the current Active
+  resource and does not re-activate. Section 46.1 accepts it (status `active` with
+  activation evidence) and shows `Blitz activated successfully.`; no extra rule.
+- A new key on Closed/Archived -> `task_closed`/`task_archived`; Topic or Group not
+  active -> `topic_not_editable`.
+- `business_conflict` covers invalid metadata/Questions, an official pair whose Blitz
+  is not group-assigned, official-assessment mismatch, pair lock/attempt
+  inconsistency, existing Attempts, and existing group recipient rows.
+  Activation never returns `official_task_requires_group_assignment`.
+- A persisted incomplete idempotency record surfaces as `500`; treat it as an
+  unknown outcome (Section 43).
+
 ---
 
 # 46. Activation Success / Completed-Replay Reconciliation
@@ -1983,6 +2083,12 @@ The Topic is no longer available for this action.
 
 No local repair.
 
+Revalidation 2026-09-24 — delivered Close matrix (`CloseTeacherBlitz`): already
+Closed -> `200` no-op (same message); Draft/Scheduled -> `task_not_active`;
+Archived -> `task_archived`; only an **Archived** Topic -> `topic_not_editable` (a
+Closed Topic may still close its Active Blitz). The delivered Close path produces no
+`business_conflict`; keeping it in the recognized set is harmless.
+
 ---
 
 # 52. Lifecycle Controller Architecture
@@ -2109,6 +2215,17 @@ archive
 Only one mutation lease on one Blitz route target at a time.
 
 Do not use a global singleton.
+
+Revalidation 2026-09-24 — delivered FE-002 pieces: Question mutations use
+`application/teacher_question_mutation_activity.dart`
+(`teacherQuestionMutationActivityProvider`, keyed by the shared
+`TeacherQuestionAuthoringRouteTarget` that `TeacherBlitzRouteTarget` implements);
+Blitz Edit runs on its own route with its own controller generation; there is no
+Blitz route mutation activity yet. FE-003 adds one for Schedule/Official/Activate/
+Close/Archive following `application/teacher_homework_route_mutation_activity.dart`,
+disables lifecycle/official actions while the Question lease is active, and disables
+the FE-002 `Edit`/`Manage Questions` entries while a lifecycle/official lease is
+active.
 
 ---
 
@@ -2416,6 +2533,9 @@ Reuse existing constants where already present.
 
 Do not duplicate constants in feature files.
 
+Revalidation 2026-09-24: all listed constants already exist except
+`institutionSettingsIncomplete` and `officialCohortMismatch`; add exactly those two.
+
 ---
 
 # 69. Error Envelope Meta Compatibility
@@ -2447,6 +2567,15 @@ because it contains documented optional `meta`.
 Do not require the UI to expose raw `meta`.
 
 Do not loosen unrelated success DTO strictness.
+
+Revalidation 2026-09-24: the delivered envelope is
+`{"message", "code": "institution_settings_incomplete", "errors": {}, "meta":
+{"missing_fields": ["blitz_timer_start_mode"]}}` with status `409`. The delivered
+FE-002 exact reader in `data/teacher_mutation_transport.dart` accepts only
+`message`, `code`, `errors` and optional `request_id`, so it would classify this
+documented response as an unknown outcome. FE-003 must accept an optional `meta`
+object (a `missing_fields` list of non-empty strings) only for
+`409 institution_settings_incomplete`; every other envelope stays exact.
 
 ---
 
@@ -2491,6 +2620,12 @@ for Topic Close/Archive:
 Do not mutate child assessments automatically.
 
 This is a directly required Stage 8 integration correction.
+
+Revalidation 2026-09-24: the delivered `TeacherTopicLifecycleController`
+refreshes only the Topic on this conflict and shows the Homework-only copy; the
+backend guard (`TeacherTopicOpenAssessmentGuard`) blocks on Homework `draft|active`
+or Blitz `draft|scheduled|active`. Refresh the Homework and Blitz list providers
+through their existing `refreshAfterMutation` only when they exist.
 
 ---
 

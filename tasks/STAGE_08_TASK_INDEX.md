@@ -13,13 +13,13 @@
 | Previous Stage | `Stage 7 — Closed / PASS` |
 | Previous Stage closure merge | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Current source of truth | `GitHub main — ChatGPT must re-check it before any readiness/handoff decision` |
-| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started` |
+| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started` |
 | Detailed task contracts | `Final planning package reviewed and approved; execution remains per-task gated` |
 | Backend Phase 2 | `PASS — run #2 on 1c56cde (run #1 on 232ebcd NOT ACCEPTED; fixes FIX-001…003 delivered; see §17)` |
 | Frontend Phase 2 | `Not started` |
 | Integration | `Not started` |
 | Closure | `Not started` |
-| Next permitted gate | `S08-FE-002 implementation` |
+| Next permitted gate | `S08-FE-003 implementation` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -36,9 +36,10 @@ designation + activation, `S08-BE-005` Student Read + Start/Resume,
 `S08-BE-010` Teacher Monitoring are `Accepted / Delivered`.
 `S08-BE-PHASE-2` run #1 (2026-09-23, audited `232ebcd`) was `NOT ACCEPTED`; the
 focused fixes `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`, and run #2
-(2026-09-24, audited `1c56cde`) is `PASS` (see §17). `S08-FE-001` is `Accepted / Delivered`
-(PR #262); `S08-FE-002` was revalidated and is `Approved / Not started`; the other
-frontend/integration/closure tasks remain `Prepared / Not started`.
+(2026-09-24, audited `1c56cde`) is `PASS` (see §17). `S08-FE-001` (PR #262) and
+`S08-FE-002` (PR #264) are `Accepted / Delivered`; `S08-FE-003` was revalidated and is
+`Approved / Not started`; the other frontend/integration/closure tasks remain
+`Prepared / Not started`.
 
 All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
 reviewed and approved planning package. Their existence or historical planning
@@ -322,8 +323,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 | `11b` | `S08-BE-PHASE-2-FIX-002` | `Documentation fix` | `Start error matrix for timeout-finalized Attempts; scheduled_at precision; item-ID convention exception` | `Phase 2 run #1 + owner decisions D1/D3/D5` | `Approved` | `Accepted` | `Delivered — PR #258, merge edb3be86aa855fff1f87245ec367117cc9554a24` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-002-start-error-and-schema-docs.md` |
 | `11c` | `S08-BE-PHASE-2-FIX-003` | `Test config fix` | `phpunit.xml memory_limit 512M for the §40 full-suite gate` | `Phase 2 run #1 + owner decision D4` | `Approved` | `Accepted` | `Delivered — PR #259, merge 2bb5b406ae9f77ed6b1e85a2ca56bea19623fbe5` | `tasks/backend/stage-08/S08-BE-PHASE-2-FIX-003-phpunit-memory-limit.md` |
 | `12` | `S08-FE-001` | `Frontend` | `Teacher Blitz frontend foundation` | `Backend Phase 2 PASS` | `Approved` | `Accepted` | `Delivered — PR #262, merge 15508f3cdfc337a299bd2f002896e6ee9de70137` | `tasks/frontend/stage-08/S08-FE-001-teacher-blitz-frontend-foundation.md` |
-| `13` | `S08-FE-002` | `Frontend` | `Teacher Blitz Builder` | `FE-001 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Approved — revalidated 2026-09-24 on 15508f3` | `Not started` | `tasks/frontend/stage-08/S08-FE-002-teacher-blitz-builder.md` |
-| `14` | `S08-FE-003` | `Frontend` | `Teacher official designation, scheduling and lifecycle UX` | `FE-001…002 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-003-teacher-blitz-lifecycle-ux.md` |
+| `13` | `S08-FE-002` | `Frontend` | `Teacher Blitz Builder` | `FE-001 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Accepted` | `Delivered — PR #264, merge b5b24b1690023a5c834cebcbb574ac50ecf73d31` | `tasks/frontend/stage-08/S08-FE-002-teacher-blitz-builder.md` |
+| `14` | `S08-FE-003` | `Frontend` | `Teacher official designation, scheduling and lifecycle UX` | `FE-001…002 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Approved — revalidated 2026-09-24 on b5b24b1` | `Not started` | `tasks/frontend/stage-08/S08-FE-003-teacher-blitz-lifecycle-ux.md` |
 | `15` | `S08-FE-004` | `Frontend` | `Student active detail, Start/Resume/replacement and authoritative countdown` | `FE-001…003 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-004-student-active-detail-start-resume-countdown.md` |
 | `16` | `S08-FE-005` | `Frontend` | `Student execution + Submit + terminal reconciliation UX` | `FE-001…004 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-005-student-execution-submit-terminal-reconciliation-ux.md` |
 | `17` | `S08-FE-006` | `Frontend` | `Teacher monitoring + exception grant + approved mobile quick actions` | `FE-001…005 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-006-teacher-live-monitoring-exception-mobile.md` |
@@ -337,9 +338,9 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
   preparation/approval only. It is intentionally non-authoritative for execution.
 - `Current readiness / review status` is authoritative for task execution.
   `S08-DOC-001`, `S08-BE-001…010` and `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`.
-  `S08-BE-PHASE-2` is `PASS` (run #2, see §17). `S08-FE-001` is `Accepted / Delivered`.
-  `S08-FE-002` is `Approved / Not started`. All other frontend/integration/closure tasks remain
-  `Prepared / Not started`.
+  `S08-BE-PHASE-2` is `PASS` (run #2, see §17). `S08-FE-001` and `S08-FE-002` are
+  `Accepted / Delivered`. `S08-FE-003` is `Approved / Not started`. All other
+  frontend/integration/closure tasks remain `Prepared / Not started`.
 - ChatGPT changes the exact next implementation task to current `Approved` only
   after re-checking current `origin/main`, dependency delivery and the final
   self-contained contract.
@@ -393,9 +394,9 @@ ChatGPT re-checks current main and S08-FE-001 readiness
     ↓
 S08-FE-001 Accepted / Delivered (PR #262, 15508f3)
     ↓
-S08-FE-002 Approved / Not started (revalidated 2026-09-24 on 15508f3)
+S08-FE-002 Accepted / Delivered (PR #264, b5b24b1)
     ↓
-S08-FE-003 Prepared / Not started
+S08-FE-003 Approved / Not started (revalidated 2026-09-24 on b5b24b1)
     ↓
 S08-FE-004 Prepared / Not started
     ↓
@@ -936,9 +937,9 @@ Current planning-package state:
 Stage 7 closure                  = PASS
 Stage 8 decomposition            = Approved
 Stage 8 Stage status             = Approved
-Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
+Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
 Detailed task contracts          = Final planning package reviewed and approved; execution remains per-task gated
-Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
+Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
 Backend Phase 2                  = PASS (run #2, 1c56cde; run #1 on 232ebcd NOT ACCEPTED)
 Frontend Phase 2                 = NOT STARTED
 Integration                      = NOT STARTED
@@ -949,7 +950,7 @@ STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 The next permitted workflow action is:
 
 ```text
-S08-FE-002 implementation
+S08-FE-003 implementation
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
@@ -1103,3 +1104,45 @@ type/helper exists; all required error codes already exist in `ApiErrorCodes`. C
 record the confirmed conflict matrix, name the current mutation-activity files, and explicitly
 authorize updating the FE-001 routing assertions whose `/blitz/new` and `/blitz/<id>/edit` behavior
 FE-002 intentionally changes. No material conflict. Current readiness: `Approved / Not started`.
+
+### S08-FE-002 acceptance (2026-09-24)
+
+```text
+Delivered          = PR #264, merge b5b24b1690023a5c834cebcbb574ac50ecf73d31 (feature commit e8a2c44)
+Merge integrity    = tree of b5b24b1 identical to the reviewed commit e8a2c44
+```
+
+Focused evidence on the delivered diff: 134 FE-002 tests (11 files), 104 FE-001 Blitz regression
+tests and 222 directly affected Homework/Question/router regression tests pass;
+`flutter analyze --no-pub` on `lib/features/teacher`, `lib/app/router`, `test/features/teacher` and
+`test/router_bootstrap_test.dart` reports no issues; `dart format --set-exit-if-changed` and
+`git diff --check` pass; committed blobs are LF. Deliberate-break checks on the official
+assignment lock, edit reconciliation match, edit stale-completion guard, Blitz Question conflict set,
+Active Question lock (builder and editor), Draft-only create success and the confirmed-pair guard for
+an inconsistent official state all turned tests red. An independent fresh-context review found no
+blocking defect; the official-contradiction guard and the §63 Refresh dialog copy were fixed and four
+test gaps closed before merge. The shared Question-editor/transport extraction keeps Homework
+behavior, copy and test keys; the Blitz Question builder/editor controllers deliberately mirror the
+Homework ones (contract §8/§83). The FE-001 routing and section assertions changed only where the
+contract changes behavior (§17, §93). Verdict: `Accepted / Delivered`.
+
+### S08-FE-003 readiness revalidation (2026-09-24, main b5b24b1)
+
+Revalidated against the delivered backend (`routes/api.php` teacher group; `TeacherBlitzController`
+schedule/activate/close/archive; `ScheduleTeacherBlitz`, `ActivateTeacherBlitz`, `CloseTeacherBlitz`,
+`ArchiveTeacherBlitz`, `TeacherBlitzPreparationGuard`, `InstitutionBlitzScheduledAt`,
+`IdempotencyGuard`, `TeacherOfficialAssessmentCohort`, `SetTeacherTopicResultPair`,
+`TeacherTopicResultPairUpdateRequest`, `TeacherTopicOpenAssessmentGuard`, `ApiErrorResponse`) and
+the delivered FE-001/FE-002/Stage 6 Flutter code. Routes, request bodies, success statuses and exact
+success messages, the no-auto-activation boundary, Idempotency-Key requirement and completed-replay
+semantics (the current Blitz is replayed, including `closed|archived`), the no-pair / locked-partial
+fill / unlocked replacement result-pair rules, the preserved Blitz side on the Stage 6 Homework-only
+body, and the Topic open-assessment rule (Homework draft/active or Blitz draft/scheduled/active) all
+match the contract. `InstitutionTimezone.serializeWallClock` already emits the numeric offset the
+backend requires (`Z` is rejected), and `SecureIdempotencyKeyGenerator` emits lowercase UUIDv4.
+Corrections marked "revalidation 2026-09-24" record the delivered Schedule/Archive/Close/Activate
+conflict matrices and copy, the `200` returned when an already-Active Blitz is activated with a new
+key, the Activation `meta` envelope that the delivered FE-002 exact error reader currently rejects,
+the two missing `ApiErrorCodes` constants, the delivered same-route serialization pieces, and the
+current Topic open-assessment behavior. No material conflict. Current readiness:
+`Approved / Not started`.
