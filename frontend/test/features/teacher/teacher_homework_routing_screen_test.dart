@@ -13,6 +13,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_homework_e
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_target.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_student_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
@@ -930,6 +931,9 @@ Future<void> _pumpApp(
         ),
         teacherHomeworkRepositoryProvider.overrideWithValue(
           homework ?? FakeTeacherHomeworkRepository(),
+        ),
+        teacherBlitzRepositoryProvider.overrideWithValue(
+          FakeTeacherBlitzRepository(),
         ),
         teacherGroupStudentRepositoryProvider.overrideWithValue(
           groupStudents ?? FakeTeacherGroupStudentRepository(),

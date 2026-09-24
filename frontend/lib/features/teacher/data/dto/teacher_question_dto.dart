@@ -77,6 +77,31 @@ double readTeacherNonNegativeNumber(Map<String, Object?> map, String key) {
   return _readNonNegativeNumber(map, key);
 }
 
+/// Reads an assessment Question list with unique IDs in positions `1..N`.
+List<TeacherQuestionDto> readTeacherQuestionList(
+  Object? json, {
+  required String resourceName,
+}) {
+  if (json is! List) {
+    throw FormatException('$resourceName questions must be an array.');
+  }
+  final questions = json
+      .map(TeacherQuestionDto.fromJson)
+      .toList(growable: false);
+  if (questions.map((question) => question.id.toLowerCase()).toSet().length !=
+      questions.length) {
+    throw FormatException('$resourceName contains duplicate Question IDs.');
+  }
+  for (var index = 0; index < questions.length; index += 1) {
+    if (questions[index].position != index + 1) {
+      throw FormatException(
+        '$resourceName Question positions are not canonical.',
+      );
+    }
+  }
+  return List<TeacherQuestionDto>.unmodifiable(questions);
+}
+
 double _readNonNegativeNumber(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! num || !value.isFinite || value < 0) {

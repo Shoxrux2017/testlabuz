@@ -181,7 +181,10 @@ class TeacherHomeworkDto {
       closedAt: closedAt,
       archivedAt: archivedAt,
     );
-    final questions = _readQuestions(map['questions']);
+    final questions = readTeacherQuestionList(
+      map['questions'],
+      resourceName: 'Teacher Homework',
+    );
 
     return TeacherHomeworkDto(
       id: readTeacherCanonicalUuid(map, 'id'),
@@ -312,29 +315,6 @@ void _validateRecipients(
       'Teacher Homework assignment mode contradicts student_ids.',
     );
   }
-}
-
-List<TeacherQuestionDto> _readQuestions(Object? json) {
-  if (json is! List) {
-    throw const FormatException('Teacher Homework questions must be an array.');
-  }
-  final questions = json
-      .map(TeacherQuestionDto.fromJson)
-      .toList(growable: false);
-  if (questions.map((question) => question.id.toLowerCase()).toSet().length !=
-      questions.length) {
-    throw const FormatException(
-      'Teacher Homework contains duplicate Question IDs.',
-    );
-  }
-  for (var index = 0; index < questions.length; index += 1) {
-    if (questions[index].position != index + 1) {
-      throw const FormatException(
-        'Teacher Homework Question positions are not canonical.',
-      );
-    }
-  }
-  return List<TeacherQuestionDto>.unmodifiable(questions);
 }
 
 void _validateLifecycle({

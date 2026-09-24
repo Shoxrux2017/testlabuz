@@ -14,6 +14,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_material_l
 import 'package:testlabuz_client/features/teacher/application/teacher_material_mutation_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_detail_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
@@ -746,6 +747,9 @@ Future<void> _pump(
         teacherLearningMaterialRepositoryProvider.overrideWithValue(materials),
         teacherHomeworkRepositoryProvider.overrideWithValue(
           FakeTeacherHomeworkRepository(),
+        ),
+        teacherBlitzRepositoryProvider.overrideWithValue(
+          FakeTeacherBlitzRepository(),
         ),
         if (picker != null)
           teacherMaterialFilePickerProvider.overrideWithValue(picker),
