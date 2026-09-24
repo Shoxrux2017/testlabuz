@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 
-import '../application/teacher_homework_route_target.dart';
-import '../application/teacher_question_builder_controller.dart';
+import '../application/teacher_blitz_question_builder_controller.dart';
+import '../application/teacher_blitz_question_editor_controller.dart';
+import '../application/teacher_blitz_question_editor_target.dart';
+import '../application/teacher_blitz_route_target.dart';
 import '../application/teacher_question_draft_commands.dart';
-import '../application/teacher_question_editor_controller.dart';
 import '../application/teacher_question_editor_state.dart';
 import '../application/teacher_session_key.dart';
 import 'teacher_question_editor_shell.dart';
 
-class TeacherQuestionEditorDialog extends StatelessWidget {
-  const TeacherQuestionEditorDialog.add({
+class TeacherBlitzQuestionEditorDialog extends StatelessWidget {
+  const TeacherBlitzQuestionEditorDialog.add({
     required this.routeTarget,
     required this.routeOwnerGeneration,
     required this.editorGeneration,
@@ -19,7 +20,7 @@ class TeacherQuestionEditorDialog extends StatelessWidget {
   }) : mode = TeacherQuestionEditorMode.add,
        questionId = null;
 
-  const TeacherQuestionEditorDialog.edit({
+  const TeacherBlitzQuestionEditorDialog.edit({
     required this.routeTarget,
     required this.routeOwnerGeneration,
     required String this.questionId,
@@ -27,7 +28,7 @@ class TeacherQuestionEditorDialog extends StatelessWidget {
     super.key,
   }) : mode = TeacherQuestionEditorMode.edit;
 
-  final TeacherHomeworkRouteTarget routeTarget;
+  final TeacherBlitzRouteTarget routeTarget;
   final int routeOwnerGeneration;
   final TeacherQuestionEditorMode mode;
   final String? questionId;
@@ -37,8 +38,8 @@ class TeacherQuestionEditorDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return TeacherQuestionEditorShell(
       mode: mode,
-      binding: _HomeworkQuestionEditorBinding(
-        TeacherQuestionEditorTarget(
+      binding: _BlitzQuestionEditorBinding(
+        TeacherBlitzQuestionEditorTarget(
           routeTarget: routeTarget,
           routeOwnerGeneration: routeOwnerGeneration,
           mode: mode,
@@ -50,36 +51,38 @@ class TeacherQuestionEditorDialog extends StatelessWidget {
   }
 }
 
-class _HomeworkQuestionEditorBinding implements TeacherQuestionEditorBinding {
-  const _HomeworkQuestionEditorBinding(this.target);
+class _BlitzQuestionEditorBinding implements TeacherQuestionEditorBinding {
+  const _BlitzQuestionEditorBinding(this.target);
 
-  final TeacherQuestionEditorTarget target;
+  final TeacherBlitzQuestionEditorTarget target;
 
   @override
-  String get assessmentLabel => 'Homework';
+  String get assessmentLabel => 'Blitz';
 
   @override
   ProviderListenable<TeacherQuestionEditorState> get state =>
-      teacherQuestionEditorControllerProvider(target);
+      teacherBlitzQuestionEditorControllerProvider(target);
 
   @override
   TeacherQuestionDraftCommands commands(WidgetRef ref) =>
-      ref.read(teacherQuestionEditorControllerProvider(target).notifier);
+      ref.read(teacherBlitzQuestionEditorControllerProvider(target).notifier);
 
   @override
   Future<void> submit(WidgetRef ref) => ref
-      .read(teacherQuestionEditorControllerProvider(target).notifier)
+      .read(teacherBlitzQuestionEditorControllerProvider(target).notifier)
       .submit();
 
   @override
   Future<void> checkCurrent(WidgetRef ref) => ref
-      .read(teacherQuestionEditorControllerProvider(target).notifier)
-      .checkCurrentHomework();
+      .read(teacherBlitzQuestionEditorControllerProvider(target).notifier)
+      .checkCurrentBlitz();
 
   @override
   bool isCurrentRouteOwner(WidgetRef ref, TeacherSessionKey owner) => ref
       .read(
-        teacherQuestionBuilderControllerProvider(target.routeTarget).notifier,
+        teacherBlitzQuestionBuilderControllerProvider(
+          target.routeTarget,
+        ).notifier,
       )
       .isCurrentRouteOwner(owner, ownerGeneration: target.routeOwnerGeneration);
 }

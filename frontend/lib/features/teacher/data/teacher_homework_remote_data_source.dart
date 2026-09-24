@@ -15,6 +15,7 @@ import '../domain/teacher_topic.dart';
 import 'dto/teacher_homework_dto.dart';
 import 'dto/teacher_homework_list_dto.dart';
 import 'dto/teacher_homework_operation_dto.dart';
+import 'teacher_mutation_transport.dart';
 
 final teacherHomeworkRemoteDataSourceProvider =
     Provider<TeacherHomeworkRemoteDataSource>((ref) {
@@ -247,34 +248,19 @@ class TeacherHomeworkRemoteDataSource {
     required String expectedMessage,
     required _TeacherHomeworkMutationOperation operation,
     TeacherHomeworkLifecycleAction? lifecycleAction,
-  }) async {
-    try {
-      final response = await send();
-      if (response.statusCode != expectedStatus) {
-        throw const TeacherHomeworkMutationOutcomeUnknownException();
-      }
-      try {
-        return TeacherHomeworkMutationDto.fromJson(
-          response.data,
-          expectedMessage: expectedMessage,
-        );
-      } on FormatException {
-        throw const TeacherHomeworkMutationOutcomeUnknownException();
-      }
-    } on TeacherHomeworkMutationOutcomeUnknownException {
-      rethrow;
-    } on DioException catch (exception) {
-      if (_isExactHomeworkMutationFailure(
-        exception.response,
-        operation,
-        lifecycleAction: lifecycleAction,
-      )) {
-        throw ApiRequestException(failureMapper.map(exception));
-      }
-      throw const TeacherHomeworkMutationOutcomeUnknownException();
-    } catch (_) {
-      throw const TeacherHomeworkMutationOutcomeUnknownException();
-    }
+  }) {
+    return sendTeacherMutation(
+      send: send,
+      expectedStatus: expectedStatus,
+      parse: (data) => TeacherHomeworkMutationDto.fromJson(
+        data,
+        expectedMessage: expectedMessage,
+      ),
+      conflictCodes: _homeworkConflictCodes(operation, lifecycleAction),
+      failureMapper: failureMapper,
+      outcomeUnknown: () =>
+          const TeacherHomeworkMutationOutcomeUnknownException(),
+    );
   }
 
   Future<TeacherHomeworkMutationDto> _sendQuestionMutation(
@@ -282,30 +268,19 @@ class TeacherHomeworkRemoteDataSource {
     required int expectedStatus,
     required String expectedMessage,
     required TeacherQuestionMutationOperation operation,
-  }) async {
-    try {
-      final response = await send();
-      if (response.statusCode != expectedStatus) {
-        throw TeacherQuestionMutationOutcomeUnknownException(operation);
-      }
-      try {
-        return TeacherHomeworkMutationDto.fromJson(
-          response.data,
-          expectedMessage: expectedMessage,
-        );
-      } on FormatException {
-        throw TeacherQuestionMutationOutcomeUnknownException(operation);
-      }
-    } on TeacherQuestionMutationOutcomeUnknownException {
-      rethrow;
-    } on DioException catch (exception) {
-      if (_isExactQuestionMutationFailure(exception.response, operation)) {
-        throw ApiRequestException(failureMapper.map(exception));
-      }
-      throw TeacherQuestionMutationOutcomeUnknownException(operation);
-    } catch (_) {
-      throw TeacherQuestionMutationOutcomeUnknownException(operation);
-    }
+  }) {
+    return sendTeacherMutation(
+      send: send,
+      expectedStatus: expectedStatus,
+      parse: (data) => TeacherHomeworkMutationDto.fromJson(
+        data,
+        expectedMessage: expectedMessage,
+      ),
+      conflictCodes: _homeworkQuestionConflictCodes,
+      failureMapper: failureMapper,
+      outcomeUnknown: () =>
+          TeacherQuestionMutationOutcomeUnknownException(operation),
+    );
   }
 
   Future<T> _mapFailures<T>(Future<T> Function() request) async {
@@ -326,175 +301,51 @@ class TeacherHomeworkRemoteDataSource {
 
 enum _TeacherHomeworkMutationOperation { create, update, lifecycle }
 
-bool _isExactHomeworkMutationFailure(
-  Response<Object?>? response,
-  _TeacherHomeworkMutationOperation operation, {
+Set<String> _homeworkConflictCodes(
+  _TeacherHomeworkMutationOperation operation,
   TeacherHomeworkLifecycleAction? lifecycleAction,
-}) {
-  final status = response?.statusCode;
-  final envelope = _readExactHomeworkErrorEnvelope(response?.data);
-  if (status == null || envelope == null) {
-    return false;
-  }
-
-  final code = envelope.code;
-  final recognized = switch (status) {
-    401 => code == ApiErrorCodes.authenticationRequired,
-    403 =>
-      code == ApiErrorCodes.forbidden ||
-          code == ApiErrorCodes.passwordChangeRequired ||
-          code == ApiErrorCodes.userInactive ||
-          code == ApiErrorCodes.institutionInactive,
-    404 => code == ApiErrorCodes.resourceNotFound,
-    409 when operation == _TeacherHomeworkMutationOperation.create =>
-      code == ApiErrorCodes.topicNotEditable,
-    409 when operation == _TeacherHomeworkMutationOperation.lifecycle =>
-      _isDocumentedLifecycleConflict(code, lifecycleAction),
-    409 =>
-      code == ApiErrorCodes.topicNotEditable ||
-          code == ApiErrorCodes.taskClosed ||
-          code == ApiErrorCodes.taskArchived ||
-          code == ApiErrorCodes.businessConflict ||
-          code == ApiErrorCodes.officialTaskRequiresGroupAssignment,
-    422 => code == ApiErrorCodes.validationFailed,
-    429 => code == ApiErrorCodes.rateLimited,
-    _ => false,
-  };
-
-  return recognized && (status == 422 || envelope.errors.isEmpty);
-}
-
-bool _isDocumentedLifecycleConflict(
-  String code,
-  TeacherHomeworkLifecycleAction? action,
 ) {
-  return switch (action) {
-    TeacherHomeworkLifecycleAction.activate =>
-      code == ApiErrorCodes.topicNotEditable ||
-          code == ApiErrorCodes.taskClosed ||
-          code == ApiErrorCodes.taskArchived ||
-          code == ApiErrorCodes.businessConflict ||
-          code == ApiErrorCodes.resultPairLocked ||
-          code == ApiErrorCodes.assessmentHasNoScoreablePoints ||
-          code == ApiErrorCodes.assessmentNotAssigned ||
-          code == ApiErrorCodes.deadlinePassed,
-    TeacherHomeworkLifecycleAction.close =>
-      code == ApiErrorCodes.taskNotActive ||
-          code == ApiErrorCodes.taskArchived ||
-          code == ApiErrorCodes.topicNotEditable ||
-          code == ApiErrorCodes.businessConflict,
-    TeacherHomeworkLifecycleAction.archive =>
-      code == ApiErrorCodes.businessConflict,
-    null => false,
-  };
-}
-
-bool _isExactQuestionMutationFailure(
-  Response<Object?>? response,
-  TeacherQuestionMutationOperation operation,
-) {
-  final status = response?.statusCode;
-  final envelope = _readExactHomeworkErrorEnvelope(response?.data);
-  if (status == null || envelope == null) {
-    return false;
-  }
-
-  final code = envelope.code;
-  final recognized = switch (status) {
-    401 => code == ApiErrorCodes.authenticationRequired,
-    403 =>
-      code == ApiErrorCodes.forbidden ||
-          code == ApiErrorCodes.passwordChangeRequired ||
-          code == ApiErrorCodes.userInactive ||
-          code == ApiErrorCodes.institutionInactive,
-    404 => code == ApiErrorCodes.resourceNotFound,
-    409 => _isDocumentedQuestionConflict(code, operation),
-    422 => code == ApiErrorCodes.validationFailed,
-    429 => code == ApiErrorCodes.rateLimited,
-    _ => false,
-  };
-
-  return recognized && (status == 422 || envelope.errors.isEmpty);
-}
-
-bool _isDocumentedQuestionConflict(
-  String code,
-  TeacherQuestionMutationOperation operation,
-) {
-  final allowedCodes = switch (operation) {
-    TeacherQuestionMutationOperation.add ||
-    TeacherQuestionMutationOperation.update ||
-    TeacherQuestionMutationOperation.delete ||
-    TeacherQuestionMutationOperation.reorder => const {
+  return switch (operation) {
+    _TeacherHomeworkMutationOperation.create => const {
+      ApiErrorCodes.topicNotEditable,
+    },
+    _TeacherHomeworkMutationOperation.lifecycle => switch (lifecycleAction) {
+      TeacherHomeworkLifecycleAction.activate => const {
+        ApiErrorCodes.topicNotEditable,
+        ApiErrorCodes.taskClosed,
+        ApiErrorCodes.taskArchived,
+        ApiErrorCodes.businessConflict,
+        ApiErrorCodes.resultPairLocked,
+        ApiErrorCodes.assessmentHasNoScoreablePoints,
+        ApiErrorCodes.assessmentNotAssigned,
+        ApiErrorCodes.deadlinePassed,
+      },
+      TeacherHomeworkLifecycleAction.close => const {
+        ApiErrorCodes.taskNotActive,
+        ApiErrorCodes.taskArchived,
+        ApiErrorCodes.topicNotEditable,
+        ApiErrorCodes.businessConflict,
+      },
+      TeacherHomeworkLifecycleAction.archive => const {
+        ApiErrorCodes.businessConflict,
+      },
+      null => const {},
+    },
+    _TeacherHomeworkMutationOperation.update => const {
       ApiErrorCodes.topicNotEditable,
       ApiErrorCodes.taskClosed,
       ApiErrorCodes.taskArchived,
       ApiErrorCodes.businessConflict,
-      ApiErrorCodes.resultPairLocked,
-      ApiErrorCodes.assessmentHasNoScoreablePoints,
+      ApiErrorCodes.officialTaskRequiresGroupAssignment,
     },
   };
-  return allowedCodes.contains(code);
 }
 
-_ExactHomeworkErrorEnvelope? _readExactHomeworkErrorEnvelope(Object? value) {
-  if (value is! Map) {
-    return null;
-  }
-  final map = <String, Object?>{};
-  for (final entry in value.entries) {
-    if (entry.key is! String) {
-      return null;
-    }
-    map[entry.key as String] = entry.value;
-  }
-
-  const required = {'message', 'code', 'errors'};
-  const allowed = {...required, 'request_id'};
-  if (map.length < required.length ||
-      !map.keys.toSet().containsAll(required) ||
-      map.keys.any((key) => !allowed.contains(key))) {
-    return null;
-  }
-
-  final message = map['message'];
-  final code = map['code'];
-  final requestId = map['request_id'];
-  final rawErrors = map['errors'];
-  if (message is! String ||
-      message.trim().isEmpty ||
-      code is! String ||
-      code.isEmpty ||
-      rawErrors is! Map ||
-      (map.containsKey('request_id') &&
-          (requestId is! String || requestId.isEmpty))) {
-    return null;
-  }
-
-  final errors = <String, List<String>>{};
-  for (final entry in rawErrors.entries) {
-    if (entry.key is! String || entry.value is! List) {
-      return null;
-    }
-    final messages = <String>[];
-    for (final item in entry.value as List) {
-      if (item is! String || item.isEmpty) {
-        return null;
-      }
-      messages.add(item);
-    }
-    if (messages.isEmpty) {
-      return null;
-    }
-    errors[entry.key as String] = messages;
-  }
-
-  return _ExactHomeworkErrorEnvelope(code: code, errors: errors);
-}
-
-class _ExactHomeworkErrorEnvelope {
-  const _ExactHomeworkErrorEnvelope({required this.code, required this.errors});
-
-  final String code;
-  final Map<String, List<String>> errors;
-}
+const _homeworkQuestionConflictCodes = {
+  ApiErrorCodes.topicNotEditable,
+  ApiErrorCodes.taskClosed,
+  ApiErrorCodes.taskArchived,
+  ApiErrorCodes.businessConflict,
+  ApiErrorCodes.resultPairLocked,
+  ApiErrorCodes.assessmentHasNoScoreablePoints,
+};

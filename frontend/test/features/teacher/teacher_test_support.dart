@@ -11,6 +11,7 @@ import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list_query.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_list.dart';
@@ -882,7 +883,16 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
 }
 
 class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
-  FakeTeacherBlitzRepository({this.onFetchList, this.onFetch});
+  FakeTeacherBlitzRepository({
+    this.onFetchList,
+    this.onFetch,
+    this.onCreate,
+    this.onUpdate,
+    this.onAddQuestion,
+    this.onUpdateQuestion,
+    this.onDeleteQuestion,
+    this.onReorderQuestions,
+  });
 
   Future<TeacherBlitzList> Function(
     String topicId,
@@ -890,9 +900,102 @@ class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
   )?
   onFetchList;
   Future<TeacherBlitz> Function(String blitzId)? onFetch;
+  Future<TeacherBlitz> Function(
+    String topicId,
+    TeacherBlitzCreateRequest request,
+  )?
+  onCreate;
+  Future<TeacherBlitz> Function(
+    String blitzId,
+    TeacherBlitzEditRequest request,
+  )?
+  onUpdate;
+  Future<TeacherBlitz> Function(
+    String blitzId,
+    TeacherQuestionCreateRequest request,
+  )?
+  onAddQuestion;
+  Future<TeacherBlitz> Function(
+    String questionId,
+    TeacherQuestionEditRequest request,
+  )?
+  onUpdateQuestion;
+  Future<TeacherBlitz> Function(String questionId)? onDeleteQuestion;
+  Future<TeacherBlitz> Function(
+    String blitzId,
+    TeacherQuestionReorderRequest request,
+  )?
+  onReorderQuestions;
 
   final listRequests = <({String topicId, TeacherBlitzListQuery query})>[];
   final fetchIds = <String>[];
+  final createRequests =
+      <({String topicId, TeacherBlitzCreateRequest request})>[];
+  final updateRequests =
+      <({String blitzId, TeacherBlitzEditRequest request})>[];
+  final addQuestionRequests =
+      <({String blitzId, TeacherQuestionCreateRequest request})>[];
+  final updateQuestionRequests =
+      <({String questionId, TeacherQuestionEditRequest request})>[];
+  final deleteQuestionIds = <String>[];
+  final reorderQuestionRequests =
+      <({String blitzId, TeacherQuestionReorderRequest request})>[];
+
+  @override
+  Future<TeacherBlitz> createBlitz(
+    String topicId,
+    TeacherBlitzCreateRequest request,
+  ) {
+    createRequests.add((topicId: topicId, request: request));
+    return onCreate?.call(topicId, request) ??
+        Future.value(teacherBlitz(topicId: topicId));
+  }
+
+  @override
+  Future<TeacherBlitz> updateBlitz(
+    String blitzId,
+    TeacherBlitzEditRequest request,
+  ) {
+    updateRequests.add((blitzId: blitzId, request: request));
+    return onUpdate?.call(blitzId, request) ??
+        Future.value(teacherBlitz(id: blitzId));
+  }
+
+  @override
+  Future<TeacherBlitz> addQuestion(
+    String blitzId,
+    TeacherQuestionCreateRequest request,
+  ) {
+    addQuestionRequests.add((blitzId: blitzId, request: request));
+    return onAddQuestion?.call(blitzId, request) ??
+        Future.value(teacherBlitz(id: blitzId));
+  }
+
+  @override
+  Future<TeacherBlitz> updateQuestion(
+    String questionId,
+    TeacherQuestionEditRequest request,
+  ) {
+    updateQuestionRequests.add((questionId: questionId, request: request));
+    return onUpdateQuestion?.call(questionId, request) ??
+        Future.value(teacherBlitz());
+  }
+
+  @override
+  Future<TeacherBlitz> deleteQuestion(String questionId) {
+    deleteQuestionIds.add(questionId);
+    return onDeleteQuestion?.call(questionId) ?? Future.value(teacherBlitz());
+  }
+
+  @override
+  Future<TeacherBlitz> reorderQuestions(
+    String blitzId,
+    TeacherQuestionReorderRequest request,
+  ) {
+    reorderQuestionRequests.add((blitzId: blitzId, request: request));
+    return onReorderQuestions?.call(blitzId, request) ??
+        Future.value(teacherBlitz(id: blitzId));
+  }
 
   @override
   Future<TeacherBlitzList> fetchBlitzList(

@@ -82,6 +82,35 @@ class TeacherBlitzDetailController extends Notifier<TeacherBlitzDetailState> {
     _startLoad(retainBlitz: state.blitz != null);
   }
 
+  /// Publishes a mutation's authoritative resource without another GET.
+  void acceptAuthoritativeBlitz(
+    TeacherBlitz blitz,
+    TeacherSessionKey originatingSessionKey,
+  ) {
+    if (!_matchesSession(originatingSessionKey) ||
+        blitz.id.toLowerCase() != target.blitzId.toLowerCase() ||
+        blitz.topicId.toLowerCase() != target.topicId.toLowerCase()) {
+      return;
+    }
+
+    _cancelActiveRequest();
+    state = TeacherBlitzDetailState(
+      status: TeacherBlitzDetailStatus.data,
+      blitz: blitz,
+    );
+  }
+
+  void markNotFound(TeacherSessionKey originatingSessionKey) {
+    if (!_matchesSession(originatingSessionKey)) {
+      return;
+    }
+
+    _cancelActiveRequest();
+    state = const TeacherBlitzDetailState(
+      status: TeacherBlitzDetailStatus.notFound,
+    );
+  }
+
   void _startLoad({required bool retainBlitz}) {
     final sessionKey = _activeSessionKey;
     if (sessionKey == null || _requestActive || !_matchesSession(sessionKey)) {
@@ -207,6 +236,10 @@ class TeacherBlitzDetailController extends Notifier<TeacherBlitzDetailState> {
 
   void _clearOwnership() {
     _activeSessionKey = null;
+    _cancelActiveRequest();
+  }
+
+  void _cancelActiveRequest() {
     _requestActive = false;
     _generation += 1;
   }

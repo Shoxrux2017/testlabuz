@@ -8,6 +8,7 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_list_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_list_state.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_session_key.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list.dart';
@@ -404,6 +405,77 @@ void main() {
       },
     );
 
+    test(
+      'refresh after mutation keeps the query and supersedes older reads',
+      () async {
+        final older = Completer<TeacherBlitzList>();
+        var calls = 0;
+        final repository = FakeTeacherBlitzRepository(
+          onFetchList: (_, query) {
+            calls += 1;
+            if (calls == 2) {
+              return older.future;
+            }
+            return Future.value(
+              _list(query, title: 'Read $calls', total: 41, lastPage: 3),
+            );
+          },
+        );
+        final harness = _Harness(repository: repository);
+        final subscription = harness.listen();
+        await flushTeacherControllers();
+        harness.controller.setStatus(TeacherBlitzStatus.draft);
+        expect(subscription.read().status, TeacherBlitzListStatus.loading);
+
+        harness.controller.refreshAfterMutation(harness.sessionKey);
+        final afterMutation = repository.listRequests.last.query;
+        expect(afterMutation.status, TeacherBlitzStatus.draft);
+        expect(afterMutation.page, 1);
+        await flushTeacherControllers();
+        older.complete(_list(afterMutation, title: 'Superseded read'));
+        await flushTeacherControllers();
+
+        expect(repository.listRequests, hasLength(3));
+        expect(subscription.read().status, TeacherBlitzListStatus.data);
+        expect(subscription.read().result!.items.single.title, 'Read 3');
+      },
+    );
+
+    test(
+      'refresh after mutation retains rows and ignores a stale session',
+      () async {
+        final auth = FakeTeacherAuthSessionController.authenticated(
+          teacherUser('teacher-a'),
+        );
+        final refresh = Completer<TeacherBlitzList>();
+        var calls = 0;
+        final repository = FakeTeacherBlitzRepository(
+          onFetchList: (_, query) {
+            calls += 1;
+            return calls == 1 ? Future.value(_list(query)) : refresh.future;
+          },
+        );
+        final harness = _Harness(repository: repository, auth: auth);
+        final subscription = harness.listen();
+        await flushTeacherControllers();
+        final confirmed = subscription.read().result;
+
+        harness.controller.refreshAfterMutation(harness.sessionKey);
+        expect(subscription.read().status, TeacherBlitzListStatus.refreshing);
+        expect(subscription.read().result, same(confirmed));
+        refresh.complete(_list(const TeacherBlitzListQuery.initial()));
+        await flushTeacherControllers();
+
+        final oldSession = harness.sessionKey;
+        auth.replaceUser(teacherUser('teacher-b'));
+        await flushTeacherControllers();
+        final requestsAfterSwitch = repository.listRequests.length;
+        harness.controller.refreshAfterMutation(oldSession);
+        await flushTeacherControllers();
+        expect(repository.listRequests, hasLength(requestsAfterSwitch));
+      },
+    );
+
     test('forbidden and not found remain ordinary list errors', () async {
       for (final failure in [
         teacherServerFailure(ApiErrorCodes.forbidden),
@@ -464,6 +536,11 @@ class _Harness {
   void setSurface(AppDeviceSurface surface) {
     container.read(teacherTestSurfaceProvider.notifier).change(surface);
   }
+
+  TeacherSessionKey get sessionKey => TeacherSessionSnapshot.fromSession(
+    container.read(authSessionControllerProvider),
+    container.read(appDeviceSurfaceProvider),
+  ).eligibleKey!;
 
   ProviderSubscription<TeacherBlitzListState> listen({
     String topicId = _topicId,

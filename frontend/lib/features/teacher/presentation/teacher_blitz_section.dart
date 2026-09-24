@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
 import '../application/teacher_blitz_list_controller.dart';
 import '../application/teacher_blitz_list_state.dart';
+import '../application/teacher_topic_detail_controller.dart';
+import '../application/teacher_topic_detail_state.dart';
 import '../application/teacher_topic_result_pair_controller.dart';
 import '../domain/teacher_blitz.dart';
+import '../domain/teacher_topic.dart';
 import 'teacher_blitz_formatters.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_workspace_list_widgets.dart';
 
-/// Read-only Topic Blitz list; Blitz actions belong to later tasks.
+/// Topic Blitz list with the desktop Create entry; lifecycle actions
+/// belong to later tasks.
 class TeacherBlitzSection extends ConsumerWidget {
   const TeacherBlitzSection({required this.topicId, super.key});
 
@@ -29,6 +34,17 @@ class TeacherBlitzSection extends ConsumerWidget {
     final officialBlitzId = pairState.hasConfirmedData
         ? pairState.pair?.blitzAssessmentId
         : null;
+    final topicDetail = ref.watch(
+      teacherTopicDetailControllerProvider(topicId),
+    );
+    final topic = topicDetail.status == TeacherTopicDetailStatus.data
+        ? topicDetail.topic
+        : null;
+    final canCreate =
+        ref.watch(appDeviceSurfaceProvider) == AppDeviceSurface.desktop &&
+        topic != null &&
+        (topic.status == TeacherTopicStatus.draft ||
+            topic.status == TeacherTopicStatus.active);
 
     return Card(
       key: const Key('teacherBlitzSection'),
@@ -48,6 +64,17 @@ class TeacherBlitzSection extends ConsumerWidget {
                     ),
                   ),
                 ),
+                if (canCreate) ...[
+                  FilledButton.icon(
+                    key: const Key('teacherBlitzCreateButton'),
+                    onPressed: () => context.go(
+                      AppRoutePaths.teacherBlitzCreateLocation(topicId),
+                    ),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create Blitz'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 IconButton(
                   key: const Key('teacherBlitzRefreshButton'),
                   tooltip: 'Refresh Blitz',

@@ -1,7 +1,9 @@
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_topic.dart';
+import 'teacher_question_authoring_route_target.dart';
 
-class TeacherHomeworkRouteTarget {
+class TeacherHomeworkRouteTarget
+    implements TeacherQuestionAuthoringRouteTarget {
   TeacherHomeworkRouteTarget({
     required this.topicId,
     required this.homeworkId,
@@ -22,8 +24,12 @@ class TeacherHomeworkRouteTarget {
     }
   }
 
+  @override
   final String topicId;
   final String homeworkId;
+
+  @override
+  String get assessmentId => homeworkId;
 
   @override
   bool operator ==(Object other) {

@@ -5,49 +5,51 @@ import 'package:go_router/go_router.dart';
 import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
-import '../application/teacher_homework_detail_controller.dart';
-import '../application/teacher_homework_detail_state.dart';
-import '../application/teacher_homework_route_target.dart';
-import '../application/teacher_question_builder_controller.dart';
+import '../application/teacher_blitz_detail_controller.dart';
+import '../application/teacher_blitz_detail_state.dart';
+import '../application/teacher_blitz_question_builder_controller.dart';
+import '../application/teacher_blitz_route_target.dart';
 import '../application/teacher_question_builder_state.dart';
 import '../application/teacher_session_key.dart';
-import '../domain/teacher_homework.dart';
+import '../domain/teacher_blitz.dart';
+import '../domain/teacher_blitz_form.dart';
 import '../domain/teacher_question.dart';
 import '../domain/teacher_question_authoring.dart';
+import 'teacher_blitz_formatters.dart';
+import 'teacher_blitz_question_editor_dialog.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_question_builder_widgets.dart';
-import 'teacher_question_editor_dialog.dart';
 
-class TeacherQuestionBuilderScreen extends ConsumerStatefulWidget {
-  const TeacherQuestionBuilderScreen({
+class TeacherBlitzQuestionBuilderScreen extends ConsumerStatefulWidget {
+  const TeacherBlitzQuestionBuilderScreen({
     required this.topicId,
-    required this.homeworkId,
+    required this.blitzId,
     super.key,
   });
 
   final String topicId;
-  final String homeworkId;
+  final String blitzId;
 
   @override
-  ConsumerState<TeacherQuestionBuilderScreen> createState() =>
-      _TeacherQuestionBuilderScreenState();
+  ConsumerState<TeacherBlitzQuestionBuilderScreen> createState() =>
+      _TeacherBlitzQuestionBuilderScreenState();
 }
 
-class _TeacherQuestionBuilderScreenState
-    extends ConsumerState<TeacherQuestionBuilderScreen> {
-  late final TeacherHomeworkRouteTarget _target;
-  late final TeacherQuestionBuilderController _builderController;
+class _TeacherBlitzQuestionBuilderScreenState
+    extends ConsumerState<TeacherBlitzQuestionBuilderScreen> {
+  late final TeacherBlitzRouteTarget _target;
+  late final TeacherBlitzQuestionBuilderController _builderController;
   late final int _routeOwnerGeneration;
 
   @override
   void initState() {
     super.initState();
-    _target = TeacherHomeworkRouteTarget(
+    _target = TeacherBlitzRouteTarget(
       topicId: widget.topicId,
-      homeworkId: widget.homeworkId,
+      blitzId: widget.blitzId,
     );
     _builderController = ref.read(
-      teacherQuestionBuilderControllerProvider(_target).notifier,
+      teacherBlitzQuestionBuilderControllerProvider(_target).notifier,
     );
     _routeOwnerGeneration = _builderController.enterRoute();
   }
@@ -64,28 +66,30 @@ class _TeacherQuestionBuilderScreenState
 
   @override
   Widget build(BuildContext context) {
-    final builderProvider = teacherQuestionBuilderControllerProvider(_target);
+    final builderProvider = teacherBlitzQuestionBuilderControllerProvider(
+      _target,
+    );
     final builderState = ref.watch(builderProvider);
-    final detailProvider = teacherHomeworkDetailControllerProvider(_target);
+    final detailProvider = teacherBlitzDetailControllerProvider(_target);
     final detailState = ref.watch(detailProvider);
 
     return PopScope(
       canPop: !builderState.blocksNavigation && !builderState.orderDirty,
       onPopInvokedWithResult: (didPop, _) async {
         if (!didPop && !builderState.blocksNavigation) {
-          await _backToHomework(builderState);
+          await _backToBlitz(builderState);
         }
       },
       child: Scaffold(
-        key: const Key('teacherQuestionBuilderScreen'),
+        key: const Key('teacherBlitzQuestionBuilderScreen'),
         appBar: AppBar(
           title: const Text('Question Builder'),
           leading: IconButton(
-            key: const Key('teacherQuestionBuilderBackButton'),
-            tooltip: 'Back to Homework',
+            key: const Key('teacherBlitzQuestionBuilderBackButton'),
+            tooltip: 'Back to Blitz',
             onPressed: builderState.blocksNavigation
                 ? null
-                : () => _backToHomework(builderState),
+                : () => _backToBlitz(builderState),
             icon: const Icon(Icons.arrow_back),
           ),
         ),
@@ -101,39 +105,39 @@ class _TeacherQuestionBuilderScreenState
 
   Widget _buildBody({
     required TeacherQuestionBuilderState builderState,
-    required TeacherHomeworkDetailState detailState,
+    required TeacherBlitzDetailState detailState,
   }) {
     if (builderState.status == TeacherQuestionBuilderStatus.unavailable ||
-        detailState.status == TeacherHomeworkDetailStatus.notFound) {
+        detailState.status == TeacherBlitzDetailStatus.notFound) {
       return _BuilderUnavailable(onBack: _backWithoutGuard);
     }
 
-    if ((detailState.status == TeacherHomeworkDetailStatus.initial ||
-            detailState.status == TeacherHomeworkDetailStatus.loading) &&
-        detailState.homework == null) {
+    if ((detailState.status == TeacherBlitzDetailStatus.initial ||
+            detailState.status == TeacherBlitzDetailStatus.loading) &&
+        detailState.blitz == null) {
       return const Center(
         child: CircularProgressIndicator(
-          key: Key('teacherQuestionBuilderLoading'),
+          key: Key('teacherBlitzQuestionBuilderLoading'),
           semanticsLabel: 'Loading Question Builder',
         ),
       );
     }
 
-    if (detailState.status == TeacherHomeworkDetailStatus.error &&
-        detailState.homework == null) {
+    if (detailState.status == TeacherBlitzDetailStatus.error &&
+        detailState.blitz == null) {
       return _BuilderLoadError(
         onRetry: ref
-            .read(teacherHomeworkDetailControllerProvider(_target).notifier)
+            .read(teacherBlitzDetailControllerProvider(_target).notifier)
             .retry,
         onBack: _backWithoutGuard,
       );
     }
 
-    final homework = detailState.homework;
-    if (homework == null) {
+    final blitz = detailState.blitz;
+    if (blitz == null) {
       return _BuilderLoadError(
         onRetry: ref
-            .read(teacherHomeworkDetailControllerProvider(_target).notifier)
+            .read(teacherBlitzDetailControllerProvider(_target).notifier)
             .refresh,
         onBack: _backWithoutGuard,
       );
@@ -141,11 +145,9 @@ class _TeacherQuestionBuilderScreenState
 
     final surface = ref.watch(appDeviceSurfaceProvider);
     final hasCurrentDetail =
-        detailState.status == TeacherHomeworkDetailStatus.data &&
+        detailState.status == TeacherBlitzDetailStatus.data &&
         !detailState.isStale;
-    final lifecycleEditable =
-        homework.status == TeacherHomeworkStatus.draft ||
-        homework.status == TeacherHomeworkStatus.active;
+    final lifecycleEditable = isTeacherBlitzAuthoringStatus(blitz.status);
     final mutationAvailable =
         surface == AppDeviceSurface.desktop &&
         hasCurrentDetail &&
@@ -156,7 +158,7 @@ class _TeacherQuestionBuilderScreenState
         !builderState.isBusy &&
         !builderState.hasBlockingOutcome;
     final orderedQuestions = teacherQuestionsInDraftOrder(
-      homework.questions,
+      blitz.questions,
       builderState,
     );
     final canEditQuestion = mutationAvailable && !builderState.orderDirty;
@@ -164,13 +166,13 @@ class _TeacherQuestionBuilderScreenState
     final showMutationControls =
         surface == AppDeviceSurface.desktop && lifecycleEditable;
     final atQuestionLimit =
-        homework.questions.length >=
+        blitz.questions.length >=
         TeacherQuestionAuthoringLimits.maxQuestionsPerAssessment;
 
     return FocusTraversalGroup(
       policy: WidgetOrderTraversalPolicy(),
       child: SingleChildScrollView(
-        key: const Key('teacherQuestionBuilderScroll'),
+        key: const Key('teacherBlitzQuestionBuilderScroll'),
         padding: const EdgeInsets.all(16),
         child: Center(
           child: ConstrainedBox(
@@ -178,30 +180,28 @@ class _TeacherQuestionBuilderScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (detailState.status ==
-                        TeacherHomeworkDetailStatus.refreshing ||
+                if (detailState.status == TeacherBlitzDetailStatus.refreshing ||
                     builderState.isBusy) ...[
                   LinearProgressIndicator(
-                    key: const Key('teacherQuestionBuilderProgress'),
+                    key: const Key('teacherBlitzQuestionBuilderProgress'),
                     semanticsLabel: switch (builderState.status) {
                       TeacherQuestionBuilderStatus.deleting =>
                         'Deleting Question',
                       TeacherQuestionBuilderStatus.reordering =>
                         'Saving Question order',
                       TeacherQuestionBuilderStatus.reconciling =>
-                        'Checking current Homework',
+                        'Checking current Blitz',
                       _ => 'Refreshing Question Builder',
                     },
                   ),
                   const SizedBox(height: 12),
                 ],
                 if (detailState.isStale ||
-                    detailState.status ==
-                        TeacherHomeworkDetailStatus.error) ...[
+                    detailState.status == TeacherBlitzDetailStatus.error) ...[
                   const TeacherQuestionBuilderMessage(
-                    key: Key('teacherQuestionBuilderStaleMessage'),
+                    key: Key('teacherBlitzQuestionBuilderStaleMessage'),
                     message:
-                        'The displayed Homework may be out of date. Refresh '
+                        'The displayed Blitz may be out of date. Refresh '
                         'before changing Questions.',
                     isError: true,
                   ),
@@ -209,14 +209,14 @@ class _TeacherQuestionBuilderScreenState
                 ],
                 if (builderState.notice != null) ...[
                   TeacherQuestionBuilderMessage(
-                    key: const Key('teacherQuestionBuilderNotice'),
+                    key: const Key('teacherBlitzQuestionBuilderNotice'),
                     message: builderState.notice!,
                     isError: builderState.hasBlockingOutcome,
                     onDismiss: builderState.hasBlockingOutcome
                         ? null
                         : () => ref
                               .read(
-                                teacherQuestionBuilderControllerProvider(
+                                teacherBlitzQuestionBuilderControllerProvider(
                                   _target,
                                 ).notifier,
                               )
@@ -228,10 +228,10 @@ class _TeacherQuestionBuilderScreenState
                 ],
                 if (builderState.serverLocked) ...[
                   const TeacherQuestionBuilderMessage(
-                    key: Key('teacherQuestionBuilderLockedBanner'),
+                    key: Key('teacherBlitzQuestionBuilderLockedBanner'),
                     message:
                         'Question editing is locked by the current server '
-                        'state. Review the current Homework before continuing.',
+                        'state. Review the current Blitz before continuing.',
                     isError: true,
                   ),
                   const SizedBox(height: 12),
@@ -240,31 +240,22 @@ class _TeacherQuestionBuilderScreenState
                     builderState.notice !=
                         'The Topic is no longer editable.') ...[
                   const TeacherQuestionBuilderMessage(
-                    key: Key('teacherQuestionBuilderTopicNotEditableBanner'),
+                    key: Key(
+                      'teacherBlitzQuestionBuilderTopicNotEditableBanner',
+                    ),
                     message: 'The Topic is no longer editable.',
                     isError: true,
                   ),
                   const SizedBox(height: 12),
                 ],
-                if (homework.status == TeacherHomeworkStatus.active) ...[
-                  const TeacherQuestionBuilderMessage(
-                    key: Key('teacherQuestionBuilderActiveNote'),
-                    message:
-                        'Question editing may be locked after Student activity '
-                        'begins. The server will confirm whether changes are '
-                        'still allowed.',
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 if (!lifecycleEditable) ...[
                   const TeacherQuestionBuilderMessage(
-                    key: Key('teacherQuestionBuilderReviewOnlyMessage'),
-                    message:
-                        'Question editing is unavailable for this Homework.',
+                    key: Key('teacherBlitzQuestionBuilderReviewOnlyMessage'),
+                    message: 'Question editing is unavailable for this Blitz.',
                   ),
                   const SizedBox(height: 12),
                 ],
-                _HomeworkContextCard(homework: homework),
+                _BlitzContextCard(blitz: blitz),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 10,
@@ -272,7 +263,7 @@ class _TeacherQuestionBuilderScreenState
                   children: [
                     if (showMutationControls)
                       FilledButton.icon(
-                        key: const Key('teacherQuestionBuilderAddButton'),
+                        key: const Key('teacherBlitzQuestionBuilderAddButton'),
                         onPressed:
                             mutationAvailable &&
                                 !builderState.orderDirty &&
@@ -283,12 +274,14 @@ class _TeacherQuestionBuilderScreenState
                         label: const Text('Add Question'),
                       ),
                     OutlinedButton.icon(
-                      key: const Key('teacherQuestionBuilderRefreshButton'),
+                      key: const Key(
+                        'teacherBlitzQuestionBuilderRefreshButton',
+                      ),
                       onPressed:
                           builderState.isBusy ||
                               builderState.hasBlockingOutcome ||
                               detailState.status ==
-                                  TeacherHomeworkDetailStatus.refreshing
+                                  TeacherBlitzDetailStatus.refreshing
                           ? null
                           : () => _refreshWithGuard(builderState),
                       icon: const Icon(Icons.refresh),
@@ -296,11 +289,13 @@ class _TeacherQuestionBuilderScreenState
                     ),
                     if (builderState.orderDirty) ...[
                       FilledButton.icon(
-                        key: const Key('teacherQuestionBuilderSaveOrderButton'),
+                        key: const Key(
+                          'teacherBlitzQuestionBuilderSaveOrderButton',
+                        ),
                         onPressed: canReorder
                             ? () => ref
                                   .read(
-                                    teacherQuestionBuilderControllerProvider(
+                                    teacherBlitzQuestionBuilderControllerProvider(
                                       _target,
                                     ).notifier,
                                   )
@@ -313,13 +308,13 @@ class _TeacherQuestionBuilderScreenState
                       ),
                       TextButton(
                         key: const Key(
-                          'teacherQuestionBuilderResetOrderButton',
+                          'teacherBlitzQuestionBuilderResetOrderButton',
                         ),
                         onPressed: builderState.isBusy
                             ? null
                             : () => ref
                                   .read(
-                                    teacherQuestionBuilderControllerProvider(
+                                    teacherBlitzQuestionBuilderControllerProvider(
                                       _target,
                                     ).notifier,
                                   )
@@ -332,30 +327,30 @@ class _TeacherQuestionBuilderScreenState
                     if (builderState.hasBlockingOutcome)
                       FilledButton.icon(
                         key: const Key(
-                          'teacherQuestionBuilderCheckCurrentButton',
+                          'teacherBlitzQuestionBuilderCheckCurrentButton',
                         ),
                         onPressed: builderState.isBusy
                             ? null
                             : () => ref
                                   .read(
-                                    teacherQuestionBuilderControllerProvider(
+                                    teacherBlitzQuestionBuilderControllerProvider(
                                       _target,
                                     ).notifier,
                                   )
-                                  .checkCurrentHomework(
+                                  .checkCurrentBlitz(
                                     ownerGeneration: _routeOwnerGeneration,
                                   ),
                         icon: const Icon(Icons.sync),
-                        label: const Text('Check current Homework'),
+                        label: const Text('Check current Blitz'),
                       ),
                     if (!lifecycleEditable)
                       OutlinedButton.icon(
                         key: const Key(
-                          'teacherQuestionBuilderBackToHomeworkButton',
+                          'teacherBlitzQuestionBuilderBackToBlitzButton',
                         ),
                         onPressed: _backWithoutGuard,
                         icon: const Icon(Icons.arrow_back),
-                        label: const Text('Back to Homework'),
+                        label: const Text('Back to Blitz'),
                       ),
                   ],
                 ),
@@ -363,7 +358,7 @@ class _TeacherQuestionBuilderScreenState
                   const SizedBox(height: 8),
                   const Text(
                     'Maximum 100 Questions.',
-                    key: Key('teacherQuestionBuilderMaximumMessage'),
+                    key: Key('teacherBlitzQuestionBuilderMaximumMessage'),
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -377,7 +372,7 @@ class _TeacherQuestionBuilderScreenState
                 const SizedBox(height: 10),
                 if (orderedQuestions.isEmpty)
                   const TeacherQuestionBuilderMessage(
-                    key: Key('teacherQuestionBuilderEmpty'),
+                    key: Key('teacherBlitzQuestionBuilderEmpty'),
                     message: 'No Questions have been added yet.',
                   )
                 else
@@ -400,7 +395,7 @@ class _TeacherQuestionBuilderScreenState
                           ? null
                           : () => ref
                                 .read(
-                                  teacherQuestionBuilderControllerProvider(
+                                  teacherBlitzQuestionBuilderControllerProvider(
                                     _target,
                                   ).notifier,
                                 )
@@ -412,7 +407,7 @@ class _TeacherQuestionBuilderScreenState
                           ? null
                           : () => ref
                                 .read(
-                                  teacherQuestionBuilderControllerProvider(
+                                  teacherBlitzQuestionBuilderControllerProvider(
                                     _target,
                                   ).notifier,
                                 )
@@ -440,7 +435,7 @@ class _TeacherQuestionBuilderScreenState
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => TeacherQuestionEditorDialog.add(
+      builder: (_) => TeacherBlitzQuestionEditorDialog.add(
         routeTarget: _target,
         routeOwnerGeneration: _routeOwnerGeneration,
         editorGeneration: generation,
@@ -457,7 +452,7 @@ class _TeacherQuestionBuilderScreenState
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => TeacherQuestionEditorDialog.edit(
+      builder: (_) => TeacherBlitzQuestionEditorDialog.edit(
         routeTarget: _target,
         routeOwnerGeneration: _routeOwnerGeneration,
         questionId: questionId,
@@ -480,12 +475,12 @@ class _TeacherQuestionBuilderScreenState
         ),
         actions: [
           TextButton(
-            key: const Key('teacherQuestionDeleteCancelButton'),
+            key: const Key('teacherBlitzQuestionDeleteCancelButton'),
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            key: const Key('teacherQuestionDeleteConfirmButton'),
+            key: const Key('teacherBlitzQuestionDeleteConfirmButton'),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Delete'),
           ),
@@ -496,7 +491,7 @@ class _TeacherQuestionBuilderScreenState
       return;
     }
     await ref
-        .read(teacherQuestionBuilderControllerProvider(_target).notifier)
+        .read(teacherBlitzQuestionBuilderControllerProvider(_target).notifier)
         .deleteQuestion(question.id, ownerGeneration: _routeOwnerGeneration);
   }
 
@@ -509,22 +504,22 @@ class _TeacherQuestionBuilderScreenState
     }
     if (!builderState.orderDirty) {
       ref
-          .read(teacherQuestionBuilderControllerProvider(_target).notifier)
+          .read(teacherBlitzQuestionBuilderControllerProvider(_target).notifier)
           .refresh(ownerGeneration: _routeOwnerGeneration);
       return;
     }
     final discard = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Discard unsaved Question order and refresh?'),
+        title: const Text('Discard unsaved Question order?'),
         actions: [
           TextButton(
-            key: const Key('teacherQuestionRefreshKeepOrderButton'),
+            key: const Key('teacherBlitzQuestionRefreshKeepOrderButton'),
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Keep order'),
           ),
           FilledButton(
-            key: const Key('teacherQuestionRefreshDiscardOrderButton'),
+            key: const Key('teacherBlitzQuestionRefreshDiscardOrderButton'),
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Discard and refresh'),
           ),
@@ -535,14 +530,14 @@ class _TeacherQuestionBuilderScreenState
       return;
     }
     final controller = ref.read(
-      teacherQuestionBuilderControllerProvider(_target).notifier,
+      teacherBlitzQuestionBuilderControllerProvider(_target).notifier,
     );
     controller
       ..resetOrder(ownerGeneration: _routeOwnerGeneration)
       ..refresh(ownerGeneration: _routeOwnerGeneration);
   }
 
-  Future<void> _backToHomework(TeacherQuestionBuilderState builderState) async {
+  Future<void> _backToBlitz(TeacherQuestionBuilderState builderState) async {
     if (builderState.blocksNavigation) {
       return;
     }
@@ -557,12 +552,12 @@ class _TeacherQuestionBuilderScreenState
           title: const Text('Discard unsaved Question order?'),
           actions: [
             TextButton(
-              key: const Key('teacherQuestionBackKeepOrderButton'),
+              key: const Key('teacherBlitzQuestionBackKeepOrderButton'),
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('Keep editing'),
             ),
             FilledButton(
-              key: const Key('teacherQuestionBackDiscardOrderButton'),
+              key: const Key('teacherBlitzQuestionBackDiscardOrderButton'),
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Discard'),
             ),
@@ -578,17 +573,14 @@ class _TeacherQuestionBuilderScreenState
 
   void _backWithoutGuard() {
     final controller = ref.read(
-      teacherQuestionBuilderControllerProvider(_target).notifier,
+      teacherBlitzQuestionBuilderControllerProvider(_target).notifier,
     );
     if (!controller.ownsRouteGeneration(_routeOwnerGeneration)) {
       return;
     }
     controller.leaveRoute(_routeOwnerGeneration);
     context.go(
-      AppRoutePaths.teacherHomeworkDetailLocation(
-        widget.topicId,
-        widget.homeworkId,
-      ),
+      AppRoutePaths.teacherBlitzDetailLocation(widget.topicId, widget.blitzId),
     );
   }
 
@@ -609,15 +601,15 @@ class _TeacherQuestionBuilderScreenState
   }
 }
 
-class _HomeworkContextCard extends StatelessWidget {
-  const _HomeworkContextCard({required this.homework});
+class _BlitzContextCard extends StatelessWidget {
+  const _BlitzContextCard({required this.blitz});
 
-  final TeacherHomework homework;
+  final TeacherBlitz blitz;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      key: const Key('teacherQuestionBuilderContext'),
+      key: const Key('teacherBlitzQuestionBuilderContext'),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -626,7 +618,7 @@ class _HomeworkContextCard extends StatelessWidget {
             Semantics(
               header: true,
               child: Text(
-                homework.title,
+                blitz.title,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
@@ -635,17 +627,17 @@ class _HomeworkContextCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                Chip(label: Text(teacherHomeworkStatusLabel(homework.status))),
+                Chip(label: Text(teacherBlitzStatusLabel(blitz.status))),
                 Chip(
-                  key: const Key('teacherQuestionBuilderTotalPoints'),
+                  key: const Key('teacherBlitzQuestionBuilderTotalPoints'),
                   label: Text(
                     'Total points: '
-                    '${formatTeacherHomeworkPoints(homework.totalPossiblePoints)}',
+                    '${formatTeacherHomeworkPoints(blitz.totalPossiblePoints)}',
                   ),
                 ),
                 Chip(
-                  key: const Key('teacherQuestionBuilderQuestionCount'),
-                  label: Text('Questions: ${homework.questions.length}'),
+                  key: const Key('teacherBlitzQuestionBuilderQuestionCount'),
+                  label: Text('Questions: ${blitz.questions.length}'),
                 ),
               ],
             ),
@@ -670,20 +662,17 @@ class _BuilderUnavailable extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Homework unavailable',
-              key: const Key('teacherQuestionBuilderUnavailable'),
+              'Blitz unavailable',
+              key: const Key('teacherBlitzQuestionBuilderUnavailable'),
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
             const Text(
-              'The Question Builder is not available for this Homework.',
+              'The Question Builder is not available for this Blitz.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: onBack,
-              child: const Text('Back to Homework'),
-            ),
+            FilledButton(onPressed: onBack, child: const Text('Back to Blitz')),
           ],
         ),
       ),
@@ -707,13 +696,13 @@ class _BuilderLoadError extends StatelessWidget {
           children: [
             Text(
               'Unable to load Question Builder',
-              key: const Key('teacherQuestionBuilderError'),
+              key: const Key('teacherBlitzQuestionBuilderError'),
               style: Theme.of(context).textTheme.titleLarge,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             const Text(
-              'The current Homework could not be loaded.',
+              'The current Blitz could not be loaded.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -723,7 +712,7 @@ class _BuilderLoadError extends StatelessWidget {
               children: [
                 TextButton(onPressed: onBack, child: const Text('Back')),
                 FilledButton.icon(
-                  key: const Key('teacherQuestionBuilderRetryButton'),
+                  key: const Key('teacherBlitzQuestionBuilderRetryButton'),
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),

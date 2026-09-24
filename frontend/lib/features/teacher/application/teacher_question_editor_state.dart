@@ -2,7 +2,6 @@ import '../domain/teacher_question.dart';
 import '../domain/teacher_question_authoring.dart';
 import '../domain/teacher_question_mutation.dart';
 import 'teacher_homework_route_target.dart';
-import 'teacher_homework_detail_state.dart';
 import 'teacher_question_mutation_activity.dart';
 
 enum TeacherQuestionEditorMode { add, edit }
@@ -73,7 +72,9 @@ class TeacherQuestionEditorPendingOperation {
   });
 
   final TeacherQuestionMutationLease lease;
-  final TeacherHomeworkDetailState authorityStateAtStart;
+
+  /// Detail state seen at start; compared by identity to detect newer authority.
+  final Object authorityStateAtStart;
   final TeacherQuestionCreateRequest? createRequest;
   final TeacherQuestionEditRequest? editRequest;
   final String? questionId;

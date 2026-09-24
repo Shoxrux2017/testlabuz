@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../application/teacher_question_editor_controller.dart';
+import '../application/teacher_question_draft_commands.dart';
 import '../domain/teacher_question.dart';
 import '../domain/teacher_question_authoring.dart';
 
@@ -18,7 +18,7 @@ class TeacherQuestionConfigurationFields extends StatelessWidget {
   final bool enabled;
   final String? errorText;
   final FocusNode focusNode;
-  final TeacherQuestionEditorController controller;
+  final TeacherQuestionDraftCommands controller;
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +119,7 @@ class _ChoiceFields extends StatelessWidget {
   final List<TeacherChoiceOptionDraft> options;
   final bool multiple;
   final bool enabled;
-  final TeacherQuestionEditorController controller;
+  final TeacherQuestionDraftCommands controller;
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +252,7 @@ class _TrueFalseFields extends StatelessWidget {
 
   final bool correctValue;
   final bool enabled;
-  final TeacherQuestionEditorController controller;
+  final TeacherQuestionDraftCommands controller;
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +418,7 @@ class _MatchingFields extends StatelessWidget {
 
   final List<TeacherMatchingPairDraft> pairs;
   final bool enabled;
-  final TeacherQuestionEditorController controller;
+  final TeacherQuestionDraftCommands controller;
 
   @override
   Widget build(BuildContext context) {
@@ -512,7 +512,7 @@ class _FillBlankFields extends StatelessWidget {
 
   final List<TeacherFillBlankDraft> blanks;
   final bool enabled;
-  final TeacherQuestionEditorController controller;
+  final TeacherQuestionDraftCommands controller;
 
   @override
   Widget build(BuildContext context) {

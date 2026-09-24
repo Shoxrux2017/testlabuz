@@ -1,6 +1,6 @@
 import '../domain/teacher_question_mutation.dart';
-import 'teacher_homework_detail_state.dart';
 import 'teacher_question_mutation_activity.dart';
+import 'teacher_question_order.dart';
 
 enum TeacherQuestionBuilderStatus {
   ready,
@@ -24,7 +24,9 @@ class TeacherQuestionBuilderPendingOperation {
            : List<String>.unmodifiable(requestedOrderIds);
 
   final TeacherQuestionMutationLease lease;
-  final TeacherHomeworkDetailState authorityStateAtStart;
+
+  /// Detail state seen at start; compared by identity to detect newer authority.
+  final Object authorityStateAtStart;
   final String? questionId;
   final List<String>? requestedOrderIds;
   final String? conflictCode;
@@ -82,7 +84,8 @@ class TeacherQuestionBuilderState {
   final TeacherQuestionBuilderPendingOperation? pendingOperation;
 
   bool get orderDirty =>
-      orderInitialized && !_sameOrder(authoritativeOrderIds, draftOrderIds);
+      orderInitialized &&
+      !sameTeacherQuestionOrder(authoritativeOrderIds, draftOrderIds);
 
   bool get isLocalBusy =>
       status == TeacherQuestionBuilderStatus.deleting ||
@@ -128,15 +131,3 @@ class TeacherQuestionBuilderState {
 }
 
 const _notProvided = Object();
-
-bool _sameOrder(List<String> left, List<String> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  for (var index = 0; index < left.length; index += 1) {
-    if (left[index].toLowerCase() != right[index].toLowerCase()) {
-      return false;
-    }
-  }
-  return true;
-}
