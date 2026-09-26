@@ -9,7 +9,7 @@
 | Area | `Frontend` |
 | Status | `Approved` |
 | Implementation type | `Flutter Teacher active-Blitz monitoring + one-Student attempt exception UX + mobile Activate/basic monitoring` |
-| Depends on | `S08-FE-001…005 Accepted / Delivered`; `S08-BE-PHASE-2 = PASS` remains valid |
+| Depends on | `S08-FE-001…005` — all `Accepted / Delivered` (FE-005: PR #270, 05d06ec); `S08-BE-PHASE-2 = PASS` remains valid; revalidated 2026-09-26 on `05d06ec` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex execution |
 | Backend API dependency | Final delivered Stage 8 monitoring + attempt-exception + activation APIs after Backend Phase 2 PASS |
@@ -196,6 +196,80 @@ monitoring state.
 
 Frontend must not attempt its own timeout transitions.
 
+## 5.1 Delivered facts (revalidation 2026-09-26)
+
+Confirmed on `05d06ec` (`routes/api.php` Teacher group, `TeacherBlitzController`,
+`TeacherBlitzShowRequest`, `ShowTeacherBlitzMonitoring`, `TeacherBlitzMonitoringResource`,
+`FinalizeTimedOutBlitzAttempts`, `TeacherBlitzAttemptExceptionRequest`,
+`GrantTeacherBlitzAttemptException`, `TeacherBlitzAttemptExceptionResource`,
+`ActivateTeacherBlitz`, `StudentBlitzAttemptSummary` and the feature tests
+`TeacherBlitzMonitoring*Test`, `TeacherBlitzAttemptException*Test`, `TeacherBlitzActivation*Test`).
+
+**Monitoring GET**
+
+- Teacher middleware only (`auth:sanctum`, `active.account`, `password.changed`,
+  `role:teacher`); there is **no throttle** on any Teacher route. Any query key or any
+  request body (even `{}`) is `422 validation_failed`, checked before ownership (`404`).
+- Only the owning Teacher with an active membership in the Topic's group can read it;
+  everything else is `404 resource_not_found`. Draft/Scheduled -> `409 task_not_active`,
+  Closed -> `409 task_closed`, Archived -> `409 task_archived`.
+- An Active read first finalizes due Attempts (`timed_out_finalized` +
+  `timeout_auto_submit` at `deadline_at`), so an `in_progress` row always has
+  `remaining_seconds >= 1`.
+- The success shape is exactly Sections 6-17: `data.blitz` has `id`, `status`
+  (`active`), `duration_seconds`, `activated_at`, `timing{mode, synchronized_ends_at,
+  server_now}`; `data.summary` has the six counts; each row has `student{id, full_name}`,
+  `status`, `attempt_number`, `started_at`, `deadline_at`, `remaining_seconds`,
+  `finalization_reason`, `score` (always `null`) and `attempt_exception` (`null` or
+  `{id, invalidated_attempt_id, replacement_attempt_id, reason_type, reason, granted_at,
+  replacement_attempt_available}`). No `message` or `meta`. Timestamps are UTC
+  `Y-m-d\TH:i:s\Z`.
+- Row status: no Attempt or an unused replacement -> `not_started`; `in_progress` ->
+  `in_progress`; `waiting_for_teacher_review` -> `waiting_for_teacher_review`;
+  `submitted`, `timed_out_finalized` and `checked` -> `finalized`.
+- `not_started` rows have every Attempt field `null` (also `deadline_at` in synchronized
+  mode). Synchronized without an exception: `remaining_seconds = max(0, common end -
+  server_now)`, so after the common end the row stays `not_started` with `0`.
+  Individual and unused replacement: `null`. Terminal rows: `0`. After #2 starts the row
+  shows #2 with its own deadline.
+- All persisted recipients are listed (also inactive Students and Students who left the
+  group), ordered by `lower(full_name)`, then `id`. `assigned` equals the partition sum and
+  the row count; `attempt_exceptions_granted` equals the rows with an exception. No
+  answers, Questions, files, scores or checking data are read or returned.
+
+**Attempt-exception grant**
+
+- Same middleware, no throttle. `Idempotency-Key` is a required UUID; operation
+  `teacher.blitz.attempt_exception.grant`; the fingerprint covers the user, the
+  Institution, the route Blitz/Student IDs and the body with the trimmed reason.
+- The body must be a JSON object with exactly `reason_type` (`technical|other_valid`) and
+  `reason`; the server trims with PHP `trim()` (ASCII whitespace only) and allows 1-4000
+  characters counted as code points (`mb_strlen`). Unknown keys or any query are
+  `422 validation_failed`.
+- Success is `201 {data, message}` with message "One additional Blitz attempt has been
+  granted." and exactly the Section 59 keys (no `institution_id`,
+  `assessment_student_id`, `granted_by_user_id`). `replacement_attempt_available` is
+  recomputed on every response as `replacement_attempt_id == null && Blitz active`.
+- Check order: middleware -> `422` -> `404 resource_not_found` (Blitz not visible, Student
+  not a recipient, inactive Student, other Institution) -> same-key completed replay
+  (`201` with the current projection, also after Close/Archive) or
+  `409 idempotency_key_reused` -> for a new claim: Blitz not Active ->
+  `409 blitz_attempt_exception_not_allowed`; exception exists ->
+  `409 blitz_attempt_exception_already_granted`; no Attempt ->
+  `409 blitz_normal_attempt_required`; #1 in progress before its deadline ->
+  `409 blitz_attempt_exception_not_allowed`. A #1 still `in_progress` after its
+  deadline is finalized as timed out and the grant succeeds. A #1 in `waiting_for_teacher_review`
+  or `checked` is grantable.
+
+**Activation**
+
+- No device, user-agent or client restriction exists server-side; mobile calls the same
+  `POST /teacher/blitz/{blitz}/activate` unchanged. A same-key replay is checked before
+  lifecycle and returns `200` with the current Blitz, including `closed`/`archived`; a
+  new key on an Active Blitz is `200` with no change. `assessment_has_no_scoreable_points`,
+  `assessment_not_assigned`, `institution_settings_incomplete` (with `meta.missing_fields`)
+  and `official_cohort_mismatch` exist as `409`.
+
 ---
 
 # 6. Monitoring Success Contract
@@ -273,6 +347,11 @@ detail.topicId == target.topicId
 
 No title is required here; after that identity guard succeeds, use the same
 confirmed FE-001 detail resource for screen title/context.
+
+Revalidation 2026-09-26: the delivered FE-001 detail model is `TeacherBlitz` (not
+`TeacherBlitzDetail`); it has `topicId`, `title`, `status`, `activatedAt`,
+`synchronizedEndsAt` and `institutionTimezone`. `TeacherBlitzTimerStartMode` exposes its
+machine value as `value` (not `apiValue`) with a `parse` factory.
 
 ---
 
@@ -986,6 +1065,14 @@ auth/bootstrap restored route
 
 It is not optional merely because a previous screen once displayed the Blitz.
 
+Revalidation 2026-09-26: the delivered `teacherBlitzDetailControllerProvider` runs on
+desktop and mobile and already maps an exact `404 resource_not_found` and a Topic mismatch
+(`blitz.topicId != target.topicId`) to `notFound`; an ID mismatch arrives as an
+`invalidResponse` error. Project the guard from its state: `data` or `refreshing` with a
+Blitz matching the target -> `confirmed`; `notFound` -> `notFound`; `error` (also when a
+stale Blitz is retained) -> `error`; `initial` or `loading` -> `checking`. Its `retry()`
+is the parent verification Retry.
+
 ---
 
 # 27. Exact Route Classification
@@ -1060,6 +1147,15 @@ Homework Questions
 ```
 
 mobile-authorized.
+
+Revalidation 2026-09-26: the delivered mobile allow-list is not a list or function. It is
+the inline `if` chain in `_authRedirect` and the per-surface rules in
+`_keepsLocationDuringBootstrap` (`app_router.dart`); add the monitoring path to the mobile
+chain and keep it during bootstrap on both surfaces. `teacherTopicIdFromPath` and
+`teacherBlitzIdFromPath` use explicit per-shape lists that must learn the monitoring
+shape, and `isTeacherApprovedLocation` must accept it on desktop. The existing routing
+tests that treat `/teacher/topics/<t>/blitz/<b>/monitoring` as invalid
+(`teacher_blitz_routing_screen_test.dart`) change with this Section.
 
 ---
 
@@ -1431,6 +1527,10 @@ Manual Retry clears the pause and performs one GET.
 On success polling resumes.
 
 Do not spin every 5 seconds against 429.
+
+Revalidation 2026-09-26: the delivered backend has no throttle on Teacher routes, so a
+`429 rate_limited` is not produced today (the global 429 envelope exists). Keep this
+Section as a defensive path and cover it with a fake repository.
 
 ---
 
@@ -1807,6 +1907,10 @@ Backend remains authoritative.
 
 Do not inspect score.
 
+Revalidation 2026-09-26: the backend also grants when #1 is `waiting_for_teacher_review`
+or `checked` (shown as `finalized`), matching this hint. A #1 row still `in_progress`
+shows no Grant; if its deadline has passed the next poll shows it `finalized`.
+
 ---
 
 # 54. Inactive Assigned Student Caveat
@@ -1908,6 +2012,11 @@ Do not accept Teacher-entered Student/Attempt IDs.
 
 Route supplies Student.
 
+Revalidation 2026-09-26: count the 4000 limit in Unicode code points (`reason.runes`), as
+the backend counts with `mb_strlen`, not in UTF-16 code units (`String.length`). Dart
+`trim()` also removes Unicode whitespace that PHP `trim()` keeps, so the client is
+slightly stricter; always send the client-trimmed reason.
+
 ---
 
 # 57. Exception Grant API
@@ -1951,6 +2060,13 @@ JSON body:
 ```
 
 No query.
+
+Revalidation 2026-09-26: send the grant through the delivered `sendTeacherMutation`
+(`teacher_mutation_transport.dart`) with conflict codes
+`blitz_attempt_exception_already_granted`, `blitz_attempt_exception_not_allowed`,
+`blitz_normal_attempt_required` and `idempotency_key_reused`. Only an exact documented
+failure is definite; any other transport failure, wrong status or parse failure is the
+outcome-unknown path of Section 64.
 
 ---
 
@@ -2336,6 +2452,12 @@ Disable reason editing while logical result remains uncertain.
 The Student target/reason snapshot cannot change until operation is resolved or
 abandoned by route/session loss.
 
+Revalidation 2026-09-26: the backend checks the completed replay after authorization but
+before lifecycle. A same-key Retry therefore returns `404 resource_not_found` (Section 71)
+when the Student was deactivated or the Teacher lost access meanwhile, and `201` with the
+historical projection after Close/Archive. For a new claim on a non-Active Blitz,
+`blitz_attempt_exception_not_allowed` comes before `already_granted`.
+
 ---
 
 # 66. Grant Check Monitoring
@@ -2433,6 +2555,9 @@ An additional attempt has already been granted to this Student.
 If monitoring cannot confirm, show current-state recovery error.
 
 No second grant.
+
+Revalidation 2026-09-26: `blitz_attempt_exception_already_granted` is reachable only while
+the Blitz is Active.
 
 ---
 
@@ -2629,6 +2754,26 @@ no request
 
 Do not rely only on hidden buttons.
 
+Revalidation 2026-09-26 — delivered desktop-only guards (behavior-relevant). Every
+FE-003 lifecycle layer is desktop-only today; change only what Activate needs:
+- `TeacherBlitzLifecycleController`: the build guard and `_matchesSession` accept a mobile
+  session; `activate()`, `retryActivation()` and `checkCurrentBlitz()` run on both
+  surfaces, while `schedule()`, `close()`, `archive()` stay desktop-only and send
+  nothing on mobile;
+- `teacher_blitz_route_mutation_activity.dart`: `begin()` returns a lease on mobile only
+  for the `activate` operation (the narrow current-session fix Section 103 allows); the
+  other operations stay desktop-only;
+- the Question mutation activity stays desktop-only; on mobile it is neutral, which
+  activation already treats as no conflict;
+- `TeacherBlitzLifecycleControls` (`_sessionOwner`) and `TeacherBlitzDetailScreen` (the
+  lifecycle card, the activity watch and the feedback listener exist only on desktop)
+  render the Activate, Retry activation and Check current Blitz controls, and the
+  feedback, on mobile, and nothing else.
+`TeacherOfficialBlitzController` stays desktop-only. The FE-003 tests that assert the
+opposite change with this Section: `teacher_blitz_lifecycle_controller_test` "mobile never
+owns lifecycle mutations" and `teacher_blitz_lifecycle_screen_test` "mobile shows no
+lifecycle or designation controls".
+
 ---
 
 # 76. Mobile Activate Visibility
@@ -2730,6 +2875,11 @@ If this Blitz must be official, refresh on desktop before activation.
 Teacher may still activate.
 
 Backend activation does not require official designation.
+
+Revalidation 2026-09-26: the delivered FE-003 activation dialog copy already matches
+Section 77; reuse it. For Section 78 use the delivered `teacherBlitzOfficialKnowledge(blitz,
+pairState)` (`official|notOfficial|unconfirmed`) over the surface-neutral
+`teacherTopicResultPairControllerProvider`; no official mutation is added on mobile.
 
 ---
 
@@ -2884,6 +3034,14 @@ No exception grant on detail.
 
 Exception grant lives in monitoring Student rows only.
 
+Revalidation 2026-09-26: the delivered detail screen has no action slot shared by both
+surfaces (AppBar Refresh aside); add the Monitor entry to one shared place. The detail
+tests that assert no Monitor on an Active Blitz (`teacher_blitz_detail_screen_test` "an
+Active Blitz offers only Close, no monitoring or countdown" and the Monitor assertion in
+`teacher_blitz_lifecycle_screen_test`) change with Sections 81-82; the Grant and
+Remaining assertions on detail stay. The Topic Blitz section gets no Monitor, so
+`teacher_blitz_section_test` stays unchanged.
+
 ---
 
 # 83. Monitoring Screen Does Not Own Close
@@ -2966,6 +3124,11 @@ Teacher formatter applies.
 Execution remaining seconds come from monitoring rows as server snapshots.
 
 Do not compute Student deadlines from timer mode.
+
+Revalidation 2026-09-26: the delivered detail screen shows activation and end instants in
+UTC (`formatUtcInstant`). Monitoring uses the delivered `formatInstitutionInstant` with the
+confirmed `TeacherBlitz.institutionTimezone`, and falls back to UTC like detail when the
+zone cannot be formatted.
 
 ---
 
@@ -3358,6 +3521,14 @@ integration_test/
 docs/
 tasks/
 ```
+
+Revalidation 2026-09-26: `ApiErrorCodes` already has `rateLimited`, `taskNotActive`,
+`taskClosed`, `taskArchived`, `resourceNotFound`, `idempotencyKeyReused`,
+`assessmentHasNoScoreablePoints`, `assessmentNotAssigned`, `institutionSettingsIncomplete`
+and `officialCohortMismatch`; add only `blitzAttemptExceptionAlreadyGranted`,
+`blitzAttemptExceptionNotAllowed` and `blitzNormalAttemptRequired`.
+`FakeTeacherBlitzRepository` in `test/features/teacher/teacher_test_support.dart` must gain
+the two new repository methods.
 
 ---
 
@@ -3779,6 +3950,13 @@ because:
 
 Existing authoring redirects remain green.
 
+Revalidation 2026-09-26: the delivered FE-001…003 test files for Sections 112-116 are
+`teacher_blitz_lifecycle_controller_test`, `teacher_blitz_lifecycle_screen_test`,
+`teacher_blitz_lifecycle_test`, `teacher_blitz_lifecycle_data_source_test`,
+`teacher_official_blitz_controller_test`, `teacher_topic_result_pair_controller_test`,
+`teacher_blitz_detail_controller_test`, `teacher_blitz_detail_screen_test`,
+`teacher_blitz_routing_screen_test` and `teacher_blitz_section_test`.
+
 ---
 
 # 117. Focused Verification — New FE-006
@@ -4143,3 +4321,6 @@ Implementation Readiness Gate        = PASS
 Execution dependency                 = S08-FE-005 Accepted / Delivered
 Next gate after acceptance            = S08-FE-PHASE-2
 ```
+
+Revalidation 2026-09-26 on `05d06ec`: the gate remains `PASS` with the corrections marked
+"Revalidation 2026-09-26" above; `S08-FE-001…005` are `Accepted / Delivered`.
