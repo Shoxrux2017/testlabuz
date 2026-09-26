@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_attempt_exception.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_monitoring.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_blitz_formatters.dart';
 
 void main() {
@@ -61,5 +63,39 @@ void main() {
       ),
       'Institution timezone unavailable',
     );
+  });
+
+  test('labels monitoring states without raw machine codes', () {
+    expect(
+      TeacherBlitzMonitoringStudentStatus.values.map(
+        teacherBlitzMonitoringStatusLabel,
+      ),
+      ['Not started', 'In progress', 'Finalized', 'Waiting for Teacher review'],
+    );
+    expect(
+      TeacherBlitzMonitoringFinalizationReason.values.map(
+        teacherBlitzFinalizationReasonLabel,
+      ),
+      ['Submitted by Student', 'Time expired', 'Finalized when Blitz closed'],
+    );
+    expect(
+      TeacherBlitzAttemptExceptionReasonType.values.map(
+        teacherBlitzAttemptExceptionReasonTypeLabel,
+      ),
+      ['Technical problem', 'Other valid reason'],
+    );
+    expect(teacherBlitzAttemptNumberLabel(null), '—');
+    expect(teacherBlitzAttemptNumberLabel(1), 'Attempt 1');
+    expect(teacherBlitzAttemptNumberLabel(2), 'Additional attempt');
+  });
+
+  test('formats a remaining-time snapshot as mm:ss or h:mm:ss', () {
+    expect(formatTeacherBlitzRemaining(null), '—');
+    expect(formatTeacherBlitzRemaining(0), '00:00');
+    expect(formatTeacherBlitzRemaining(9), '00:09');
+    expect(formatTeacherBlitzRemaining(360), '06:00');
+    expect(formatTeacherBlitzRemaining(3599), '59:59');
+    expect(formatTeacherBlitzRemaining(3600), '1:00:00');
+    expect(formatTeacherBlitzRemaining(37230), '10:20:30');
   });
 }

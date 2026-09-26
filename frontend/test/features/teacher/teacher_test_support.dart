@@ -9,8 +9,10 @@ import 'package:testlabuz_client/features/auth/domain/auth_institution.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_attempt_exception.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list_query.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_monitoring.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_schedule.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_repository.dart';
@@ -41,6 +43,8 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pa
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
+
+import 'teacher_blitz_monitoring_fixtures.dart';
 
 /// Mutable device surface for tests that change it after providers exist.
 ///
@@ -897,6 +901,8 @@ class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
     this.onActivate,
     this.onClose,
     this.onArchive,
+    this.onFetchMonitoring,
+    this.onGrantAttemptException,
   });
 
   Future<TeacherBlitzList> Function(
@@ -940,6 +946,14 @@ class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
   onActivate;
   Future<TeacherBlitz> Function(String blitzId)? onClose;
   Future<TeacherBlitz> Function(String blitzId)? onArchive;
+  Future<TeacherBlitzMonitoring> Function(String blitzId)? onFetchMonitoring;
+  Future<TeacherBlitzAttemptException> Function(
+    String blitzId,
+    String studentId,
+    TeacherBlitzAttemptExceptionRequest request,
+    String idempotencyKey,
+  )?
+  onGrantAttemptException;
 
   final listRequests = <({String topicId, TeacherBlitzListQuery query})>[];
   final fetchIds = <String>[];
@@ -959,6 +973,45 @@ class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
   final activateRequests = <({String blitzId, String idempotencyKey})>[];
   final closeIds = <String>[];
   final archiveIds = <String>[];
+  final monitoringIds = <String>[];
+  final grantRequests =
+      <
+        ({
+          String blitzId,
+          String studentId,
+          TeacherBlitzAttemptExceptionRequest request,
+          String idempotencyKey,
+        })
+      >[];
+
+  @override
+  Future<TeacherBlitzMonitoring> fetchMonitoring(String blitzId) {
+    monitoringIds.add(blitzId);
+    return onFetchMonitoring?.call(blitzId) ??
+        Future.value(teacherMonitoring(blitzId: blitzId));
+  }
+
+  @override
+  Future<TeacherBlitzAttemptException> grantAttemptException(
+    String blitzId,
+    String studentId,
+    TeacherBlitzAttemptExceptionRequest request, {
+    required String idempotencyKey,
+  }) {
+    grantRequests.add((
+      blitzId: blitzId,
+      studentId: studentId,
+      request: request,
+      idempotencyKey: idempotencyKey,
+    ));
+    return onGrantAttemptException?.call(
+          blitzId,
+          studentId,
+          request,
+          idempotencyKey,
+        ) ??
+        Future.value(teacherGrant(blitzId: blitzId, studentId: studentId));
+  }
 
   @override
   Future<TeacherBlitz> scheduleBlitz(

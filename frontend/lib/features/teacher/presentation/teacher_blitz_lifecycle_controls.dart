@@ -16,8 +16,9 @@ import '../domain/teacher_blitz_form.dart';
 import '../domain/teacher_blitz_lifecycle.dart';
 import 'teacher_blitz_schedule_dialog.dart';
 
-/// Desktop Schedule/Official/Activate/Close/Archive controls for a confirmed
-/// current Blitz. Visibility is a UX hint; the server stays authoritative.
+/// Schedule/Official/Activate/Close/Archive controls for a confirmed current
+/// Blitz; mobile shows only Activate and its recovery. Visibility is a UX
+/// hint; the server stays authoritative.
 class TeacherBlitzLifecycleControls extends ConsumerWidget {
   const TeacherBlitzLifecycleControls({
     required this.target,
@@ -54,16 +55,21 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
       target.topicId.toLowerCase(),
     );
     final pairState = ref.watch(pairProvider);
+    final surface = ref.watch(appDeviceSurfaceProvider);
+    final isDesktop = surface == AppDeviceSurface.desktop;
 
     final officialKnowledge = teacherBlitzOfficialKnowledge(blitz, pairState);
     final officialOption = teacherOfficialBlitzOption(
       blitz: blitz,
       pairState: pairState,
     );
-    final actions = teacherBlitzLifecycleActions(
-      blitz,
-      official: officialKnowledge,
-    );
+    final actions = [
+      for (final action in teacherBlitzLifecycleActions(
+        blitz,
+        official: officialKnowledge,
+      ))
+        if (isTeacherBlitzLifecycleActionOnSurface(action, surface)) action,
+    ];
     final enabled =
         mutationsAvailable &&
         !routeActivity.isActive &&
@@ -72,12 +78,15 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
         !official.hasBlockingOutcome;
     final isPreparation = isTeacherBlitzAuthoringStatus(blitz.status);
     final isGroup = blitz.assignmentMode == TeacherBlitzAssignmentMode.group;
-    final officialAction = switch (officialOption) {
-      TeacherOfficialBlitzOption.set ||
-      TeacherOfficialBlitzOption.fillLocked => 'Set as Official Blitz',
-      TeacherOfficialBlitzOption.replace => 'Replace Official Blitz',
-      _ => null,
-    };
+    // Official designation is desktop-only.
+    final officialAction = !isDesktop
+        ? null
+        : switch (officialOption) {
+            TeacherOfficialBlitzOption.set ||
+            TeacherOfficialBlitzOption.fillLocked => 'Set as Official Blitz',
+            TeacherOfficialBlitzOption.replace => 'Replace Official Blitz',
+            _ => null,
+          };
 
     final lifecycleController = ref.read(lifecycleProvider.notifier);
     final officialController = ref.read(officialProvider.notifier);
@@ -89,7 +98,7 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (isPreparation) ...[
+            if (isPreparation && isDesktop) ...[
               const Text(
                 'Scheduling records the planned Blitz time.\nThe Blitz does '
                 'not start automatically.\nThe Teacher must still activate it.',
@@ -150,6 +159,9 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
                                   context,
                                   ref,
                                   dialog: _activateDialog,
+                                  note: isDesktop
+                                      ? null
+                                      : _mobileOfficialNote(officialKnowledge),
                                   perform: lifecycleController.activate,
                                 )
                               : null,
@@ -186,11 +198,12 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
                   ),
               ],
             ),
-            if (_officialGuidance(officialOption) case final guidance?) ...[
+            if (_officialGuidance(officialOption) case final guidance?
+                when isDesktop) ...[
               const SizedBox(height: 10),
               Text(guidance, key: const Key('teacherBlitzOfficialGuidance')),
             ],
-            if (isPreparation && isGroup) ...[
+            if (isPreparation && isGroup && isDesktop) ...[
               if (officialKnowledge == TeacherBlitzOfficialKnowledge.official)
                 const Padding(
                   padding: EdgeInsets.only(top: 10),
@@ -251,7 +264,8 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
                 )
               else if (_conflictAction(lifecycle.conflictCode)
                   case final action?
-                  when isPreparation &&
+                  when isDesktop &&
+                      isPreparation &&
                       (action != _ConflictAction.edit || !isGroup))
                 Align(
                   alignment: Alignment.centerLeft,
@@ -306,6 +320,7 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
     WidgetRef ref, {
     required _ConfirmationCopy dialog,
     required Future<void> Function() perform,
+    String? note,
   }) async {
     final owner = _sessionOwner(ref);
     if (owner == null) {
@@ -316,7 +331,23 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
       builder: (dialogContext) => AlertDialog(
         key: const Key('teacherBlitzConfirmDialog'),
         title: Text(dialog.title),
-        content: Text(dialog.body),
+        content: note == null
+            ? Text(dialog.body)
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(dialog.body),
+                    const SizedBox(height: 16),
+                    Text(
+                      note,
+                      key: const Key('teacherBlitzActivationOfficialNote'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
         actions: [
           TextButton(
             autofocus: true,
@@ -341,11 +372,10 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
   }
 
   TeacherSessionKey? _sessionOwner(WidgetRef ref) {
-    final owner = TeacherSessionSnapshot.fromSession(
+    return TeacherSessionSnapshot.fromSession(
       ref.read(authSessionControllerProvider),
       ref.read(appDeviceSurfaceProvider),
     ).eligibleKey;
-    return owner?.surface == AppDeviceSurface.desktop ? owner : null;
   }
 }
 
@@ -413,6 +443,21 @@ _ConfirmationCopy _officialDialog(TeacherOfficialBlitzOption option) {
           'validate whether this Blitz is still eligible.',
       action: 'Set as Official Blitz',
     ),
+  };
+}
+
+/// Mobile cannot designate, so activation states what the confirmed pair
+/// proves about this Blitz; none of it blocks a practice activation.
+String _mobileOfficialNote(TeacherBlitzOfficialKnowledge knowledge) {
+  return switch (knowledge) {
+    TeacherBlitzOfficialKnowledge.official => 'Official Blitz',
+    TeacherBlitzOfficialKnowledge.notOfficial =>
+      "This Blitz is not currently designated as the Topic's official Blitz."
+          '\n\nIf you activate it now, it remains practice/supplementary and '
+          'cannot later be newly designated as official while Active.',
+    TeacherBlitzOfficialKnowledge.unconfirmed =>
+      'Official Blitz status could not be confirmed.\nIf this Blitz must be '
+          'official, refresh on desktop before activation.',
   };
 }
 

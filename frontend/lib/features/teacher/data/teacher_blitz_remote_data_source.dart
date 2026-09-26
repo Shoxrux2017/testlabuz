@@ -6,13 +6,16 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
+import '../domain/teacher_blitz_attempt_exception.dart';
 import '../domain/teacher_blitz_list_query.dart';
 import '../domain/teacher_blitz_mutation.dart';
 import '../domain/teacher_blitz_schedule.dart';
 import '../domain/teacher_question_mutation.dart';
 import '../domain/teacher_topic.dart';
+import 'dto/teacher_blitz_attempt_exception_dto.dart';
 import 'dto/teacher_blitz_dto.dart';
 import 'dto/teacher_blitz_list_dto.dart';
+import 'dto/teacher_blitz_monitoring_dto.dart';
 import 'dto/teacher_blitz_operation_dto.dart';
 import 'dto/teacher_dto_parse.dart';
 import 'dto/teacher_question_mutation_messages.dart';
@@ -75,6 +78,23 @@ class TeacherBlitzRemoteDataSource {
         );
       }
       return TeacherBlitzDetailDto.fromJson(response.data);
+    });
+  }
+
+  /// One read; the monitoring controller owns any repeated polling.
+  Future<TeacherBlitzMonitoringDto> fetchMonitoring(String blitzId) {
+    _requireCanonicalId(blitzId, 'blitzId');
+    return _mapFailures(() async {
+      final response = await dio.get<Object?>(
+        '/teacher/blitz/${Uri.encodeComponent(blitzId)}/monitoring',
+        options: Options(followRedirects: false),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'Teacher Blitz monitoring success status must be 200.',
+        );
+      }
+      return TeacherBlitzMonitoringDto.fromJson(response.data);
     });
   }
 
@@ -270,6 +290,43 @@ class TeacherBlitzRemoteDataSource {
       expectedStatus: 200,
       expectedMessage: TeacherBlitzMutationDto.archiveSuccessMessage,
       conflictCodes: const {ApiErrorCodes.businessConflict},
+    );
+  }
+
+  Future<TeacherBlitzAttemptExceptionDto> grantAttemptException(
+    String blitzId,
+    String studentId,
+    TeacherBlitzAttemptExceptionRequest request, {
+    required String idempotencyKey,
+  }) {
+    _requireCanonicalId(blitzId, 'blitzId');
+    _requireCanonicalId(studentId, 'studentId');
+    _requireCanonicalId(idempotencyKey, 'idempotencyKey');
+    return sendTeacherMutation(
+      send: () => dio.post<Object?>(
+        '/teacher/blitz/${Uri.encodeComponent(blitzId)}/students/'
+        '${Uri.encodeComponent(studentId)}/attempt-exception',
+        data: request.toJson(),
+        options: Options(
+          followRedirects: false,
+          headers: {'Idempotency-Key': idempotencyKey},
+        ),
+      ),
+      expectedStatus: 201,
+      parse: (data) => TeacherBlitzAttemptExceptionDto.fromJson(
+        data,
+        expectedBlitzId: blitzId,
+        expectedStudentId: studentId,
+      ),
+      conflictCodes: const {
+        ApiErrorCodes.blitzAttemptExceptionAlreadyGranted,
+        ApiErrorCodes.blitzAttemptExceptionNotAllowed,
+        ApiErrorCodes.blitzNormalAttemptRequired,
+        ApiErrorCodes.idempotencyKeyReused,
+      },
+      failureMapper: failureMapper,
+      outcomeUnknown: () =>
+          const TeacherBlitzAttemptExceptionOutcomeUnknownException(),
     );
   }
 

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:testlabuz_client/app/app.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_router.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
+import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
@@ -15,6 +17,7 @@ import 'package:testlabuz_client/features/teacher/data/teacher_learning_material
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 
 import 'teacher_test_support.dart';
 
@@ -64,7 +67,6 @@ void main() {
       '/teacher/topics/$_topicId/blitz/not-a-uuid',
       '/teacher/topics/$_topicId/blitz',
       '/teacher/topics/$_topicId/blitz/$_blitzId/',
-      '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring',
       '/teacher/topics/$_topicId/blitz/$_blitzId/extra',
       '/teacher/topics/$_topicId/blitz/$_blitzId?private=1',
       '/teacher/topics/$_topicId/blitz/$_blitzId#fragment',
@@ -86,6 +88,51 @@ void main() {
         throwsArgumentError,
       );
     }
+  });
+
+  test('the monitoring route helpers accept only the canonical path', () {
+    final location = AppRoutePaths.teacherBlitzMonitoringLocation(
+      _topicId,
+      _blitzId,
+    );
+
+    expect(location, '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring');
+    expect(AppRouteNames.teacherBlitzMonitoring, 'teacher-blitz-monitoring');
+    expect(
+      AppRoutePaths.teacherBlitzMonitoring,
+      '/teacher/topics/:topicId/blitz/:blitzId/monitoring',
+    );
+    expect(AppRoutePaths.isTeacherBlitzMonitoringPath(location), isTrue);
+    expect(AppRoutePaths.isTeacherBlitzDetailPath(location), isFalse);
+    expect(AppRoutePaths.isTeacherBlitzEditPath(location), isFalse);
+    expect(AppRoutePaths.isTeacherApprovedLocation(location), isTrue);
+    expect(AppRoutePaths.teacherTopicIdFromPath(location), _topicId);
+    expect(AppRoutePaths.teacherBlitzIdFromPath(location), _blitzId);
+    expect(AppRoutePaths.teacherHomeworkIdFromPath(location), isNull);
+
+    for (final invalid in [
+      '/teacher/topics/not-a-uuid/blitz/$_blitzId/monitoring',
+      '/teacher/topics/$_topicId/blitz/not-a-uuid/monitoring',
+      '/teacher/topics/$_topicId/blitz/new/monitoring',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring/',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring/extra',
+      '/teacher/topics/$_topicId/homework/$_blitzId/monitoring',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring?private=1',
+      '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring#fragment',
+    ]) {
+      expect(
+        AppRoutePaths.isTeacherBlitzMonitoringPath(invalid),
+        isFalse,
+        reason: invalid,
+      );
+      expect(AppRoutePaths.isTeacherApprovedLocation(invalid), isFalse);
+      expect(AppRoutePaths.teacherTopicIdFromPath(invalid), isNull);
+      expect(AppRoutePaths.teacherBlitzIdFromPath(invalid), isNull);
+    }
+    expect(
+      () => AppRoutePaths.teacherBlitzMonitoringLocation(_topicId, 'new'),
+      throwsArgumentError,
+    );
   });
 
   test('Blitz authoring route helpers accept only canonical paths', () {
@@ -351,7 +398,9 @@ void main() {
         '/teacher/topics/$_topicId/blitz/not-a-uuid',
         '/teacher/topics/$_topicId/blitz',
         '/teacher/topics/$_topicId/blitz/$_blitzId/extra',
-        '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring',
+        '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring/extra',
+        '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring?private=1',
+        '/teacher/topics/$_topicId/blitz/$_blitzId/monitoring#fragment',
         '/teacher/topics/$_topicId/blitz/$_blitzId?private=1',
         '/teacher/topics/$_topicId/blitz/$_blitzId#fragment',
       ]) {
@@ -378,11 +427,222 @@ void main() {
             find.byKey(const Key('teacherBlitzDetailScreen')),
             findsNothing,
           );
+          expect(
+            find.byKey(const Key('teacherBlitzMonitoringScreen')),
+            findsNothing,
+          );
           expect(blitz.fetchIds, isEmpty);
+          expect(blitz.monitoringIds, isEmpty);
         }
       }
     },
   );
+
+  for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
+    testWidgets(
+      '${surface.name} direct monitoring entry confirms, then reads',
+      (tester) async {
+        await _useSurface(tester, surface);
+        final blitz = _activeBlitz();
+        final location = AppRoutePaths.teacherBlitzMonitoringLocation(
+          _topicId,
+          _blitzId,
+        );
+
+        await _pumpApp(
+          tester,
+          location: location,
+          blitz: blitz,
+          surface: surface,
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('teacherBlitzMonitoringScreen')),
+          findsOneWidget,
+        );
+        expect(blitz.fetchIds, [_blitzId]);
+        expect(blitz.monitoringIds, [_blitzId]);
+        expect(find.text('Live · updates every 5 seconds'), findsOneWidget);
+        expect(_routerPath(tester), location);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('${surface.name} a Blitz of another Topic is never monitored', (
+      tester,
+    ) async {
+      await _useSurface(tester, surface);
+      final blitz = FakeTeacherBlitzRepository(
+        onFetch: (id) async => teacherBlitz(
+          id: id,
+          topicId: '10000000-0000-0000-0000-000000000002',
+          status: TeacherBlitzStatus.active,
+        ),
+      );
+
+      await _pumpApp(
+        tester,
+        location: AppRoutePaths.teacherBlitzMonitoringLocation(
+          _topicId,
+          _blitzId,
+        ),
+        blitz: blitz,
+        surface: surface,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('teacherBlitzMonitoringUnavailable')),
+        findsOneWidget,
+      );
+      expect(blitz.monitoringIds, isEmpty);
+      expect(find.textContaining('Grant'), findsNothing);
+    });
+
+    testWidgets('${surface.name} monitoring deep link survives bootstrap', (
+      tester,
+    ) async {
+      await _useSurface(tester, surface);
+      final auth = FakeTeacherAuthSessionController(
+        const AuthSessionState.bootstrapping(),
+      );
+      final blitz = _activeBlitz();
+      final location = AppRoutePaths.teacherBlitzMonitoringLocation(
+        _topicId,
+        _blitzId,
+      );
+
+      await _pumpApp(
+        tester,
+        location: location,
+        blitz: blitz,
+        auth: auth,
+        surface: surface,
+      );
+      await tester.pump();
+      expect(blitz.monitoringIds, isEmpty);
+
+      auth.replaceUser(teacherUser('teacher-a'));
+      await tester.pumpAndSettle();
+
+      expect(_routerPath(tester), location);
+      expect(
+        find.byKey(const Key('teacherBlitzMonitoringScreen')),
+        findsOneWidget,
+      );
+      expect(blitz.monitoringIds, [_blitzId]);
+    });
+  }
+
+  testWidgets('a missing parent Blitz is a safe not-found state', (
+    tester,
+  ) async {
+    final blitz = FakeTeacherBlitzRepository(
+      onFetch: (_) async => throw teacherServerFailure(
+        ApiErrorCodes.resourceNotFound,
+        statusCode: 404,
+      ),
+    );
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherBlitzMonitoringLocation(
+        _topicId,
+        _blitzId,
+      ),
+      blitz: blitz,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('teacherBlitzMonitoringUnavailable')),
+      findsOneWidget,
+    );
+    expect(blitz.monitoringIds, isEmpty);
+  });
+
+  testWidgets('a parent read failure offers Retry, not monitoring', (
+    tester,
+  ) async {
+    await _useSurface(tester, AppDeviceSurface.mobile);
+    final blitz = FakeTeacherBlitzRepository(
+      onFetch: (_) async => throw teacherLocalFailure(ApiFailureKind.timeout),
+    );
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherBlitzMonitoringLocation(
+        _topicId,
+        _blitzId,
+      ),
+      blitz: blitz,
+      surface: AppDeviceSurface.mobile,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('teacherBlitzMonitoringParentRetryButton')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('teacherBlitzMonitoringUnavailable')),
+      findsNothing,
+    );
+    expect(blitz.monitoringIds, isEmpty);
+  });
+
+  testWidgets('a non-Teacher role does not gain the monitoring route', (
+    tester,
+  ) async {
+    final blitz = _activeBlitz();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherBlitzMonitoringLocation(
+        _topicId,
+        _blitzId,
+      ),
+      blitz: blitz,
+      auth: FakeTeacherAuthSessionController.authenticated(
+        teacherUser('student-a', role: UserRole.student),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('teacherBlitzMonitoringScreen')), findsNothing);
+    expect(blitz.fetchIds, isEmpty);
+    expect(blitz.monitoringIds, isEmpty);
+  });
+
+  testWidgets('Monitor opens monitoring and Back returns to the Blitz', (
+    tester,
+  ) async {
+    final blitz = _activeBlitz();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherBlitzDetailLocation(_topicId, _blitzId),
+      blitz: blitz,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('teacherBlitzMonitorButton')));
+    await tester.pumpAndSettle();
+
+    expect(
+      _routerPath(tester),
+      AppRoutePaths.teacherBlitzMonitoringLocation(_topicId, _blitzId),
+    );
+    expect(blitz.monitoringIds, [_blitzId]);
+
+    await tester.tap(find.byKey(const Key('teacherBlitzMonitoringBackButton')));
+    await tester.pumpAndSettle();
+
+    expect(
+      _routerPath(tester),
+      AppRoutePaths.teacherBlitzDetailLocation(_topicId, _blitzId),
+    );
+    expect(find.byKey(const Key('teacherBlitzDetailScreen')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+    expect(blitz.monitoringIds, [_blitzId]);
+  });
 
   testWidgets('malformed Blitz paths fall back to root during bootstrap', (
     tester,
@@ -515,6 +775,20 @@ void main() {
       AppRoutePaths.teacherHomeworkDetailLocation(_topicId, _homeworkId),
     );
   });
+}
+
+FakeTeacherBlitzRepository _activeBlitz() {
+  return FakeTeacherBlitzRepository(
+    onFetch: (id) async =>
+        teacherBlitz(id: id, status: TeacherBlitzStatus.active),
+  );
+}
+
+Future<void> _useSurface(WidgetTester tester, AppDeviceSurface surface) async {
+  if (surface == AppDeviceSurface.mobile) {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+  }
 }
 
 GoRouter _router(WidgetTester tester) {

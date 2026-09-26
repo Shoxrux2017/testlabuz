@@ -38,6 +38,7 @@ import '../../features/teacher/presentation/teacher_learning_workspace_screen.da
 import '../../features/teacher/presentation/teacher_blitz_create_screen.dart';
 import '../../features/teacher/presentation/teacher_blitz_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_blitz_edit_screen.dart';
+import '../../features/teacher/presentation/teacher_blitz_monitoring_screen.dart';
 import '../../features/teacher/presentation/teacher_blitz_question_builder_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_create_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_detail_screen.dart';
@@ -484,6 +485,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                       );
                     },
                   ),
+                  // A read/runtime route; the screen itself confirms that the
+                  // Blitz belongs to the route Topic.
+                  GoRoute(
+                    name: AppRouteNames.teacherBlitzMonitoring,
+                    path: AppRoutePaths.teacherBlitzMonitoringSegment,
+                    builder: (context, state) {
+                      final target = _teacherBlitzRouteTarget(state);
+                      return _buildTeacherDestination(
+                        TeacherBlitzMonitoringScreen(
+                          key: ValueKey<TeacherBlitzRouteTarget>(target),
+                          target: target,
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ],
@@ -793,7 +809,8 @@ String? _authRedirect(
     if (surface == AppDeviceSurface.mobile) {
       if (AppRoutePaths.isTeacherTopicDetailPath(location) ||
           AppRoutePaths.isTeacherHomeworkDetailPath(location) ||
-          AppRoutePaths.isTeacherBlitzDetailPath(location)) {
+          AppRoutePaths.isTeacherBlitzDetailPath(location) ||
+          AppRoutePaths.isTeacherBlitzMonitoringPath(location)) {
         return null;
       }
       if (AppRoutePaths.isTeacherHomeworkEditPath(location)) {
@@ -898,7 +915,8 @@ bool _keepsLocationDuringBootstrap(
       (AppRoutePaths.isTeacherHomeworkDetailPath(location) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
-      (AppRoutePaths.isTeacherBlitzDetailPath(location) &&
+      ((AppRoutePaths.isTeacherBlitzDetailPath(location) ||
+              AppRoutePaths.isTeacherBlitzMonitoringPath(location)) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       ((AppRoutePaths.isStudentTopicDetailPath(location) ||
