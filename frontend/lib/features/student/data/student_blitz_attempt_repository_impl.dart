@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/student_blitz_attempt.dart';
 import '../domain/student_blitz_attempt_repository.dart';
+import '../domain/student_blitz_submit.dart';
 import 'student_blitz_attempt_remote_data_source.dart';
 
 final studentBlitzAttemptRepositoryProvider =
@@ -25,5 +26,20 @@ class StudentBlitzAttemptRepositoryImpl
     StudentBlitzAttemptRequest request,
   ) async {
     return (await remoteDataSource.start(blitzId, request)).toDomain();
+  }
+
+  @override
+  Future<StudentBlitzSubmitResult> submitAttempt(
+    String attemptId,
+    String expectedBlitzId,
+    String idempotencyKey, {
+    required StudentBlitzSubmitResponseExpectation expectation,
+  }) async {
+    return (await remoteDataSource.submitAttempt(
+      attemptId,
+      expectedBlitzId,
+      idempotencyKey,
+      expectation: expectation,
+    )).toDomain();
   }
 }

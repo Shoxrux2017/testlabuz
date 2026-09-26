@@ -23,6 +23,7 @@ class StudentFileAnswerEditor extends StatefulWidget {
     required this.onReload,
     required this.onOpen,
     required this.onSaveAs,
+    this.recoveryLabel = 'Reload attempt',
     super.key,
   });
 
@@ -40,6 +41,9 @@ class StudentFileAnswerEditor extends StatefulWidget {
   final VoidCallback onReload;
   final VoidCallback onOpen;
   final VoidCallback onSaveAs;
+
+  /// Action that re-reads the Attempt after an unconfirmed upload.
+  final String recoveryLabel;
 
   @override
   State<StudentFileAnswerEditor> createState() =>
@@ -242,7 +246,7 @@ class _StudentFileAnswerEditorState extends State<StudentFileAnswerEditor> {
                 if (uncertain)
                   FilledButton(
                     onPressed: widget.isReconciling ? null : widget.onReload,
-                    child: const Text('Reload attempt'),
+                    child: Text(widget.recoveryLabel),
                   )
                 else ...[
                   Semantics(

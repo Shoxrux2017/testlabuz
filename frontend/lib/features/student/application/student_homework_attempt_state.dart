@@ -1,5 +1,6 @@
 import '../../../core/network/api_failure.dart';
 import '../domain/student_homework_attempt.dart';
+import 'student_attempt_publication_token.dart';
 
 enum StudentHomeworkAttemptLoadStatus {
   initial,
@@ -10,10 +11,8 @@ enum StudentHomeworkAttemptLoadStatus {
   error,
 }
 
-/// Identifies one authoritative parent publication, without encoding its data.
-class StudentHomeworkAttemptPublicationToken {
-  StudentHomeworkAttemptPublicationToken();
-}
+/// Shared with Blitz so the type-neutral file answer state can be reused.
+typedef StudentHomeworkAttemptPublicationToken = StudentAttemptPublicationToken;
 
 class StudentHomeworkAttemptState {
   const StudentHomeworkAttemptState({

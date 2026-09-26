@@ -15,7 +15,8 @@ import '../domain/student_blitz_route_target.dart';
 import 'student_active_blitz_controller.dart';
 import 'student_blitz_attempt_start_state.dart';
 import 'student_blitz_detail_controller.dart';
-import 'student_blitz_detail_state.dart';
+import 'student_blitz_execution_controller.dart';
+import 'student_blitz_execution_state.dart';
 import 'student_session_key.dart';
 
 final studentBlitzAttemptStartControllerProvider = NotifierProvider.autoDispose
@@ -25,9 +26,9 @@ final studentBlitzAttemptStartControllerProvider = NotifierProvider.autoDispose
       StudentBlitzRouteTarget
     >(StudentBlitzAttemptStartController.new);
 
-/// Owns one route session's explicit Start/Resume/replacement Start and the
-/// in-memory execution Attempt returned by it. There is no Attempt read API,
-/// so leaving the route drops the shell and a later Resume re-requests it.
+/// Owns one route session's explicit Start/Resume/replacement Start request.
+/// A validated success hands the returned Attempt, together with the exact
+/// request that was sent, to [StudentBlitzExecutionController].
 class StudentBlitzAttemptStartController
     extends Notifier<StudentBlitzAttemptStartState> {
   StudentBlitzAttemptStartController(this.target);
@@ -51,7 +52,7 @@ class StudentBlitzAttemptStartController
       _clearOwnership();
       return const StudentBlitzAttemptStartState();
     }
-    ref.listen(studentBlitzDetailControllerProvider(target), _onDetail);
+    ref.listen(studentBlitzExecutionControllerProvider(target), _onExecution);
     if (_activeSessionKey == key) {
       return state;
     }
@@ -114,24 +115,6 @@ class StudentBlitzAttemptStartController
     return feedback;
   }
 
-  /// The execution countdown for [anchor] reached zero locally. Execution
-  /// becomes read-only and one authoritative detail read decides the state;
-  /// nothing is finalized on the device.
-  void markExecutionExpired(StudentBlitzCountdownAnchor anchor) {
-    final key = _activeSessionKey;
-    if (key == null ||
-        !_matchesSession(key) ||
-        state.status != StudentBlitzAttemptStartStatus.active ||
-        state.executionAnchor != anchor ||
-        state.isReconcilingExpiry) {
-      return;
-    }
-    state = state.reconcilingExpiry();
-    ref
-        .read(studentBlitzDetailControllerProvider(target).notifier)
-        .reconcileAfterLocalExpiry();
-  }
-
   Future<void> _submit(StudentSessionKey key) async {
     final request = _pendingRequest!;
     final generation = ++_generation;
@@ -140,7 +123,6 @@ class StudentBlitzAttemptStartController
       status: StudentBlitzAttemptStartStatus.submitting,
       originatingIntent: request.intent,
       requestedAttemptId: request.attemptId,
-      blitzTitle: _pendingTitle,
     );
     try {
       final result = await ref
@@ -149,12 +131,21 @@ class StudentBlitzAttemptStartController
       if (!_canPublish(generation, key, requestTarget)) {
         return;
       }
+      // The exact sent request is handed over before it is cleared here, so
+      // execution can later replay it unchanged to re-read this Attempt.
       if (!isAcceptedStudentBlitzStartResult(
-        request: request,
-        blitzId: requestTarget.blitzId,
-        result: result,
-        expectedMode: _pendingMode,
-      )) {
+            request: request,
+            blitzId: requestTarget.blitzId,
+            result: result,
+            expectedMode: _pendingMode,
+          ) ||
+          !ref
+              .read(studentBlitzExecutionControllerProvider(target).notifier)
+              .acceptStartedAttempt(
+                result.attempt,
+                request,
+                blitzTitle: _pendingTitle,
+              )) {
         throw ApiRequestException(
           ApiFailure.local(
             kind: ApiFailureKind.invalidResponse,
@@ -163,26 +154,16 @@ class StudentBlitzAttemptStartController
         );
       }
       _pendingRequest = null;
-      final attempt = result.attempt;
-      final inProgress = attempt.status == StudentBlitzAttemptStatus.inProgress;
+      final inProgress =
+          result.attempt.status == StudentBlitzAttemptStatus.inProgress;
       state = StudentBlitzAttemptStartState(
         status: inProgress
             ? StudentBlitzAttemptStartStatus.active
             : StudentBlitzAttemptStartStatus.terminal,
-        attempt: attempt,
         resultKind: result.resultKind,
         feedback: inProgress ? _successFeedback(request.intent, result) : null,
         originatingIntent: request.intent,
         requestedAttemptId: request.attemptId,
-        blitzTitle: _pendingTitle,
-        executionAnchor: inProgress
-            ? StudentBlitzCountdownAnchor(
-                subjectId: attempt.id.toLowerCase(),
-                deadlineAt: attempt.deadlineAt,
-                serverNow: attempt.timing.serverNow,
-                remainingSeconds: attempt.timing.remainingSeconds,
-              )
-            : null,
       );
       _reconcile(key);
     } on ApiRequestException catch (exception) {
@@ -231,57 +212,25 @@ class StudentBlitzAttemptStartController
       failure: failure,
       originatingIntent: request.intent,
       requestedAttemptId: request.attemptId,
-      blitzTitle: _pendingTitle,
     );
   }
 
-  void _onDetail(StudentBlitzDetailState? _, StudentBlitzDetailState next) {
-    final attempt = state.attempt;
-    if (state.status != StudentBlitzAttemptStartStatus.active ||
-        attempt == null) {
+  /// Mirrors the handed-off execution: a finalized one allows a new explicit
+  /// request, and a dropped one leaves only an explicit Resume from detail.
+  void _onExecution(
+    StudentBlitzExecutionState? _,
+    StudentBlitzExecutionState next,
+  ) {
+    if (state.status != StudentBlitzAttemptStartStatus.active &&
+        state.status != StudentBlitzAttemptStartStatus.terminal) {
       return;
     }
-    switch (next.status) {
-      case StudentBlitzDetailStatus.notActive ||
-          StudentBlitzDetailStatus.timeExpired ||
-          StudentBlitzDetailStatus.notFound:
-        _retireExecution();
-      case StudentBlitzDetailStatus.data:
-        final blitz = next.blitz!;
-        final attemptId = attempt.id.toLowerCase();
-        if (blitz.attempts.inProgressAttemptId?.toLowerCase() != attemptId) {
-          _retireExecution();
-          return;
-        }
-        final deadline = blitz.timing.deadlineAt;
-        final remaining = blitz.timing.remainingSeconds;
-        if (deadline == null ||
-            remaining == null ||
-            remaining <= 0 ||
-            !deadline.isAtSameMomentAs(attempt.deadlineAt)) {
-          return;
-        }
-        final anchor = StudentBlitzCountdownAnchor(
-          subjectId: attemptId,
-          deadlineAt: deadline,
-          serverNow: blitz.timing.serverNow,
-          remainingSeconds: remaining,
-        );
-        if (anchor != state.executionAnchor) {
-          state = state.withExecutionAnchor(anchor);
-        }
-      case StudentBlitzDetailStatus.initial ||
-          StudentBlitzDetailStatus.loading ||
-          StudentBlitzDetailStatus.refreshing ||
-          StudentBlitzDetailStatus.error:
-        return;
+    if (next.status == StudentBlitzExecutionStatus.none) {
+      state = const StudentBlitzAttemptStartState();
+    } else if (next.isTerminal &&
+        state.status == StudentBlitzAttemptStartStatus.active) {
+      state = state.withStatus(StudentBlitzAttemptStartStatus.terminal);
     }
-  }
-
-  /// The server no longer confirms this execution; its Questions are dropped
-  /// and only an explicit Resume can show an execution again.
-  void _retireExecution() {
-    state = const StudentBlitzAttemptStartState();
   }
 
   void _reconcile(StudentSessionKey key) {

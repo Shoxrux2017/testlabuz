@@ -12,6 +12,8 @@ import 'package:testlabuz_client/features/student/application/student_blitz_atte
 import 'package:testlabuz_client/features/student/application/student_blitz_attempt_start_state.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_detail_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_detail_state.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_execution_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_execution_state.dart';
 import 'package:testlabuz_client/features/student/data/student_blitz_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz.dart';
@@ -44,15 +46,18 @@ void main() {
       await flushStudentControllers();
 
       expect(harness.state.status, StudentBlitzAttemptStartStatus.active);
-      expect(harness.state.attempt!.id, studentBlitzAttemptId);
+      expect(harness.execution.attempt!.id, studentBlitzAttemptId);
       expect(
         harness.state.resultKind,
         StudentBlitzAttemptStartResultKind.created,
       );
       expect(harness.state.feedback, StudentBlitzStartFeedback.started);
-      expect(harness.state.blitzTitle, 'Classroom Blitz');
-      expect(harness.state.executionAnchor!.subjectId, studentBlitzAttemptId);
-      expect(harness.state.executionAnchor!.remainingSeconds, 300);
+      expect(harness.execution.blitzTitle, 'Classroom Blitz');
+      expect(
+        harness.execution.countdownAnchor!.subjectId,
+        studentBlitzAttemptId,
+      );
+      expect(harness.execution.countdownAnchor!.remainingSeconds, 300);
       expect(harness.keys.calls, 1);
       expect(harness.blitz.detailIds, hasLength(2));
       expect(harness.detail.status, StudentBlitzDetailStatus.refreshing);
@@ -109,7 +114,7 @@ void main() {
       );
       await operation;
       expect(harness.state.status, StudentBlitzAttemptStartStatus.active);
-      expect(harness.state.attempt!.attemptNumber, 2);
+      expect(harness.execution.attempt!.attemptNumber, 2);
       expect(
         harness.state.feedback,
         StudentBlitzStartFeedback.additionalStarted,
@@ -160,7 +165,7 @@ void main() {
       );
       await operation;
       expect(harness.state.status, StudentBlitzAttemptStartStatus.active);
-      expect(harness.state.attempt!.id, studentBlitzReplacementAttemptId);
+      expect(harness.execution.attempt!.id, studentBlitzReplacementAttemptId);
     });
 
     test(
@@ -225,7 +230,7 @@ void main() {
             harness.state.status,
             StudentBlitzAttemptStartStatus.uncertain,
           );
-          expect(harness.state.attempt, isNull);
+          expect(harness.execution.attempt, isNull);
           await harness.controller.start(StudentBlitzExecutionAction.resume);
           expect(harness.attempts.requests, hasLength(1));
 
@@ -291,7 +296,7 @@ void main() {
         await first;
         expect(harness.state.status, StudentBlitzAttemptStartStatus.uncertain);
         expect(harness.state.failure!.kind, ApiFailureKind.invalidResponse);
-        expect(harness.state.attempt, isNull);
+        expect(harness.execution.attempt, isNull);
         expect(harness.blitz.detailIds, hasLength(1));
         final retry = harness.controller.retry();
         expect(harness.attempts.requests.last.idempotencyKey, blitzKey(1));
@@ -314,7 +319,7 @@ void main() {
       );
       await first;
       expect(harness.state.status, StudentBlitzAttemptStartStatus.uncertain);
-      expect(harness.state.attempt, isNull);
+      expect(harness.execution.attempt, isNull);
     });
 
     test('a normal Start answered with #2 is never accepted', () async {
@@ -470,16 +475,17 @@ void main() {
       );
       await first;
       expect(harness.state.status, StudentBlitzAttemptStartStatus.terminal);
+      expect(harness.execution.status, StudentBlitzExecutionStatus.terminal);
       expect(
-        harness.state.attempt!.status,
+        harness.execution.attempt!.status,
         StudentBlitzAttemptStatus.timedOutFinalized,
       );
-      expect(harness.state.executionAnchor, isNull);
+      expect(harness.execution.countdownAnchor, isNull);
       expect(harness.blitz.detailIds, hasLength(2));
     });
   });
 
-  group('execution ownership', () {
+  group('execution handoff', () {
     test('a completion after a session switch is ignored', () async {
       final harness = await _Harness.ready(studentBlitzDetail());
       final first = harness.controller.start(
@@ -490,104 +496,30 @@ void main() {
       harness.pendingStarts.single.complete(studentBlitzStartResult());
       await first;
       expect(harness.state.status, StudentBlitzAttemptStartStatus.idle);
-      expect(harness.state.attempt, isNull);
+      expect(harness.execution.attempt, isNull);
       await harness.controller.retry();
       expect(harness.attempts.requests, hasLength(1));
     });
 
-    for (final (status, failure) in [
-      (
-        StudentBlitzDetailStatus.timeExpired,
-        studentServerFailure(ApiErrorCodes.blitzTimeExpired, statusCode: 409),
-      ),
-      (
-        StudentBlitzDetailStatus.notActive,
-        studentServerFailure(ApiErrorCodes.blitzNotActive, statusCode: 409),
-      ),
-      (
-        StudentBlitzDetailStatus.notFound,
-        studentServerFailure(ApiErrorCodes.resourceNotFound, statusCode: 404),
-      ),
-    ]) {
-      test('detail ${status.name} retires the execution shell', () async {
-        final harness = await _Harness.active();
-        harness.pendingDetails.last.completeError(failure);
-        await flushStudentControllers();
-        expect(harness.detail.status, status);
-        expect(harness.state.status, StudentBlitzAttemptStartStatus.idle);
-        expect(harness.state.attempt, isNull);
-      });
-    }
-
-    test(
-      'detail that no longer confirms this Attempt retires the shell',
-      () async {
-        final harness = await _Harness.active();
-        harness.pendingDetails.last.complete(finishedBlitzDetail());
-        await flushStudentControllers();
-        expect(harness.state.status, StudentBlitzAttemptStartStatus.idle);
-        expect(harness.state.attempt, isNull);
-      },
-    );
-
-    test(
-      'a newer detail snapshot of this Attempt re-anchors the countdown',
-      () async {
-        final harness = await _Harness.active();
-        final first = harness.state.executionAnchor!;
-        harness.pendingDetails.last.complete(
-          inProgressBlitzDetail(
-            remainingSeconds: 240,
-            serverNow: DateTime.utc(2026, 9, 17, 12, 1),
-          ),
-        );
-        await flushStudentControllers();
-        expect(harness.state.status, StudentBlitzAttemptStartStatus.active);
-        expect(harness.state.executionAnchor, isNot(first));
-        expect(harness.state.executionAnchor!.remainingSeconds, 240);
-      },
-    );
-
-    test('local expiry reconciles once and never finalizes locally', () async {
+    test('a dropped execution allows only a new explicit request', () async {
       final harness = await _Harness.active();
-      harness.pendingDetails.last.complete(inProgressBlitzDetail());
-      await flushStudentControllers();
-      final anchor = harness.state.executionAnchor!;
-      final listCalls = harness.blitz.activeCalls;
-      harness.controller.markExecutionExpired(anchor);
-      harness.controller.markExecutionExpired(anchor);
-      expect(harness.state.isReconcilingExpiry, isTrue);
-      expect(harness.state.status, StudentBlitzAttemptStartStatus.active);
-      expect(
-        harness.state.attempt!.status,
-        StudentBlitzAttemptStatus.inProgress,
-      );
-      expect(harness.state.attempt!.finalizedAt, isNull);
-      expect(harness.blitz.detailIds, hasLength(3));
-      expect(harness.blitz.activeCalls, listCalls + 1);
+      harness.executionController.clearLocalState();
+      expect(harness.state.status, StudentBlitzAttemptStartStatus.idle);
+      expect(harness.state.acceptsNewRequest, isTrue);
       expect(harness.attempts.requests, hasLength(1));
-
-      harness.pendingDetails.last.completeError(
-        studentLocalFailure(ApiFailureKind.connection),
-      );
-      await flushStudentControllers();
-      expect(harness.state.isReconcilingExpiry, isTrue);
-      expect(harness.detail.status, StudentBlitzDetailStatus.error);
-      expect(harness.state.status, StudentBlitzAttemptStartStatus.active);
     });
 
-    test('an obsolete anchor cannot mark the execution expired', () async {
+    test('a finalized execution allows a new explicit request', () async {
       final harness = await _Harness.active();
-      harness.controller.markExecutionExpired(
-        StudentBlitzCountdownAnchor(
-          subjectId: studentBlitzAttemptId,
-          deadlineAt: DateTime.utc(2026, 9, 17, 12, 5),
-          serverNow: DateTime.utc(2026, 9, 17, 11),
-          remainingSeconds: 1,
+      expect(harness.state.acceptsNewRequest, isFalse);
+      expect(
+        harness.executionController.acceptSubmittedAttempt(
+          studentBlitzAttempt(status: StudentBlitzAttemptStatus.submitted),
         ),
+        isTrue,
       );
-      expect(harness.state.isReconcilingExpiry, isFalse);
-      expect(harness.blitz.detailIds, hasLength(2));
+      expect(harness.state.status, StudentBlitzAttemptStartStatus.terminal);
+      expect(harness.state.acceptsNewRequest, isTrue);
     });
 
     test('feedback is consumed once', () async {
@@ -599,25 +531,6 @@ void main() {
       expect(harness.state.feedback, isNull);
       expect(harness.controller.consumeFeedback(), isNull);
     });
-  });
-
-  test('expiry during the post-Start read issues a fresh read', () async {
-    final harness = await _Harness.active();
-    final postStartRead = harness.pendingDetails.last;
-    final listCalls = harness.blitz.activeCalls;
-    harness.controller.markExecutionExpired(harness.state.executionAnchor!);
-    expect(harness.state.isReconcilingExpiry, isTrue);
-    expect(harness.blitz.detailIds, hasLength(3));
-    expect(harness.blitz.activeCalls, listCalls + 1);
-    postStartRead.complete(inProgressBlitzDetail());
-    await flushStudentControllers();
-    expect(harness.state.isReconcilingExpiry, isTrue);
-    harness.pendingDetails.last.completeError(
-      studentServerFailure(ApiErrorCodes.blitzTimeExpired, statusCode: 409),
-    );
-    await flushStudentControllers();
-    expect(harness.state.status, StudentBlitzAttemptStartStatus.idle);
-    expect(harness.state.attempt, isNull);
   });
 
   test(
@@ -669,6 +582,10 @@ class _Harness {
       container.listen(studentActiveBlitzControllerProvider, (_, _) {}),
       container.listen(studentBlitzDetailControllerProvider(target), (_, _) {}),
       container.listen(
+        studentBlitzExecutionControllerProvider(target),
+        (_, _) {},
+      ),
+      container.listen(
         studentBlitzAttemptStartControllerProvider(target),
         (_, _) {},
       ),
@@ -716,6 +633,10 @@ class _Harness {
   StudentBlitzAttemptStartController get controller => container.read(
     studentBlitzAttemptStartControllerProvider(target).notifier,
   );
+  StudentBlitzExecutionState get execution =>
+      container.read(studentBlitzExecutionControllerProvider(target));
+  StudentBlitzExecutionController get executionController =>
+      container.read(studentBlitzExecutionControllerProvider(target).notifier);
   StudentBlitzDetailState get detail =>
       container.read(studentBlitzDetailControllerProvider(target));
   StudentBlitzDetailController get detailController =>

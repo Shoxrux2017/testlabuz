@@ -7,7 +7,9 @@ import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/student_blitz.dart';
 import '../domain/student_blitz_attempt.dart';
+import '../domain/student_blitz_submit.dart';
 import 'dto/student_blitz_attempt_dto.dart';
+import 'dto/student_blitz_submit_dto.dart';
 
 final studentBlitzAttemptRemoteDataSourceProvider =
     Provider<StudentBlitzAttemptRemoteDataSource>((ref) {
@@ -50,6 +52,43 @@ class StudentBlitzAttemptRemoteDataSource {
       return StudentBlitzAttemptStartOperationDto.fromResponse(
         statusCode: response.statusCode,
         body: response.data,
+      );
+    });
+  }
+
+  /// Posts one final Submit with [idempotencyKey]; nothing retries it here.
+  Future<StudentBlitzSubmitDto> submitAttempt(
+    String attemptId,
+    String expectedBlitzId,
+    String idempotencyKey, {
+    required StudentBlitzSubmitResponseExpectation expectation,
+  }) {
+    for (final (value, name) in [
+      (attemptId, 'attemptId'),
+      (expectedBlitzId, 'expectedBlitzId'),
+      (idempotencyKey, 'idempotencyKey'),
+    ]) {
+      if (!isCanonicalStudentBlitzId(value)) {
+        throw ArgumentError.value(value, name, 'Must be a canonical UUID.');
+      }
+    }
+    return _mapFailures(() async {
+      final response = await dio.post<Object?>(
+        '/student/attempts/${Uri.encodeComponent(attemptId)}/submit',
+        data: const <String, Object?>{},
+        options: Options(
+          followRedirects: false,
+          headers: {'Idempotency-Key': idempotencyKey},
+        ),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException('Blitz Submit success status must be 200.');
+      }
+      return StudentBlitzSubmitDto.fromJson(
+        response.data,
+        expectedAttemptId: attemptId,
+        expectedBlitzId: expectedBlitzId,
+        expectation: expectation,
       );
     });
   }

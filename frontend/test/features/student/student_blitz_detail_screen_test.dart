@@ -20,6 +20,7 @@ import 'package:testlabuz_client/features/student/domain/student_blitz_route_tar
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/presentation/student_blitz_countdown.dart';
 import 'package:testlabuz_client/features/student/presentation/student_blitz_detail_screen.dart';
+import 'package:testlabuz_client/features/student/presentation/student_question_answer_editor.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_read_view.dart';
 
 import 'student_blitz_test_support.dart';
@@ -223,7 +224,7 @@ void main() {
         ),
       );
       await _settle(tester);
-      expect(find.byType(StudentQuestionReadView), findsNWidgets(2));
+      expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(2));
       expect(find.text('Blitz resumed.'), findsOneWidget);
     });
 
@@ -362,15 +363,14 @@ void main() {
       await _confirmStart(tester);
 
       expect(harness.path, route);
-      expect(find.byType(StudentQuestionReadView), findsNWidgets(2));
-      expect(_answerState(blitzUuid(101)), 'Saved');
-      expect(_answerState(blitzUuid(102)), 'Not answered');
+      // Every Question appears once, in its shared editor.
+      expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(2));
+      expect(find.byType(StudentQuestionReadView), findsNothing);
       expect(find.text('Attempt 1'), findsOneWidget);
       expect(find.text('Time remaining'), findsOneWidget);
       expect(find.text('Blitz started.'), findsOneWidget);
       expect(find.byKey(const Key('studentBlitzRefreshButton')), findsNothing);
-      expect(find.byType(TextField), findsNothing);
-      expect(find.textContaining('Submit'), findsNothing);
+      expect(find.byKey(const Key('studentBlitzSubmitButton')), findsOneWidget);
     });
 
     testWidgets('the approved additional attempt is labelled as such', (
@@ -417,7 +417,9 @@ void main() {
       expect(find.text('Additional Blitz attempt started.'), findsOneWidget);
     });
 
-    testWidgets('a terminal replay never opens execution', (tester) async {
+    testWidgets('a terminal replay shows its summary, not execution', (
+      tester,
+    ) async {
       final harness = _Harness(detail: studentBlitzDetail());
       harness.start = studentBlitzStartResult(
         attempt: studentBlitzAttempt(
@@ -429,15 +431,13 @@ void main() {
       harness.detail = finishedBlitzDetail();
       await _confirmStart(tester);
 
-      _expectNoQuestions();
+      expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
+      expect(find.byType(StudentBlitzCountdown), findsNothing);
       expect(
-        find.text('The Blitz time has expired for this attempt.'),
+        find.byKey(const Key('studentBlitzFinalizationSummary')),
         findsOneWidget,
       );
-      expect(
-        find.text('You have already finished this Blitz.'),
-        findsOneWidget,
-      );
+      expect(find.text('Time expired'), findsWidgets);
     });
 
     testWidgets('leaving asks first and makes no API call', (tester) async {
@@ -459,7 +459,7 @@ void main() {
       );
       await tester.tap(find.text('Stay'));
       await _settle(tester);
-      expect(find.byType(StudentQuestionReadView), findsNWidgets(2));
+      expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(2));
 
       await tester.tap(find.byTooltip('Back to Topic'));
       await _settle(tester);
@@ -475,7 +475,7 @@ void main() {
   });
 
   group('countdown expiry', () {
-    testWidgets('execution zero reconciles once and shows time expired', (
+    testWidgets('execution zero replays the Start request once', (
       tester,
     ) async {
       final harness = _Harness(detail: studentBlitzDetail());
@@ -493,26 +493,40 @@ void main() {
       await _confirmStart(tester);
       final reads = harness.blitz.detailIds.length;
       final lists = harness.blitz.activeCalls;
-      final pending = Completer<StudentBlitzDetail>();
-      harness.detail = pending;
+      final pending = Completer<StudentBlitzAttemptStartResult>();
+      harness.start = pending;
 
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();
       expect(_countdown(tester), '00:00');
       expect(find.text('Checking current Blitz time…'), findsOneWidget);
-      expect(harness.blitz.detailIds, hasLength(reads + 1));
-      expect(harness.blitz.activeCalls, lists + 1);
+      expect(harness.attempts.requests, hasLength(2));
+      expect(
+        harness.attempts.requests.last,
+        same(harness.attempts.requests.first),
+      );
       await tester.pump(const Duration(seconds: 5));
-      expect(harness.blitz.detailIds, hasLength(reads + 1));
+      expect(harness.attempts.requests, hasLength(2));
+      expect(harness.blitz.detailIds, hasLength(reads));
 
-      pending.completeError(
-        studentServerFailure(ApiErrorCodes.blitzTimeExpired, statusCode: 409),
+      // The replay finalizes the due Attempt; the device never does.
+      pending.complete(
+        studentBlitzStartResult(
+          attempt: studentBlitzAttempt(
+            status: StudentBlitzAttemptStatus.timedOutFinalized,
+            finalizationReason: StudentBlitzAttemptFinalizationReason.timeout,
+          ),
+        ),
       );
       await _settle(tester);
-      expect(find.text('The Blitz time has expired.'), findsOneWidget);
-      _expectNoQuestions();
-      expect(harness.attempts.requests, hasLength(1));
-      expect(find.textContaining('Submitted'), findsNothing);
+      expect(
+        find.byKey(const Key('studentBlitzFinalizationSummary')),
+        findsOneWidget,
+      );
+      expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
+      expect(harness.blitz.detailIds, hasLength(reads + 1));
+      expect(harness.blitz.activeCalls, lists + 1);
+      expect(find.text('Your Blitz attempt has been submitted.'), findsNothing);
     });
 
     testWidgets('a failed expiry check keeps execution locked at zero', (
@@ -531,7 +545,7 @@ void main() {
         serverNow: DateTime.utc(2026, 9, 17, 12, 4, 58),
       );
       await _confirmStart(tester);
-      harness.detail = studentLocalFailure(ApiFailureKind.connection);
+      harness.start = studentLocalFailure(ApiFailureKind.connection);
 
       await tester.pump(const Duration(seconds: 2));
       await _settle(tester);
@@ -545,19 +559,25 @@ void main() {
       expect(_countdown(tester), '00:00');
       await tester.pump(const Duration(seconds: 10));
       expect(_countdown(tester), '00:00');
-      final reads = harness.blitz.detailIds.length;
+      expect(harness.attempts.requests, hasLength(2));
 
-      harness.detail = studentServerFailure(
-        ApiErrorCodes.blitzTimeExpired,
-        statusCode: 409,
+      harness.start = studentBlitzStartResult(
+        attempt: studentBlitzAttempt(
+          status: StudentBlitzAttemptStatus.timedOutFinalized,
+          finalizationReason: StudentBlitzAttemptFinalizationReason.timeout,
+        ),
       );
-      await tester.tap(
-        find.byKey(const Key('studentBlitzExpiryRefreshButton')),
-      );
+      await tester.tap(find.byKey(const Key('studentBlitzCheckAttemptButton')));
       await _settle(tester);
-      expect(harness.blitz.detailIds, hasLength(reads + 1));
-      expect(find.text('The Blitz time has expired.'), findsOneWidget);
-      expect(harness.attempts.requests, hasLength(1));
+      expect(harness.attempts.requests, hasLength(3));
+      expect(
+        harness.attempts.requests.last,
+        same(harness.attempts.requests.first),
+      );
+      expect(
+        find.byKey(const Key('studentBlitzFinalizationSummary')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('pre-Start class time zero disables Start and checks once', (
@@ -619,7 +639,7 @@ void main() {
         attempt: studentBlitzAttempt(mode: StudentBlitzTimerMode.individual),
       );
       await _confirmStart(tester);
-      expect(find.byType(StudentQuestionReadView), findsNWidgets(2));
+      expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     });
   }
@@ -627,23 +647,13 @@ void main() {
 
 void _expectNoQuestions() {
   expect(find.byType(StudentQuestionReadView), findsNothing);
+  expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
   expect(find.text('Questions'), findsNothing);
 }
 
 String _countdown(WidgetTester tester) => tester
     .widget<Text>(find.byKey(const Key('studentBlitzCountdownValue')))
     .data!;
-
-String _answerState(String questionId) {
-  final row = find.byKey(ValueKey('studentBlitzAnswerState$questionId'));
-  return (find
-              .descendant(of: row, matching: find.byType(Text))
-              .evaluate()
-              .single
-              .widget
-          as Text)
-      .data!;
-}
 
 Future<void> _settle(WidgetTester tester) async {
   for (var frame = 0; frame < 8; frame += 1) {
