@@ -21,6 +21,11 @@
 
 This is a **checkpoint/review contract**, not an implementation task.
 
+Revalidation 2026-09-26: the Project Owner assigned Claude both the ChatGPT and the Codex
+roles (Stage 8 index §17). As for `S08-BE-PHASE-2`, Claude executes this read-only review
+and the verification commands; the Project Owner or CI may run them instead. The
+read-only rule (§4) and the focused-fix workflow (§49) are unchanged.
+
 Do not create a duplicate `CODEX-PROMPT`.
 
 ---
@@ -97,6 +102,10 @@ The range must include:
 - all Phase 2 fixes merged before final PASS.
 
 Do not use only the last task diff.
+
+Revalidation 2026-09-26: `FRONTEND_BLOCK_DIFF_BASE = f6618937ea19fe60ebd67c03954f34caf0284cf8`,
+the first parent of the FE-001 merge `15508f3`. `frontend/` is unchanged between the
+Stage 7 closure `962ef5d` and that commit.
 
 ---
 
@@ -222,6 +231,13 @@ audited SHA
 ```
 
 Do not hide first-run failure or rerun repeatedly until green.
+
+Revalidation 2026-09-26: the `fvm` CLI is not on PATH on the execution machine. Run the
+§§7-11 commands with the pinned SDK in `frontend/.fvm/flutter_sdk` (3.44.7, as in
+`frontend/.fvmrc`): `./.fvm/flutter_sdk/bin/flutter` for `flutter` and
+`./.fvm/flutter_sdk/bin/dart` for `dart`. Record the substitution in the report. The
+Windows (Visual Studio Community 2026) and Android (SDK 37, licenses accepted) toolchains
+are installed there.
 
 Any unresolved deterministic failure => `NOT ACCEPTED`.
 
@@ -609,6 +625,10 @@ exception grant
 
 Verify both UI hiding and application/controller action guards.
 
+Revalidation 2026-09-26: on mobile, Activate includes its recovery controls, Retry
+activation and Check current Blitz (FE-006 §75). Only the `activate` route mutation lease
+is granted on mobile.
+
 ---
 
 # 22. Student Active Blitz Audit
@@ -785,6 +805,17 @@ Returned Attempt is authoritative.
 Questions become visible only after a strictly valid Start/Resume/replacement
 response.
 
+Revalidation 2026-09-26: the delivered Start matrix, per FE-004 §74 and the owner decision D3
+on `S08-BE-PHASE-2`, refines the expected semantics above:
+- `start_normal`: a `timed_out_finalized` #1 without an exception returns
+  `blitz_time_expired`; any other terminal #1, or a terminal #1 with an exception, returns
+  `attempts_exhausted`;
+- `resume`: a `timed_out_finalized` target returns `blitz_time_expired`, and any other
+  terminal target returns `attempt_not_editable`;
+- `start_replacement`: a terminal #2 returns `blitz_time_expired` (timed out) or
+  `attempts_exhausted`;
+- a new claim on a non-Active Topic or Blitz returns `blitz_not_active`.
+
 ---
 
 # 26. Immutable Start Request / Replay Audit — Critical
@@ -868,6 +899,11 @@ Never generate a new Start key merely to re-read the current Attempt.
 
 A key-only replay implementation, changed body, changed Resume target, intent
 switch or recovery-created replacement is blocking.
+
+Revalidation 2026-09-26: the delivered values are `_pendingRequest` in
+`StudentBlitzAttemptStartController` and `_completedStartRequest` in
+`StudentBlitzExecutionController`, which receives the returned Attempt and the exact request
+in one handoff.
 
 Verify explicit recovery coverage for:
 
@@ -1003,6 +1039,10 @@ File upload:
 - protected current file Open/Save As only from authoritative current answer.
 
 No storage path leak.
+
+Revalidation 2026-09-26: only a strict `200` for the upload itself proves its bytes. The
+FE-005 metadata match (id, name, extension, size, `updatedAt`) only checks that a later
+replay still shows that confirmed upload. It is never used to prove an uncertain upload.
 
 ---
 
