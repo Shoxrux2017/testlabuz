@@ -37,6 +37,7 @@ abstract final class AppRouteNames {
   static const studentTopicDetail = 'student-topic-detail';
   static const studentHomeworkDetail = 'student-homework-detail';
   static const studentHomeworkAttempt = 'student-homework-attempt';
+  static const studentBlitzDetail = 'student-blitz-detail';
   static const parent = 'parent';
   static const unsupportedDevice = 'unsupported-device';
 }
@@ -134,6 +135,8 @@ abstract final class AppRoutePaths {
   static const studentHomeworkIdParameter = 'homeworkId';
   static const studentHomeworkAttemptsSegment = 'attempts';
   static const studentHomeworkAttemptIdParameter = 'attemptId';
+  static const studentBlitzSegment = 'blitz';
+  static const studentBlitzIdParameter = 'blitzId';
   static const studentTopicDetail =
       '$student/$studentTopicsSegment/:$studentTopicIdParameter';
   static const studentHomeworkDetail =
@@ -141,6 +144,8 @@ abstract final class AppRoutePaths {
   static const studentHomeworkAttempt =
       '$studentHomeworkDetail/$studentHomeworkAttemptsSegment/'
       ':$studentHomeworkAttemptIdParameter';
+  static const studentBlitzDetail =
+      '$studentTopicDetail/$studentBlitzSegment/:$studentBlitzIdParameter';
   static const parent = '/parent';
   static const unsupportedDevice = '/unsupported-device';
 
@@ -211,6 +216,9 @@ abstract final class AppRoutePaths {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _studentAttemptIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _studentBlitzIdPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
@@ -678,7 +686,22 @@ abstract final class AppRoutePaths {
     return path == student ||
         isStudentTopicDetailPath(path) ||
         isStudentHomeworkDetailPath(path) ||
-        isStudentHomeworkAttemptPath(path);
+        isStudentHomeworkAttemptPath(path) ||
+        isStudentBlitzDetailPath(path);
+  }
+
+  /// Blitz execution has no Attempt route; this one path is both the
+  /// pre-Start detail and the execution shell.
+  static bool isStudentBlitzDetailPath(String path) {
+    const prefix = '$student/$studentTopicsSegment/';
+    if (!path.startsWith(prefix)) {
+      return false;
+    }
+    final segments = path.substring(prefix.length).split('/');
+    return segments.length == 3 &&
+        _studentTopicIdPattern.hasMatch(segments[0]) &&
+        segments[1] == studentBlitzSegment &&
+        _studentBlitzIdPattern.hasMatch(segments[2]);
   }
 
   static bool isStudentHomeworkAttemptPath(String path) {
@@ -699,7 +722,8 @@ abstract final class AppRoutePaths {
     const prefix = '$student/$studentTopicsSegment/';
     if (!isStudentTopicDetailPath(path) &&
         !isStudentHomeworkDetailPath(path) &&
-        !isStudentHomeworkAttemptPath(path)) {
+        !isStudentHomeworkAttemptPath(path) &&
+        !isStudentBlitzDetailPath(path)) {
       return null;
     }
     return path.substring(prefix.length).split('/').first;
@@ -714,6 +738,10 @@ abstract final class AppRoutePaths {
 
   static String? studentAttemptIdFromPath(String path) {
     return isStudentHomeworkAttemptPath(path) ? path.split('/').last : null;
+  }
+
+  static String? studentBlitzIdFromPath(String path) {
+    return isStudentBlitzDetailPath(path) ? path.split('/').last : null;
   }
 
   static String studentTopicDetailLocation(String topicId) {
@@ -757,5 +785,17 @@ abstract final class AppRoutePaths {
     }
     return '${studentHomeworkDetailLocation(topicId, homeworkId)}/'
         '$studentHomeworkAttemptsSegment/${Uri.encodeComponent(attemptId)}';
+  }
+
+  static String studentBlitzDetailLocation(String topicId, String blitzId) {
+    if (!_studentBlitzIdPattern.hasMatch(blitzId)) {
+      throw ArgumentError.value(
+        blitzId,
+        'blitzId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+    return '${studentTopicDetailLocation(topicId)}/$studentBlitzSegment/'
+        '${Uri.encodeComponent(blitzId)}';
   }
 }

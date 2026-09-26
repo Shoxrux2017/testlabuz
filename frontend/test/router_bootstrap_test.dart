@@ -27,6 +27,7 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboa
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
+import 'package:testlabuz_client/features/student/data/student_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
@@ -40,6 +41,7 @@ import 'package:testlabuz_client/features/student/domain/student_topic_repositor
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 
+import 'features/student/student_blitz_test_support.dart';
 import 'features/teacher/teacher_test_support.dart';
 
 void main() {
@@ -914,6 +916,9 @@ Future<void> _pumpApp(
         teacherTopicListRepositoryProvider.overrideWithValue(
           FakeTeacherTopicListRepository(),
         ),
+        studentBlitzRepositoryProvider.overrideWithValue(
+          FakeStudentBlitzRepository(),
+        ),
         studentTopicRepositoryProvider.overrideWithValue(
           studentTopics ?? FakeStudentTopicRepository(),
         ),
@@ -955,6 +960,9 @@ Future<ProviderContainer> _pumpAppWithContainer(
       ),
       teacherTopicListRepositoryProvider.overrideWithValue(
         FakeTeacherTopicListRepository(),
+      ),
+      studentBlitzRepositoryProvider.overrideWithValue(
+        FakeStudentBlitzRepository(),
       ),
       studentTopicRepositoryProvider.overrideWithValue(
         FakeStudentTopicRepository(),

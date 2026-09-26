@@ -111,6 +111,17 @@ DateTime? readStudentNullableWholeSecondUtcTimestamp(
   return readStudentNullableUtcTimestamp(map, key);
 }
 
+DateTime readStudentWholeSecondUtcTimestamp(
+  Map<String, Object?> map,
+  String key,
+) {
+  final timestamp = readStudentNullableWholeSecondUtcTimestamp(map, key);
+  if (timestamp == null) {
+    throw FormatException('$key must not be null.');
+  }
+  return timestamp;
+}
+
 double readStudentNonNegativeNumber(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! num || !value.isFinite || value < 0) {

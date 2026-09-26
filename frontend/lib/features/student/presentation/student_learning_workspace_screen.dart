@@ -18,6 +18,7 @@ import '../application/student_topic_list_state.dart';
 import '../domain/student_topic.dart';
 import '../domain/student_topic_list.dart';
 import '../domain/student_topic_list_query.dart';
+import 'student_active_blitz_section.dart';
 import 'student_topic_formatters.dart';
 
 class StudentLearningWorkspaceScreen extends ConsumerStatefulWidget {
@@ -80,9 +81,18 @@ class _StudentLearningWorkspaceScreenState
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 1040),
-                          child: _StudentTopicsWorkspace(
-                            state: listState,
-                            searchController: _searchController,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Time-sensitive work comes first; it loads and
+                              // fails independently of My Topics.
+                              const StudentActiveBlitzSection(),
+                              const SizedBox(height: 16),
+                              _StudentTopicsWorkspace(
+                                state: listState,
+                                searchController: _searchController,
+                              ),
+                            ],
                           ),
                         ),
                       ),

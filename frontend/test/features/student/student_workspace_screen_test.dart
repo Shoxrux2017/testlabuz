@@ -7,6 +7,7 @@ import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
+import 'package:testlabuz_client/features/student/data/student_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/student/domain/student_homework.dart';
@@ -18,6 +19,7 @@ import 'package:testlabuz_client/features/student/domain/student_topic_list.dart
 import 'package:testlabuz_client/features/student/presentation/student_learning_workspace_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_topic_detail_screen.dart';
 
+import 'student_blitz_test_support.dart';
 import 'student_test_support.dart';
 
 void main() {
@@ -225,6 +227,9 @@ Future<void> _pumpWorkspace(
           ),
         ),
         appDeviceSurfaceProvider.overrideWithValue(surface),
+        studentBlitzRepositoryProvider.overrideWithValue(
+          FakeStudentBlitzRepository(),
+        ),
         studentTopicRepositoryProvider.overrideWithValue(effectiveRepository),
       ],
       child: const MaterialApp(home: StudentLearningWorkspaceScreen()),

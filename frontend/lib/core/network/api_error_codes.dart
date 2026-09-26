@@ -30,6 +30,8 @@ abstract final class ApiErrorCodes {
   static const institutionSettingsIncomplete =
       'institution_settings_incomplete';
   static const officialCohortMismatch = 'official_cohort_mismatch';
+  static const blitzNotActive = 'blitz_not_active';
+  static const blitzTimeExpired = 'blitz_time_expired';
   static const unsupportedFileType = 'unsupported_file_type';
   static const fileTooLarge = 'file_too_large';
   static const fileUploadFailed = 'file_upload_failed';

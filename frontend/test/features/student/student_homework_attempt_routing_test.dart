@@ -11,6 +11,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/auth/data/auth_repository_impl.dart';
 import 'package:testlabuz_client/features/auth/domain/auth_user.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/student/data/student_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_attempt_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart';
@@ -29,6 +30,7 @@ import 'package:testlabuz_client/features/student/presentation/student_homework_
 import 'package:testlabuz_client/features/student/presentation/student_homework_detail_screen.dart';
 
 import '../../router_bootstrap_test.dart' show FakeAuthRepository;
+import 'student_blitz_test_support.dart';
 import 'student_test_support.dart';
 
 const _homeworkId = '40000000-0000-0000-0000-000000000001';
@@ -340,6 +342,9 @@ Future<ProviderContainer> _pump(
       ),
       studentHomeworkAttemptRepositoryProvider.overrideWithValue(
         attempts ?? _AttemptRepository(),
+      ),
+      studentBlitzRepositoryProvider.overrideWithValue(
+        FakeStudentBlitzRepository(),
       ),
       studentTopicRepositoryProvider.overrideWithValue(
         FakeStudentTopicRepository(),
