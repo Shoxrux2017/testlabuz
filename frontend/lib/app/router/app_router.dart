@@ -26,8 +26,10 @@ import '../../features/platform_admin/presentation/platform_owner_institution_ed
 import '../../features/platform_admin/presentation/platform_owner_institutions_screen.dart';
 import '../../features/platform_admin/presentation/platform_owner_shell.dart';
 import '../../features/student/application/student_session_key.dart';
+import '../../features/student/domain/student_blitz_route_target.dart';
 import '../../features/student/domain/student_homework_attempt_route_target.dart';
 import '../../features/student/domain/student_homework_route_target.dart';
+import '../../features/student/presentation/student_blitz_detail_screen.dart';
 import '../../features/student/presentation/student_homework_attempt_screen.dart';
 import '../../features/student/presentation/student_homework_detail_screen.dart';
 import '../../features/student/presentation/student_learning_workspace_screen.dart';
@@ -555,6 +557,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                 ],
               ),
+              GoRoute(
+                name: AppRouteNames.studentBlitzDetail,
+                path:
+                    '${AppRoutePaths.studentBlitzSegment}/:${AppRoutePaths.studentBlitzIdParameter}',
+                builder: (context, state) {
+                  final target = StudentBlitzRouteTarget(
+                    topicId: state
+                        .pathParameters[AppRoutePaths.studentTopicIdParameter]!,
+                    blitzId: state
+                        .pathParameters[AppRoutePaths.studentBlitzIdParameter]!,
+                  );
+                  return _buildStudentDestination(
+                    StudentBlitzDetailScreen(
+                      key: ValueKey<StudentBlitzRouteTarget>(target),
+                      target: target,
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ],
@@ -882,7 +903,8 @@ bool _keepsLocationDuringBootstrap(
               surface == AppDeviceSurface.mobile)) ||
       ((AppRoutePaths.isStudentTopicDetailPath(location) ||
               AppRoutePaths.isStudentHomeworkDetailPath(location) ||
-              AppRoutePaths.isStudentHomeworkAttemptPath(location)) &&
+              AppRoutePaths.isStudentHomeworkAttemptPath(location) ||
+              AppRoutePaths.isStudentBlitzDetailPath(location)) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       (surface == AppDeviceSurface.desktop &&
