@@ -404,7 +404,7 @@ void main() {
     }
   });
 
-  testWidgets('exposes no mutation, exception, monitoring, or countdown UI', (
+  testWidgets('an Active Blitz offers only Close, no monitoring or countdown', (
     tester,
   ) async {
     await _pumpDetail(
@@ -419,11 +419,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Close'), findsOneWidget);
     for (final label in [
       'Edit',
       'Schedule',
       'Activate',
-      'Close',
       'Archive',
       'Monitor',
       'Monitoring',
@@ -477,9 +477,6 @@ void main() {
         matcher,
         reason: reason,
       );
-      for (final lifecycle in ['Schedule', 'Activate', 'Close', 'Archive']) {
-        expect(find.text(lifecycle), findsNothing, reason: lifecycle);
-      }
     }
   });
 

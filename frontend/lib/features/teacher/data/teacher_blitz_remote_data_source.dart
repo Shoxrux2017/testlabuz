@@ -8,6 +8,7 @@ import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/teacher_blitz_list_query.dart';
 import '../domain/teacher_blitz_mutation.dart';
+import '../domain/teacher_blitz_schedule.dart';
 import '../domain/teacher_question_mutation.dart';
 import '../domain/teacher_topic.dart';
 import 'dto/teacher_blitz_dto.dart';
@@ -186,6 +187,89 @@ class TeacherBlitzRemoteDataSource {
       expectedStatus: 200,
       expectedMessage: TeacherQuestionMutationMessages.reordered,
       operation: TeacherQuestionMutationOperation.reorder,
+    );
+  }
+
+  Future<TeacherBlitzMutationDto> scheduleBlitz(
+    String blitzId,
+    TeacherBlitzScheduleRequest request,
+  ) {
+    _requireCanonicalId(blitzId, 'blitzId');
+    return _sendBlitzMutation(
+      () => dio.post<Object?>(
+        '/teacher/blitz/${Uri.encodeComponent(blitzId)}/schedule',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherBlitzMutationDto.scheduleSuccessMessage,
+      conflictCodes: const {
+        ApiErrorCodes.taskClosed,
+        ApiErrorCodes.taskArchived,
+        ApiErrorCodes.businessConflict,
+        ApiErrorCodes.topicNotEditable,
+      },
+    );
+  }
+
+  Future<TeacherBlitzMutationDto> activateBlitz(
+    String blitzId, {
+    required String idempotencyKey,
+  }) {
+    _requireCanonicalId(blitzId, 'blitzId');
+    _requireCanonicalId(idempotencyKey, 'idempotencyKey');
+    return _sendBlitzMutation(
+      () => dio.post<Object?>(
+        '/teacher/blitz/${Uri.encodeComponent(blitzId)}/activate',
+        options: Options(
+          followRedirects: false,
+          headers: {'Idempotency-Key': idempotencyKey},
+        ),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherBlitzMutationDto.activateSuccessMessage,
+      conflictCodes: const {
+        ApiErrorCodes.idempotencyKeyReused,
+        ApiErrorCodes.taskClosed,
+        ApiErrorCodes.taskArchived,
+        ApiErrorCodes.topicNotEditable,
+        ApiErrorCodes.institutionSettingsIncomplete,
+        ApiErrorCodes.assessmentHasNoScoreablePoints,
+        ApiErrorCodes.assessmentNotAssigned,
+        ApiErrorCodes.officialCohortMismatch,
+        ApiErrorCodes.businessConflict,
+      },
+    );
+  }
+
+  Future<TeacherBlitzMutationDto> closeBlitz(String blitzId) {
+    _requireCanonicalId(blitzId, 'blitzId');
+    return _sendBlitzMutation(
+      () => dio.post<Object?>(
+        '/teacher/blitz/${Uri.encodeComponent(blitzId)}/close',
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherBlitzMutationDto.closeSuccessMessage,
+      conflictCodes: const {
+        ApiErrorCodes.taskNotActive,
+        ApiErrorCodes.taskArchived,
+        ApiErrorCodes.topicNotEditable,
+        ApiErrorCodes.businessConflict,
+      },
+    );
+  }
+
+  Future<TeacherBlitzMutationDto> archiveBlitz(String blitzId) {
+    _requireCanonicalId(blitzId, 'blitzId');
+    return _sendBlitzMutation(
+      () => dio.post<Object?>(
+        '/teacher/blitz/${Uri.encodeComponent(blitzId)}/archive',
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherBlitzMutationDto.archiveSuccessMessage,
+      conflictCodes: const {ApiErrorCodes.businessConflict},
     );
   }
 

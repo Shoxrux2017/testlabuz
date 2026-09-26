@@ -6,6 +6,7 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
+import '../domain/teacher_blitz.dart';
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_result_pair.dart';
@@ -61,6 +62,39 @@ class TeacherTopicResultPairRemoteDataSource {
       () => dio.put<Object?>(
         '/teacher/topics/${Uri.encodeComponent(topicId)}/result-pair',
         data: <String, Object?>{'homework_assessment_id': homeworkId},
+        options: Options(followRedirects: false),
+      ),
+    );
+  }
+
+  Future<TeacherTopicResultPairMutationDto> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  }) {
+    _requireTopicId(topicId);
+    if (!isCanonicalTeacherHomeworkId(homeworkId)) {
+      throw ArgumentError.value(
+        homeworkId,
+        'homeworkId',
+        'Must be a canonical UUID.',
+      );
+    }
+    if (!isCanonicalTeacherBlitzId(blitzId)) {
+      throw ArgumentError.value(
+        blitzId,
+        'blitzId',
+        'Must be a canonical UUID.',
+      );
+    }
+
+    return _sendMutation(
+      () => dio.put<Object?>(
+        '/teacher/topics/${Uri.encodeComponent(topicId)}/result-pair',
+        data: <String, Object?>{
+          'homework_assessment_id': homeworkId,
+          'blitz_assessment_id': blitzId,
+        },
         options: Options(followRedirects: false),
       ),
     );

@@ -27,6 +27,9 @@ abstract final class ApiErrorCodes {
       'assessment_has_no_scoreable_points';
   static const officialTaskRequiresGroupAssignment =
       'official_task_requires_group_assignment';
+  static const institutionSettingsIncomplete =
+      'institution_settings_incomplete';
+  static const officialCohortMismatch = 'official_cohort_mismatch';
   static const unsupportedFileType = 'unsupported_file_type';
   static const fileTooLarge = 'file_too_large';
   static const fileUploadFailed = 'file_upload_failed';

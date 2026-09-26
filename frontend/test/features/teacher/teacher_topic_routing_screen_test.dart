@@ -1168,7 +1168,7 @@ void main() {
       expect(topics.fetchIds, hasLength(2));
       expect(
         find.text(
-          "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.",
+          "Close or archive the Topic's open Homework and Blitz tasks before closing or archiving the Topic.",
         ),
         findsOneWidget,
       );

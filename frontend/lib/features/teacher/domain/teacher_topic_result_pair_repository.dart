@@ -7,4 +7,11 @@ abstract interface class TeacherTopicResultPairRepository {
     String topicId,
     String homeworkId,
   );
+
+  /// Designates [blitzId] while preserving the current official Homework.
+  Future<TeacherTopicResultPair> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  });
 }

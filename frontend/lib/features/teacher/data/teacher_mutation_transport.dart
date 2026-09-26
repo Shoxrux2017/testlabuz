@@ -68,7 +68,14 @@ bool isExactTeacherMutationFailure(
     _ => false,
   };
 
-  return recognized && (status == 422 || envelope.errors.isEmpty);
+  // Only the documented settings conflict may carry `meta`.
+  final metaAllowed =
+      !envelope.hasMeta ||
+      (status == 409 && code == ApiErrorCodes.institutionSettingsIncomplete);
+
+  return recognized &&
+      metaAllowed &&
+      (status == 422 || envelope.errors.isEmpty);
 }
 
 _ExactErrorEnvelope? _readExactErrorEnvelope(Object? value) {
@@ -84,7 +91,7 @@ _ExactErrorEnvelope? _readExactErrorEnvelope(Object? value) {
   }
 
   const required = {'message', 'code', 'errors'};
-  const allowed = {...required, 'request_id'};
+  const allowed = {...required, 'request_id', 'meta'};
   if (map.length < required.length ||
       !map.keys.toSet().containsAll(required) ||
       map.keys.any((key) => !allowed.contains(key))) {
@@ -101,7 +108,8 @@ _ExactErrorEnvelope? _readExactErrorEnvelope(Object? value) {
       code.isEmpty ||
       rawErrors is! Map ||
       (map.containsKey('request_id') &&
-          (requestId is! String || requestId.isEmpty))) {
+          (requestId is! String || requestId.isEmpty)) ||
+      (map.containsKey('meta') && !_isDocumentedErrorMeta(map['meta']))) {
     return null;
   }
 
@@ -123,12 +131,32 @@ _ExactErrorEnvelope? _readExactErrorEnvelope(Object? value) {
     errors[entry.key as String] = messages;
   }
 
-  return _ExactErrorEnvelope(code: code, errors: errors);
+  return _ExactErrorEnvelope(
+    code: code,
+    errors: errors,
+    hasMeta: map.containsKey('meta'),
+  );
+}
+
+// The only documented error `meta` is `{"missing_fields": [<field>, ...]}`.
+bool _isDocumentedErrorMeta(Object? value) {
+  if (value is! Map || value.length != 1) {
+    return false;
+  }
+  final fields = value['missing_fields'];
+  return fields is List &&
+      fields.isNotEmpty &&
+      fields.every((field) => field is String && field.isNotEmpty);
 }
 
 class _ExactErrorEnvelope {
-  const _ExactErrorEnvelope({required this.code, required this.errors});
+  const _ExactErrorEnvelope({
+    required this.code,
+    required this.errors,
+    required this.hasMeta,
+  });
 
   final String code;
   final Map<String, List<String>> errors;
+  final bool hasMeta;
 }

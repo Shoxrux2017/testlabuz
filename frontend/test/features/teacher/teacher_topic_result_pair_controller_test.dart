@@ -394,4 +394,13 @@ class _FakeTeacherTopicResultPairRepository
     setRequests.add((topicId: topicId, homeworkId: homeworkId));
     throw UnsupportedError('Official mutation is outside this focused test.');
   }
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  }) {
+    throw UnsupportedError('Blitz designation is outside this Homework test.');
+  }
 }

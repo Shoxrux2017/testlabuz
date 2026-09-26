@@ -12,6 +12,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_blitz_deta
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_edit_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_edit_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_list_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_mutation_activity.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_result_pair_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
@@ -526,6 +527,25 @@ void main() {
   });
 
   group('TeacherBlitzEditController uncertain outcome', () {
+    test('a Blitz lifecycle mutation blocks Save', () async {
+      final harness = _Harness();
+      harness.listen();
+      final controller = harness.enterRoute();
+      await flushTeacherControllers();
+      harness.container.listen(
+        teacherBlitzRouteMutationActivityProvider(_target()),
+        (_, _) {},
+      );
+      harness.container
+          .read(teacherBlitzRouteMutationActivityProvider(_target()).notifier)
+          .begin(TeacherBlitzRouteMutationOperation.schedule);
+      controller.updateTitle('Renamed');
+
+      await controller.submit();
+
+      expect(harness.blitz.updateRequests, isEmpty);
+    });
+
     test('a matching server state reconciles as success', () async {
       var reads = 0;
       final harness = _Harness(

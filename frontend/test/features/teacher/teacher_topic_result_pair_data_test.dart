@@ -17,6 +17,8 @@ const _topicId = '10000000-0000-0000-0000-000000000001';
 const _otherTopicId = '10000000-0000-0000-0000-000000000002';
 const _homeworkId = '20000000-0000-0000-0000-000000000001';
 const _otherHomeworkId = '20000000-0000-0000-0000-000000000002';
+const _blitzId = '80000000-0000-0000-0000-000000000001';
+const _otherBlitzId = '80000000-0000-0000-0000-000000000002';
 
 void main() {
   group('TeacherTopicResultPairRemoteDataSource', () {
@@ -228,6 +230,110 @@ void main() {
         }
       },
     );
+
+    test('Blitz designation PUT sends both sides of the pair', () async {
+      final adapter = _RecordingAdapter(
+        (_) => _jsonResponse(200, {
+          'data': _pairJson()..['blitz_assessment_id'] = _blitzId,
+          'message': TeacherTopicResultPairMutationDto.successMessage,
+        }),
+      );
+
+      final pair = await _repository(
+        adapter,
+      ).setOfficialBlitz(_topicId, homeworkId: _homeworkId, blitzId: _blitzId);
+
+      expect(pair.blitzAssessmentId, _blitzId);
+      final put = adapter.requests.single;
+      expect(put.method, 'PUT');
+      expect(put.path, '/teacher/topics/$_topicId/result-pair');
+      expect(put.queryParameters, isEmpty);
+      expect(put.followRedirects, isFalse);
+      expect(put.data, {
+        'homework_assessment_id': _homeworkId,
+        'blitz_assessment_id': _blitzId,
+      });
+    });
+
+    test('Blitz designation identity mismatches remain unknown', () async {
+      for (final pair in <Map<String, Object?>>[
+        _pairJson()..['blitz_assessment_id'] = null,
+        _pairJson()..['blitz_assessment_id'] = _otherBlitzId,
+        _pairJson()
+          ..['blitz_assessment_id'] = _blitzId
+          ..['homework_assessment_id'] = _otherHomeworkId,
+        _pairJson()
+          ..['blitz_assessment_id'] = _blitzId
+          ..['topic_id'] = _otherTopicId,
+      ]) {
+        final adapter = _RecordingAdapter(
+          (_) => _jsonResponse(200, {
+            'data': pair,
+            'message': TeacherTopicResultPairMutationDto.successMessage,
+          }),
+        );
+
+        await expectLater(
+          _repository(adapter).setOfficialBlitz(
+            _topicId,
+            homeworkId: _homeworkId,
+            blitzId: _blitzId,
+          ),
+          throwsA(isA<TeacherTopicResultPairMutationOutcomeUnknownException>()),
+        );
+      }
+    });
+
+    test('Blitz designation maps the documented 409 conflicts', () async {
+      for (final code in [
+        'topic_not_editable',
+        'official_task_requires_group_assignment',
+        'business_conflict',
+        'result_pair_locked',
+      ]) {
+        final adapter = _RecordingAdapter(
+          (_) => _jsonResponse(409, _errorJson(409, code)),
+        );
+
+        await expectLater(
+          _repository(adapter).setOfficialBlitz(
+            _topicId,
+            homeworkId: _homeworkId,
+            blitzId: _blitzId,
+          ),
+          throwsA(
+            isA<ApiRequestException>().having(
+              (error) => error.failure.serverCode,
+              'serverCode',
+              code,
+            ),
+          ),
+        );
+      }
+    });
+
+    test('Blitz designation rejects malformed IDs before transport', () {
+      final adapter = _RecordingAdapter((_) => _jsonResponse(200, null));
+      final source = _source(adapter);
+
+      expect(
+        () => source.setOfficialBlitz(
+          _topicId,
+          homeworkId: _homeworkId,
+          blitzId: 'bad-blitz',
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => source.setOfficialBlitz(
+          _topicId,
+          homeworkId: 'bad-homework',
+          blitzId: _blitzId,
+        ),
+        throwsArgumentError,
+      );
+      expect(adapter.requests, isEmpty);
+    });
 
     test('ambiguous Dio failure remains unknown and is not retried', () async {
       final adapter = _RecordingAdapter(

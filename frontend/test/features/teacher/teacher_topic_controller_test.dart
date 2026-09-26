@@ -7,6 +7,8 @@ import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_blitz_list_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_homework_list_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_create_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_create_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_detail_controller.dart';
@@ -18,7 +20,9 @@ import 'package:testlabuz_client/features/teacher/application/teacher_topic_grou
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_lifecycle_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_lifecycle_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_topic_list_controller.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group.dart';
@@ -31,7 +35,7 @@ import 'teacher_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
 const _openHomeworkFeedback =
-    "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.";
+    "Close or archive the Topic's open Homework and Blitz tasks before closing or archiving the Topic.";
 
 void main() {
   group('TeacherTopicGroupPickerController', () {
@@ -903,6 +907,46 @@ void main() {
     );
 
     test(
+      'open assessment conflict refreshes Homework and Blitz lists',
+      () async {
+        final repository = FakeTeacherTopicRepository(
+          onFetch: (id) async =>
+              teacherTopic(id: id, status: TeacherTopicStatus.active),
+          onLifecycle: (_, _) async => throw teacherServerFailure(
+            ApiErrorCodes.topicHasOpenAssessments,
+            statusCode: 409,
+          ),
+        );
+        final harness = _Harness(topics: repository);
+        harness.container
+          ..listen(teacherTopicDetailControllerProvider(_topicId), (_, _) {})
+          ..listen(teacherHomeworkListControllerProvider(_topicId), (_, _) {})
+          ..listen(teacherBlitzListControllerProvider(_topicId), (_, _) {});
+        await flushTeacherControllers();
+        final homeworkReads = harness.homework.listRequests.length;
+        final blitzReads = harness.blitz.listRequests.length;
+        final lifecycleProvider = teacherTopicLifecycleControllerProvider(
+          _topicId,
+        );
+        final lifecycleSubscription = harness.container.listen(
+          lifecycleProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+
+        await harness.container
+            .read(lifecycleProvider.notifier)
+            .perform(TeacherTopicLifecycleAction.close);
+        await flushTeacherControllers();
+
+        expect(lifecycleSubscription.read().feedback, _openHomeworkFeedback);
+        expect(harness.homework.listRequests.length, homeworkReads + 1);
+        expect(harness.blitz.listRequests.length, blitzReads + 1);
+        expect(repository.lifecycleRequests, hasLength(1));
+      },
+    );
+
+    test(
       'failed open Homework refresh preserves the definite non-commit',
       () async {
         var fetches = 0;
@@ -1187,6 +1231,8 @@ class _Harness {
         teacherTopicListRepositoryProvider.overrideWithValue(
           FakeTeacherTopicListRepository(),
         ),
+        teacherHomeworkRepositoryProvider.overrideWithValue(homework),
+        teacherBlitzRepositoryProvider.overrideWithValue(blitz),
       ],
     );
     addTearDown(container.dispose);
@@ -1195,6 +1241,8 @@ class _Harness {
   final FakeTeacherAuthSessionController auth;
   final FakeTeacherGroupListRepository groups;
   final FakeTeacherTopicRepository topics;
+  final homework = FakeTeacherHomeworkRepository();
+  final blitz = FakeTeacherBlitzRepository();
   final AppDeviceSurface surface;
   late final ProviderContainer container;
 }

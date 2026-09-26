@@ -17,6 +17,7 @@ import 'teacher_blitz_detail_controller.dart';
 import 'teacher_blitz_detail_state.dart';
 import 'teacher_blitz_question_builder_controller.dart';
 import 'teacher_blitz_question_editor_target.dart';
+import 'teacher_blitz_route_mutation_activity.dart';
 import 'teacher_question_draft_commands.dart';
 import 'teacher_question_editor_state.dart';
 import 'teacher_question_mutation_activity.dart';
@@ -586,7 +587,8 @@ class TeacherBlitzQuestionEditorController
         !builderState.hasBlockingOutcome &&
         !ref
             .read(teacherQuestionMutationActivityProvider(target.routeTarget))
-            .isActive;
+            .isActive &&
+        !isTeacherBlitzRouteMutationActive(ref, target.routeTarget);
   }
 
   bool _canPublish(

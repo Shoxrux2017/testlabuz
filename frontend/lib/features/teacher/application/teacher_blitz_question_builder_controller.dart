@@ -14,6 +14,7 @@ import '../domain/teacher_question_mutation.dart';
 import 'teacher_blitz_detail_controller.dart';
 import 'teacher_blitz_detail_state.dart';
 import 'teacher_blitz_list_controller.dart';
+import 'teacher_blitz_route_mutation_activity.dart';
 import 'teacher_blitz_route_target.dart';
 import 'teacher_question_builder_state.dart';
 import 'teacher_question_mutation_activity.dart';
@@ -929,7 +930,8 @@ class TeacherBlitzQuestionBuilderController
         !state.authoritativeReloadPending &&
         !state.isBusy &&
         !state.hasBlockingOutcome &&
-        !ref.read(teacherQuestionMutationActivityProvider(target)).isActive;
+        !ref.read(teacherQuestionMutationActivityProvider(target)).isActive &&
+        !isTeacherBlitzRouteMutationActive(ref, target);
   }
 
   bool _hasEditableBlitz() {

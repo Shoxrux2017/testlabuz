@@ -10,6 +10,8 @@ import '../../auth/application/auth_session_controller.dart';
 import '../data/teacher_topic_repository_impl.dart';
 import '../domain/teacher_topic.dart';
 import '../domain/teacher_topic_mutation.dart';
+import 'teacher_blitz_list_controller.dart';
+import 'teacher_homework_list_controller.dart';
 import 'teacher_session_key.dart';
 import 'teacher_material_mutation_activity.dart';
 import 'teacher_topic_detail_controller.dart';
@@ -121,6 +123,7 @@ class TeacherTopicLifecycleController
     if (!_canPublish(generation, key, action)) {
       return;
     }
+    _refreshOpenAssessmentLists(key);
     state = TeacherTopicLifecycleState(
       status: TeacherTopicLifecycleStatus.reconciling,
       action: action,
@@ -156,6 +159,18 @@ class TeacherTopicLifecycleController
       action: action,
       feedback: _topicHasOpenAssessmentsFeedback,
     );
+  }
+
+  // Open Homework or Blitz blocked the Topic; show the lists' server truth.
+  void _refreshOpenAssessmentLists(TeacherSessionKey key) {
+    final homework = teacherHomeworkListControllerProvider(topicId);
+    if (ref.exists(homework)) {
+      ref.read(homework.notifier).refreshAfterMutation(key);
+    }
+    final blitz = teacherBlitzListControllerProvider(topicId);
+    if (ref.exists(blitz)) {
+      ref.read(blitz.notifier).refreshAfterMutation(key);
+    }
   }
 
   Future<void> checkCurrentTopic() async {
@@ -371,4 +386,4 @@ String _notAvailableMessage(TeacherTopicLifecycleAction action) {
 }
 
 const _topicHasOpenAssessmentsFeedback =
-    "Close or archive the Topic's draft/active Homework before closing or archiving the Topic.";
+    "Close or archive the Topic's open Homework and Blitz tasks before closing or archiving the Topic.";
