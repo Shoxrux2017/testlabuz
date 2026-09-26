@@ -462,6 +462,15 @@ class _FakeResultPairRepository implements TeacherTopicResultPairRepository {
   ) {
     throw StateError('Official designation is not used by this widget test.');
   }
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  }) {
+    throw UnsupportedError('Blitz designation is outside this Homework test.');
+  }
 }
 
 Future<void> _selectDropdownOption<T>(

@@ -9,6 +9,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_detail_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_list_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_question_builder_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_mutation_activity.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_question_builder_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_question_mutation_activity.dart';
@@ -437,6 +438,26 @@ void main() {
   });
 
   group('TeacherBlitzQuestionBuilderController ownership', () {
+    test('a Blitz lifecycle mutation blocks Question mutations', () async {
+      final questions = _questions(2);
+      final harness = _BuilderHarness(
+        initialBlitz: teacherBlitz(questions: questions),
+      );
+      await harness.listenAndEnterRoute();
+      harness.container
+          .read(
+            teacherBlitzRouteMutationActivityProvider(harness.target).notifier,
+          )
+          .begin(TeacherBlitzRouteMutationOperation.activate);
+
+      await harness.controller.deleteQuestion(
+        questions.first.id,
+        ownerGeneration: harness.ownerGeneration!,
+      );
+
+      expect(harness.repository.deleteQuestionIds, isEmpty);
+    });
+
     test('a completion after route exit cannot publish', () async {
       final questions = _questions(2);
       final pending = Completer<TeacherBlitz>();

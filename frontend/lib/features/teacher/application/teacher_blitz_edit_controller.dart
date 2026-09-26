@@ -15,6 +15,7 @@ import 'teacher_blitz_detail_controller.dart';
 import 'teacher_blitz_detail_state.dart';
 import 'teacher_blitz_edit_state.dart';
 import 'teacher_blitz_list_controller.dart';
+import 'teacher_blitz_route_mutation_activity.dart';
 import 'teacher_blitz_route_target.dart';
 import 'teacher_blitz_server_validation.dart';
 import 'teacher_homework_student_picker_target.dart';
@@ -374,6 +375,7 @@ class TeacherBlitzEditController extends Notifier<TeacherBlitzEditState> {
         blitz == null ||
         form == null ||
         initial == null ||
+        isTeacherBlitzRouteMutationActive(ref, target) ||
         !_matchesSession(sessionKey)) {
       return;
     }

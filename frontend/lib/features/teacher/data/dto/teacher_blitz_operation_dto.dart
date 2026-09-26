@@ -26,6 +26,10 @@ class TeacherBlitzMutationDto {
 
   static const createSuccessMessage = 'Blitz task created successfully.';
   static const updateSuccessMessage = 'Blitz task updated successfully.';
+  static const scheduleSuccessMessage = 'Blitz task scheduled successfully.';
+  static const activateSuccessMessage = 'Blitz task activated successfully.';
+  static const closeSuccessMessage = 'Blitz task closed successfully.';
+  static const archiveSuccessMessage = 'Blitz task archived successfully.';
 
   final TeacherBlitzDto blitz;
 }

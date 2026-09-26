@@ -1302,4 +1302,13 @@ class _FakeResultPairRepository implements TeacherTopicResultPairRepository {
     return onSet?.call(topicId, homeworkId) ??
         Future.value(_resultPair(homeworkId: homeworkId));
   }
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  }) {
+    throw UnsupportedError('Blitz designation is outside this Homework test.');
+  }
 }

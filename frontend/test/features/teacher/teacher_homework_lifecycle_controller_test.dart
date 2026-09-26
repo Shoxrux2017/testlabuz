@@ -795,6 +795,15 @@ class _FakePairRepository implements TeacherTopicResultPairRepository {
       'Official writes are not used by lifecycle tests.',
     );
   }
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  }) {
+    throw UnsupportedError('Blitz designation is outside this Homework test.');
+  }
 }
 
 TeacherTopicResultPair _pair({

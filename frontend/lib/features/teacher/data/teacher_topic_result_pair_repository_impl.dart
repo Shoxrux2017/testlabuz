@@ -50,4 +50,24 @@ class TeacherTopicResultPairRepositoryImpl
     }
     return pair;
   }
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  }) async {
+    final dto = await remoteDataSource.setOfficialBlitz(
+      topicId,
+      homeworkId: homeworkId,
+      blitzId: blitzId,
+    );
+    final pair = dto.pair.toDomain();
+    if (pair.topicId.toLowerCase() != topicId.toLowerCase() ||
+        pair.homeworkAssessmentId.toLowerCase() != homeworkId.toLowerCase() ||
+        pair.blitzAssessmentId?.toLowerCase() != blitzId.toLowerCase()) {
+      throw const TeacherTopicResultPairMutationOutcomeUnknownException();
+    }
+    return pair;
+  }
 }

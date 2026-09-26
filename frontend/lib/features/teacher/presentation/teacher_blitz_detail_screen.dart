@@ -7,44 +7,145 @@ import '../../../app/router/app_route_paths.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/teacher_blitz_detail_controller.dart';
 import '../application/teacher_blitz_detail_state.dart';
+import '../application/teacher_blitz_lifecycle_controller.dart';
+import '../application/teacher_blitz_lifecycle_state.dart';
+import '../application/teacher_blitz_route_mutation_activity.dart';
 import '../application/teacher_blitz_route_target.dart';
+import '../application/teacher_official_blitz_controller.dart';
+import '../application/teacher_official_blitz_state.dart';
 import '../application/teacher_topic_result_pair_controller.dart';
 import '../domain/teacher_blitz.dart';
 import '../domain/teacher_blitz_form.dart';
 import 'teacher_blitz_formatters.dart';
+import 'teacher_blitz_lifecycle_controls.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_question_read_view.dart';
 import 'teacher_topic_formatters.dart';
 
-/// Blitz detail with desktop authoring entries; lifecycle actions belong
-/// to later tasks.
-class TeacherBlitzDetailScreen extends ConsumerWidget {
+/// Blitz detail with desktop authoring entries and lifecycle controls.
+class TeacherBlitzDetailScreen extends ConsumerStatefulWidget {
   const TeacherBlitzDetailScreen({required this.target, super.key});
 
   final TeacherBlitzRouteTarget target;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TeacherBlitzDetailScreen> createState() =>
+      _TeacherBlitzDetailScreenState();
+}
+
+class _TeacherBlitzDetailScreenState
+    extends ConsumerState<TeacherBlitzDetailScreen> {
+  late TeacherBlitzRouteTarget _target;
+  late TeacherBlitzLifecycleController _lifecycleController;
+  late TeacherOfficialBlitzController _officialController;
+  late TeacherBlitzRouteMutationActivityController _activityController;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindTarget();
+  }
+
+  @override
+  void didUpdateWidget(covariant TeacherBlitzDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.target == widget.target) {
+      return;
+    }
+    final oldLifecycle = _lifecycleController;
+    final oldOfficial = _officialController;
+    final oldActivity = _activityController;
+    oldLifecycle.invalidateRouteCompletions();
+    oldOfficial.invalidateRouteCompletions();
+    _bindTarget();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldLifecycle.leaveRoute();
+      oldOfficial.leaveRoute();
+      oldActivity.endRoute();
+    });
+  }
+
+  @override
+  void dispose() {
+    final lifecycle = _lifecycleController;
+    final official = _officialController;
+    final activity = _activityController;
+    lifecycle.invalidateRouteCompletions();
+    official.invalidateRouteCompletions();
+    // Provider state may not change while the tree is finalizing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      lifecycle.leaveRoute();
+      official.leaveRoute();
+      activity.endRoute();
+    });
+    super.dispose();
+  }
+
+  void _bindTarget() {
+    _target = widget.target;
+    _lifecycleController = ref.read(
+      teacherBlitzLifecycleControllerProvider(_target).notifier,
+    );
+    _officialController = ref.read(
+      teacherOfficialBlitzControllerProvider(_target).notifier,
+    );
+    _activityController = ref.read(
+      teacherBlitzRouteMutationActivityProvider(_target).notifier,
+    );
+  }
+
+  bool _isCurrentTarget(TeacherBlitzRouteTarget target) {
+    return mounted && _target == target;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final target = _target;
     final detailProvider = teacherBlitzDetailControllerProvider(target);
     final detail = ref.watch(detailProvider);
     final controller = ref.read(detailProvider.notifier);
     final pairState = ref.watch(
       teacherTopicResultPairControllerProvider(target.topicId.toLowerCase()),
     );
+    final isDesktop =
+        ref.watch(appDeviceSurfaceProvider) == AppDeviceSurface.desktop;
+    final activity = isDesktop
+        ? ref.watch(teacherBlitzRouteMutationActivityProvider(target))
+        : const TeacherBlitzRouteMutationActivityState();
     final blitz = detail.blitz;
     final isOfficial =
         blitz != null &&
         pairState.hasConfirmedData &&
         pairState.pair?.blitzAssessmentId?.toLowerCase() ==
             blitz.id.toLowerCase();
+    final hasCurrentDetail =
+        detail.status == TeacherBlitzDetailStatus.data && !detail.isStale;
+
+    if (isDesktop) {
+      _listenForFeedback(context, target);
+    }
 
     // Authoring needs a confirmed current Draft/Scheduled Blitz on desktop.
     final showAuthoring =
-        ref.watch(appDeviceSurfaceProvider) == AppDeviceSurface.desktop &&
+        isDesktop &&
         blitz != null &&
-        detail.status == TeacherBlitzDetailStatus.data &&
-        !detail.isStale &&
+        hasCurrentDetail &&
         isTeacherBlitzAuthoringStatus(blitz.status);
+
+    void editBlitz() {
+      context.go(
+        AppRoutePaths.teacherBlitzEditLocation(target.topicId, target.blitzId),
+      );
+    }
+
+    void manageQuestions() {
+      context.go(
+        AppRoutePaths.teacherBlitzQuestionsLocation(
+          target.topicId,
+          target.blitzId,
+        ),
+      );
+    }
 
     // The nested route normally pops to its Topic; `go` covers an empty stack.
     void backToTopic() {
@@ -69,24 +170,14 @@ class TeacherBlitzDetailScreen extends ConsumerWidget {
           if (showAuthoring)
             TextButton.icon(
               key: const Key('teacherBlitzManageQuestionsButton'),
-              onPressed: () => context.go(
-                AppRoutePaths.teacherBlitzQuestionsLocation(
-                  target.topicId,
-                  target.blitzId,
-                ),
-              ),
+              onPressed: activity.isActive ? null : manageQuestions,
               icon: const Icon(Icons.quiz_outlined),
               label: const Text('Manage Questions'),
             ),
           if (showAuthoring)
             TextButton.icon(
               key: const Key('teacherBlitzEditButton'),
-              onPressed: () => context.go(
-                AppRoutePaths.teacherBlitzEditLocation(
-                  target.topicId,
-                  target.blitzId,
-                ),
-              ),
+              onPressed: activity.isActive ? null : editBlitz,
               icon: const Icon(Icons.edit_outlined),
               label: const Text('Edit'),
             ),
@@ -94,11 +185,18 @@ class TeacherBlitzDetailScreen extends ConsumerWidget {
             IconButton(
               key: const Key('teacherBlitzDetailRefreshButton'),
               tooltip: 'Refresh Blitz',
-              onPressed: detail.isLoading
+              onPressed: detail.isLoading || activity.isActive
                   ? null
-                  : detail.status == TeacherBlitzDetailStatus.error
-                  ? controller.retry
-                  : controller.refresh,
+                  : () {
+                      // A refresh shows server truth; settled notices go.
+                      _lifecycleController.clearNotice();
+                      _officialController.clearNotice();
+                      if (detail.status == TeacherBlitzDetailStatus.error) {
+                        controller.retry();
+                      } else {
+                        controller.refresh();
+                      }
+                    },
               icon: const Icon(Icons.refresh),
             ),
         ],
@@ -131,10 +229,50 @@ class TeacherBlitzDetailScreen extends ConsumerWidget {
                         detail.status == TeacherBlitzDetailStatus.refreshing,
                     stale: detail.isStale,
                     onRetry: controller.retry,
+                    lifecycleControls: isDesktop
+                        ? TeacherBlitzLifecycleControls(
+                            target: target,
+                            blitz: blitz,
+                            mutationsAvailable: hasCurrentDetail,
+                            isCurrentTarget: _isCurrentTarget,
+                            onEditBlitz: editBlitz,
+                            onManageQuestions: manageQuestions,
+                          )
+                        : null,
                   ),
         },
       ),
     );
+  }
+
+  void _listenForFeedback(
+    BuildContext context,
+    TeacherBlitzRouteTarget target,
+  ) {
+    final lifecycleProvider = teacherBlitzLifecycleControllerProvider(target);
+    final officialProvider = teacherOfficialBlitzControllerProvider(target);
+    ref.listen<TeacherBlitzLifecycleState>(lifecycleProvider, (_, next) {
+      final feedback = next.feedback;
+      if (feedback == null || !context.mounted) {
+        return;
+      }
+      _showFeedback(context, feedback);
+      ref.read(lifecycleProvider.notifier).consumeFeedback();
+    });
+    ref.listen<TeacherOfficialBlitzState>(officialProvider, (_, next) {
+      final feedback = next.feedback;
+      if (feedback == null || !context.mounted) {
+        return;
+      }
+      _showFeedback(context, feedback);
+      ref.read(officialProvider.notifier).consumeFeedback();
+    });
+  }
+
+  void _showFeedback(BuildContext context, String feedback) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(feedback)));
   }
 }
 
@@ -145,6 +283,7 @@ class _BlitzDetailContent extends StatelessWidget {
     required this.refreshing,
     required this.stale,
     required this.onRetry,
+    required this.lifecycleControls,
   });
 
   final TeacherBlitz blitz;
@@ -152,6 +291,7 @@ class _BlitzDetailContent extends StatelessWidget {
   final bool refreshing;
   final bool stale;
   final VoidCallback onRetry;
+  final Widget? lifecycleControls;
 
   @override
   Widget build(BuildContext context) {
@@ -228,6 +368,10 @@ class _BlitzDetailContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              if (lifecycleControls case final controls?) ...[
+                controls,
+                const SizedBox(height: 12),
+              ],
               _BlitzDetailCard(
                 title: 'Blitz information',
                 rows: [

@@ -12,6 +12,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_mutation.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_schedule.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_group_list.dart';
@@ -892,6 +893,10 @@ class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
     this.onUpdateQuestion,
     this.onDeleteQuestion,
     this.onReorderQuestions,
+    this.onSchedule,
+    this.onActivate,
+    this.onClose,
+    this.onArchive,
   });
 
   Future<TeacherBlitzList> Function(
@@ -926,6 +931,15 @@ class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
     TeacherQuestionReorderRequest request,
   )?
   onReorderQuestions;
+  Future<TeacherBlitz> Function(
+    String blitzId,
+    TeacherBlitzScheduleRequest request,
+  )?
+  onSchedule;
+  Future<TeacherBlitz> Function(String blitzId, String idempotencyKey)?
+  onActivate;
+  Future<TeacherBlitz> Function(String blitzId)? onClose;
+  Future<TeacherBlitz> Function(String blitzId)? onArchive;
 
   final listRequests = <({String topicId, TeacherBlitzListQuery query})>[];
   final fetchIds = <String>[];
@@ -940,6 +954,57 @@ class FakeTeacherBlitzRepository implements TeacherBlitzRepository {
   final deleteQuestionIds = <String>[];
   final reorderQuestionRequests =
       <({String blitzId, TeacherQuestionReorderRequest request})>[];
+  final scheduleRequests =
+      <({String blitzId, TeacherBlitzScheduleRequest request})>[];
+  final activateRequests = <({String blitzId, String idempotencyKey})>[];
+  final closeIds = <String>[];
+  final archiveIds = <String>[];
+
+  @override
+  Future<TeacherBlitz> scheduleBlitz(
+    String blitzId,
+    TeacherBlitzScheduleRequest request,
+  ) {
+    scheduleRequests.add((blitzId: blitzId, request: request));
+    return onSchedule?.call(blitzId, request) ??
+        Future.value(
+          teacherBlitz(
+            id: blitzId,
+            status: TeacherBlitzStatus.scheduled,
+            scheduledAt: request.scheduledInstant,
+          ),
+        );
+  }
+
+  @override
+  Future<TeacherBlitz> activateBlitz(
+    String blitzId, {
+    required String idempotencyKey,
+  }) {
+    activateRequests.add((blitzId: blitzId, idempotencyKey: idempotencyKey));
+    return onActivate?.call(blitzId, idempotencyKey) ??
+        Future.value(
+          teacherBlitz(id: blitzId, status: TeacherBlitzStatus.active),
+        );
+  }
+
+  @override
+  Future<TeacherBlitz> closeBlitz(String blitzId) {
+    closeIds.add(blitzId);
+    return onClose?.call(blitzId) ??
+        Future.value(
+          teacherBlitz(id: blitzId, status: TeacherBlitzStatus.closed),
+        );
+  }
+
+  @override
+  Future<TeacherBlitz> archiveBlitz(String blitzId) {
+    archiveIds.add(blitzId);
+    return onArchive?.call(blitzId) ??
+        Future.value(
+          teacherBlitz(id: blitzId, status: TeacherBlitzStatus.archived),
+        );
+  }
 
   @override
   Future<TeacherBlitz> createBlitz(
@@ -1034,13 +1099,42 @@ TeacherTopicResultPair teacherResultPair({
   );
 }
 
-/// Read-only result-pair fake; official designation is not a Blitz read path.
+/// Result-pair fake for Blitz reads and Blitz designation.
 class FakeTeacherTopicResultPairRepository
     implements TeacherTopicResultPairRepository {
-  FakeTeacherTopicResultPairRepository({this.onFetch});
+  FakeTeacherTopicResultPairRepository({this.onFetch, this.onSetOfficialBlitz});
 
   Future<TeacherTopicResultPair?> Function(String topicId)? onFetch;
+  Future<TeacherTopicResultPair> Function(
+    String topicId,
+    String homeworkId,
+    String blitzId,
+  )?
+  onSetOfficialBlitz;
   final fetchTopicIds = <String>[];
+  final setOfficialBlitzRequests =
+      <({String topicId, String homeworkId, String blitzId})>[];
+
+  @override
+  Future<TeacherTopicResultPair> setOfficialBlitz(
+    String topicId, {
+    required String homeworkId,
+    required String blitzId,
+  }) {
+    setOfficialBlitzRequests.add((
+      topicId: topicId,
+      homeworkId: homeworkId,
+      blitzId: blitzId,
+    ));
+    return onSetOfficialBlitz?.call(topicId, homeworkId, blitzId) ??
+        Future.value(
+          teacherResultPair(
+            topicId: topicId,
+            homeworkAssessmentId: homeworkId,
+            blitzAssessmentId: blitzId,
+          ),
+        );
+  }
 
   @override
   Future<TeacherTopicResultPair?> fetchResultPair(String topicId) {

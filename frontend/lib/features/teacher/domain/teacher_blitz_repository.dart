@@ -2,6 +2,7 @@ import 'teacher_blitz.dart';
 import 'teacher_blitz_list.dart';
 import 'teacher_blitz_list_query.dart';
 import 'teacher_blitz_mutation.dart';
+import 'teacher_blitz_schedule.dart';
 import 'teacher_question_mutation.dart';
 
 abstract interface class TeacherBlitzRepository {
@@ -38,4 +39,18 @@ abstract interface class TeacherBlitzRepository {
     String blitzId,
     TeacherQuestionReorderRequest request,
   );
+
+  Future<TeacherBlitz> scheduleBlitz(
+    String blitzId,
+    TeacherBlitzScheduleRequest request,
+  );
+
+  Future<TeacherBlitz> activateBlitz(
+    String blitzId, {
+    required String idempotencyKey,
+  });
+
+  Future<TeacherBlitz> closeBlitz(String blitzId);
+
+  Future<TeacherBlitz> archiveBlitz(String blitzId);
 }

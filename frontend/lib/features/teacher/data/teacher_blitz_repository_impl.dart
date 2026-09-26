@@ -7,6 +7,7 @@ import '../domain/teacher_blitz_list.dart';
 import '../domain/teacher_blitz_list_query.dart';
 import '../domain/teacher_blitz_mutation.dart';
 import '../domain/teacher_blitz_repository.dart';
+import '../domain/teacher_blitz_schedule.dart';
 import '../domain/teacher_question_mutation.dart';
 import 'teacher_blitz_remote_data_source.dart';
 
@@ -111,6 +112,46 @@ class TeacherBlitzRepositoryImpl implements TeacherBlitzRepository {
       TeacherQuestionMutationOperation.reorder,
     );
   }
+
+  @override
+  Future<TeacherBlitz> scheduleBlitz(
+    String blitzId,
+    TeacherBlitzScheduleRequest request,
+  ) async {
+    final dto = await remoteDataSource.scheduleBlitz(blitzId, request);
+    return _requireLifecycleTarget(dto.blitz.toDomain(), blitzId);
+  }
+
+  @override
+  Future<TeacherBlitz> activateBlitz(
+    String blitzId, {
+    required String idempotencyKey,
+  }) async {
+    final dto = await remoteDataSource.activateBlitz(
+      blitzId,
+      idempotencyKey: idempotencyKey,
+    );
+    return _requireLifecycleTarget(dto.blitz.toDomain(), blitzId);
+  }
+
+  @override
+  Future<TeacherBlitz> closeBlitz(String blitzId) async {
+    final dto = await remoteDataSource.closeBlitz(blitzId);
+    return _requireLifecycleTarget(dto.blitz.toDomain(), blitzId);
+  }
+
+  @override
+  Future<TeacherBlitz> archiveBlitz(String blitzId) async {
+    final dto = await remoteDataSource.archiveBlitz(blitzId);
+    return _requireLifecycleTarget(dto.blitz.toDomain(), blitzId);
+  }
+}
+
+TeacherBlitz _requireLifecycleTarget(TeacherBlitz blitz, String blitzId) {
+  if (blitz.id.toLowerCase() != blitzId.toLowerCase()) {
+    throw const TeacherBlitzMutationOutcomeUnknownException();
+  }
+  return blitz;
 }
 
 TeacherBlitz _requireQuestionMutationTarget(
