@@ -10,6 +10,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/student/application/student_active_blitz_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_attempt_start_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_attempt_start_state.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_countdown_clock.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_detail_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_execution_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_execution_state.dart';
@@ -485,6 +486,30 @@ void main() {
       },
     );
 
+    test('the countdown baseline starts when the Attempt is adopted', () async {
+      final h = await _Harness.executing();
+      final anchor = h.execution.countdownAnchor!;
+
+      expect(h.stopwatches, anyElement(same(anchor.adoptionClock)));
+      expect(anchor.adoptionClock.isRunning, isTrue);
+    });
+
+    test(
+      'an equal republished snapshot keeps the anchor and its baseline',
+      () async {
+        final h = await _Harness.executing();
+        final first = h.execution.countdownAnchor!;
+
+        final replay = h.executionController.refreshCurrentAttempt();
+        h.pendingStarts.last.complete(
+          studentBlitzStartResult(attempt: studentBlitzAttempt()),
+        );
+        await replay;
+
+        expect(h.execution.countdownAnchor, same(first));
+      },
+    );
+
     test('an obsolete anchor cannot expire the execution', () async {
       final h = await _Harness.executing();
       h.executionController.markLocalTimeExpired(
@@ -493,6 +518,7 @@ void main() {
           deadlineAt: DateTime.utc(2026, 9, 17, 12, 5),
           serverNow: DateTime.utc(2026, 9, 17, 11),
           remainingSeconds: 1,
+          adoptionClock: Stopwatch(),
         ),
       );
       expect(h.execution.localTimeExpired, isFalse);
@@ -669,6 +695,11 @@ void main() {
       await flushStudentControllers();
       expect(h.execution.countdownAnchor, isNot(first));
       expect(h.execution.countdownAnchor!.remainingSeconds, 240);
+      expect(
+        h.execution.countdownAnchor!.adoptionClock,
+        isNot(same(first.adoptionClock)),
+      );
+      expect(h.execution.countdownAnchor!.adoptionClock.isRunning, isTrue);
       expect(h.attempts.requests, hasLength(1));
     });
   });
@@ -827,6 +858,11 @@ class _Harness {
         studentBlitzRepositoryProvider.overrideWithValue(blitz),
         studentBlitzAttemptRepositoryProvider.overrideWithValue(attempts),
         idempotencyKeyGeneratorProvider.overrideWithValue(keys),
+        studentBlitzStopwatchFactoryProvider.overrideWithValue(() {
+          final stopwatch = Stopwatch();
+          stopwatches.add(stopwatch);
+          return stopwatch;
+        }),
       ],
     );
     addTearDown(container.dispose);
@@ -878,6 +914,9 @@ class _Harness {
     topicId: studentTopicId,
     blitzId: studentBlitzId,
   );
+
+  /// Every monotonic clock a controller started, in creation order.
+  final stopwatches = <Stopwatch>[];
   final auth = FakeStudentAuthSessionController.authenticated(
     studentUser('student-a'),
   );

@@ -133,6 +133,7 @@ class StudentBlitzCountdownAnchor {
     required this.deadlineAt,
     required this.serverNow,
     required this.remainingSeconds,
+    required this.adoptionClock,
   });
 
   /// The Blitz (pre-Start) or Attempt (execution) the countdown belongs to.
@@ -140,6 +141,11 @@ class StudentBlitzCountdownAnchor {
   final DateTime deadlineAt;
   final DateTime serverNow;
   final int remainingSeconds;
+
+  /// Monotonic time since the snapshot was adopted, not since it was drawn:
+  /// a snapshot adopted while no frame renders must not show extra time.
+  /// It is not part of equality; an equal snapshot keeps its first baseline.
+  final Stopwatch adoptionClock;
 
   @override
   bool operator ==(Object other) =>

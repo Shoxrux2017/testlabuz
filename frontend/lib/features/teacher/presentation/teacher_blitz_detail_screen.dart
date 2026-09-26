@@ -41,6 +41,12 @@ class _TeacherBlitzDetailScreenState
   late TeacherOfficialBlitzController _officialController;
   late TeacherBlitzRouteMutationActivityController _activityController;
 
+  /// Route-owner generations of this instance; a popping older instance of
+  /// the same route cannot end a newer instance's work.
+  late int _lifecycleOwner;
+  late int _officialOwner;
+  late int _activityOwner;
+
   @override
   void initState() {
     super.initState();
@@ -56,13 +62,16 @@ class _TeacherBlitzDetailScreenState
     final oldLifecycle = _lifecycleController;
     final oldOfficial = _officialController;
     final oldActivity = _activityController;
-    oldLifecycle.invalidateRouteCompletions();
-    oldOfficial.invalidateRouteCompletions();
+    final lifecycleOwner = _lifecycleOwner;
+    final officialOwner = _officialOwner;
+    final activityOwner = _activityOwner;
+    oldLifecycle.invalidateRouteCompletions(lifecycleOwner);
+    oldOfficial.invalidateRouteCompletions(officialOwner);
     _bindTarget();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      oldLifecycle.leaveRoute();
-      oldOfficial.leaveRoute();
-      oldActivity.endRoute();
+      oldLifecycle.leaveRoute(lifecycleOwner);
+      oldOfficial.leaveRoute(officialOwner);
+      oldActivity.endRoute(activityOwner);
     });
   }
 
@@ -71,13 +80,16 @@ class _TeacherBlitzDetailScreenState
     final lifecycle = _lifecycleController;
     final official = _officialController;
     final activity = _activityController;
-    lifecycle.invalidateRouteCompletions();
-    official.invalidateRouteCompletions();
+    final lifecycleOwner = _lifecycleOwner;
+    final officialOwner = _officialOwner;
+    final activityOwner = _activityOwner;
+    lifecycle.invalidateRouteCompletions(lifecycleOwner);
+    official.invalidateRouteCompletions(officialOwner);
     // Provider state may not change while the tree is finalizing.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      lifecycle.leaveRoute();
-      official.leaveRoute();
-      activity.endRoute();
+      lifecycle.leaveRoute(lifecycleOwner);
+      official.leaveRoute(officialOwner);
+      activity.endRoute(activityOwner);
     });
     super.dispose();
   }
@@ -93,6 +105,9 @@ class _TeacherBlitzDetailScreenState
     _activityController = ref.read(
       teacherBlitzRouteMutationActivityProvider(_target).notifier,
     );
+    _lifecycleOwner = _lifecycleController.enterRoute();
+    _officialOwner = _officialController.enterRoute();
+    _activityOwner = _activityController.enterRoute();
   }
 
   bool _isCurrentTarget(TeacherBlitzRouteTarget target) {

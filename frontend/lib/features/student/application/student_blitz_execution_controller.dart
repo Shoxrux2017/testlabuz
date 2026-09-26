@@ -15,6 +15,7 @@ import '../domain/student_blitz_attempt.dart';
 import '../domain/student_blitz_route_target.dart';
 import 'student_active_blitz_controller.dart';
 import 'student_attempt_publication_token.dart';
+import 'student_blitz_countdown_clock.dart';
 import 'student_blitz_detail_controller.dart';
 import 'student_blitz_detail_state.dart';
 import 'student_blitz_execution_state.dart';
@@ -398,13 +399,13 @@ class StudentBlitzExecutionController
                 !blitz.timing.serverNow.isAfter(current.serverNow))) {
           return;
         }
-        final anchor = StudentBlitzCountdownAnchor(
+        final anchor = _anchorFor(
           subjectId: attemptId,
           deadlineAt: deadline,
           serverNow: blitz.timing.serverNow,
           remainingSeconds: remaining,
         );
-        if (anchor != state.countdownAnchor) {
+        if (!identical(anchor, state.countdownAnchor)) {
           state = state.copyWith(countdownAnchor: anchor);
         }
       case StudentBlitzDetailStatus.initial ||
@@ -443,7 +444,7 @@ class StudentBlitzExecutionController
       localTimeExpired:
           inProgress && !positive && (fresh ? false : state.localTimeExpired),
       countdownAnchor: inProgress
-          ? StudentBlitzCountdownAnchor(
+          ? _anchorFor(
               subjectId: attempt.id.toLowerCase(),
               deadlineAt: attempt.deadlineAt,
               serverNow: attempt.timing.serverNow,
@@ -452,6 +453,31 @@ class StudentBlitzExecutionController
           : null,
       blitzTitle: blitzTitle ?? state.blitzTitle,
       confirmedBySubmit: confirmedBySubmit,
+    );
+  }
+
+  /// The anchor for an adopted server snapshot. An equal snapshot keeps the
+  /// current anchor, so a republish never restarts its baseline.
+  StudentBlitzCountdownAnchor _anchorFor({
+    required String subjectId,
+    required DateTime deadlineAt,
+    required DateTime serverNow,
+    required int remainingSeconds,
+  }) {
+    final current = state.countdownAnchor;
+    if (current != null &&
+        current.subjectId == subjectId &&
+        current.deadlineAt.isAtSameMomentAs(deadlineAt) &&
+        current.serverNow.isAtSameMomentAs(serverNow) &&
+        current.remainingSeconds == remainingSeconds) {
+      return current;
+    }
+    return StudentBlitzCountdownAnchor(
+      subjectId: subjectId,
+      deadlineAt: deadlineAt,
+      serverNow: serverNow,
+      remainingSeconds: remainingSeconds,
+      adoptionClock: ref.read(studentBlitzStopwatchFactoryProvider)()..start(),
     );
   }
 

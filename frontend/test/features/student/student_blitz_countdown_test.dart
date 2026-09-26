@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_countdown_clock.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz.dart';
 import 'package:testlabuz_client/features/student/presentation/student_blitz_countdown.dart';
 import 'package:testlabuz_client/features/student/presentation/student_blitz_formatters.dart';
@@ -37,7 +38,7 @@ void main() {
     tester,
   ) async {
     final expired = <StudentBlitzCountdownAnchor>[];
-    await _pump(tester, _anchor(300), onExpired: expired.add);
+    await _pump(tester, _anchor(tester, 300), onExpired: expired.add);
     expect(_value(tester), '05:00');
     await tester.pump(const Duration(milliseconds: 999));
     expect(_value(tester), '05:00');
@@ -49,8 +50,18 @@ void main() {
     expect(expired, isEmpty);
   });
 
+  testWidgets('a snapshot adopted before the countdown is built counts from '
+      'its adoption', (tester) async {
+    final adoptionClock = tester.binding.clock.stopwatch()..start();
+    await tester.pump(const Duration(seconds: 30));
+
+    await _pump(tester, _anchor(tester, 300, adoptionClock: adoptionClock));
+
+    expect(_value(tester), '04:30');
+  });
+
   testWidgets('an hour-long anchor uses the hour form', (tester) async {
-    await _pump(tester, _anchor(3661));
+    await _pump(tester, _anchor(tester, 3661));
     expect(_value(tester), '1:01:01');
     await tester.pump(const Duration(seconds: 62));
     expect(_value(tester), '59:59');
@@ -60,7 +71,7 @@ void main() {
     tester,
   ) async {
     final expired = <StudentBlitzCountdownAnchor>[];
-    final anchor = _anchor(2);
+    final anchor = _anchor(tester, 2);
     await _pump(tester, anchor, onExpired: expired.add);
     await tester.pump(const Duration(seconds: 2));
     expect(_value(tester), '00:00');
@@ -73,9 +84,9 @@ void main() {
   testWidgets('an unrelated rebuild with the same anchor keeps counting', (
     tester,
   ) async {
-    await _pump(tester, _anchor(300));
+    await _pump(tester, _anchor(tester, 300));
     await tester.pump(const Duration(seconds: 10));
-    await _pump(tester, _anchor(300), label: 'Rebuilt label');
+    await _pump(tester, _anchor(tester, 300), label: 'Rebuilt label');
     expect(find.text('Rebuilt label'), findsOneWidget);
     expect(_value(tester), '04:50');
   });
@@ -84,11 +95,15 @@ void main() {
     tester,
   ) async {
     final expired = <StudentBlitzCountdownAnchor>[];
-    final first = _anchor(1);
+    final first = _anchor(tester, 1);
     await _pump(tester, first, onExpired: expired.add);
     await tester.pump(const Duration(seconds: 1));
     expect(expired, [first]);
-    final second = _anchor(120, serverNow: DateTime.utc(2026, 9, 17, 12, 3));
+    final second = _anchor(
+      tester,
+      120,
+      serverNow: DateTime.utc(2026, 9, 17, 12, 3),
+    );
     await _pump(tester, second, onExpired: expired.add);
     expect(_value(tester), '02:00');
     await tester.pump(const Duration(seconds: 120));
@@ -99,7 +114,7 @@ void main() {
     tester,
   ) async {
     final expired = <StudentBlitzCountdownAnchor>[];
-    final anchor = _anchor(0);
+    final anchor = _anchor(tester, 0);
     await _pump(tester, anchor, onExpired: expired.add);
     await tester.pump();
     expect(_value(tester), '00:00');
@@ -109,7 +124,7 @@ void main() {
   testWidgets('screen readers get words without a per-second live region', (
     tester,
   ) async {
-    await _pump(tester, _anchor(61));
+    await _pump(tester, _anchor(tester, 61));
     final semantics = tester.widget<Semantics>(
       find.byKey(const Key('studentBlitzCountdown')),
     );
@@ -120,20 +135,25 @@ void main() {
   testWidgets('the last minute changes the icon, not only the color', (
     tester,
   ) async {
-    await _pump(tester, _anchor(61));
+    await _pump(tester, _anchor(tester, 61));
     expect(find.byIcon(Icons.timer_outlined), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
     expect(find.byIcon(Icons.hourglass_bottom), findsOneWidget);
   });
 }
 
-StudentBlitzCountdownAnchor _anchor(int remaining, {DateTime? serverNow}) =>
-    StudentBlitzCountdownAnchor(
-      subjectId: studentBlitzAttemptId,
-      deadlineAt: DateTime.utc(2026, 9, 17, 12, 5),
-      serverNow: serverNow ?? DateTime.utc(2026, 9, 17, 12),
-      remainingSeconds: remaining,
-    );
+StudentBlitzCountdownAnchor _anchor(
+  WidgetTester tester,
+  int remaining, {
+  DateTime? serverNow,
+  Stopwatch? adoptionClock,
+}) => StudentBlitzCountdownAnchor(
+  subjectId: studentBlitzAttemptId,
+  deadlineAt: DateTime.utc(2026, 9, 17, 12, 5),
+  serverNow: serverNow ?? DateTime.utc(2026, 9, 17, 12),
+  remainingSeconds: remaining,
+  adoptionClock: adoptionClock ?? (tester.binding.clock.stopwatch()..start()),
+);
 
 Future<void> _pump(
   WidgetTester tester,

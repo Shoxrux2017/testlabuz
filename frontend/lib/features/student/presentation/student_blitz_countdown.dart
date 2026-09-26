@@ -1,23 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/student_blitz.dart';
 import 'student_blitz_formatters.dart';
 
-/// Monotonic elapsed-time source; widget tests substitute the fake clock.
-final studentBlitzStopwatchFactoryProvider = Provider<Stopwatch Function()>(
-  (ref) => Stopwatch.new,
-);
-
 /// Live countdown anchored to a server `remaining_seconds` snapshot.
 ///
-/// Remaining time is always recomputed from monotonic elapsed time, never
-/// from the device wall clock or by counting timer callbacks, so a changed
-/// device clock or a paused event loop cannot grant extra time. It is
-/// presentation only: the server decides every execution outcome.
-class StudentBlitzCountdown extends ConsumerStatefulWidget {
+/// Remaining time is always recomputed from the anchor's monotonic adoption
+/// clock, never from the device wall clock, from when the countdown was
+/// drawn, or by counting timer callbacks, so a changed device clock or a
+/// paused event loop cannot grant extra time. It is presentation only: the
+/// server decides every execution outcome.
+class StudentBlitzCountdown extends StatefulWidget {
   const StudentBlitzCountdown({
     required this.anchor,
     required this.label,
@@ -32,25 +27,27 @@ class StudentBlitzCountdown extends ConsumerStatefulWidget {
   final ValueChanged<StudentBlitzCountdownAnchor>? onExpired;
 
   @override
-  ConsumerState<StudentBlitzCountdown> createState() =>
-      _StudentBlitzCountdownState();
+  State<StudentBlitzCountdown> createState() => _StudentBlitzCountdownState();
 }
 
-class _StudentBlitzCountdownState extends ConsumerState<StudentBlitzCountdown> {
-  late Stopwatch _stopwatch;
+class _StudentBlitzCountdownState extends State<StudentBlitzCountdown> {
+  /// The first of equal anchors; a later equal one never restarts its clock.
+  late StudentBlitzCountdownAnchor _active;
   Timer? _ticker;
   late int _remaining;
 
   @override
   void initState() {
     super.initState();
+    _active = widget.anchor;
     _anchor();
   }
 
   @override
   void didUpdateWidget(StudentBlitzCountdown oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.anchor != oldWidget.anchor) {
+    if (widget.anchor != _active) {
+      _active = widget.anchor;
       _anchor();
     }
   }
@@ -63,13 +60,12 @@ class _StudentBlitzCountdownState extends ConsumerState<StudentBlitzCountdown> {
 
   void _anchor() {
     _ticker?.cancel();
-    _stopwatch = ref.read(studentBlitzStopwatchFactoryProvider)()..start();
     _remaining = _currentRemaining();
     if (_remaining == 0) {
       // Never report during build; the owner may start a server read.
-      final anchor = widget.anchor;
+      final anchor = _active;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.anchor == anchor) {
+        if (mounted && identical(_active, anchor)) {
           widget.onExpired?.call(anchor);
         }
       });
@@ -81,7 +77,7 @@ class _StudentBlitzCountdownState extends ConsumerState<StudentBlitzCountdown> {
 
   int _currentRemaining() {
     final remaining =
-        widget.anchor.remainingSeconds - _stopwatch.elapsed.inSeconds;
+        _active.remainingSeconds - _active.adoptionClock.elapsed.inSeconds;
     return remaining < 0 ? 0 : remaining;
   }
 
@@ -96,7 +92,7 @@ class _StudentBlitzCountdownState extends ConsumerState<StudentBlitzCountdown> {
     if (remaining == 0) {
       // Cancelling first makes the report exactly once per anchor.
       _ticker?.cancel();
-      widget.onExpired?.call(widget.anchor);
+      widget.onExpired?.call(_active);
     }
   }
 

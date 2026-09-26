@@ -751,6 +751,63 @@ void main() {
       expect(harness.activity.isActive, isFalse);
     });
 
+    test(
+      'an older route owner leaving keeps the newer owner working',
+      () async {
+        final pending = Completer<TeacherBlitz>();
+        var activations = 0;
+        final harness = _Harness(
+          onActivate: (id, _) {
+            activations += 1;
+            if (activations == 1) {
+              throw const TeacherBlitzMutationOutcomeUnknownException();
+            }
+            return pending.future;
+          },
+        );
+        await harness.start();
+        final older = harness.controller.enterRoute();
+        final newer = harness.controller.enterRoute();
+        await harness.controller.activate();
+        expect(harness.state.canRetryActivation, isTrue);
+
+        final retry = harness.controller.retryActivation();
+        await flushTeacherControllers();
+        harness.controller
+          ..invalidateRouteCompletions(older)
+          ..leaveRoute(older);
+        pending.complete(teacherBlitz(status: TeacherBlitzStatus.active));
+        await retry;
+        await flushTeacherControllers();
+
+        expect(harness.blitz.activateRequests.map((r) => r.idempotencyKey), [
+          _keyA,
+          _keyA,
+        ]);
+        expect(harness.state.feedback, 'Blitz activated successfully.');
+
+        harness.controller.leaveRoute(newer);
+        expect(harness.state.feedback, isNull);
+      },
+    );
+
+    test('an older route owner cannot end the newer owner\'s lease', () async {
+      final harness = _Harness();
+      await harness.start();
+      final activity = harness.container.read(
+        teacherBlitzRouteMutationActivityProvider(_target()).notifier,
+      );
+      final older = activity.enterRoute();
+      final newer = activity.enterRoute();
+      final lease = activity.begin(TeacherBlitzRouteMutationOperation.close)!;
+
+      activity.endRoute(older);
+      expect(activity.owns(lease), isTrue);
+
+      activity.endRoute(newer);
+      expect(activity.owns(lease), isFalse);
+    });
+
     test('an active Question mutation blocks lifecycle actions', () async {
       final harness = _Harness();
       await harness.start();

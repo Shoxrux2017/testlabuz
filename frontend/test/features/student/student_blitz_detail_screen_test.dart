@@ -18,6 +18,7 @@ import 'package:testlabuz_client/features/student/domain/student_blitz.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz_attempt.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz_route_target.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_countdown_clock.dart';
 import 'package:testlabuz_client/features/student/presentation/student_blitz_countdown.dart';
 import 'package:testlabuz_client/features/student/presentation/student_blitz_detail_screen.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_answer_editor.dart';
@@ -27,6 +28,111 @@ import 'student_blitz_test_support.dart';
 import 'student_test_support.dart';
 
 void main() {
+  test('the pre-Start anchor counts from the detail adoption clock', () {
+    final adoptionClock = Stopwatch()..start();
+    final anchor = studentBlitzPreStartAnchor(
+      studentBlitzDetail(),
+      adoptionClock,
+    );
+    expect(anchor!.adoptionClock, same(adoptionClock));
+    expect(
+      studentBlitzPreStartAnchor(individualBlitzDetail(), adoptionClock),
+      isNull,
+    );
+  });
+
+  group('returning to the app', () {
+    testWidgets('showing the app again re-reads the Blitz detail once', (
+      tester,
+    ) async {
+      addTearDown(() => _showApp(tester));
+      final harness = _Harness(detail: studentBlitzDetail());
+      await harness.pump(tester);
+      final reads = harness.blitz.detailIds.length;
+      harness.detail = studentBlitzDetail(
+        timing: studentBlitzTiming(
+          serverNow: DateTime.utc(2026, 9, 17, 12, 3),
+          deadlineAt: DateTime.utc(2026, 9, 17, 12, 5),
+          remainingSeconds: 120,
+        ),
+      );
+
+      _hideApp(tester);
+      await tester.pump();
+      _showApp(tester);
+      await _settle(tester);
+
+      expect(harness.blitz.detailIds, hasLength(reads + 1));
+      expect(harness.attempts.requests, isEmpty);
+      expect(_countdown(tester), '02:00');
+    });
+
+    testWidgets('a class snapshot adopted before it is drawn counts from its '
+        'adoption', (tester) async {
+      final pending = Completer<StudentBlitzDetail>();
+      final harness = _Harness(detail: pending);
+      await harness.pump(tester);
+
+      pending.complete(studentBlitzDetail());
+      await tester.pump(const Duration(seconds: 30));
+
+      expect(_countdown(tester), '04:30');
+    });
+
+    testWidgets('an Attempt adopted before it is drawn counts from its '
+        'adoption', (tester) async {
+      final harness = _Harness(detail: studentBlitzDetail());
+      await harness.pump(tester);
+      final pendingStart = Completer<StudentBlitzAttemptStartResult>();
+      harness.start = pendingStart;
+      harness.detail = inProgressBlitzDetail();
+      await _confirmStart(tester);
+
+      pendingStart.complete(studentBlitzStartResult());
+      await tester.pump(const Duration(seconds: 30));
+
+      expect(_countdown(tester), '04:30');
+    });
+
+    testWidgets('a focus-only change reads nothing', (tester) async {
+      addTearDown(() => _showApp(tester));
+      final harness = _Harness(detail: studentBlitzDetail());
+      await harness.pump(tester);
+      final reads = harness.blitz.detailIds.length;
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await _settle(tester);
+
+      expect(harness.blitz.detailIds, hasLength(reads));
+    });
+
+    testWidgets('a newer snapshot on return re-anchors the running attempt', (
+      tester,
+    ) async {
+      addTearDown(() => _showApp(tester));
+      final harness = _Harness(detail: studentBlitzDetail());
+      await harness.pump(tester);
+      harness.detail = inProgressBlitzDetail();
+      await _confirmStart(tester);
+      expect(_countdown(tester), isNot('00:00'));
+      final starts = harness.attempts.requests.length;
+      harness.detail = inProgressBlitzDetail(
+        remainingSeconds: 240,
+        serverNow: DateTime.utc(2026, 9, 17, 12, 1),
+      );
+
+      _hideApp(tester);
+      await tester.pump();
+      _showApp(tester);
+      await _settle(tester);
+
+      expect(_countdown(tester), '04:00');
+      expect(harness.attempts.requests, hasLength(starts));
+    });
+  });
+
   group('pre-Start detail', () {
     testWidgets('synchronized normal path counts the class time live', (
       tester,
@@ -658,6 +764,19 @@ String _countdown(WidgetTester tester) => tester
 Future<void> _settle(WidgetTester tester) async {
   for (var frame = 0; frame < 8; frame += 1) {
     await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
+/// Walks the lifecycle to hidden, as when the Student leaves the app.
+void _hideApp(WidgetTester tester) {
+  for (final state in [AppLifecycleState.inactive, AppLifecycleState.hidden]) {
+    tester.binding.handleAppLifecycleStateChanged(state);
+  }
+}
+
+void _showApp(WidgetTester tester) {
+  for (final state in [AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+    tester.binding.handleAppLifecycleStateChanged(state);
   }
 }
 

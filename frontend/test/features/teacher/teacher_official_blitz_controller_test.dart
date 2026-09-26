@@ -262,6 +262,32 @@ void main() {
       }
     });
 
+    test(
+      'an older route owner leaving keeps the newer owner\'s result',
+      () async {
+        final pending = Completer<TeacherTopicResultPair>();
+        final harness = _Harness(
+          pair: _pair(),
+          onSet: (_, _, _) => pending.future,
+        );
+        await harness.start();
+        final older = harness.controller.enterRoute();
+        final newer = harness.controller.enterRoute();
+        unawaited(harness.controller.setOfficial());
+        await flushTeacherControllers();
+
+        harness.controller
+          ..invalidateRouteCompletions(older)
+          ..leaveRoute(older);
+        pending.complete(_pair(blitzId: _blitzId));
+        await flushTeacherControllers();
+
+        expect(harness.state.feedback, 'Official Blitz updated successfully.');
+        harness.controller.leaveRoute(newer);
+        expect(harness.state.feedback, isNull);
+      },
+    );
+
     test('a completion after a session change is ignored', () async {
       final pending = Completer<TeacherTopicResultPair>();
       final harness = _Harness(

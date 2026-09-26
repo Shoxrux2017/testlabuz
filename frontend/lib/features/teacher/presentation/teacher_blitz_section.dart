@@ -15,8 +15,8 @@ import 'teacher_blitz_formatters.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_workspace_list_widgets.dart';
 
-/// Topic Blitz list with the desktop Create entry; lifecycle actions
-/// belong to later tasks.
+/// Topic Blitz list with the desktop Create entry; each card opens the Blitz
+/// detail, which owns the lifecycle actions.
 class TeacherBlitzSection extends ConsumerWidget {
   const TeacherBlitzSection({required this.topicId, super.key});
 

@@ -401,6 +401,26 @@ void main() {
       expect(harness.state.livePollingEnabled, isFalse);
     });
 
+    monitoringTest('an older route owner leaving keeps the newer owner live', (
+      harness,
+    ) async {
+      await harness.start(enterRoute: false);
+      final older = harness.monitoring.enterLiveRoute();
+      final newer = harness.monitoring.enterLiveRoute();
+
+      harness.monitoring.leaveLiveRoute(older);
+      await harness.tick();
+
+      expect(harness.state.livePollingEnabled, isTrue);
+      expect(harness.repository.monitoringIds, hasLength(2));
+
+      harness.monitoring.leaveLiveRoute(newer);
+      await harness.tick();
+
+      expect(harness.state.livePollingEnabled, isFalse);
+      expect(harness.repository.monitoringIds, hasLength(2));
+    });
+
     monitoringTest('an app pause stops polling and a resume reads at once', (
       harness,
     ) async {

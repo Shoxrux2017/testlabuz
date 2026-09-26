@@ -59,6 +59,7 @@ class TeacherBlitzRouteMutationActivityController
   TeacherSessionKey? _activeSessionKey;
   void Function()? _releaseRetention;
   var _generation = 0;
+  var _routeOwnerGeneration = 0;
   var _initialized = false;
 
   @override
@@ -124,9 +125,17 @@ class TeacherBlitzRouteMutationActivityController
     _releaseRetentionNow();
   }
 
+  /// A screen instance claims this route; a popping older instance of the
+  /// same route can then no longer end the newer instance's work.
+  int enterRoute() => ++_routeOwnerGeneration;
+
   /// Ends this route target even when the operation controller that acquired
-  /// the lease has already been disposed.
-  void endRoute() {
+  /// the lease has already been disposed. With [ownerGeneration], only the
+  /// current route owner may end it.
+  void endRoute([int? ownerGeneration]) {
+    if (ownerGeneration != null && ownerGeneration != _routeOwnerGeneration) {
+      return;
+    }
     _generation += 1;
     if (!ref.mounted) {
       _releaseRetentionNow();

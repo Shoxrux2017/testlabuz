@@ -119,6 +119,7 @@ class TeacherOfficialBlitzController
   _OfficialOperation? _activeOperation;
   String? _reviewedHomeworkId;
   var _operationGeneration = 0;
+  var _routeOwnerGeneration = 0;
 
   String get _topicKey => target.topicId.toLowerCase();
 
@@ -253,17 +254,32 @@ class TeacherOfficialBlitzController
     state = const TeacherOfficialBlitzState();
   }
 
-  void invalidateRouteCompletions() {
+  /// A screen instance claims this route; a popping older instance of the
+  /// same route can then no longer end the newer instance's work.
+  int enterRoute() => ++_routeOwnerGeneration;
+
+  /// With [ownerGeneration], only the current route owner may invalidate.
+  void invalidateRouteCompletions([int? ownerGeneration]) {
+    if (_isStaleRouteOwner(ownerGeneration)) {
+      return;
+    }
     _operationGeneration += 1;
   }
 
-  void leaveRoute() {
+  /// With [ownerGeneration], only the current route owner may leave.
+  void leaveRoute([int? ownerGeneration]) {
+    if (_isStaleRouteOwner(ownerGeneration)) {
+      return;
+    }
     invalidateRouteCompletions();
     _releaseActiveLease();
     if (ref.mounted) {
       state = const TeacherOfficialBlitzState();
     }
   }
+
+  bool _isStaleRouteOwner(int? ownerGeneration) =>
+      ownerGeneration != null && ownerGeneration != _routeOwnerGeneration;
 
   Future<void> _reconcile(_OfficialOperation operation) async {
     if (!_canPublish(operation)) {

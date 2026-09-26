@@ -252,6 +252,61 @@ void main() {
       );
     }
 
+    for (final (name, detail, action, intent, attemptId, kind) in [
+      (
+        'start_replacement',
+        replacementBlitzDetail(),
+        StudentBlitzExecutionAction.startReplacement,
+        StudentBlitzAttemptIntent.startReplacement,
+        null,
+        StudentBlitzAttemptStartResultKind.created,
+      ),
+      (
+        'Resume #2',
+        inProgressBlitzDetail(
+          attemptId: studentBlitzReplacementAttemptId,
+          exceptionGranted: true,
+        ),
+        StudentBlitzExecutionAction.resume,
+        StudentBlitzAttemptIntent.resume,
+        studentBlitzReplacementAttemptId,
+        StudentBlitzAttemptStartResultKind.resumed,
+      ),
+    ]) {
+      test('an uncertain $name retries the identical request', () async {
+        final harness = await _Harness.ready(detail);
+        final first = harness.controller.start(action);
+        harness.pendingStarts.single.completeError(
+          studentLocalFailure(ApiFailureKind.timeout),
+        );
+        await first;
+        expect(harness.state.status, StudentBlitzAttemptStartStatus.uncertain);
+        final sent = harness.attempts.requests.single;
+
+        final retry = harness.controller.retry();
+        final resent = harness.attempts.requests.last;
+
+        expect(harness.attempts.requests, hasLength(2));
+        expect(resent, same(sent));
+        expect(resent.intent, intent);
+        expect(resent.attemptId, attemptId);
+        expect(resent.toJson(), sent.toJson());
+        expect(resent.idempotencyKey, blitzKey(1));
+        expect(harness.keys.calls, 1);
+        harness.pendingStarts.last.complete(
+          studentBlitzStartResult(
+            attempt: studentBlitzAttempt(
+              id: studentBlitzReplacementAttemptId,
+              attemptNumber: 2,
+            ),
+            kind: kind,
+          ),
+        );
+        await retry;
+        expect(harness.state.status, StudentBlitzAttemptStartStatus.active);
+      });
+    }
+
     test('Retry never reinterprets the request from a newer detail', () async {
       final harness = await _Harness.ready(inProgressBlitzDetail());
       final first = harness.controller.start(

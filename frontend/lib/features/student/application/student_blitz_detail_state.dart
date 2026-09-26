@@ -17,6 +17,7 @@ class StudentBlitzDetailState {
     this.status = StudentBlitzDetailStatus.initial,
     this.blitz,
     this.failure,
+    this.adoptionClock,
   });
 
   final StudentBlitzDetailStatus status;
@@ -25,6 +26,10 @@ class StudentBlitzDetailState {
   /// a new Start only when [status] is `data`.
   final StudentBlitzDetail? blitz;
   final ApiFailure? failure;
+
+  /// Started when [blitz] was published and kept with it while refreshing;
+  /// the pre-Start countdown counts from it.
+  final Stopwatch? adoptionClock;
 
   bool get isRequestInFlight =>
       status == StudentBlitzDetailStatus.loading ||
