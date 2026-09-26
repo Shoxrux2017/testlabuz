@@ -1,4 +1,4 @@
-import 'student_homework_attempt.dart';
+import 'student_attempt_answer.dart';
 import 'student_question.dart';
 
 sealed class StudentAnswerMutation {

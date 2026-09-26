@@ -4,19 +4,37 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
+import '../application/student_blitz_answer_editor_controller.dart';
 import '../application/student_blitz_attempt_start_controller.dart';
 import '../application/student_blitz_attempt_start_state.dart';
 import '../application/student_blitz_detail_controller.dart';
 import '../application/student_blitz_detail_state.dart';
+import '../application/student_blitz_execution_controller.dart';
+import '../application/student_blitz_execution_operation_gate.dart';
+import '../application/student_blitz_execution_state.dart';
+import '../application/student_blitz_file_answer_controller.dart';
+import '../application/student_blitz_submission_transfer_controller.dart';
+import '../application/student_blitz_submit_controller.dart';
+import '../application/student_blitz_submit_state.dart';
+import '../application/student_file_answer_state.dart';
+import '../application/student_submission_transfer_state.dart';
+import '../domain/student_attempt_answer.dart';
 import '../domain/student_blitz.dart';
 import '../domain/student_blitz_attempt.dart';
+import '../domain/student_blitz_execution_target.dart';
 import '../domain/student_blitz_route_target.dart';
+import '../domain/student_question.dart';
+import 'student_attempt_answer_read_view.dart';
 import 'student_blitz_attempt_shell.dart';
 import 'student_blitz_countdown.dart';
+import 'student_blitz_finalization_summary.dart';
 import 'student_blitz_formatters.dart';
+import 'student_file_answer_editor.dart';
+import 'student_question_read_view.dart';
 
 /// Pre-Start Blitz detail and, after an explicit successful Start/Resume in
-/// this route session, the execution shell on the same route.
+/// this route session, the execution shell and then its finalization summary
+/// on the same route.
 class StudentBlitzDetailScreen extends ConsumerStatefulWidget {
   const StudentBlitzDetailScreen({required this.target, super.key});
 
@@ -33,6 +51,7 @@ class _StudentBlitzDetailScreenState
   /// reconciliation read moves detail out of `data`, which removes Start
   /// until a newer server snapshot arrives.
   StudentBlitzCountdownAnchor? _expiredPreStartAnchor;
+  bool _leaving = false;
 
   StudentBlitzRouteTarget get _target => widget.target;
 
@@ -42,6 +61,9 @@ class _StudentBlitzDetailScreenState
     final startProvider = studentBlitzAttemptStartControllerProvider(_target);
     final detail = ref.watch(detailProvider);
     final start = ref.watch(startProvider);
+    final execution = ref.watch(
+      studentBlitzExecutionControllerProvider(_target),
+    );
     ref.listen(startProvider, (_, next) {
       if (next.feedback == null) {
         return;
@@ -56,11 +78,16 @@ class _StudentBlitzDetailScreenState
     final timezone =
         ref.watch(authSessionControllerProvider).user?.institution?.timezone ??
         '';
+    final attempt = execution.attempt;
+    final executionTarget = attempt == null
+        ? null
+        : StudentBlitzExecutionTarget(
+            routeTarget: _target,
+            attemptId: attempt.id,
+          );
     final executing =
-        start.status == StudentBlitzAttemptStartStatus.active &&
-        start.attempt != null &&
-        start.executionAnchor != null;
-    final guardsLeave = executing && !start.isReconcilingExpiry;
+        execution.isExecuting && execution.countdownAnchor != null;
+    final guardsLeave = executing;
 
     return PopScope(
       canPop: !guardsLeave,
@@ -83,14 +110,17 @@ class _StudentBlitzDetailScreenState
         body: SafeArea(
           child: executing
               ? StudentBlitzAttemptShell(
-                  state: start,
-                  detail: detail,
+                  target: executionTarget!,
+                  execution: execution,
                   institutionTimezone: timezone,
-                  onExpired: ref
-                      .read(startProvider.notifier)
-                      .markExecutionExpired,
-                  onRefresh: ref.read(detailProvider.notifier).reconcile,
-                  onLeave: () => _leave(confirm: guardsLeave),
+                  onLeave: () => _leave(confirm: true),
+                )
+              : execution.isTerminal
+              ? _TerminalExecution(
+                  target: executionTarget!,
+                  execution: execution,
+                  timezone: timezone,
+                  onBack: () => _leave(confirm: false),
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -119,10 +149,11 @@ class _StudentBlitzDetailScreenState
     return switch (start.status) {
       StudentBlitzAttemptStartStatus.submitting ||
       StudentBlitzAttemptStartStatus.uncertain => true,
-      StudentBlitzAttemptStartStatus.failure ||
-      StudentBlitzAttemptStartStatus.terminal => !hasOwnView,
+      StudentBlitzAttemptStartStatus.failure => !hasOwnView,
+      // A handed-off Attempt is shown by the execution views instead.
       StudentBlitzAttemptStartStatus.idle ||
-      StudentBlitzAttemptStartStatus.active => false,
+      StudentBlitzAttemptStartStatus.active ||
+      StudentBlitzAttemptStartStatus.terminal => false,
     };
   }
 
@@ -296,39 +327,157 @@ class _StudentBlitzDetailScreenState
     return confirmed == true && mounted;
   }
 
-  /// Leaving never cancels or pauses the server Attempt.
+  /// Leaving never cancels or pauses the server Attempt and sends nothing;
+  /// it discards only this route session's local execution state.
   Future<void> _leave({required bool confirm}) async {
-    if (confirm) {
-      final leave = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          key: const Key('studentBlitzLeaveDialog'),
-          title: const Text('Leave Blitz?'),
-          content: const Text(
+    if (_leaving) return;
+    final execution = ref.read(
+      studentBlitzExecutionControllerProvider(_target),
+    );
+    final attempt = execution.attempt;
+    final executionTarget = execution.isExecuting && attempt != null
+        ? StudentBlitzExecutionTarget(
+            routeTarget: _target,
+            attemptId: attempt.id,
+          )
+        : null;
+    if (confirm && executionTarget != null) {
+      _leaving = true;
+      final leave = await _confirmLeave(executionTarget, execution);
+      _leaving = false;
+      // A Submit that began meanwhile can never be abandoned by Leave.
+      if (!leave ||
+          !mounted ||
+          ref.read(
+                studentBlitzExecutionOperationGateProvider(executionTarget),
+              ) ==
+              StudentBlitzExecutionOperation.submitting) {
+        return;
+      }
+    }
+    if (!mounted) return;
+    if (executionTarget != null) {
+      ref
+          .read(studentBlitzSubmitControllerProvider(executionTarget).notifier)
+          .clearLocalState();
+      ref
+          .read(
+            studentBlitzAnswerEditorControllerProvider(
+              executionTarget,
+            ).notifier,
+          )
+          .clearLocalState();
+      ref
+          .read(
+            studentBlitzFileAnswerControllerProvider(executionTarget).notifier,
+          )
+          .clearLocalState();
+    }
+    ref
+        .read(studentBlitzExecutionControllerProvider(_target).notifier)
+        .clearLocalState();
+    context.go(AppRoutePaths.studentTopicDetailLocation(_target.topicId));
+  }
+
+  Future<bool> _confirmLeave(
+    StudentBlitzExecutionTarget target,
+    StudentBlitzExecutionState execution,
+  ) async {
+    final gate = ref.read(studentBlitzExecutionOperationGateProvider(target));
+    final submit = ref.read(studentBlitzSubmitControllerProvider(target));
+    final editor = ref.read(studentBlitzAnswerEditorControllerProvider(target));
+    final files = ref.read(studentBlitzFileAnswerControllerProvider(target));
+    final submitting =
+        gate == StudentBlitzExecutionOperation.submitting ||
+        submit.status == StudentBlitzSubmitStatus.submitting;
+    final submitUncertain =
+        gate == StudentBlitzExecutionOperation.submitUncertain ||
+        submit.status == StudentBlitzSubmitStatus.uncertain ||
+        submit.status == StudentBlitzSubmitStatus.checking;
+    final unconfirmedWrite =
+        editor.hasUncertainMutation ||
+        files.hasUncertainUpload ||
+        editor.activeQuestionId != null ||
+        files.activeQuestionId != null;
+    final reconciling =
+        gate == StudentBlitzExecutionOperation.terminalReconciliation ||
+        execution.status == StudentBlitzExecutionStatus.refreshing;
+    const unconfirmedReturn =
+        'When you return, the app will reload the current server state.\n'
+        'If this attempt is still in progress, Resume will be available.\n'
+        'If it was finalized while you were away, it may no longer be '
+        'resumable.';
+    final (key, title, content) = submitting
+        ? (
+            'studentBlitzSubmitInProgressDialog',
+            'Submission is in progress.',
+            'Wait until the result is known.',
+          )
+        : submitUncertain
+        ? (
+            'studentBlitzSubmitLeaveDialog',
+            'Leave Blitz?',
+            'The submission result is unconfirmed.\n'
+                'Leaving will discard this local retry key.\n'
+                '$unconfirmedReturn',
+          )
+        : unconfirmedWrite
+        ? (
+            'studentBlitzUnconfirmedLeaveDialog',
+            'Leave Blitz?',
+            'A save result is still unconfirmed.\n'
+                'Leaving discards the local reconciliation state.\n'
+                '$unconfirmedReturn',
+          )
+        : reconciling
+        ? (
+            'studentBlitzReconcilingLeaveDialog',
+            'Leave Blitz?',
+            'The current attempt is still being checked.\n'
+                'Leaving discards the local reconciliation state.\n'
+                '$unconfirmedReturn',
+          )
+        : editor.hasDirtyDrafts || files.hasPendingSelection
+        ? (
+            'studentBlitzUnsavedLeaveDialog',
+            'Leave Blitz?',
+            [
+              if (editor.hasDirtyDrafts) 'You have unsaved answer changes.',
+              if (files.hasPendingSelection)
+                'The selected local file has not been uploaded.',
+              'Leaving discards only the unsaved local changes.',
+              'Your server timer continues.',
+            ].join('\n'),
+          )
+        : (
+            'studentBlitzLeaveDialog',
+            'Leave Blitz?',
             'Your server timer will continue.\n'
-            'You can resume later while the attempt remains active.',
+                'You can resume later while the attempt remains active.',
+          );
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: Key(key),
+        title: Text(title),
+        scrollable: true,
+        content: Text(content),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Stay'),
           ),
-          actions: [
-            TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Stay'),
-            ),
+          if (!submitting)
             FilledButton(
               key: const Key('studentBlitzLeaveConfirmButton'),
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Leave'),
             ),
-          ],
-        ),
-      );
-      if (leave != true) {
-        return;
-      }
-    }
-    if (mounted) {
-      context.go(AppRoutePaths.studentTopicDetailLocation(_target.topicId));
-    }
+        ],
+      ),
+    );
+    return leave == true;
   }
 }
 
@@ -409,16 +558,123 @@ class _StartStatus extends StatelessWidget {
                 key: const Key('studentBlitzStartFailure'),
                 textAlign: TextAlign.center,
               ),
-            if (state.status == StudentBlitzAttemptStartStatus.terminal &&
-                state.attempt != null)
-              Text(
-                studentBlitzTerminalAttemptMessage(state.attempt!),
-                key: const Key('studentBlitzTerminalAttempt'),
-                textAlign: TextAlign.center,
-              ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The finalized Attempt: its summary and read-only saved answers. Only the
+/// Student's current submitted file stays transferable.
+class _TerminalExecution extends ConsumerWidget {
+  const _TerminalExecution({
+    required this.target,
+    required this.execution,
+    required this.timezone,
+    required this.onBack,
+  });
+
+  final StudentBlitzExecutionTarget target;
+  final StudentBlitzExecutionState execution;
+  final String timezone;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final attempt = execution.attempt!;
+    final fileState = ref.watch(
+      studentBlitzFileAnswerControllerProvider(target),
+    );
+    final transferProvider = studentBlitzSubmissionTransferControllerProvider(
+      target,
+    );
+    final transferState = ref.watch(transferProvider);
+    final transferController = ref.read(transferProvider.notifier);
+    final answers = <String, StudentAttemptAnswerState>{
+      for (final answer in attempt.answers)
+        answer.questionId.toLowerCase(): answer,
+    };
+    return SingleChildScrollView(
+      key: const Key('studentBlitzTerminalView'),
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              StudentBlitzFinalizationSummary(
+                attempt: attempt,
+                timezone: timezone,
+                confirmedBySubmit: execution.confirmedBySubmit,
+              ),
+              const SizedBox(height: 16),
+              Semantics(
+                header: true,
+                child: Text(
+                  'Questions',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final question in attempt.questions) ...[
+                if (question.type == StudentQuestionType.fileBased &&
+                    fileState.questions[question.id.toLowerCase()] != null)
+                  _terminalFile(
+                    fileState.questions[question.id.toLowerCase()]!,
+                    transferState: transferState,
+                    transferController: transferController,
+                  )
+                else ...[
+                  StudentQuestionReadView(question: question),
+                  StudentAttemptAnswerReadView(
+                    question: question,
+                    answer: answers[question.id.toLowerCase()],
+                  ),
+                ],
+                const SizedBox(height: 12),
+              ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const Key('studentBlitzTerminalBackButton'),
+                  onPressed: onBack,
+                  child: const Text('Back to Topic'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _terminalFile(
+    StudentFileQuestionAnswerState file, {
+    required StudentSubmissionTransferState transferState,
+    required StudentBlitzSubmissionTransferController transferController,
+  }) {
+    final question = file.question;
+    final serverFile = file.serverFile;
+    return StudentFileAnswerEditor(
+      key: ValueKey(('blitzTerminalFile', target, question.id)),
+      state: file,
+      isTerminal: true,
+      canChoose: false,
+      canUpload: false,
+      canDiscard: false,
+      isReconciling: false,
+      canTransfer:
+          serverFile != null &&
+          transferController.canTransfer(question.id, serverFile.id),
+      transferState: transferState,
+      onChoose: () async {},
+      onUpload: () {},
+      onDiscard: () {},
+      onReload: () {},
+      onOpen: () => transferController.open(question.id, serverFile!.id),
+      onSaveAs: () => transferController.saveAs(question.id, serverFile!.id),
     );
   }
 }

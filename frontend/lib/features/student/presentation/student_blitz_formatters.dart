@@ -1,6 +1,7 @@
 import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/student_blitz_attempt_start_state.dart';
+import '../application/student_blitz_submit_readiness.dart';
 import '../domain/student_blitz.dart';
 import '../domain/student_blitz_attempt.dart';
 
@@ -155,21 +156,53 @@ String studentBlitzStartFeedbackMessage(StudentBlitzStartFeedback feedback) =>
         'Additional Blitz attempt is already in progress.',
     };
 
-/// Copy for a Start/Resume result whose Attempt is already terminal.
-String studentBlitzTerminalAttemptMessage(StudentBlitzAttempt attempt) {
-  if (attempt.status == StudentBlitzAttemptStatus.waitingForReview ||
-      attempt.status == StudentBlitzAttemptStatus.checked) {
-    return 'This Blitz attempt is already finalized.';
-  }
-  return switch (attempt.finalizationReason) {
-    StudentBlitzAttemptFinalizationReason.timeout =>
-      'The Blitz time has expired for this attempt.',
-    StudentBlitzAttemptFinalizationReason.taskClosed =>
-      'This Blitz attempt was finalized when the Blitz was closed.',
-    StudentBlitzAttemptFinalizationReason.studentSubmit ||
-    null => 'This Blitz attempt was already submitted.',
-  };
-}
+/// The finalized Attempt state; a checked Attempt shows no checking result.
+String studentBlitzFinalizedStateLabel(StudentBlitzAttemptStatus status) =>
+    switch (status) {
+      StudentBlitzAttemptStatus.inProgress => 'In progress',
+      StudentBlitzAttemptStatus.submitted => 'Submitted',
+      StudentBlitzAttemptStatus.timedOutFinalized =>
+        'Finalized at the deadline',
+      StudentBlitzAttemptStatus.waitingForReview => 'Finalized',
+      StudentBlitzAttemptStatus.checked => 'Finalized',
+    };
+
+String studentBlitzFinalizationReasonLabel(
+  StudentBlitzAttemptFinalizationReason reason,
+) => switch (reason) {
+  StudentBlitzAttemptFinalizationReason.studentSubmit => 'Submitted by you',
+  StudentBlitzAttemptFinalizationReason.timeout => 'Time expired',
+  StudentBlitzAttemptFinalizationReason.taskClosed =>
+    'The Teacher closed the Blitz',
+};
+
+String studentBlitzSubmitBlockerMessage(StudentBlitzSubmitBlocker blocker) =>
+    switch (blocker) {
+      StudentBlitzSubmitBlocker.attemptNotEditable =>
+        'This attempt is not available for submission.',
+      StudentBlitzSubmitBlocker.attemptStateRefreshing =>
+        'Wait until the current attempt is confirmed.',
+      StudentBlitzSubmitBlocker.localTimeExpired =>
+        'The time has run out on this device. '
+            'Wait for the server to confirm the attempt.',
+      StudentBlitzSubmitBlocker.nonFileUnsavedChanges =>
+        'Save or discard unsaved answer changes before submitting.',
+      StudentBlitzSubmitBlocker.nonFileSaveInProgress =>
+        'Wait for the current answer save to finish.',
+      StudentBlitzSubmitBlocker.nonFileSaveUncertain =>
+        'Check the unconfirmed answer save before submitting.',
+      StudentBlitzSubmitBlocker.fileSelectionPending =>
+        'Upload or discard the selected file before submitting.',
+      StudentBlitzSubmitBlocker.fileUploadInProgress =>
+        'Wait for the current file operation to finish.',
+      StudentBlitzSubmitBlocker.fileUploadUncertain =>
+        'Check the unconfirmed file upload before submitting.',
+      StudentBlitzSubmitBlocker.operationBusy =>
+        'Wait for the current submission step to finish.',
+      StudentBlitzSubmitBlocker.localStateUnavailable =>
+        'Check the current attempt to confirm the saved answers '
+            'before submitting.',
+    };
 
 String _unit(int value, String unit) => '$value $unit${value == 1 ? '' : 's'}';
 

@@ -23,6 +23,7 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
     required this.onDiscard,
     required this.onClear,
     required this.onReload,
+    this.recoveryLabel = 'Reload attempt',
     super.key,
   });
 
@@ -36,6 +37,9 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
   final VoidCallback onDiscard;
   final VoidCallback onClear;
   final VoidCallback onReload;
+
+  /// Action that re-reads the Attempt after an unconfirmed save.
+  final String recoveryLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +108,7 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
               if (uncertain)
                 FilledButton(
                   onPressed: isReconciling ? null : onReload,
-                  child: const Text('Reload attempt'),
+                  child: Text(recoveryLabel),
                 )
               else ...[
                 FilledButton(

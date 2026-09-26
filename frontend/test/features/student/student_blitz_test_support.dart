@@ -9,6 +9,7 @@ import 'package:testlabuz_client/features/student/domain/student_blitz.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz_attempt.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz_repository.dart';
+import 'package:testlabuz_client/features/student/domain/student_blitz_submit.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 
 import 'student_test_support.dart';
@@ -536,7 +537,7 @@ class FakeStudentBlitzRepository implements StudentBlitzRepository {
 
 class FakeStudentBlitzAttemptRepository
     implements StudentBlitzAttemptRepository {
-  FakeStudentBlitzAttemptRepository({this.onStart});
+  FakeStudentBlitzAttemptRepository({this.onStart, this.onSubmit});
 
   Future<StudentBlitzAttemptStartResult> Function(
     String blitzId,
@@ -556,6 +557,47 @@ class FakeStudentBlitzAttemptRepository
     return onStart?.call(blitzId, request) ??
         Future.value(studentBlitzStartResult());
   }
+
+  Future<StudentBlitzSubmitResult> Function(BlitzSubmitCall call)? onSubmit;
+  final submits = <BlitzSubmitCall>[];
+
+  @override
+  Future<StudentBlitzSubmitResult> submitAttempt(
+    String attemptId,
+    String expectedBlitzId,
+    String idempotencyKey, {
+    required StudentBlitzSubmitResponseExpectation expectation,
+  }) {
+    final call = BlitzSubmitCall(
+      attemptId: attemptId,
+      blitzId: expectedBlitzId,
+      idempotencyKey: idempotencyKey,
+      expectation: expectation,
+    );
+    submits.add(call);
+    return onSubmit?.call(call) ??
+        Future.value(
+          StudentBlitzSubmitResult(
+            attempt: studentBlitzAttempt(
+              status: StudentBlitzAttemptStatus.submitted,
+            ),
+          ),
+        );
+  }
+}
+
+class BlitzSubmitCall {
+  const BlitzSubmitCall({
+    required this.attemptId,
+    required this.blitzId,
+    required this.idempotencyKey,
+    required this.expectation,
+  });
+
+  final String attemptId;
+  final String blitzId;
+  final String idempotencyKey;
+  final StudentBlitzSubmitResponseExpectation expectation;
 }
 
 // --- Transport ----------------------------------------------------------------

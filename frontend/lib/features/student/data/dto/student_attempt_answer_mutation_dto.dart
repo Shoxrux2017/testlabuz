@@ -1,9 +1,9 @@
 import '../../domain/student_answer_mutation.dart';
-import '../../domain/student_homework_attempt.dart';
+import '../../domain/student_attempt_answer.dart';
 import '../../domain/student_question.dart';
 import '../../domain/student_submission_upload.dart';
+import 'student_attempt_answer_parser.dart';
 import 'student_dto_parse.dart';
-import 'student_homework_attempt_dto.dart';
 
 class StudentAttemptAnswerMutationDto {
   const StudentAttemptAnswerMutationDto({
