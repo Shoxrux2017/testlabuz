@@ -9,7 +9,7 @@
 | Area | `Frontend` |
 | Status | `Approved` |
 | Implementation type | `Flutter Student active-Blitz discovery + pre-Start detail + idempotent Start/Resume + server-anchored countdown shell` |
-| Depends on | `S08-FE-001…003 Accepted / Delivered`; `S08-BE-PHASE-2 = PASS` remains valid |
+| Depends on | `S08-FE-001` (PR #262, 15508f3), `S08-FE-002` (PR #264, b5b24b1), `S08-FE-003` (PR #266, a37dd02) — all `Accepted / Delivered`; `S08-BE-PHASE-2 = PASS` remains valid; revalidated 2026-09-26 on `a37dd02` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex execution |
 | Backend API dependency | Final delivered Stage 8 Student Blitz active/detail/Start APIs after Backend Phase 2 PASS |
@@ -340,6 +340,45 @@ Messages:
 
 No other Student Blitz endpoint is called in FE-004.
 
+## 6.1 Delivered facts (revalidation 2026-09-26)
+
+Confirmed on `a37dd02` (`routes/api.php` Student group, `StudentBlitzController`,
+`StudentBlitzAttemptController`, `StudentBlitzShowRequest`,
+`StudentBlitzAttemptStartRequest`, `ReadStudentBlitz`, `StartStudentBlitzAttempt`,
+`StudentBlitzAccess`, `StudentBlitzTiming`, `StudentBlitzAttemptSummary`,
+`StudentBlitzResource`, `StudentBlitzSummaryResource`, `StudentBlitzAttemptResource`,
+`IdempotencyGuard`, `ApiErrorResponse` and their feature tests):
+
+- the three routes use the Student middleware (`auth:sanctum`, `active.account`,
+  `password.changed`, `role:student`) with no throttle; no other `/student/blitz`
+  route exists. `GET /student/attempts/{attempt}` is Homework-only and returns `404`
+  for a Blitz Attempt, so a Blitz Attempt is re-read only through `intent = resume`;
+- `{blitz}` is not route-model bound: a non-UUID ID, another Institution's Blitz or
+  an unassigned Blitz is `404 resource_not_found` on all three routes;
+- both GETs reject any query key and any non-empty body with `422 validation_failed`;
+  send neither;
+- the Start body must be a JSON object (the shared Dio client already sends
+  `application/json`). Allowed keys are exactly `intent` + `attempt_id` for `resume`
+  and exactly `intent` otherwise; `attempt_id: null` next to `start_normal` or
+  `start_replacement` is rejected. Every validation failure is `422 validation_failed`
+  and stores no idempotency record;
+- `Idempotency-Key` must be a UUID (any version); the backend lowercases the key and
+  `attempt_id`. Key scope is Institution + user + operation, not per Blitz; the
+  fingerprint covers the intent body and the Blitz ID. A failed request stores
+  nothing, so a same-key Retry after a failure that did not commit executes again;
+- a completed same-key replay returns the **stored** status (`201` or `200`) with the
+  matching message and re-renders the intent-specific Attempt of the original request
+  from its current state and the current server time: `start_normal` -> Attempt #1,
+  `start_replacement` -> Attempt #2, `resume` -> the requested Attempt ID (stored
+  `200`). The replay is served even after that Attempt became terminal or the Blitz
+  was closed. The same key with another intent, `attempt_id` or Blitz is
+  `409 idempotency_key_reused`;
+- success envelopes are exactly `{data}` (GET) and `{data, message}` (Start); error
+  envelopes are exactly `{message, code, errors}` (`errors` defaults to `{}`) and no
+  Student Blitz path adds `meta`;
+- timer timestamps are serialized as `YYYY-MM-DDTHH:MM:SSZ`; reads use the database
+  clock and Start uses the application clock, both truncated to the whole second.
+
 ---
 
 # 7. Student Blitz Route
@@ -598,6 +637,9 @@ Require:
 
 Do not create a second Student Topic detail model.
 
+Revalidation 2026-09-26: the wire object is exactly `{id, title}` in both list items
+and detail.
+
 ---
 
 # 15. Attempt Usage Summary
@@ -627,6 +669,11 @@ inProgressAttemptId nullable canonical UUID
 additionalExceptionGranted bool
 replacementAttemptAvailable bool
 ```
+
+Revalidation 2026-09-26: exact wire keys are `normal_attempts`, `normal_used`,
+`in_progress_attempt_id`, `additional_exception_granted` and
+`replacement_attempt_available`. There is no `normal_limit`, `latest_attempt_status`
+or `replacement_used` key.
 
 ---
 
@@ -695,6 +742,11 @@ Do not try to infer #1/#2 solely from this summary.
 
 Attempt number becomes authoritative only after Start/Resume returns the Attempt.
 
+Revalidation 2026-09-26: the backend grants an exception only against a terminal
+normal Attempt #1 and allows at most one exception and two Attempts, so these
+invariants hold for every successful response. `in_progress_attempt_id` reports the
+latest Attempt (#2 when it exists, otherwise #1).
+
 ---
 
 # 17. Timing Domain
@@ -738,6 +790,12 @@ A small shared strict UTC-second parser is preferred over duplicated DTO string
 logic.
 
 No device timezone conversion is used for execution authority.
+
+Revalidation 2026-09-26: exact wire keys are `mode`, `server_now`,
+`synchronized_ends_at`, `deadline_at` and `remaining_seconds`. The existing
+`readStudentNullableWholeSecondUtcTimestamp` in `student_dto_parse.dart` already
+enforces the exact `YYYY-MM-DDTHH:MM:SSZ` form; reuse it instead of adding another
+parser.
 
 ---
 
@@ -794,6 +852,43 @@ remainingSeconds == null
 ```
 
 except no other shape is accepted.
+
+Revalidation 2026-09-26 — finished-attempt timing (behavior-relevant correction).
+`StudentBlitzTiming::project` returns:
+
+```text
+replacement available         -> deadline_at = null, remaining_seconds = null
+no Attempt                    -> deadline_at = synchronized_ends_at (null when individual)
+                                 remaining_seconds = max(0, deadline - server_now) or null
+latest Attempt in progress    -> deadline_at = that Attempt's deadline
+                                 remaining_seconds = max(0, deadline - server_now)
+latest Attempt terminal and   -> deadline_at = that Attempt's deadline
+no replacement available         remaining_seconds = 0
+```
+
+The last shape is a valid `200` detail (the Section 118 "terminal normal summary"
+case). For example, an individual Student who submitted Attempt #1 keeps receiving it
+while the Blitz is Active, and its `deadline_at` may be later **or earlier** than
+`server_now`. Therefore the equality rule and `deadlineAt >= serverNow` above apply
+only when the summary is not finished. For a finished summary:
+
+```text
+normalUsed == 1
+inProgressAttemptId == null
+replacementAttemptAvailable == false
+```
+
+require instead:
+
+```text
+deadlineAt != null
+remainingSeconds == 0
+```
+
+with no ordering requirement between `deadlineAt` and `serverNow`. The active list
+never contains this shape (the backend drops finished rows without a replacement and
+every row whose `remaining_seconds` is `0`), but the shared timing parser must accept
+it for detail.
 
 ---
 
@@ -875,6 +970,12 @@ comes from replacement Attempt #2 and may be **later than**
 
 Do not require equality to common class end in this case.
 
+Revalidation 2026-09-26: the backend stores the synchronized normal Attempt #1
+deadline as exactly `synchronized_ends_at`, so the pre-Start / #1 shape always has
+`deadlineAt == synchronizedEndsAt`. A finished summary (Section 18) has
+`deadlineAt == synchronizedEndsAt` when `additionalExceptionGranted == false`, and the
+finished Attempt #2 deadline (possibly later) when it is `true`.
+
 ---
 
 # 20. Individual Timing Integrity
@@ -912,6 +1013,10 @@ remainingSeconds != null
 ```
 
 The deadline is the persisted current Attempt deadline.
+
+Revalidation 2026-09-26: a finished individual summary (Section 18) has `deadlineAt`
+equal to the latest Attempt's persisted deadline and `remainingSeconds == 0`;
+`synchronizedEndsAt` stays `null`.
 
 ---
 
@@ -1033,6 +1138,13 @@ The current API response is authoritative.
 The UI may locally mark its rendered countdown as expired after monotonic elapsed,
 but actual collection membership changes only after server refresh.
 
+Revalidation 2026-09-26: the delivered list contains Active Blitz tasks that are not
+started (individual, or synchronized before the common end), have an in-progress
+Attempt, or have a replacement available. It drops finished rows without a
+replacement and every row with `remaining_seconds == 0`. Order is
+`activated_at DESC, id DESC`. Every list/detail read first finalizes this Student's
+due in-progress Attempts as timed out.
+
 ---
 
 # 25. Blitz Detail Domain
@@ -1102,6 +1214,11 @@ strict parsing fails as invalidResponse.
 
 Do not silently ignore pre-Start Question leakage.
 
+Revalidation 2026-09-26: `description` is a nullable string; `student_instructions`
+is a non-blank string; `total_possible_points` is a JSON number encoded as an integer
+when whole (for example `5`), so accept a JSON integer or double; `duration_seconds`
+is a positive JSON integer; `status` is always `active` on success.
+
 ---
 
 # 27. Detail Lifecycle Response Handling
@@ -1151,6 +1268,22 @@ notFound
 ```
 
 Do not treat known execution conflicts as generic network error.
+
+Revalidation 2026-09-26 — delivered detail conflicts (`ReadStudentBlitz`,
+`StudentBlitzTiming::assertExecutable`):
+
+- an assigned Blitz in Draft/Scheduled/Closed/Archived is `409 blitz_not_active`; the
+  read does not check Topic status (Start does);
+- `409 blitz_time_expired` when the latest Attempt is `timed_out_finalized`; when a
+  synchronized Blitz is not started at/after the common end; when an in-progress
+  Attempt reached its deadline (the read finalizes it first); when a synchronized
+  Attempt #1 is finished and the common end passed; when Attempt #2 is finished and
+  its deadline passed;
+- never `blitz_time_expired` while a replacement is available;
+- an individual Student whose Attempt #1 is submitted keeps receiving `200` with the
+  finished shape of Section 18;
+- backend messages differ from the frontend copy (for example "This Blitz is not
+  active."); branch only on `code`.
 
 ---
 
@@ -1281,6 +1414,14 @@ Do not weaken:
 - exact text preservation;
 - file metadata safety;
 - duplicate answer Question-ID checks.
+
+Revalidation 2026-09-26: the shared answer classes and `parseStudentAttemptAnswerValue`
+are consumed today by more than thirty Stage 7 production and test files through
+`student_homework_attempt.dart` / `student_homework_attempt_dto.dart`. To keep the
+diff inside Section 116, move the classes and the answer-state parser into the
+neutral files and keep those two Homework files re-exporting them (`export`), so the
+other Stage 7 consumers compile unchanged. Blitz code imports the neutral files
+directly. Do not rewrite unrelated imports.
 
 ---
 
@@ -1439,6 +1580,15 @@ If Backend Phase 2 materially changes this shape, stop before implementation and
 report the mismatch.
 
 Do not accept score/checking fields.
+
+Revalidation 2026-09-26: the delivered `StudentBlitzAttemptResource` has exactly these
+keys. `assessment_id` is the Blitz ID (there is no `blitz_id`); `deadline_at` is never
+null for a Blitz Attempt, so require it for every status; `timing` is exactly
+`{server_now, mode, remaining_seconds}` and `remaining_seconds` is `0` for every
+terminal status. Questions use the same `StudentQuestionResource` and answers the same
+`StudentAttemptAnswerStateResource` as Homework, so the Stage 7 parsers apply
+unchanged. `questions` are present for terminal replays too. A new normal Start and a
+new replacement #2 both return `answers: []`.
 
 ---
 
@@ -2417,6 +2567,18 @@ Do not use device clock to hide/show an action.
 
 Server detail success and attempt projection are the authority.
 
+Revalidation 2026-09-26 — finished state: when the confirmed detail has the finished
+summary of Section 18 (`normalUsed == 1`, `inProgressAttemptId == null`,
+`replacementAttemptAvailable == false`), show no Start control and no countdown, and
+show:
+
+```text
+You have already finished this Blitz.
+```
+
+Refresh stays available; a later Teacher exception appears only after a server
+refresh.
+
 ---
 
 # 64. Start Confirmation
@@ -2858,6 +3020,31 @@ Treat as client/server contract failure, not a Student form error.
 
 No message-text branching.
 
+Revalidation 2026-09-26 — delivered Start matrix (`StartStudentBlitzAttempt`):
+
+- `resume`: an unknown Attempt ID, or one of another Student/Blitz ->
+  `404 resource_not_found`; the requested Attempt `timed_out_finalized` ->
+  `409 blitz_time_expired`; any other terminal status -> `409 attempt_not_editable`;
+  in progress -> `200` with that exact Attempt;
+- `start_normal`: Attempt #1 in progress -> `200` Attempt #1 (also with a new key);
+  Attempt #1 terminal while an exception exists -> `attempts_exhausted`; Attempt #1
+  `timed_out_finalized` without an exception -> `blitz_time_expired`; any other
+  terminal #1 -> `attempts_exhausted`. It never returns Attempt #2;
+- `start_replacement`: Attempt #2 in progress -> `200` Attempt #2; Attempt #2
+  terminal -> `blitz_time_expired` (timed out) or `attempts_exhausted`; no replacement
+  available -> `attempts_exhausted`; otherwise `201` with the new Attempt #2;
+- a new claim while the Topic or Blitz is not Active -> `blitz_not_active` (the key is
+  claimed first, so reusing a key for another request on a closed Blitz still reports
+  `idempotency_key_reused`);
+- a synchronized new normal Start at/after the common end, or a current Attempt
+  at/after its deadline -> `blitz_time_expired`;
+- `business_conflict` only for an inconsistent official result pair;
+  `assessment_not_assigned` only when the recipient row disappears mid-request;
+- `500 server_error` for corrupt history or missing Institution settings; it is
+  uncertain under Section 73, and a same-key Retry re-executes because nothing was
+  stored;
+- `institution_settings_incomplete` is never returned on Student paths.
+
 ---
 
 # 75. Session / Account Start Failures
@@ -2997,6 +3184,11 @@ If returned Attempt is terminal:
 
 Do not treat a valid same-key replay as malformed success merely because current
 Attempt is terminal.
+
+Revalidation 2026-09-26: a terminal Attempt can also arrive on a **fresh** send. When
+the in-progress Attempt's deadline passes while the Start request is in flight, the
+backend finalizes it and returns the originating status (`200`/`201`) with
+`timed_out_finalized`. Handle it exactly like a terminal replay.
 
 ---
 
@@ -4071,6 +4263,12 @@ docs/
 tasks/
 ```
 
+Revalidation 2026-09-26: `ApiErrorCodes` currently lacks `blitz_not_active` and
+`blitz_time_expired`; add them. Every other code this task uses already exists.
+`student_homework_attempt.dart` and `student_homework_attempt_dto.dart` change only by
+the move plus re-export of Section 31. `StudentQuestionReadView` still imports
+`formatStudentHomeworkPoints` from the Homework formatters (Section 104).
+
 ---
 
 # 117. Active List DTO Tests
@@ -4122,6 +4320,16 @@ Cover:
 - fractional timing timestamps rejected;
 - `12:00:00Z -> 12:10:00Z` requires exactly `remaining_seconds=600`;
 - any `questions` key in success rejected.
+
+Revalidation 2026-09-26 — add:
+
+- finished synchronized summary with `deadline_at` later than `server_now` and
+  `remaining_seconds = 0` accepted;
+- finished individual summary with `deadline_at` earlier than `server_now` and
+  `remaining_seconds = 0` accepted;
+- finished summary with `remaining_seconds != 0` or `deadline_at = null` rejected;
+- detail screen for a finished summary shows "You have already finished this Blitz."
+  with no Start control and no countdown.
 
 ---
 
@@ -4826,3 +5034,6 @@ Implementation Readiness Gate        = PASS
 Execution dependency                 = S08-FE-003 Accepted / Delivered
 Next task after acceptance            = S08-FE-005
 ```
+
+Revalidation 2026-09-26 on `a37dd02`: the gate remains `PASS` with the corrections
+marked "Revalidation 2026-09-26" above; `S08-FE-001…003` are `Accepted / Delivered`.
