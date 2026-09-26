@@ -1,6 +1,8 @@
 import 'teacher_blitz.dart';
+import 'teacher_blitz_attempt_exception.dart';
 import 'teacher_blitz_list.dart';
 import 'teacher_blitz_list_query.dart';
+import 'teacher_blitz_monitoring.dart';
 import 'teacher_blitz_mutation.dart';
 import 'teacher_blitz_schedule.dart';
 import 'teacher_question_mutation.dart';
@@ -53,4 +55,13 @@ abstract interface class TeacherBlitzRepository {
   Future<TeacherBlitz> closeBlitz(String blitzId);
 
   Future<TeacherBlitz> archiveBlitz(String blitzId);
+
+  Future<TeacherBlitzMonitoring> fetchMonitoring(String blitzId);
+
+  Future<TeacherBlitzAttemptException> grantAttemptException(
+    String blitzId,
+    String studentId,
+    TeacherBlitzAttemptExceptionRequest request, {
+    required String idempotencyKey,
+  });
 }

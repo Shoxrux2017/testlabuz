@@ -15,6 +15,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_blitz_deta
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_lifecycle_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_lifecycle_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_list_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_official_blitz_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_mutation_activity.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_question_mutation_activity.dart';
@@ -762,14 +763,196 @@ void main() {
 
       expect(harness.blitz.activateRequests, isEmpty);
     });
+  });
 
-    test('mobile never owns lifecycle mutations', () async {
+  group('mobile', () {
+    test('activates a Draft or Scheduled Blitz with one key', () async {
+      for (final initial in [
+        teacherBlitz(),
+        teacherBlitz(
+          status: TeacherBlitzStatus.scheduled,
+          scheduledAt: DateTime.utc(2026, 9, 30, 4),
+        ),
+      ]) {
+        final harness = _Harness(
+          initial: initial,
+          surface: AppDeviceSurface.mobile,
+        );
+        await harness.start();
+
+        await harness.controller.activate();
+        await flushTeacherControllers();
+
+        expect(harness.blitz.activateRequests.single.idempotencyKey, _keyA);
+        expect(
+          harness.state.status,
+          TeacherBlitzLifecycleStatus.confirmedSuccess,
+        );
+        expect(harness.state.feedback, 'Blitz activated successfully.');
+        expect(harness.detail.status, TeacherBlitzStatus.active);
+        expect(harness.activity.isActive, isFalse);
+      }
+    });
+
+    test(
+      'a mobile same-key Retry accepts a later Closed or Archived Blitz',
+      () async {
+        for (final (status, feedback) in [
+          (
+            TeacherBlitzStatus.closed,
+            'Activation was confirmed. This Blitz is now closed.',
+          ),
+          (
+            TeacherBlitzStatus.archived,
+            'Activation was confirmed. This Blitz is now archived.',
+          ),
+        ]) {
+          var activations = 0;
+          final harness = _Harness(
+            surface: AppDeviceSurface.mobile,
+            onActivate: (id, _) async {
+              activations += 1;
+              if (activations == 1) {
+                throw const TeacherBlitzMutationOutcomeUnknownException();
+              }
+              return _withStatus(
+                teacherBlitz(id: id, status: TeacherBlitzStatus.closed),
+                status,
+              );
+            },
+          );
+          await harness.start();
+
+          await harness.controller.activate();
+          expect(harness.state.canRetryActivation, isTrue);
+          await harness.controller.retryActivation();
+
+          expect(harness.blitz.activateRequests.map((r) => r.idempotencyKey), [
+            _keyA,
+            _keyA,
+          ]);
+          expect(harness.keys.generated, 1);
+          expect(harness.state.feedback, feedback);
+          expect(harness.detail.status, status);
+          expect(harness.state.canRetryActivation, isFalse);
+        }
+      },
+    );
+
+    test(
+      'a mobile same-key replay before activation is never accepted',
+      () async {
+        var activations = 0;
+        final harness = _Harness(
+          surface: AppDeviceSurface.mobile,
+          onActivate: (id, _) async {
+            activations += 1;
+            if (activations == 1) {
+              throw const TeacherBlitzMutationOutcomeUnknownException();
+            }
+            return teacherBlitz(id: id, status: TeacherBlitzStatus.scheduled);
+          },
+        );
+        await harness.start();
+
+        await harness.controller.activate();
+        await harness.controller.retryActivation();
+
+        expect(
+          harness.state.status,
+          isNot(TeacherBlitzLifecycleStatus.confirmedSuccess),
+        );
+        expect(harness.blitz.activateRequests, hasLength(2));
+      },
+    );
+
+    test('the mobile route lease exists only for Activate', () async {
       final harness = _Harness(surface: AppDeviceSurface.mobile);
       await harness.start();
+      final activity = harness.container.read(
+        teacherBlitzRouteMutationActivityProvider(_target()).notifier,
+      );
 
-      await harness.controller.activate();
+      for (final operation in [
+        TeacherBlitzRouteMutationOperation.schedule,
+        TeacherBlitzRouteMutationOperation.official,
+        TeacherBlitzRouteMutationOperation.close,
+        TeacherBlitzRouteMutationOperation.archive,
+      ]) {
+        expect(activity.begin(operation), isNull, reason: operation.name);
+      }
+      final lease = activity.begin(TeacherBlitzRouteMutationOperation.activate);
+      expect(lease, isNotNull);
+      expect(activity.owns(lease!), isTrue);
+      activity.release(lease);
+      expect(harness.activity.isActive, isFalse);
+    });
 
-      expect(harness.blitz.activateRequests, isEmpty);
+    test('mobile never schedules, closes, archives or designates', () async {
+      final draft = _Harness(surface: AppDeviceSurface.mobile);
+      await draft.start();
+      draft.container.listen(
+        teacherOfficialBlitzControllerProvider(_target()),
+        (_, _) {},
+      );
+
+      await draft.controller.schedule(_schedule());
+      await draft.controller.archive();
+      await draft.container
+          .read(teacherOfficialBlitzControllerProvider(_target()).notifier)
+          .setOfficial();
+
+      expect(draft.blitz.scheduleRequests, isEmpty);
+      expect(draft.blitz.archiveIds, isEmpty);
+      expect(draft.pairs.setOfficialBlitzRequests, isEmpty);
+      expect(draft.activity.isActive, isFalse);
+
+      final active = _Harness(
+        initial: teacherBlitz(status: TeacherBlitzStatus.active),
+        surface: AppDeviceSurface.mobile,
+      );
+      await active.start();
+
+      await active.controller.close();
+
+      expect(active.blitz.closeIds, isEmpty);
+    });
+
+    test('mobile activation conflicts point to the desktop workspace', () async {
+      for (final (code, notice) in [
+        (
+          ApiErrorCodes.assessmentHasNoScoreablePoints,
+          'This Blitz needs at least one scoreable Question.\nUse the desktop '
+              'Teacher workspace to manage Questions.',
+        ),
+        (
+          ApiErrorCodes.assessmentNotAssigned,
+          'The server could not establish a valid assigned Student set.\nUse '
+              'the desktop Teacher workspace to review the assignment when '
+              'editing is required.',
+        ),
+        (
+          ApiErrorCodes.institutionSettingsIncomplete,
+          "The Institution's Blitz timer-start setting is not configured.\nAsk "
+              'the Institution Admin to complete the Blitz timer setting '
+              'before activation.',
+        ),
+      ]) {
+        final harness = _Harness(
+          surface: AppDeviceSurface.mobile,
+          onActivate: (_, _) async =>
+              throw teacherServerFailure(code, statusCode: 409),
+        );
+        await harness.start();
+
+        await harness.controller.activate();
+
+        expect(
+          harness.state.status,
+          TeacherBlitzLifecycleStatus.definiteFailure,
+        );
+        expect(harness.state.notice, notice, reason: code);
+      }
     });
   });
 }

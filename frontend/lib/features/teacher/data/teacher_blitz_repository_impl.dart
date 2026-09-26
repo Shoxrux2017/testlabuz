@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../domain/teacher_blitz.dart';
+import '../domain/teacher_blitz_attempt_exception.dart';
 import '../domain/teacher_blitz_list.dart';
 import '../domain/teacher_blitz_list_query.dart';
+import '../domain/teacher_blitz_monitoring.dart';
 import '../domain/teacher_blitz_mutation.dart';
 import '../domain/teacher_blitz_repository.dart';
 import '../domain/teacher_blitz_schedule.dart';
@@ -144,6 +146,37 @@ class TeacherBlitzRepositoryImpl implements TeacherBlitzRepository {
   Future<TeacherBlitz> archiveBlitz(String blitzId) async {
     final dto = await remoteDataSource.archiveBlitz(blitzId);
     return _requireLifecycleTarget(dto.blitz.toDomain(), blitzId);
+  }
+
+  @override
+  Future<TeacherBlitzMonitoring> fetchMonitoring(String blitzId) async {
+    final dto = await remoteDataSource.fetchMonitoring(blitzId);
+    final monitoring = dto.toDomain();
+    if (monitoring.blitz.id.toLowerCase() != blitzId.toLowerCase()) {
+      throw ApiRequestException(
+        ApiFailure.local(
+          kind: ApiFailureKind.invalidResponse,
+          message: 'Teacher Blitz monitoring ID does not match the request.',
+        ),
+      );
+    }
+    return monitoring;
+  }
+
+  @override
+  Future<TeacherBlitzAttemptException> grantAttemptException(
+    String blitzId,
+    String studentId,
+    TeacherBlitzAttemptExceptionRequest request, {
+    required String idempotencyKey,
+  }) async {
+    final dto = await remoteDataSource.grantAttemptException(
+      blitzId,
+      studentId,
+      request,
+      idempotencyKey: idempotencyKey,
+    );
+    return dto.toDomain();
   }
 }
 

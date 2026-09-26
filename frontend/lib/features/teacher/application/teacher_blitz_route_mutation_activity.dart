@@ -67,7 +67,7 @@ class TeacherBlitzRouteMutationActivityController
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
     ).eligibleKey;
-    if (sessionKey == null || sessionKey.surface != AppDeviceSurface.desktop) {
+    if (sessionKey == null) {
       _reset();
       _initialized = true;
       return const TeacherBlitzRouteMutationActivityState();
@@ -87,7 +87,12 @@ class TeacherBlitzRouteMutationActivityController
     TeacherBlitzRouteMutationOperation operation,
   ) {
     final sessionKey = _activeSessionKey;
-    if (sessionKey == null || state.isActive || !_matchesSession(sessionKey)) {
+    if (sessionKey == null ||
+        state.isActive ||
+        !_matchesSession(sessionKey) ||
+        // Mobile may only activate; the other route mutations are desktop-only.
+        (sessionKey.surface != AppDeviceSurface.desktop &&
+            operation != TeacherBlitzRouteMutationOperation.activate)) {
       return null;
     }
 
@@ -134,7 +139,6 @@ class TeacherBlitzRouteMutationActivityController
   bool _matchesSession(TeacherSessionKey sessionKey) {
     return ref.mounted &&
         _activeSessionKey == sessionKey &&
-        sessionKey.surface == AppDeviceSurface.desktop &&
         TeacherSessionSnapshot.fromSession(
               ref.read(authSessionControllerProvider),
               ref.read(appDeviceSurfaceProvider),

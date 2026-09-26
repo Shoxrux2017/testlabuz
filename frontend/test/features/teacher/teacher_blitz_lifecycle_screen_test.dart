@@ -57,7 +57,12 @@ void main() {
             reason: '${status.value}: $label',
           );
         }
-        for (final absent in ['Monitor', 'Grant exception', 'Remaining']) {
+        expect(
+          find.text('Monitor'),
+          status == TeacherBlitzStatus.active ? findsOneWidget : findsNothing,
+          reason: '${status.value}: Monitor',
+        );
+        for (final absent in ['Grant exception', 'Remaining']) {
           expect(find.text(absent), findsNothing);
         }
       }
@@ -146,6 +151,28 @@ void main() {
       expect(find.text('Blitz activated successfully.'), findsOneWidget);
       expect(find.text('Close'), findsOneWidget);
       expect(find.text('Activate'), findsNothing);
+    });
+
+    testWidgets('Monitor waits while a lifecycle action is in flight', (
+      tester,
+    ) async {
+      final pending = Completer<TeacherBlitz>();
+      final repository = FakeTeacherBlitzRepository(
+        onFetch: (id) async => _blitz(TeacherBlitzStatus.active),
+        onClose: (_) => pending.future,
+      );
+      await _pump(tester, repository: repository);
+      await tester.pumpAndSettle();
+      expect(_button(tester, 'teacherBlitzMonitorButton'), isNotNull);
+
+      await _tapButton(tester, 'teacherBlitzCloseButton');
+      await tester.tap(find.byKey(const Key('teacherBlitzConfirmButton')));
+      await tester.pump();
+
+      expect(_button(tester, 'teacherBlitzMonitorButton'), isNull);
+      pending.complete(_blitz(TeacherBlitzStatus.closed));
+      await tester.pumpAndSettle();
+      expect(find.text('Monitor'), findsNothing);
     });
 
     testWidgets('a same-key replay returning Closed adopts Closed', (
@@ -547,47 +574,240 @@ void main() {
     });
   });
 
-  testWidgets('mobile shows no lifecycle or designation controls', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    for (final (status, pair) in [
-      (TeacherBlitzStatus.draft, _pair()),
-      (TeacherBlitzStatus.scheduled, _pair(blitzId: _otherBlitzId)),
-      (TeacherBlitzStatus.active, _pair()),
-      (TeacherBlitzStatus.closed, _pair()),
-    ]) {
+  group('mobile', () {
+    testWidgets('shows only Activate or Monitor', (tester) async {
+      await _useMobileSize(tester);
+      for (final (status, pair, visible) in [
+        (TeacherBlitzStatus.draft, _pair(), 'Activate'),
+        (
+          TeacherBlitzStatus.scheduled,
+          _pair(blitzId: _otherBlitzId),
+          'Activate',
+        ),
+        (TeacherBlitzStatus.active, _pair(), 'Monitor'),
+        (TeacherBlitzStatus.closed, _pair(), null),
+        (TeacherBlitzStatus.archived, _pair(), null),
+      ]) {
+        await _pump(
+          tester,
+          blitz: _blitz(status),
+          pairs: FakeTeacherTopicResultPairRepository(
+            onFetch: (_) async => pair,
+          ),
+          surface: AppDeviceSurface.mobile,
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('teacherBlitzDetailTitle')),
+          findsOneWidget,
+        );
+        for (final label in ['Activate', 'Monitor']) {
+          expect(
+            find.text(label),
+            label == visible ? findsOneWidget : findsNothing,
+            reason: '${status.value}: $label',
+          );
+        }
+        for (final label in [
+          'Schedule',
+          'Reschedule',
+          'Close',
+          'Archive',
+          'Set as Official Blitz',
+          'Replace Official Blitz',
+          'Edit',
+          'Manage Questions',
+          'Grant exception',
+          'Grant additional attempt',
+        ]) {
+          expect(
+            find.text(label),
+            findsNothing,
+            reason: '${status.value}: $label',
+          );
+        }
+        expect(find.byKey(const Key('teacherBlitzScheduleNote')), findsNothing);
+        expect(
+          find.byKey(const Key('teacherBlitzOfficialGuidance')),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      }
+    });
+
+    testWidgets('a confirmed activation shows feedback, then Monitor', (
+      tester,
+    ) async {
+      await _useMobileSize(tester);
+      final repository = FakeTeacherBlitzRepository(
+        onFetch: (id) async => _blitz(TeacherBlitzStatus.draft),
+      );
+      final pairs = FakeTeacherTopicResultPairRepository(
+        onFetch: (_) async => _pair(blitzId: _blitzId),
+      );
       await _pump(
         tester,
-        blitz: _blitz(status),
-        pairs: FakeTeacherTopicResultPairRepository(onFetch: (_) async => pair),
+        repository: repository,
+        pairs: pairs,
         surface: AppDeviceSurface.mobile,
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('teacherBlitzDetailTitle')), findsOneWidget);
+      await _tapButton(tester, 'teacherBlitzActivateButton');
+      expect(find.text('Activate Blitz?'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('teacherBlitzConfirmButton')));
+      await tester.pumpAndSettle();
+
+      expect(repository.activateRequests.single.idempotencyKey, _key);
+      expect(find.text('Blitz activated successfully.'), findsOneWidget);
+      expect(find.text('Monitor'), findsOneWidget);
+      expect(find.text('Activate'), findsNothing);
+      expect(find.text('Close'), findsNothing);
+      expect(pairs.setOfficialBlitzRequests, isEmpty);
+    });
+
+    for (final (status, chip) in [
+      (TeacherBlitzStatus.closed, 'Closed'),
+      (TeacherBlitzStatus.archived, 'Archived'),
+    ]) {
+      testWidgets('a same-key replay returning $chip adopts it', (
+        tester,
+      ) async {
+        await _useMobileSize(tester);
+        var activations = 0;
+        final repository = FakeTeacherBlitzRepository(
+          onFetch: (id) async => _blitz(TeacherBlitzStatus.draft),
+          onActivate: (_, _) async {
+            activations += 1;
+            if (activations == 1) {
+              throw const TeacherBlitzMutationOutcomeUnknownException();
+            }
+            return _blitz(status);
+          },
+        );
+        await _pump(
+          tester,
+          repository: repository,
+          surface: AppDeviceSurface.mobile,
+        );
+        await tester.pumpAndSettle();
+        await _tapButton(tester, 'teacherBlitzActivateButton');
+        await tester.tap(find.byKey(const Key('teacherBlitzConfirmButton')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Check current Blitz'), findsOneWidget);
+        await _tapButton(tester, 'teacherBlitzRetryActivationButton');
+
+        expect(repository.activateRequests.map((r) => r.idempotencyKey), [
+          _key,
+          _key,
+        ]);
+        expect(find.widgetWithText(Chip, chip), findsOneWidget);
+        for (final label in ['Activate', 'Retry activation', 'Monitor']) {
+          expect(find.text(label), findsNothing, reason: label);
+        }
+      });
+    }
+
+    for (final (name, pairs, context) in [
+      (
+        'the confirmed official Blitz',
+        FakeTeacherTopicResultPairRepository(
+          onFetch: (_) async => _pair(blitzId: _blitzId),
+        ),
+        'Official Blitz',
+      ),
+      (
+        'a confirmed practice Blitz',
+        FakeTeacherTopicResultPairRepository(
+          onFetch: (_) async => _pair(blitzId: _otherBlitzId),
+        ),
+        "This Blitz is not currently designated as the Topic's official "
+            'Blitz.\n\nIf you activate it now, it remains '
+            'practice/supplementary and cannot later be newly designated as '
+            'official while Active.',
+      ),
+      (
+        'an unconfirmed official status',
+        FakeTeacherTopicResultPairRepository(
+          onFetch: (_) async =>
+              throw teacherLocalFailure(ApiFailureKind.connection),
+        ),
+        'Official Blitz status could not be confirmed.\nIf this Blitz must be '
+            'official, refresh on desktop before activation.',
+      ),
+    ]) {
+      testWidgets('activation explains $name and still activates', (
+        tester,
+      ) async {
+        await _useMobileSize(tester);
+        final repository = FakeTeacherBlitzRepository(
+          onFetch: (id) async => _blitz(TeacherBlitzStatus.draft),
+        );
+        await _pump(
+          tester,
+          repository: repository,
+          pairs: pairs,
+          surface: AppDeviceSurface.mobile,
+        );
+        await tester.pumpAndSettle();
+
+        await _tapButton(tester, 'teacherBlitzActivateButton');
+
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('teacherBlitzConfirmDialog')),
+            matching: find.text(context),
+          ),
+          findsOneWidget,
+        );
+        await tester.tap(find.byKey(const Key('teacherBlitzConfirmButton')));
+        await tester.pumpAndSettle();
+        expect(repository.activateRequests, hasLength(1));
+        expect(pairs.setOfficialBlitzRequests, isEmpty);
+      });
+    }
+
+    testWidgets('a scoreable-points conflict offers no mobile editor', (
+      tester,
+    ) async {
+      await _useMobileSize(tester);
+      await _pump(
+        tester,
+        repository: FakeTeacherBlitzRepository(
+          onFetch: (id) async => _blitz(TeacherBlitzStatus.draft),
+          onActivate: (_, _) async => throw teacherServerFailure(
+            ApiErrorCodes.assessmentHasNoScoreablePoints,
+            statusCode: 409,
+          ),
+        ),
+        surface: AppDeviceSurface.mobile,
+      );
+      await tester.pumpAndSettle();
+      await _tapButton(tester, 'teacherBlitzActivateButton');
+      await tester.tap(find.byKey(const Key('teacherBlitzConfirmButton')));
+      await tester.pumpAndSettle();
+
       expect(
-        find.byKey(const Key('teacherBlitzLifecycleControls')),
+        find.text(
+          'This Blitz needs at least one scoreable Question.\nUse the desktop '
+          'Teacher workspace to manage Questions.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('teacherBlitzLifecycleConflictAction')),
         findsNothing,
       );
-      for (final label in [
-        'Schedule',
-        'Reschedule',
-        'Activate',
-        'Close',
-        'Archive',
-        'Set as Official Blitz',
-        'Replace Official Blitz',
-      ]) {
-        expect(
-          find.text(label),
-          findsNothing,
-          reason: '${status.value}: $label',
-        );
-      }
-    }
+      expect(find.text('Manage Questions'), findsNothing);
+    });
   });
+}
+
+Future<void> _useMobileSize(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(390, 844));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
 TeacherBlitz _blitz(TeacherBlitzStatus status, {DateTime? scheduledAt}) {

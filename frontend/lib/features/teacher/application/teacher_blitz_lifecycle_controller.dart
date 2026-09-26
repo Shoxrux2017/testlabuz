@@ -46,6 +46,15 @@ TeacherBlitzOfficialKnowledge teacherBlitzOfficialKnowledge(
       : TeacherBlitzOfficialKnowledge.notOfficial;
 }
 
+/// Mobile may only Activate; every other lifecycle action is desktop-only.
+bool isTeacherBlitzLifecycleActionOnSurface(
+  TeacherBlitzLifecycleAction action,
+  AppDeviceSurface surface,
+) {
+  return surface == AppDeviceSurface.desktop ||
+      action == TeacherBlitzLifecycleAction.activate;
+}
+
 const _scheduleUnconfirmed =
     'The schedule update could not be confirmed.\nReview the current Blitz '
     'schedule before trying again.';
@@ -75,7 +84,7 @@ class TeacherBlitzLifecycleController
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
     ).eligibleKey;
-    if (sessionKey == null || sessionKey.surface != AppDeviceSurface.desktop) {
+    if (sessionKey == null) {
       _clearSession();
       return const TeacherBlitzLifecycleState();
     }
@@ -459,7 +468,11 @@ class TeacherBlitzLifecycleController
     _publishDefiniteFailure(
       operation,
       conflictCode: conflictCode,
-      notice: _conflictMessage(operation.action, conflictCode),
+      notice: _conflictMessage(
+        operation.action,
+        conflictCode,
+        operation.lease.sessionKey.surface,
+      ),
     );
   }
 
@@ -549,6 +562,7 @@ class TeacherBlitzLifecycleController
     final sessionKey = _activeSessionKey;
     if (sessionKey == null ||
         !_matchesSession(sessionKey) ||
+        !isTeacherBlitzLifecycleActionOnSurface(action, sessionKey.surface) ||
         state.blocksMutations ||
         _otherMutationActive()) {
       return null;
@@ -624,7 +638,6 @@ class TeacherBlitzLifecycleController
   bool _matchesSession(TeacherSessionKey sessionKey) {
     return ref.mounted &&
         _activeSessionKey == sessionKey &&
-        sessionKey.surface == AppDeviceSurface.desktop &&
         TeacherSessionSnapshot.fromSession(
               ref.read(authSessionControllerProvider),
               ref.read(appDeviceSurfaceProvider),
@@ -794,7 +807,23 @@ String _definiteFailureMessage(
   };
 }
 
-String _conflictMessage(TeacherBlitzLifecycleAction action, String? code) {
+String _conflictMessage(
+  TeacherBlitzLifecycleAction action,
+  String? code,
+  AppDeviceSurface surface,
+) {
+  // Mobile has no Question or assignment editor to point to.
+  if (surface == AppDeviceSurface.mobile) {
+    switch (code) {
+      case ApiErrorCodes.assessmentHasNoScoreablePoints:
+        return 'This Blitz needs at least one scoreable Question.\nUse the '
+            'desktop Teacher workspace to manage Questions.';
+      case ApiErrorCodes.assessmentNotAssigned:
+        return 'The server could not establish a valid assigned Student set.'
+            '\nUse the desktop Teacher workspace to review the assignment '
+            'when editing is required.';
+    }
+  }
   return switch ((action, code)) {
     (_, ApiErrorCodes.taskClosed) => 'This Blitz is closed.',
     (_, ApiErrorCodes.taskArchived) => 'This Blitz is archived.',

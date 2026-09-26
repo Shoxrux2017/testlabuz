@@ -36,4 +36,9 @@ abstract final class ApiErrorCodes {
   static const fileTooLarge = 'file_too_large';
   static const fileUploadFailed = 'file_upload_failed';
   static const fileNotAvailable = 'file_not_available';
+  static const blitzAttemptExceptionAlreadyGranted =
+      'blitz_attempt_exception_already_granted';
+  static const blitzAttemptExceptionNotAllowed =
+      'blitz_attempt_exception_not_allowed';
+  static const blitzNormalAttemptRequired = 'blitz_normal_attempt_required';
 }

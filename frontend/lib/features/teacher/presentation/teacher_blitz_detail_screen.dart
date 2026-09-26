@@ -22,7 +22,8 @@ import 'teacher_homework_formatters.dart';
 import 'teacher_question_read_view.dart';
 import 'teacher_topic_formatters.dart';
 
-/// Blitz detail with desktop authoring entries and lifecycle controls.
+/// Blitz detail with desktop authoring and lifecycle controls, mobile
+/// Activate, and the monitoring entry for an Active Blitz.
 class TeacherBlitzDetailScreen extends ConsumerStatefulWidget {
   const TeacherBlitzDetailScreen({required this.target, super.key});
 
@@ -109,9 +110,12 @@ class _TeacherBlitzDetailScreenState
     );
     final isDesktop =
         ref.watch(appDeviceSurfaceProvider) == AppDeviceSurface.desktop;
-    final activity = isDesktop
-        ? ref.watch(teacherBlitzRouteMutationActivityProvider(target))
-        : const TeacherBlitzRouteMutationActivityState();
+    final activity = ref.watch(
+      teacherBlitzRouteMutationActivityProvider(target),
+    );
+    final lifecycle = ref.watch(
+      teacherBlitzLifecycleControllerProvider(target),
+    );
     final blitz = detail.blitz;
     final isOfficial =
         blitz != null &&
@@ -121,9 +125,7 @@ class _TeacherBlitzDetailScreenState
     final hasCurrentDetail =
         detail.status == TeacherBlitzDetailStatus.data && !detail.isStale;
 
-    if (isDesktop) {
-      _listenForFeedback(context, target);
-    }
+    _listenForFeedback(context, target);
 
     // Authoring needs a confirmed current Draft/Scheduled Blitz on desktop.
     final showAuthoring =
@@ -131,6 +133,17 @@ class _TeacherBlitzDetailScreenState
         blitz != null &&
         hasCurrentDetail &&
         isTeacherBlitzAuthoringStatus(blitz.status);
+    // Mobile shows lifecycle controls only for Activate and its outcome.
+    final showLifecycleControls =
+        blitz != null &&
+        (isDesktop ||
+            isTeacherBlitzAuthoringStatus(blitz.status) ||
+            lifecycle.isBusy ||
+            lifecycle.notice != null);
+    final showMonitor =
+        blitz != null &&
+        hasCurrentDetail &&
+        blitz.status == TeacherBlitzStatus.active;
 
     void editBlitz() {
       context.go(
@@ -141,6 +154,15 @@ class _TeacherBlitzDetailScreenState
     void manageQuestions() {
       context.go(
         AppRoutePaths.teacherBlitzQuestionsLocation(
+          target.topicId,
+          target.blitzId,
+        ),
+      );
+    }
+
+    void monitor() {
+      context.go(
+        AppRoutePaths.teacherBlitzMonitoringLocation(
           target.topicId,
           target.blitzId,
         ),
@@ -229,7 +251,10 @@ class _TeacherBlitzDetailScreenState
                         detail.status == TeacherBlitzDetailStatus.refreshing,
                     stale: detail.isStale,
                     onRetry: controller.retry,
-                    lifecycleControls: isDesktop
+                    onMonitor: showMonitor ? monitor : null,
+                    // A lifecycle result must not land on the monitoring route.
+                    monitorEnabled: !activity.isActive,
+                    lifecycleControls: showLifecycleControls
                         ? TeacherBlitzLifecycleControls(
                             target: target,
                             blitz: blitz,
@@ -283,6 +308,8 @@ class _BlitzDetailContent extends StatelessWidget {
     required this.refreshing,
     required this.stale,
     required this.onRetry,
+    required this.onMonitor,
+    required this.monitorEnabled,
     required this.lifecycleControls,
   });
 
@@ -291,6 +318,10 @@ class _BlitzDetailContent extends StatelessWidget {
   final bool refreshing;
   final bool stale;
   final VoidCallback onRetry;
+
+  /// Null unless the confirmed current Blitz is Active.
+  final VoidCallback? onMonitor;
+  final bool monitorEnabled;
   final Widget? lifecycleControls;
 
   @override
@@ -368,6 +399,18 @@ class _BlitzDetailContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              if (onMonitor case final onMonitor?) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    key: const Key('teacherBlitzMonitorButton'),
+                    onPressed: monitorEnabled ? onMonitor : null,
+                    icon: const Icon(Icons.monitor_heart_outlined),
+                    label: const Text('Monitor'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               if (lifecycleControls case final controls?) ...[
                 controls,
                 const SizedBox(height: 12),

@@ -404,7 +404,7 @@ void main() {
     }
   });
 
-  testWidgets('an Active Blitz offers only Close, no monitoring or countdown', (
+  testWidgets('an Active Blitz offers Close and Monitor, no countdown', (
     tester,
   ) async {
     await _pumpDetail(
@@ -420,12 +420,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Close'), findsOneWidget);
+    expect(find.text('Monitor'), findsOneWidget);
     for (final label in [
       'Edit',
       'Schedule',
       'Activate',
       'Archive',
-      'Monitor',
       'Monitoring',
       'Grant exception',
       'Manage Questions',
