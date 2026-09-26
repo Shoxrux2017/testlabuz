@@ -9,7 +9,7 @@
 | Area | `Frontend` |
 | Status | `Approved` |
 | Implementation type | `Flutter Student Blitz typed/file answer execution + idempotent Submit + timeout/close terminal reconciliation` |
-| Depends on | `S08-FE-001…004 Accepted / Delivered`; `S08-BE-PHASE-2 = PASS` remains valid |
+| Depends on | `S08-FE-001…004` — all `Accepted / Delivered` (FE-004: PR #268, 466119a); `S08-BE-PHASE-2 = PASS` remains valid; revalidated 2026-09-26 on `466119a` |
 | Planning baseline | `origin/main @ 962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Runtime implementation baseline | ChatGPT must re-check/freeze current `origin/main` immediately before Codex execution |
 | Backend API dependency | Final delivered Stage 8 shared answer/file route + Blitz Submit + protected file download after Backend Phase 2 PASS |
@@ -246,6 +246,92 @@ There is still **no** Blitz Attempt GET endpoint.
 
 Authoritative Attempt reconciliation uses the already-completed FE-004 Start
 request replay mechanism defined below.
+
+## 4.5 Delivered facts (revalidation 2026-09-26)
+
+Confirmed on `466119a` (`routes/api.php` Student group, `StudentAttemptAnswerController`,
+`StudentAttemptAnswerRequest`, `SaveStudentAttemptAnswer`, `SaveStudentBlitzAttemptAnswer`,
+`SaveStudentBlitzFileAnswer`, `StudentBlitzAttemptAccess`, `StudentSubmissionAnswerFiles`,
+`StudentAttemptSubmitRequest`, `SubmitStudentBlitzAttempt`, `StartStudentBlitzAttempt`,
+`DownloadProtectedFile`, `ProtectedStudentSubmissionAccess`, `CloseTeacherBlitz`,
+`FinalizeTimedOutBlitzAttempts` and their feature tests):
+
+**Answer PUT (typed and file)**
+
+- Student middleware only, no throttle, no Idempotency-Key. An identical or
+  equivalent repeated PUT returns `200` with the same body and the original
+  `updated_at` and writes nothing.
+- The JSON body is exactly `type` plus the one type field that the delivered
+  `StudentAnswerMutation.toJson()` already sends; Blitz uses the same request,
+  value resolver and response resource as Homework, so the Stage 7 bodies and the
+  Stage 7 multipart upload (`type=file_based` + `file`) are accepted unchanged.
+  There is no `answer: null` body.
+- Clearing is an empty value (`selected_option_ids: []`, blank `text`, `pairs: []`,
+  `items: []`, `values: []`); `single_choice`, `true_false` and `file_based` cannot
+  be cleared. The delivered `StudentAnswerDraft.canClear` already matches. A cleared
+  answer returns `answer: null, updated_at: null` and disappears from `answers[]`.
+- Success is `200 {data: {question_id, type, answer, updated_at}}` with no
+  `message`; the server canonicalizes `answer` (lowercased IDs, canonical order,
+  raw text).
+- Check order: `blitz_not_active` (Topic or Blitz not active) -> `attempt_not_editable`
+  (any non-`in_progress` status, including `timed_out_finalized`) ->
+  `blitz_time_expired` (in progress at/after the deadline; the server first
+  finalizes the due Attempts as `timed_out_finalized`). After a Teacher Close
+  every PUT therefore returns `blitz_not_active`.
+- Also reachable: `404 resource_not_found`, `422 validation_failed` (shape, type
+  mismatch, foreign child IDs), `422 selection_limit_exceeded`, `409 business_conflict`
+  (corrupt stored answer), file-only `422 unsupported_file_type`,
+  `422 file_too_large`, `500 file_upload_failed`, and `500 server_error`. Not
+  reachable: `deadline_passed`, `task_closed`, `task_archived`, `task_not_active`,
+  `assessment_not_assigned`, `submission_locked` (it does not exist),
+  `idempotency_key_reused`.
+- File uploads are content-sniffed (PDF, DOCX, PPT, PPTX; the extension must match),
+  limited to min(15 MiB, Institution `student_submission_max_mb`) — the value the
+  Attempt resource already exposes as `answer_ui.max_size_bytes` — and validated
+  before the lifecycle checks. A replacement keeps the same `file.id`; an identical
+  re-upload is a no-op that keeps `updated_at`.
+
+**Submit**
+
+- Body empty or `{}` (the Stage 7 client already sends `{}`), `Idempotency-Key`
+  required UUID; any other body or query is `422 validation_failed`.
+- Success is `200 {data, message}` with message
+  "Blitz attempt submitted successfully." and `data` in the exact
+  `StudentBlitzAttemptResource` shape used by Start/Resume. A fresh Submit always
+  produces `submitted + student_submit` with `submitted_at == finalized_at` (no
+  automatic checking exists).
+- Operation `student.blitz.attempt.submit`, scoped to Institution + user; the
+  fingerprint covers the Attempt ID. A same-key replay returns stored `200` with
+  the current Attempt re-rendered, including after Close, Archive, the deadline,
+  `waiting_for_teacher_review` or `checked`. A failed Submit stores nothing, so a
+  same-key Retry after a non-committed failure executes again.
+- Check order: `404` -> completed replay / `idempotency_key_reused` -> new key on a
+  `timed_out_finalized` Attempt: `blitz_time_expired` -> new key on any other
+  terminal Attempt (including a Teacher-closed one): `attempt_not_editable` ->
+  in-progress Attempt with an inactive Topic/Blitz: `blitz_not_active` (practically
+  unreachable, because Close finalizes every Attempt) -> at/after the deadline:
+  due Attempts are finalized and `blitz_time_expired`. `business_conflict` and
+  `assessment_not_assigned` are not reachable.
+
+**Protected download**
+
+- The same `GET /files/{file}/download` route as Stage 7. Only the owning Student
+  can download, whatever the Attempt status, while the Blitz is Active, Closed or
+  Archived; everyone else gets `404`. A replacement keeps the URL.
+
+**Completed Start replay**
+
+- Authorization (assignment) runs first and ignores lifecycle; the fingerprint must
+  match exactly. The replay skips lifecycle and timing checks, returns the stored
+  status (`201`/`200`, Resume keys always `200`) with the matching message, and
+  re-renders the same Attempt's current state.
+- An in-progress Attempt already past its deadline is finalized and returned as
+  `timed_out_finalized` with the original status (not `409`). After a Teacher Close
+  it returns `submitted + task_closed_auto_finalize`; after Submit, waiting or
+  checked it returns that state.
+- Teacher Close finalizes every in-progress Attempt at once: past-deadline ones as
+  timeout at `deadline_at`, the rest as `task_closed_auto_finalize` at the close
+  instant.
 
 ---
 
@@ -503,6 +589,18 @@ FE-004 Start controller must transfer the successful Attempt together with the
 exact immutable successful `StudentBlitzAttemptRequest` into it.
 
 Do not keep two independently mutable copies of the Attempt.
+
+Revalidation 2026-09-26 — delivered FE-004 ownership (behavior-relevant). The
+delivered `StudentBlitzAttemptStartState` still holds the in-progress `attempt`, its
+`executionAnchor` and `isReconcilingExpiry`, and `StudentBlitzAttemptStartController`
+re-anchors or retires the shell from a detail listener. FE-005 moves that ownership
+into `StudentBlitzExecutionController`: on a validated success the start controller
+hands off the Attempt plus the exact sent `StudentBlitzAttemptRequest` and then
+keeps only the request lifecycle, result kind and feedback. The execution Attempt,
+countdown anchor, `localTimeExpired` gate, and the detail re-anchor/retire rules
+move to the execution controller and the shell reads only from it, so no second
+mutable Attempt copy remains in the start state. Update the FE-004 tests that
+assert the moved fields accordingly; their behavior must stay the same.
 
 ---
 
@@ -833,6 +931,16 @@ behavior change.
 
 Do not copy the raw answer PUT implementation into a second Blitz transport.
 
+Revalidation 2026-09-26 — narrower extraction. Move the raw PUT/multipart
+implementation (and its failure mapping, including `StudentSubmissionSourceUnavailable`)
+once into `StudentAttemptAnswerRemoteDataSource`, with `StudentAttemptAnswerRepository`
+and its implementation for Blitz. Keep `StudentHomeworkAttemptRepository.saveAnswer`
+/ `uploadFileAnswer` (and the Homework remote data source methods) as thin delegates
+to the shared data source. The Homework answer/file controllers then stay unchanged,
+and so do the 13 Stage 7 test files whose fakes implement those Homework methods;
+updating the Homework controllers to the new repository is therefore not required.
+There is still exactly one raw answer PUT implementation.
+
 ---
 
 # 18. Shared Answer Mutation DTO
@@ -885,6 +993,12 @@ fill_in_blank
 ```
 
 Do not create Blitz-specific field widgets.
+
+Revalidation 2026-09-26: the delivered `StudentQuestionAnswerEditor` and
+`StudentFileAnswerEditor` are callback-driven (`onChanged/onSave/onDiscard/onClear/
+onReload`, `onChoose/onUpload/onOpen/onSaveAs`), so they are reused as they are.
+`StudentAnswerDraft.canClear` already excludes `single_choice` and `true_false`, and
+the file editor has no clear, matching the backend.
 
 ---
 
@@ -1187,6 +1301,11 @@ presentation does.
 
 No message parsing.
 
+Revalidation 2026-09-26: after a Teacher Close every answer PUT returns
+`blitz_not_active`, and a timed-out Attempt returns `attempt_not_editable`; both
+reconcile through the completed Start replay, which then returns the terminal
+Attempt (`task_closed_auto_finalize` or `timeout_auto_submit`).
+
 ---
 
 # 30. Local Countdown Expired Gate
@@ -1213,6 +1332,27 @@ Do not restore mutation authority from old countdown state.
 
 Only a newer authoritative in-progress Attempt publication with positive
 server-anchored timing may clear the local expired gate.
+
+Revalidation 2026-09-26 — zero-time and detail-conflict reconciliation
+(behavior-relevant). Delivered FE-004 reconciles local zero with one detail GET and
+drops the shell when detail returns `notActive`/`timeExpired`/`notFound`. While a
+completed Start request exists, FE-005 replaces that with:
+
+1. local zero sets `localTimeExpired` at once;
+2. once no answer/file/Submit request is in flight (Section 91), replay the completed
+   Start request once — the backend finalizes a due Attempt during the replay and
+   returns it with the original status;
+3. adopt the result: terminal -> finalization summary; `in_progress` with positive
+   remaining -> re-anchor and clear the gate;
+4. refresh Blitz detail and the active list;
+5. if the replay fails transiently, keep the gate and show "Time may have expired.
+   Reconnect and refresh to confirm the current Blitz state." with
+   "Check current attempt" (the same replay).
+
+A detail `notActive`/`timeExpired` while execution is active also triggers this
+replay instead of dropping the shell, so a Teacher Close or timeout ends in the
+Section 71 summary. The FE-004 drop-the-shell path remains only when no completed
+request exists, or when the replay returns `404` or an identity mismatch.
 
 ---
 
@@ -1400,6 +1540,11 @@ Do not allow transfer of:
 - selected-but-not-uploaded local file through protected endpoint;
 - file from another Question/Attempt;
 - file while an uncertain upload could invalidate current authority.
+
+Revalidation 2026-09-26: the delivered `StudentSubmissionTransferController` is keyed
+by the Homework Attempt route target, so create the Blitz-keyed controller (mirroring
+it) unless a target-neutral extraction stays narrow. The backend serves the owner's
+file whatever the Attempt status while the Blitz is Active, Closed or Archived.
 
 ---
 
@@ -1816,6 +1961,11 @@ Those remain terminal/current-state outcomes to reconcile through the existing
 Attempt authority paths, not successful Submit DTO results.
 
 Malformed or context-incompatible `2xx` remains outcome-uncertain.
+
+Revalidation 2026-09-26: the backend never checks automatically, so a fresh Submit
+returns only `submitted + student_submit`; `waiting_for_teacher_review|checked` can
+appear only on a same-key replay after later Stage 9 work, and the backend itself
+replays only the original `student_submit` lineage.
 
 ---
 
@@ -2338,6 +2488,12 @@ Do not assume Teacher Close reason until Attempt says so.
 
 Keep writes disabled during reconciliation.
 
+Revalidation 2026-09-26: the delivered Submit checks terminal status before Blitz
+status. After a real Teacher Close a new-key Submit therefore returns
+`attempt_not_editable` (or `blitz_time_expired` when Close finalized it as a timeout),
+not `blitz_not_active`. Sections 63–65 still apply as written; `blitz_not_active`
+remains a defensive path.
+
 ---
 
 # 66. Submit `idempotency_key_reused`
@@ -2697,6 +2853,10 @@ through a shared presentation parameter/label.
 If shared widget is changed, preserve Homework wording/behavior where tests
 require it.
 
+Revalidation 2026-09-26: both shared editors hard-code "Reload attempt"; add an
+optional recovery-label parameter that defaults to "Reload attempt" (Homework
+unchanged) and pass "Check current attempt" from Blitz.
+
 ---
 
 # 80. Protected File Transfer Does Not Require Editability
@@ -3033,6 +3193,9 @@ idempotencyKeyReused = 'idempotency_key_reused'
 Reuse existing constants where present.
 
 Do not duplicate.
+
+Revalidation 2026-09-26: every listed constant already exists in `ApiErrorCodes`
+(`blitzTimeExpired`/`blitzNotActive` were added by FE-004); add none.
 
 ---
 
@@ -3662,6 +3825,16 @@ homework_deadline_auto_submit
 
 Do not accidentally route Homework recovery through Blitz Start replay.
 
+Revalidation 2026-09-26: the current Stage 7 file names are
+`student_answer_editor_controller_test`, `student_answer_editor_screen_test`,
+`student_file_answer_controller_test`, `student_file_answer_screen_test`,
+`student_submission_transfer_controller_test`, `student_homework_submit_readiness_test`,
+`student_homework_submit_controller_test`, `student_homework_submit_screen_test`,
+`student_homework_screen_test`, `student_homework_attempt_dto_test`,
+`student_homework_attempt_data_test`, `student_answer_mutation_data_test` and
+`student_file_answer_data_test` (there is no
+`student_homework_attempt_remote_data_source_test`).
+
 ---
 
 # 113. FE-004 Direct Regression
@@ -4035,3 +4208,6 @@ Implementation Readiness Gate        = PASS
 Execution dependency                 = S08-FE-004 Accepted / Delivered
 Next task after acceptance            = S08-FE-006
 ```
+
+Revalidation 2026-09-26 on `466119a`: the gate remains `PASS` with the corrections
+marked "Revalidation 2026-09-26" above; `S08-FE-001…004` are `Accepted / Delivered`.
