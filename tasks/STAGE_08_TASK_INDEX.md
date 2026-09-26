@@ -13,13 +13,13 @@
 | Previous Stage | `Stage 7 — Closed / PASS` |
 | Previous Stage closure merge | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Current source of truth | `GitHub main — ChatGPT must re-check it before any readiness/handoff decision` |
-| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started` |
+| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started` |
 | Detailed task contracts | `Final planning package reviewed and approved; execution remains per-task gated` |
 | Backend Phase 2 | `PASS — run #2 on 1c56cde (run #1 on 232ebcd NOT ACCEPTED; fixes FIX-001…003 delivered; see §17)` |
 | Frontend Phase 2 | `Not started` |
 | Integration | `Not started` |
 | Closure | `Not started` |
-| Next permitted gate | `S08-FE-004 implementation` |
+| Next permitted gate | `S08-FE-005 implementation` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -37,9 +37,9 @@ designation + activation, `S08-BE-005` Student Read + Start/Resume,
 `S08-BE-PHASE-2` run #1 (2026-09-23, audited `232ebcd`) was `NOT ACCEPTED`; the
 focused fixes `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`, and run #2
 (2026-09-24, audited `1c56cde`) is `PASS` (see §17). `S08-FE-001` (PR #262) and
-`S08-FE-002` (PR #264) and `S08-FE-003` (PR #266) are `Accepted / Delivered`;
-`S08-FE-004` was revalidated and is `Approved / Not started`; the other
-frontend/integration/closure tasks remain `Prepared / Not started`.
+`S08-FE-002` (PR #264), `S08-FE-003` (PR #266) and `S08-FE-004` (PR #268) are
+`Accepted / Delivered`; `S08-FE-005` was revalidated and is `Approved / Not started`;
+the other frontend/integration/closure tasks remain `Prepared / Not started`.
 
 All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
 reviewed and approved planning package. Their existence or historical planning
@@ -325,8 +325,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 | `12` | `S08-FE-001` | `Frontend` | `Teacher Blitz frontend foundation` | `Backend Phase 2 PASS` | `Approved` | `Accepted` | `Delivered — PR #262, merge 15508f3cdfc337a299bd2f002896e6ee9de70137` | `tasks/frontend/stage-08/S08-FE-001-teacher-blitz-frontend-foundation.md` |
 | `13` | `S08-FE-002` | `Frontend` | `Teacher Blitz Builder` | `FE-001 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Accepted` | `Delivered — PR #264, merge b5b24b1690023a5c834cebcbb574ac50ecf73d31` | `tasks/frontend/stage-08/S08-FE-002-teacher-blitz-builder.md` |
 | `14` | `S08-FE-003` | `Frontend` | `Teacher official designation, scheduling and lifecycle UX` | `FE-001…002 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Accepted` | `Delivered — PR #266, merge a37dd0204738b96aa69f0f471f9e4befa564c4be` | `tasks/frontend/stage-08/S08-FE-003-teacher-blitz-lifecycle-ux.md` |
-| `15` | `S08-FE-004` | `Frontend` | `Student active detail, Start/Resume/replacement and authoritative countdown` | `FE-001…003 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Approved — revalidated 2026-09-26 on a37dd02` | `Not started` | `tasks/frontend/stage-08/S08-FE-004-student-active-detail-start-resume-countdown.md` |
-| `16` | `S08-FE-005` | `Frontend` | `Student execution + Submit + terminal reconciliation UX` | `FE-001…004 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-005-student-execution-submit-terminal-reconciliation-ux.md` |
+| `15` | `S08-FE-004` | `Frontend` | `Student active detail, Start/Resume/replacement and authoritative countdown` | `FE-001…003 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Accepted` | `Delivered — PR #268, merge 466119ad96beb7ce8da56ef107bda587a58d7980` | `tasks/frontend/stage-08/S08-FE-004-student-active-detail-start-resume-countdown.md` |
+| `16` | `S08-FE-005` | `Frontend` | `Student execution + Submit + terminal reconciliation UX` | `FE-001…004 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Approved — revalidated 2026-09-26 on 466119a` | `Not started` | `tasks/frontend/stage-08/S08-FE-005-student-execution-submit-terminal-reconciliation-ux.md` |
 | `17` | `S08-FE-006` | `Frontend` | `Teacher monitoring + exception grant + approved mobile quick actions` | `FE-001…005 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-006-teacher-live-monitoring-exception-mobile.md` |
 | `18` | `S08-FE-PHASE-2` | `Frontend review` | `Full Stage 8 frontend review + full verification` | `FE-001…006 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Prepared` | `Not started` | `tasks/frontend/stage-08/S08-FE-PHASE-2-frontend-block-review.md` |
 | `19` | `S08-INT-001` | `Integration` | `Guarded real-stack Blitz E2E/security/persistence verification` | `Both Phase 2 checkpoints PASS` | `Approved` | `Prepared` | `Not started` | `tasks/integration/stage-08/S08-INT-001-stage-08-real-stack-integration.md` |
@@ -338,9 +338,9 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
   preparation/approval only. It is intentionally non-authoritative for execution.
 - `Current readiness / review status` is authoritative for task execution.
   `S08-DOC-001`, `S08-BE-001…010` and `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`.
-  `S08-BE-PHASE-2` is `PASS` (run #2, see §17). `S08-FE-001`, `S08-FE-002` and
-  `S08-FE-003` are `Accepted / Delivered`. `S08-FE-004` is `Approved / Not started`.
-  All other frontend/integration/closure tasks remain `Prepared / Not started`.
+  `S08-BE-PHASE-2` is `PASS` (run #2, see §17). `S08-FE-001…004` are
+  `Accepted / Delivered`. `S08-FE-005` is `Approved / Not started`. All other
+  frontend/integration/closure tasks remain `Prepared / Not started`.
 - ChatGPT changes the exact next implementation task to current `Approved` only
   after re-checking current `origin/main`, dependency delivery and the final
   self-contained contract.
@@ -398,9 +398,9 @@ S08-FE-002 Accepted / Delivered (PR #264, b5b24b1)
     ↓
 S08-FE-003 Accepted / Delivered (PR #266, a37dd02)
     ↓
-S08-FE-004 Approved / Not started (revalidated 2026-09-26 on a37dd02)
+S08-FE-004 Accepted / Delivered (PR #268, 466119a)
     ↓
-S08-FE-005 Prepared / Not started
+S08-FE-005 Approved / Not started (revalidated 2026-09-26 on 466119a)
     ↓
 S08-FE-006 Prepared / Not started
     ↓
@@ -937,9 +937,9 @@ Current planning-package state:
 Stage 7 closure                  = PASS
 Stage 8 decomposition            = Approved
 Stage 8 Stage status             = Approved
-Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
+Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
 Detailed task contracts          = Final planning package reviewed and approved; execution remains per-task gated
-Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
+Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Approved / Not started; other frontend/integration/closure tasks Prepared / Not started
 Backend Phase 2                  = PASS (run #2, 1c56cde; run #1 on 232ebcd NOT ACCEPTED)
 Frontend Phase 2                 = NOT STARTED
 Integration                      = NOT STARTED
@@ -950,7 +950,7 @@ STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 The next permitted workflow action is:
 
 ```text
-S08-FE-004 implementation
+S08-FE-005 implementation
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
@@ -1194,3 +1194,80 @@ order, detail conflict conditions, the nullable/number value types, the non-null
 fresh-send terminal results, the two missing `ApiErrorCodes` constants, and a re-export approach
 that keeps the shared answer extraction inside the §116 file scope. No material conflict. Current
 readiness: `Approved / Not started`.
+
+### S08-FE-004 acceptance (2026-09-26)
+
+```text
+Delivered          = PR #268, merge 466119ad96beb7ce8da56ef107bda587a58d7980 (feature commit 3dc0d36)
+Merge integrity    = tree of 466119a identical to the reviewed commit 3dc0d36
+```
+
+Focused evidence on the delivered diff:
+- **Tests:**
+  - 208 FE-004 tests across 12 files: list/detail DTO, Attempt DTO, domain, both data sources, active-list/detail/Start controllers, countdown, Active Blitz section, detail screen, routing;
+  - 1523 tests overall, covering the whole `test/features/student` suite, `router_bootstrap_test` and every other full-app test (Teacher routing/material, Institution Admin, Platform Owner).
+- **Static checks:**
+  - `flutter analyze --no-pub` on `lib/features/student`, `lib/app/router`, `lib/core/network`, `test/features/student` and `test/router_bootstrap_test.dart` reports no issues;
+  - `dart format --set-exit-if-changed` and `git diff --check` pass;
+  - committed blobs are LF.
+- **Deliberate-break checks:** 19 checks all turned tests red:
+  - finished-attempt timing;
+  - replacement deadline;
+  - Question-key leak;
+  - Resume accepting another Attempt;
+  - normal Start accepting #2;
+  - timer-mode mismatch;
+  - Retry with a new key;
+  - shell kept after time expiry;
+  - expiry read not de-duplicated;
+  - expiry read skipped while another read is in flight;
+  - unexpected Start error dropping the frozen request;
+  - stale list owner;
+  - countdown reset on rebuild;
+  - countdown ticking after zero;
+  - Start without confirmation;
+  - pre-Start zero without a read;
+  - Start offered while a request is pending;
+  - Active Blitz section missing;
+  - bootstrap dropping the deep link.
+- **Independent fresh-context review, fixed before merge:**
+  - P1: two Admin/Platform full-app tests hung. The new controllers now end unexpected failures in a retryable `unknown` error (Start becomes `uncertain` and keeps the frozen request), following the adjacent Topic controllers.
+  - P2: the zero-time read now supersedes an in-flight read.
+  - P3 cleanups.
+- **Changes outside the new files:**
+  - The Stage 7 saved-answer extraction keeps Homework behaviour and messages. The Homework files re-export the moved classes and parser.
+  - The Homework DTO also uses the new shared required-timestamp helper, with an identical message.
+  - Four existing full-app tests only gained a `studentBlitzRepositoryProvider` override.
+
+Verdict: `Accepted / Delivered`.
+
+### S08-FE-005 readiness revalidation (2026-09-26, main 466119a)
+
+Revalidated against the delivered backend (shared answer PUT/multipart, Blitz Submit, protected
+download and Start replay: `StudentAttemptAnswerRequest`, `SaveStudentBlitzAttemptAnswer`,
+`SaveStudentBlitzFileAnswer`, `StudentBlitzAttemptAccess`, `StudentAttemptSubmitRequest`,
+`SubmitStudentBlitzAttempt`, `StartStudentBlitzAttempt`, `ProtectedStudentSubmissionAccess`,
+`CloseTeacherBlitz`, `FinalizeTimedOutBlitzAttempts` and their tests) and the delivered FE-004 and
+Stage 7 Student code. What matches the contract:
+- the answer route and bodies (the Stage 7 `StudentAnswerMutation` JSON and multipart upload are
+  accepted unchanged for Blitz);
+- the cleared-answer shape and clear rules, which the delivered `canClear` already encodes;
+- the success envelopes and the exact Submit message, with the Attempt resource shape;
+- the Submit idempotency and same-key replay semantics;
+- the reachable error codes (no `submission_locked` or `deadline_passed` for Blitz);
+- the protected download rules;
+- the completed Start replay as the only re-read (it returns the same Attempt's current state with
+  the stored status and finalizes a due Attempt during the replay).
+
+Every named Stage 7 primitive exists, and the shared editors are callback-driven. Behavior-relevant
+corrections marked "Revalidation 2026-09-26":
+- the delivered FE-004 start state still owns the execution Attempt, anchor and expiry flag; FE-005
+  moves them to the execution controller;
+- local zero and detail conflicts during execution reconcile through the completed Start replay, so
+  timeout and Teacher Close end in the finalization summary instead of FE-004 dropping the shell;
+- the shared answer transport is extracted once, while the Homework repository methods stay as
+  thin delegates, so the Homework controllers and 13 Stage 7 test fakes stay unchanged.
+
+Other corrections record the delivered facts, the Submit check order after Close, the
+recovery-label parameter, existing error constants and the actual Stage 7 test file names. No
+material conflict. Current readiness: `Approved / Not started`.
