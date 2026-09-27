@@ -8,7 +8,9 @@ use App\Actions\Student\StartStudentBlitzAttempt;
 use App\Actions\Student\SubmitStudentBlitzAttempt;
 use App\Actions\Teacher\ActivateTeacherBlitz;
 use App\Actions\Teacher\GrantTeacherBlitzAttemptException;
+use App\Domain\Assessment\AssessmentActivationValidator;
 use App\Models\Institution;
+use App\Models\Question;
 use App\Models\User;
 use Database\Seeders\Stage8E2eSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -46,7 +48,9 @@ class Stage8E2eSeederTest extends TestCase
             'driver' => 'local', 'root' => $this->privateTestRoot, 'visibility' => 'private', 'throw' => true,
         ]]);
         // The runner removes any real manifest before this test; the transaction restores whatever it finds.
+        // The real sentinel graph keeps its blob on the real disk, so the test works on its own copy.
         (new Stage8E2eSeeder)->cleanupOwnedState();
+        (new Stage8E2eSeeder)->removeSentinels();
     }
 
     protected function tearDown(): void
@@ -278,6 +282,17 @@ class Stage8E2eSeederTest extends TestCase
         $this->assertSame($sentinels, $seeder->sentinelState());
     }
 
+    public function test_every_seeded_question_set_passes_the_production_activation_validator(): void
+    {
+        (new Stage8E2eSeeder)->run();
+        $validator = app(AssessmentActivationValidator::class);
+        foreach (Stage8E2eSeeder::manifest()['assessments'] as $name => $id) {
+            $questions = Question::query()->where('assessment_id', $id)->orderBy('position')->get();
+            $expected = DB::table('assessments')->where('id', $id)->value('total_possible_points');
+            $this->assertSame($expected, $validator->validateQuestions($questions), $name);
+        }
+    }
+
     public function test_seeded_matching_and_ordering_item_ids_reveal_no_answer_key(): void
     {
         (new Stage8E2eSeeder)->run();
@@ -325,6 +340,8 @@ class Stage8E2eSeederTest extends TestCase
         app(GrantTeacherBlitzAttemptException::class)($user('individual_teacher'), $manifest['assessments']['matrix'], $manifest['users']['d_matrix'],
             Stage8E2eSeeder::id(9_900_004), ['reason_type' => 'technical', 'reason' => 'E2E S08 cleanup test grant']);
         app(ActivateTeacherBlitz::class)($user('teacher'), $manifest['assessments']['sync_replacement'], Stage8E2eSeeder::id(9_900_005));
+        // A seeded unused exception gains its replacement link at runtime; ownership must still hold.
+        app(StartStudentBlitzAttempt::class)($user('mon_exception'), $manifest['assessments']['monitoring'], Stage8E2eSeeder::id(9_900_006), 'start_replacement');
         $user('d_race_file')->createToken('E2E S08 cleanup test');
         $builderBlitz = (string) Str::uuid();
         $builderQuestion = (string) Str::uuid();
@@ -339,11 +356,11 @@ class Stage8E2eSeederTest extends TestCase
             'question_id' => $builderQuestion, 'option_text' => 'E2E S08 UI option', 'is_correct' => true, 'position' => 1] + $stamps);
 
         $state = $seeder->ownedState();
-        $this->assertCount(count($manifest['attempts']) + 2, $state['db']['assessment_attempts']);
+        $this->assertCount(count($manifest['attempts']) + 3, $state['db']['assessment_attempts']);
         $this->assertCount(1, $state['db']['files']);
         $this->assertCount(1, $state['db']['attempt_answers']);
         $this->assertCount(count($manifest['exceptions']) + 1, $state['db']['blitz_attempt_exceptions']);
-        $this->assertCount(5, $state['db']['idempotency_records']);
+        $this->assertCount(6, $state['db']['idempotency_records']);
         $this->assertCount(1, $state['db']['personal_access_tokens']);
         $this->assertSame([$builderBlitz], $state['dynamic']['assessments']);
         $this->assertSame([$builderQuestion], $state['dynamic']['questions']);

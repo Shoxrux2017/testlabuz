@@ -21,7 +21,7 @@ class Stage8E2eSeeder extends Seeder
     public const PRIMARY_KEYS = ['institution_settings' => 'institution_id', 'blitz_tasks' => 'assessment_id', 'homework_assignments' => 'assessment_id', 'question_true_false_answers' => 'question_id'];
 
     /** Static columns that the scenarios legitimately change; ownership still requires an owned value. */
-    public const MUTABLE_COLUMNS = ['topic_result_pairs' => ['blitz_assessment_id', 'designated_by_user_id'], 'blitz_tasks' => ['activated_by_user_id']];
+    public const MUTABLE_COLUMNS = ['topic_result_pairs' => ['blitz_assessment_id', 'designated_by_user_id'], 'blitz_tasks' => ['activated_by_user_id'], 'blitz_attempt_exceptions' => ['replacement_attempt_id']];
 
     public const IDEMPOTENCY_OPERATIONS = ['teacher.blitz.activate', 'teacher.blitz.attempt_exception.grant', 'student.blitz.attempt.start', 'student.blitz.attempt.submit', 'student.homework.attempt.start', 'student.homework.attempt.submit'];
 
@@ -236,9 +236,14 @@ class Stage8E2eSeeder extends Seeder
                 }
                 foreach ($identity as $column => $value) {
                     if (in_array($column, self::MUTABLE_COLUMNS[$table] ?? [], true)) {
-                        $this->require($row->{$column} === null || $row->{$column} === $value
-                            || in_array($row->{$column}, $table === 'topic_result_pairs' && $column === 'blitz_assessment_id' ? $manifest['blitz'] : $manifest['users'], true),
-                            'Static Stage 8 ownership mismatch: '.$table.'.'.$column);
+                        $owned = match ($column) {
+                            'blitz_assessment_id' => in_array($row->{$column}, $manifest['blitz'], true),
+                            // A seeded unused exception may later link the same Student's own replacement #2.
+                            'replacement_attempt_id' => DB::table('assessment_attempts')->where('id', $row->{$column})->where('assessment_id', $row->assessment_id)
+                                ->where('student_id', $row->student_id)->where('attempt_number', 2)->exists(),
+                            default => in_array($row->{$column}, $manifest['users'], true),
+                        };
+                        $this->require($row->{$column} === null || $row->{$column} === $value || $owned, 'Static Stage 8 ownership mismatch: '.$table.'.'.$column);
                     } elseif ($column === $primaryKey || str_ends_with($column, '_id') || in_array($column, ['login_name', 'name', 'title', 'role', 'type', 'assignment_mode', 'assignment_source'], true)) {
                         $this->require($row->{$column} === $value, 'Static Stage 8 ownership mismatch: '.$table.'.'.$column);
                     }
@@ -660,7 +665,9 @@ class Stage8E2eSeeder extends Seeder
                 $type = $types[$label];
                 $nested = $manifest['nested'][$name][$label];
                 $rows['questions'][] = ['id' => $questionId, 'institution_id' => $institution, 'assessment_id' => $manifest['assessments'][$name],
-                    'type' => $type, 'prompt' => 'E2E S08 '.($label === 'unanswered' ? 'Unanswered Short Written' : ucwords(str_replace('_', ' ', $type))),
+                    // Activation validates every configuration, including the fill-in-blank placeholders.
+                    'type' => $type, 'prompt' => 'E2E S08 '.($label === 'unanswered' ? 'Unanswered Short Written' : ucwords(str_replace('_', ' ', $type)))
+                        .($type === 'fill_in_blank' ? ' {{blank1}} and {{blank2}}' : ''),
                     'instructions' => 'E2E S08 Save your answer.', 'points' => '1.000000', 'position' => ++$position,
                     'checking_mode' => in_array($type, ['open_written', 'file_based'], true) ? 'manual' : 'automatic'] + $stamps;
                 $parent = ['institution_id' => $institution, 'question_id' => $questionId] + $stamps;

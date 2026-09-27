@@ -182,7 +182,7 @@ function Stop-Stage8Blocker {
 }
 
 function Watch-Stage8LockOverlap {
-    param([Parameter(Mandatory = $true)][int] $BlockerPid, [Parameter(Mandatory = $true)][string] $ApplicationAddress, [int] $WindowSeconds = $script:Stage8ProbeWindowSeconds)
+    param([Parameter(Mandatory = $true)][int] $BlockerPid, [Parameter(Mandatory = $true)][string] $ApplicationAddress, [int] $WindowSeconds = $script:Stage8ProbeWindowSeconds, [ValidateRange(1, 2)][int] $Waiters = 2)
     $program = @'
 if (!app()->environment('testing') || DB::selectOne('select current_database() as name')->name !== 'testlabuz_testing') { throw new RuntimeException('observer identity'); }
 $observer = (int) DB::scalar('select pg_backend_pid()');
@@ -204,12 +204,12 @@ do {
     $waiters = array_filter($sessions, fn ($s) => $s['pid'] !== $blocker && $s['client_addr'] === $address && $s['state'] === 'active' && $s['wait_event_type'] === 'Lock');
     $samples[] = $sample;
     if (count($samples) > 40) { array_shift($samples); }
-    $qualified = count($waiters) >= 2;
+    $qualified = count($waiters) >= (int) $stage8Input['waiters'];
     if (!$qualified) { usleep(100000); }
 } while (!$qualified && microtime(true) < $deadline);
 echo json_encode(['observer_pid' => $observer, 'database' => (string) DB::scalar('select current_database()'), 'samples' => $samples, 'timed_out' => !$qualified], JSON_THROW_ON_ERROR);
 '@
-    Invoke-Stage8ContainerPhp -Program $program -InputJson (@{ blocker_pid = $BlockerPid; address = $ApplicationAddress; window_seconds = $WindowSeconds } | ConvertTo-Json -Compress)
+    Invoke-Stage8ContainerPhp -Program $program -InputJson (@{ blocker_pid = $BlockerPid; address = $ApplicationAddress; window_seconds = $WindowSeconds; waiters = $Waiters } | ConvertTo-Json -Compress)
 }
 
 # Each race request runs in its own PowerShell job process; the bearer token travels as a job argument, never argv.
@@ -261,7 +261,10 @@ function Receive-Stage8RaceRequest {
     finally { Remove-Job -Job $Job -Force -ErrorAction SilentlyContinue }
 }
 
-# Full Section 14.1 protocol for one race. It never forces a winner; the business oracle judges the branch.
+# Full Section 14.1 protocol for one race. It never forces a winner: the first request is chosen at random
+# and the business oracle judges the resulting branch.
+# The second request starts only once the first waits in the lock queue. The PHP built-in server can otherwise
+# accept both connections in one worker and serve them one after the other, so they would never overlap.
 function Invoke-Stage8OverlapProbe {
     param(
         [Parameter(Mandatory = $true)][string] $AttemptId,
@@ -282,8 +285,11 @@ function Invoke-Stage8OverlapProbe {
     try {
         $blocker = Start-Stage8Blocker -AttemptId $AttemptId
         $events.Add('blocker_locked')
-        $jobA = Start-Stage8RaceRequest -Request $RequestA -Token $TokenA
-        $jobB = Start-Stage8RaceRequest -Request $RequestB -Token $TokenB
+        $aFirst = (Get-Random -Minimum 0 -Maximum 2) -eq 0
+        if ($aFirst) { $jobA = Start-Stage8RaceRequest -Request $RequestA -Token $TokenA } else { $jobB = Start-Stage8RaceRequest -Request $RequestB -Token $TokenB }
+        $queued = Watch-Stage8LockOverlap -BlockerPid $blocker.Pid -ApplicationAddress $Runtime.ClientAddress -Waiters 1
+        if ($queued.timed_out) { $events.Add('first_request_not_queued') } else { $events.Add('first_request_queued') }
+        if ($aFirst) { $jobB = Start-Stage8RaceRequest -Request $RequestB -Token $TokenB } else { $jobA = Start-Stage8RaceRequest -Request $RequestA -Token $TokenA }
         $events.Add('requests_started')
         $observation = Watch-Stage8LockOverlap -BlockerPid $blocker.Pid -ApplicationAddress $Runtime.ClientAddress
         if ($observation.timed_out) { $events.Add('window_timed_out') }
@@ -301,6 +307,13 @@ function Invoke-Stage8OverlapProbe {
     if ($resultA.ProcessId -eq $resultB.ProcessId -or $resultA.ProcessId -eq $PID -or $resultB.ProcessId -eq $PID) {
         throw 'integration-harness defect: Stage 8 race requests did not run in independent client processes.'
     }
-    Assert-Stage8RaceVerdict -Evidence $evidence -Events $events.ToArray() -MarkedPass $true
-    [pscustomobject] @{ Evidence = $evidence; Events = $events.ToArray(); A = $resultA; B = $resultB }
+    try { Assert-Stage8RaceVerdict -Evidence $evidence -Events $events.ToArray() -MarkedPass $true }
+    catch {
+        # Bounded, non-secret diagnostics: statuses, codes and the waiter counts the observer saw.
+        $seen = @(@($observation.samples) | ForEach-Object { @($_.sessions | Where-Object { $_.wait_event_type -ceq 'Lock' }).Count }) -join ','
+        $codeA = if ($null -ne $resultA.Json -and $null -ne $resultA.Json.PSObject.Properties['code']) { $resultA.Json.code } else { '' }
+        $codeB = if ($null -ne $resultB.Json -and $null -ne $resultB.Json.PSObject.Properties['code']) { $resultB.Json.code } else { '' }
+        throw "$($_.Exception.Message) [A=$($resultA.StatusCode) $codeA; B=$($resultB.StatusCode) $codeB; samples=$(@($observation.samples).Count); lock_waiters_per_sample=$seen; events=$($events -join ',')]"
+    }
+    [pscustomobject] @{ Evidence = $evidence; Events = $events.ToArray(); A = $resultA; B = $resultB; FirstLaunched = $(if ($aFirst) { 'A' } else { 'B' }) }
 }
