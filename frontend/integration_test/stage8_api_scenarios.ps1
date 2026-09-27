@@ -179,10 +179,12 @@ function Invoke-Stage8ExecutionMatrix {
     if ($history.Attempts.Count -ne 2) { throw 'production defect: Replacement history mismatch.' }
     Assert-Stage8ReplayOutcome $replacement (Invoke-Stage8Start $Context d_matrix $matrix $k2) 201 $stable
     Assert-Stage8ReplayOutcome $replacement (Invoke-Stage8Start $Context d_matrix $matrix (New-Stage8StartRequest (& $key) start_replacement)) 200 $stable
-    Assert-Stage8KeyReuseOutcome (Invoke-Stage8Start $Context d_matrix $matrix ([pscustomobject] @{ Key = $kr.Key; Body = [pscustomobject] @{ intent = 'start_replacement' } }))
     $kr2 = New-Stage8StartRequest (& $key) resume $attempt2
     Assert-Stage8ReplayOutcome $replacement (Invoke-Stage8Start $Context d_matrix $matrix $kr2) 200 $stable
+    $beforeReuse = Get-Stage8Facts
+    Assert-Stage8KeyReuseOutcome (Invoke-Stage8Start $Context d_matrix $matrix ([pscustomobject] @{ Key = $kr.Key; Body = [pscustomobject] @{ intent = 'start_replacement' } }))
     Assert-Stage8KeyReuseOutcome (Invoke-Stage8Submit $Context d_matrix $attempt2 $ks)
+    Assert-Stage8RowsUnchanged $beforeReuse (Get-Stage8Facts) @('assessment_attempts', 'idempotency_records', 'blitz_attempt_exceptions') 'key reuse against replacement #2'
     $ks2 = & $key
     Assert-Stage8ApiSuccess (Invoke-Stage8Answer $Context d_matrix $attempt2 $q.short_written @{ type = 'short_written'; text = 'E2E S08 replacement answer' })
     Assert-Stage8ApiSuccess (Invoke-Stage8Submit $Context d_matrix $attempt2 $ks2)
@@ -207,6 +209,29 @@ function Invoke-Stage8ExecutionMatrix {
         $k = & $key; Assert-Stage8Rejection (& $probe $k) 409 blitz_time_expired $Context $k
     }
     Assert-Stage8RowsUnchanged $timedOut (Get-Stage8Facts) @('assessment_attempts') 'timed-out target rejections'
+    $timeoutStudent = [string] $m.users.d_timeout_resume
+    Assert-Stage8ApiSuccess (Invoke-Stage8Grant $Context individual_teacher $timeoutBlitz $timeoutStudent (& $key) 'E2E S08 connection dropped before the deadline') 201
+    $timeoutGranted = Get-Stage8Facts
+    $staleTimeout = New-Stage8StartRequest (& $key) resume $timeoutAttempt
+    $staleTimeoutResponse = Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz $staleTimeout
+    Assert-Stage8Rejection $staleTimeoutResponse 409 blitz_time_expired $Context $staleTimeout.Key
+    $k = & $key; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz (New-Stage8StartRequest $k start_normal)) 409 attempts_exhausted $Context $k
+    $k = & $key; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz (New-Stage8StartRequest $k resume $attempt1)) 404 resource_not_found $Context $k
+    Assert-Stage8NoSwitch $timeoutGranted (Get-Stage8Facts) $timeoutBlitz $timeoutStudent $staleTimeoutResponse $timeoutAttempt
+    Assert-Stage8RowsUnchanged $timeoutGranted (Get-Stage8Facts) @('assessment_attempts', 'blitz_attempt_exceptions') 'stale and foreign Resume after the exception'
+    $timeoutReplacement = Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz (New-Stage8StartRequest (& $key) start_replacement)
+    Assert-Stage8ApiSuccess $timeoutReplacement 201
+    $timeoutAttempt2 = [string] $timeoutReplacement.Json.data.id
+    if ([int] $timeoutReplacement.Json.data.attempt_number -ne 2) { throw 'production defect: start_replacement after a timed-out #1 did not create #2.' }
+    Wait-Stage8ServerPast ([string] $timeoutReplacement.Json.data.deadline_at)
+    $dueResume2 = New-Stage8StartRequest (& $key) resume $timeoutAttempt2
+    Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz $dueResume2) 409 blitz_time_expired $Context $dueResume2.Key
+    $timedOut2 = Get-Stage8Facts
+    Assert-Stage8TerminalAttempt (Get-Stage8Row $timedOut2 assessment_attempts $timeoutAttempt2) timeout_auto_submit ''
+    if ((Assert-Stage8AttemptHistory $timedOut2 $timeoutBlitz $timeoutStudent).Attempts.Count -ne 2) { throw 'production defect: Timed-out replacement history is not exactly #1 and #2.' }
+    $k = & $key; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz (New-Stage8StartRequest $k start_replacement)) 409 blitz_time_expired $Context $k
+    $k = & $key; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz (New-Stage8StartRequest $k start_normal)) 409 attempts_exhausted $Context $k
+    Assert-Stage8RowsUnchanged $timedOut2 (Get-Stage8Facts) @('assessment_attempts', 'blitz_attempt_exceptions') 'timed-out replacement rejections'
     $lateStart = Invoke-Stage8Start $Context d_late_submit $m.assessments.matrix_late_submit (New-Stage8StartRequest (& $key) start_normal)
     Assert-Stage8ApiSuccess $lateStart 201
     $lateAttempt = [string] $lateStart.Json.data.id
@@ -224,7 +249,8 @@ function Invoke-Stage8ExecutionMatrix {
     foreach ($rejected in $Context.RejectedKeys) { Assert-Stage8NoIdempotencyRecord $end $rejected }
     Assert-Stage8NoStageNineScoring $end
     $evidence = [pscustomobject] @{ student = $student; attempt1 = $attempt1; attempt2 = $attempt2; start_normal = $k1; resume1 = $kr; start_replacement = $k2; resume2 = $kr2
-        submit1 = $ks; submit2 = $ks2; grant = $kg; grant_reason = $reason; exception = [string] $grant.Json.data.id; timed_out = $timeoutAttempt; late_submit = $lateAttempt; file_id = [string] $fileRow.id }
+        submit1 = $ks; submit2 = $ks2; grant = $kg; grant_reason = $reason; exception = [string] $grant.Json.data.id; timed_out = $timeoutAttempt; timed_out_replacement = $timeoutAttempt2
+        late_submit = $lateAttempt; file_id = [string] $fileRow.id }
     Add-Stage8Evidence $Context 'execution_matrix' $evidence
     $evidence
 }
@@ -372,7 +398,9 @@ function Invoke-Stage8UnsetTimer {
     $blitz = $m.assessments.unset
     $k = New-Stage8Key 500
     $before = Get-Stage8Facts
+    if ($null -ne (Get-Stage8Row $before institution_settings $m.institutions.unset institution_id).blitz_timer_start_mode) { throw 'integration-harness defect: The unset-timer Institution has a timer mode.' }
     Assert-Stage8BlitzLifecycle (Get-Stage8Row $before blitz_tasks $blitz assessment_id) draft $null 600
+    if (@(Get-Stage8Rows $before assessment_students assessment_id $blitz).Count -ne 0) { throw 'integration-harness defect: The unset-timer Blitz already has activation recipients.' }
     Assert-Stage8Rejection (Invoke-Stage8Activate $Context unset_teacher $blitz $k) 409 institution_settings_incomplete $Context $k
     Assert-Stage8NoActivationWrites $before (Get-Stage8Facts) $blitz $k
     Add-Stage8Evidence $Context 'unset_timer_activation_rollback' ([pscustomobject] @{ blitz = $blitz; key = $k })
@@ -411,6 +439,20 @@ function Invoke-Stage8LateWrites {
     Add-Stage8Evidence $Context 'late_writes' ([pscustomobject] @{ typed_attempt = $typedAttempt; file_attempt = $fileAttempt; file = $file.id })
 }
 
+function Get-Stage8RaceValue {
+    param([AllowNull()] $Value, [string] $Written, [string] $Prior)
+    if ($null -ne $Value -and [string] $Value -ceq $Written) { 'written' } elseif ($null -ne $Value -and [string] $Value -ceq $Prior) { 'prior' } else { 'other' }
+}
+
+# The Submit response is built inside the Submit transaction, so it shows exactly what was frozen.
+function Get-Stage8FrozenAnswer {
+    param($SubmitResponse, [string] $QuestionId)
+    if ([int] $SubmitResponse.StatusCode -ne 200 -or $null -eq $SubmitResponse.Json) { return $null }
+    $states = @($SubmitResponse.Json.data.answers | Where-Object { [string] $_.question_id -ceq $QuestionId })
+    if ($states.Count -ne 1) { throw 'production defect: The Submit response does not carry exactly one frozen state for the raced Question.' }
+    $states[0].answer
+}
+
 # Sections 47A.7-47A.8: real write-vs-Submit races, proven simultaneous inside PostgreSQL first.
 function Invoke-Stage8Races {
     param($Context)
@@ -429,8 +471,10 @@ function Invoke-Stage8Races {
     $facts = Get-Stage8Facts
     $answer = @(Get-Stage8Rows $facts attempt_answers attempt_id $typedAttempt)[0]
     $text = [string] @($facts.tables.answer_text_values | Where-Object answer_id -CEQ $answer.id)[0].text_value
-    $value = switch ($text) { 'E2E S08 race written' { 'written' } 'E2E S08 race prior' { 'prior' } default { 'other' } }
-    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $typedAttempt $typedQuestion $value
+    $value = Get-Stage8RaceValue $text 'E2E S08 race written' 'E2E S08 race prior'
+    $frozen = Get-Stage8FrozenAnswer $probe.B $typedQuestion
+    $frozenValue = Get-Stage8RaceValue $(if ($null -ne $frozen) { $frozen.text }) 'E2E S08 race written' 'E2E S08 race prior'
+    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $typedAttempt $typedQuestion $value $frozenValue
     if (@($facts.tables.idempotency_records | Where-Object { $_.operation -ceq 'student.blitz.attempt.submit' -and $_.result_resource_id -ceq $typedAttempt }).Count -ne 1) { throw 'production defect: Typed race did not leave exactly one Submit result.' }
     $results.typed = [pscustomobject] @{ attempt = $typedAttempt; branch = $branch; first_launched = $probe.FirstLaunched; evidence = $probe.Evidence }
 
@@ -438,7 +482,8 @@ function Invoke-Stage8Races {
     Assert-Stage8ApiSuccess $fileStart 201
     $fileAttempt = [string] $fileStart.Json.data.id
     $fileQuestion = [string] $m.questions.race_file.file_based
-    Assert-Stage8ApiSuccess (Invoke-Stage8Call $Context d_race_file "/student/attempts/$fileAttempt/answers/$fileQuestion" PUT -FilePath $Context.Files.Files['answer_pdf'].path)
+    $priorUpload = Invoke-Stage8Call $Context d_race_file "/student/attempts/$fileAttempt/answers/$fileQuestion" PUT -FilePath $Context.Files.Files['answer_pdf'].path
+    Assert-Stage8ApiSuccess $priorUpload
     $fileKey = New-Stage8Key 533
     $probe = Invoke-Stage8OverlapProbe -AttemptId $fileAttempt -Runtime $Context.Runtime `
         -RequestA @{ Method = 'PUT'; Url = "$base/student/attempts/$fileAttempt/answers/$fileQuestion"; FilePath = $Context.Files.Files['replacement_docx'].path } -TokenA (Get-Stage8Token $Context d_race_file -Fresh) `
@@ -446,8 +491,14 @@ function Invoke-Stage8Races {
     $facts = Get-Stage8Facts
     $answer = @(Get-Stage8Rows $facts attempt_answers attempt_id $fileAttempt)[0]
     $file = Get-Stage8Row $facts files (Get-Stage8Row $facts answer_files $answer.id answer_id).file_id
-    $value = switch ([string] $file.checksum_sha256) { $Context.Files.Files['replacement_docx'].sha256 { 'written' } $Context.Files.Files['answer_pdf'].sha256 { 'prior' } default { 'other' } }
-    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $fileAttempt $fileQuestion $value
+    $value = Get-Stage8RaceValue $file.checksum_sha256 $Context.Files.Files['replacement_docx'].sha256 $Context.Files.Files['answer_pdf'].sha256
+    # Each upload is a new File row, so the frozen File id names the branch exactly.
+    $writtenFileId = if ([int] $probe.A.StatusCode -eq 200) { [string] $probe.A.Json.data.answer.file.id } else { '' }
+    $frozen = Get-Stage8FrozenAnswer $probe.B $fileQuestion
+    $frozenValue = Get-Stage8RaceValue $(if ($null -ne $frozen) { $frozen.file.id }) $writtenFileId ([string] $priorUpload.Json.data.answer.file.id)
+    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $fileAttempt $fileQuestion $value $frozenValue
+    if ([string] $file.id -cne $(if ($value -ceq 'written') { $writtenFileId } else { [string] $priorUpload.Json.data.answer.file.id })) { throw 'production defect: The persisted raced File is not the one its branch uploaded.' }
+    if (@($facts.tables.idempotency_records | Where-Object { $_.operation -ceq 'student.blitz.attempt.submit' -and $_.result_resource_id -ceq $fileAttempt }).Count -ne 1) { throw 'production defect: File race did not leave exactly one Submit result.' }
     $fixture = if ($value -ceq 'written') { 'replacement_docx' } else { 'answer_pdf' }
     Assert-Stage8File $facts $file (Get-Stage8FileExpectation $Context.Files $fixture) (Get-Stage8Row $facts assessment_attempts $fileAttempt) $fileQuestion
     $results.file = [pscustomobject] @{ attempt = $fileAttempt; branch = $branch; first_launched = $probe.FirstLaunched; evidence = $probe.Evidence }
@@ -456,7 +507,7 @@ function Invoke-Stage8Races {
 
 # Section 59: Teacher Close finalizes future Attempts as closed and due ones at their deadline.
 function Invoke-Stage8TeacherClose {
-    param($Context)
+    param($Context, $Execution)
     $m = $Context.Manifest
     $blitz = $m.assessments.close
     $future = Invoke-Stage8Start $Context d_close_future $blitz (New-Stage8StartRequest (New-Stage8Key 550) start_normal)
@@ -475,8 +526,30 @@ function Invoke-Stage8TeacherClose {
     $k = New-Stage8Key 551; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_close_future $blitz (New-Stage8StartRequest $k resume $futureAttempt)) 409 blitz_not_active $Context $k
     $k = New-Stage8Key 552; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_close_never $blitz (New-Stage8StartRequest $k start_normal)) 409 blitz_not_active $Context $k
     $k = New-Stage8Key 553; Assert-Stage8Rejection (Invoke-Stage8Submit $Context d_close_future $futureAttempt $k) 409 attempt_not_editable $Context $k
+    Assert-Stage8ApiError (Invoke-Stage8Answer $Context d_close_future $futureAttempt $m.questions.close.short_written @{ type = 'short_written'; text = 'E2E S08 after Close' }) 409 blitz_not_active
     Assert-Stage8ApiError (Invoke-Stage8Call $Context individual_teacher "/teacher/blitz/$blitz/monitoring") 409 task_closed
-    Assert-Stage8RowsUnchanged $closed (Get-Stage8Facts) @('assessment_attempts') 'requests after Close'
+    $futureReplay = Invoke-Stage8Start $Context d_close_future $blitz (New-Stage8StartRequest (New-Stage8Key 550) start_normal)
+    Assert-Stage8ApiSuccess $futureReplay 201
+    if ([string] $futureReplay.Json.data.id -cne $futureAttempt -or $futureReplay.Json.data.status -cne 'submitted' -or $futureReplay.Json.data.finalization_reason -cne 'task_closed_auto_finalize') { throw 'production defect: A completed Start replay after Close is not the current finalized Attempt.' }
+    Assert-Stage8RowsUnchanged $closed (Get-Stage8Facts) @('assessment_attempts', 'attempt_answers', 'idempotency_records') 'requests after Close'
+
+    # The execution matrix Blitz is closed too, so its completed Start and grant keys replay on a closed Blitz.
+    $matrix = $m.assessments.matrix
+    Assert-Stage8ApiSuccess (Invoke-Stage8Call $Context individual_teacher "/teacher/blitz/$matrix/close" POST -Body @{})
+    $matrixClosed = Get-Stage8Facts
+    Assert-Stage8BlitzLifecycle (Get-Stage8Row $matrixClosed blitz_tasks $matrix assessment_id) closed individual 7200
+    foreach ($pair in @(@{ Request = $Execution.start_normal; Status = 201; Attempt = $Execution.attempt1 }, @{ Request = $Execution.resume1; Status = 200; Attempt = $Execution.attempt1 },
+            @{ Request = $Execution.start_replacement; Status = 201; Attempt = $Execution.attempt2 }, @{ Request = $Execution.resume2; Status = 200; Attempt = $Execution.attempt2 })) {
+        $response = Invoke-Stage8Start $Context d_matrix $matrix $pair.Request
+        Assert-Stage8ApiSuccess $response $pair.Status
+        if ([string] $response.Json.data.id -cne $pair.Attempt) { throw 'production defect: A Start replay after Close switched Attempts.' }
+    }
+    $grantReplay = Invoke-Stage8Grant $Context individual_teacher $matrix $Execution.student $Execution.grant $Execution.grant_reason
+    Assert-Stage8ApiSuccess $grantReplay 201
+    if ([string] $grantReplay.Json.data.id -cne $Execution.exception) { throw 'production defect: A grant replay after Close returned another exception.' }
+    $k = New-Stage8Key 554; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_matrix $matrix (New-Stage8StartRequest $k start_normal)) 409 blitz_not_active $Context $k
+    $k = New-Stage8Key 555; Assert-Stage8Rejection (Invoke-Stage8Grant $Context individual_teacher $matrix ([string] $m.users.d_matrix_peer) $k 'E2E S08 after Close') 409 blitz_attempt_exception_not_allowed $Context $k
+    Assert-Stage8RowsUnchanged $matrixClosed (Get-Stage8Facts) @('assessment_attempts', 'blitz_attempt_exceptions', 'idempotency_records', 'blitz_tasks') 'replays and rejections on the closed matrix Blitz'
     Add-Stage8Evidence $Context 'teacher_close' ([pscustomobject] @{ blitz = $blitz; closed_at = [string] $blitzRow.closed_at; future = $futureAttempt; due = [string] $m.attempts.close_due_1 })
 }
 
@@ -547,7 +620,7 @@ function Invoke-Stage8PostRestartReplays {
     if ($activationReplay.Json.data.status -cne 'closed') { throw 'production defect: Post-restart activation replay lost the historical lifecycle.' }
     foreach ($pair in @(@{ Request = $Execution.start_normal; Status = 201; Attempt = $Execution.attempt1 }, @{ Request = $Execution.resume1; Status = 200; Attempt = $Execution.attempt1 },
             @{ Request = $Execution.start_replacement; Status = 201; Attempt = $Execution.attempt2 }, @{ Request = $Execution.resume2; Status = 200; Attempt = $Execution.attempt2 })) {
-        Assert-Stage8StartReplay $pair.Request $pair.Request
+        Assert-Stage8StartRequest $pair.Request
         $response = Invoke-Stage8Start $Context d_matrix $matrix $pair.Request
         Assert-Stage8ApiSuccess $response $pair.Status
         if ([string] $response.Json.data.id -cne $pair.Attempt) { throw 'production defect: A post-restart Start replay switched Attempts.' }

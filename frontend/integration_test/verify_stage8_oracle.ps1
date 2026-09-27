@@ -36,8 +36,16 @@ $individual = Copy-Stage8Synthetic $sync; $individual.timer_start_mode_snapshot 
 Confirm-Stage8Accept { Assert-Stage8BlitzLifecycle $individual active individual 600 }
 $bad = Copy-Stage8Synthetic $individual; $bad.synchronized_ends_at = '2026-09-27 10:10:00+00'
 Confirm-Stage8Reject 'individual common end non-null' { Assert-Stage8BlitzLifecycle $bad active individual 600 }
-$draft = [pscustomobject] @{ status = 'draft'; duration_seconds = 600; timer_start_mode_snapshot = $null; activated_at = '2026-09-27 10:00:00+00'; synchronized_ends_at = $null; activated_by_user_id = $null }
+$draft = [pscustomobject] @{ status = 'draft'; duration_seconds = 600; timer_start_mode_snapshot = $null; activated_at = '2026-09-27 10:00:00+00'; synchronized_ends_at = $null; activated_by_user_id = $null; scheduled_at = $null; archived_at = $null }
 Confirm-Stage8Reject 'draft Blitz with activation timing' { Assert-Stage8BlitzLifecycle $draft draft $null 600 }
+$scheduled = [pscustomobject] @{ status = 'scheduled'; duration_seconds = 600; timer_start_mode_snapshot = $null; activated_at = $null; synchronized_ends_at = $null; activated_by_user_id = $null; scheduled_at = '2026-09-29 04:00:00+00'; archived_at = $null }
+Confirm-Stage8Accept { Assert-Stage8BlitzLifecycle $scheduled scheduled $null 600 }
+$bad = Copy-Stage8Synthetic $scheduled; $bad.scheduled_at = $null
+Confirm-Stage8Reject 'scheduled Blitz without scheduled_at' { Assert-Stage8BlitzLifecycle $bad scheduled $null 600 }
+$archived = Copy-Stage8Synthetic $scheduled; $archived.status = 'archived'
+Confirm-Stage8Reject 'archived Blitz without archived_at' { Assert-Stage8BlitzLifecycle $archived archived $null 600 }
+$archived.archived_at = '2026-09-27 10:30:00+00'
+Confirm-Stage8Accept { Assert-Stage8BlitzLifecycle $archived archived $null 600 }
 
 # Official pair and cohort.
 $pair = [pscustomobject] @{ id = 'pair'; institution_id = 'target'; topic_id = 'topic'; homework_assessment_id = 'homework'; blitz_assessment_id = 'blitz'; cohort_snapshotted_at = 'c'; locked_at = 'l'; updated_at = 'u' }
@@ -174,7 +182,9 @@ Confirm-Stage8Reject 'Resume replay dropping original attempt_id' { Assert-Stage
 $changed = [pscustomobject] @{ Key = $key; Body = [pscustomobject] @{ intent = 'resume'; attempt_id = '08000000-0000-4000-8000-000003000002' } }
 Confirm-Stage8Reject 'Resume replay changing original attempt_id' { Assert-Stage8StartReplay $resume $changed }
 Confirm-Stage8Reject 'replay with another key' { Assert-Stage8StartReplay $resume ([pscustomobject] @{ Key = '08000000-0000-4000-8000-000009000003'; Body = $resume.Body }) }
-Confirm-Stage8Accept { Assert-Stage8KeyReuseOutcome ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'idempotency_key_reused' } }) }
+Confirm-Stage8Accept { Assert-Stage8KeyReuseOutcome ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ message = 'Reused.'; code = 'idempotency_key_reused'; errors = [pscustomobject] @{} } }) }
+Confirm-Stage8Reject 'key reuse with non-empty errors' { Assert-Stage8KeyReuseOutcome ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ message = 'Reused.'; code = 'idempotency_key_reused'; errors = [pscustomobject] @{ key = @('x') } } }) }
+Confirm-Stage8Reject 'key reuse with an extra envelope field' { Assert-Stage8KeyReuseOutcome ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ message = 'Reused.'; code = 'idempotency_key_reused'; errors = [pscustomobject] @{}; data = 1 } }) }
 Confirm-Stage8Reject 'same Start key changing intent returning the stored Attempt' { Assert-Stage8KeyReuseOutcome ([pscustomobject] @{ StatusCode = 200; Json = [pscustomobject] @{ data = [pscustomobject] @{ id = 'n1' } } }) }
 Confirm-Stage8Reject 'same Start key changing intent with another conflict' { Assert-Stage8KeyReuseOutcome ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'attempt_not_editable' } }) }
 
@@ -227,15 +237,17 @@ $raceAttempt = [pscustomobject] @{ id = 'n1'; status = 'submitted'; finalization
 $raceFacts = [pscustomobject] @{ tables = (New-Stage8Tables @{ assessment_attempts = @($raceAttempt); attempt_answers = @($answer) }); blobs = @(); public_blobs = @() }
 $ok = [pscustomobject] @{ StatusCode = 200; Json = $null }
 $notEditable = [pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'attempt_not_editable' } }
-if ((Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written) -cne 'write_first' -or (Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior) -cne 'submit_first') { throw 'integration-harness defect: Oracle verifier rejected a valid race branch.' }
+if ((Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written written) -cne 'write_first' -or (Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior prior) -cne 'submit_first') { throw 'integration-harness defect: Oracle verifier rejected a valid race branch.' }
 $script:checks += 2
-Confirm-Stage8Reject 'write 200 but persisted pre-race value' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 prior }
-Confirm-Stage8Reject 'write 409 but persisted raced value' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 written }
-Confirm-Stage8Reject 'race value matching neither branch' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 other }
-Confirm-Stage8Reject 'race write with another conflict code' { Assert-Stage8RaceBranch ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'blitz_time_expired' } }) $ok $raceFacts n1 q1 prior }
-Confirm-Stage8Reject 'race Submit failing' { Assert-Stage8RaceBranch $ok ([pscustomobject] @{ StatusCode = 409; Json = $null }) $raceFacts n1 q1 written }
+Confirm-Stage8Reject 'write 200 but persisted pre-race value' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 prior prior }
+Confirm-Stage8Reject 'write 409 but persisted raced value' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 written written }
+Confirm-Stage8Reject 'race value matching neither branch' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 other other }
+Confirm-Stage8Reject 'race write with another conflict code' { Assert-Stage8RaceBranch ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'blitz_time_expired' } }) $ok $raceFacts n1 q1 prior prior }
+Confirm-Stage8Reject 'race Submit failing' { Assert-Stage8RaceBranch $ok ([pscustomobject] @{ StatusCode = 409; Json = $null }) $raceFacts n1 q1 written written }
 $postFreeze = Copy-Stage8Synthetic $raceFacts; $postFreeze.tables.attempt_answers[0].updated_at = '2026-09-27 10:06:00+00'
-Confirm-Stage8Reject 'answer write committed after the Submit freeze' { Assert-Stage8RaceBranch $ok $ok $postFreeze n1 q1 written }
+Confirm-Stage8Reject 'answer write committed after the Submit freeze (later second)' { Assert-Stage8RaceBranch $ok $ok $postFreeze n1 q1 written written }
+Confirm-Stage8Reject 'write 200 persisted after a Submit whose frozen snapshot shows the prior value (same second)' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written prior }
+Confirm-Stage8Reject 'Submit-first branch whose frozen snapshot differs' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior written }
 
 # Concurrency evidence is re-checked here as part of the race oracle.
 $attemptId = '08000000-0000-4000-8000-000003000099'
@@ -305,6 +317,7 @@ $script:sentinelCalls = 0
 $changing = { $script:sentinelCalls++; if ($script:sentinelCalls -eq 1) { $sentinel } else { [pscustomobject] @{ rows = [pscustomobject] @{ blitz_tasks = @([pscustomobject] @{ assessment_id = 's'; status = 'active' }) }; blob = $sentinel.blob } } }
 Confirm-Stage8Reject 'unrelated Scheduler sentinel changed after the command' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider $changing -Invoker $invoker | Out-Null }
 Confirm-Stage8Reject 'Scheduler output count differing from the guarded set' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = 'Candidates: 2; finalized attempts: 2; failures: 0.' } } | Out-Null }
+Confirm-Stage8Reject 'first Scheduler invocation finalizing fewer due Attempts' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = 'Candidates: 1; finalized attempts: 0; failures: 0.' } } | Out-Null }
 Confirm-Stage8Reject 'second Scheduler invocation finalizing again' { Invoke-Stage8GuardedScheduler -Invocation Second -FactsProvider { $empty } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = 'Candidates: 0; finalized attempts: 1; failures: 0.' } } | Out-Null }
 Confirm-Stage8Reject 'Scheduler failures reported' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 1; Output = 'Candidates: 1; finalized attempts: 0; failures: 1.' } } | Out-Null }
 

@@ -235,6 +235,21 @@ function Assert-Stage8ProcessFacts {
     if (@($Processes | Where-Object { [string] $_.cmd -cmatch 'schedule:(?:run|work)' }).Count -ne 0) {
         throw 'A Laravel scheduler runs in the Stage 8 container; global Blitz reconciliation must stay guarded.'
     }
+    $workers.Count
+}
+
+# The application's own database session proves both ends: its client address is the Stage 8 container
+# and its server address is the approved PostgreSQL container on the same network.
+function Assert-Stage8SessionCorrelation {
+    param([AllowEmptyString()][string] $ClientAddress, [AllowEmptyString()][string] $ContainerAddress,
+        [AllowEmptyString()][string] $ServerAddress, [AllowEmptyString()][string] $PostgresAddress)
+    $ipv4 = '\A[0-9]{1,3}(?:\.[0-9]{1,3}){3}\z'
+    if ($ContainerAddress -cnotmatch $ipv4 -or $ClientAddress -cne $ContainerAddress) {
+        throw 'Stage 8 application database sessions cannot be correlated to the container network address.'
+    }
+    if ($PostgresAddress -cnotmatch $ipv4 -or $ServerAddress -cne $PostgresAddress) {
+        throw 'The Stage 8 application is not connected to the approved PostgreSQL container.'
+    }
 }
 
 function Get-Stage8ProcessFacts {
@@ -423,7 +438,7 @@ function Assert-Stage8DedicatedRuntime {
         -PostgresNetworkPresent ($null -ne $postgres.NetworkSettings.Networks.($script:Stage8DockerNetworkName)) `
         -PostgresRunning ([bool] $postgres.State.Running)
     $containerEnvironment = $null
-    Assert-Stage8ProcessFacts -Processes @(Get-Stage8ProcessFacts -BackendContainerName $BackendContainerName)
+    $observedWorkers = Assert-Stage8ProcessFacts -Processes @(Get-Stage8ProcessFacts -BackendContainerName $BackendContainerName)
 
     $runtimeProgram = @'
 $migrationFiles = glob(database_path('migrations/*.php')) ?: [];
@@ -445,15 +460,15 @@ $facts = [
     'public_root' => realpath((string) config('filesystems.disks.public.root')) ?: '',
     'private_public' => config('filesystems.disks.'.config('filesystems.private_files_disk').'.visibility') === 'public',
     'client_address' => (string) DB::scalar('select host(inet_client_addr())'),
+    'server_address' => (string) DB::scalar('select host(inet_server_addr())'),
 ];
 echo json_encode($facts, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
 '@
     $facts = Invoke-Stage8ContainerPhp -BackendContainerName $BackendContainerName -Program $runtimeProgram
     Assert-Stage8LaravelFacts -Facts $facts
     $networkAddress = [string] $inspection.NetworkSettings.Networks.($script:Stage8DockerNetworkName).IPAddress
-    if ($networkAddress -cnotmatch '\A[0-9]{1,3}(?:\.[0-9]{1,3}){3}\z' -or [string] $facts.client_address -cne $networkAddress) {
-        throw 'Stage 8 application database sessions cannot be correlated to the container network address.'
-    }
+    Assert-Stage8SessionCorrelation -ClientAddress ([string] $facts.client_address) -ContainerAddress $networkAddress `
+        -ServerAddress ([string] $facts.server_address) -PostgresAddress ([string] $postgres.NetworkSettings.Networks.($script:Stage8DockerNetworkName).IPAddress)
     Invoke-Stage8HttpBoundaryProbe -ApiTarget $ApiTarget
 
     [pscustomobject] @{
@@ -468,7 +483,7 @@ echo json_encode($facts, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
         DockerNetworkName = $script:Stage8DockerNetworkName
         PrivateVolumeName = $script:Stage8PrivateVolumeName
         ClientAddress = $networkAddress
-        Workers = [int] $script:Stage8WorkerCount
+        Workers = [int] $observedWorkers
     }
 }
 
@@ -488,9 +503,14 @@ function Initialize-Stage8Runtime {
     if ($LASTEXITCODE -ne 0) { throw 'Docker could not list the Stage 8 runtime.' }
     if ($existing.Count -gt 1) { throw 'The Stage 8 runtime container identity is ambiguous.' }
     if ($existing.Count -eq 1) {
-        $running = (& docker inspect --format '{{.State.Running}}' $script:Stage8BackendContainerName 2>$null)
-        if ($LASTEXITCODE -ne 0) { throw 'The existing Stage 8 runtime could not be inspected.' }
-        if ([string] $running -cne 'true') {
+        $inspection = @(& docker inspect $script:Stage8BackendContainerName 2>$null | ConvertFrom-Json)
+        if ($LASTEXITCODE -ne 0 -or $inspection.Count -ne 1) { throw 'The existing Stage 8 runtime could not be inspected.' }
+        $static = $inspection[0]
+        Assert-Stage8ContainerFacts -InspectionCount 1 -ContainerName ([string] $static.Name.TrimStart('/')) -Running $true `
+            -AutoRemove ([bool] $static.HostConfig.AutoRemove) -WorkingDirectory ([string] $static.Config.WorkingDir) -Image ([string] $static.Config.Image) `
+            -Command @($static.Config.Cmd | ForEach-Object { [string] $_ }) -Platform ([string] $static.Platform) -RestartPolicy ([string] $static.HostConfig.RestartPolicy.Name)
+        Assert-Stage8MountFacts -Mounts @($static.Mounts) -ExpectedBackendSource (Get-Stage8BackendSource)
+        if ([string] $static.State.Running -cne 'True') {
             & docker start $script:Stage8BackendContainerName | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'The existing Stage 8 runtime could not be started.' }
         }

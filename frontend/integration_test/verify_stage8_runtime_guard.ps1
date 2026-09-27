@@ -157,7 +157,19 @@ $invalidProcessSets = @(
 foreach ($processes in $invalidProcessSets) {
     Assert-Stage8Rejected { Assert-Stage8ProcessFacts -Processes $processes } 'The Stage 8 guard accepted a non-forking or unguarded concurrency runtime.'
 }
-Assert-Stage8ProcessFacts -Processes @(New-Stage8ProcessSet)
+if ((Assert-Stage8ProcessFacts -Processes @(New-Stage8ProcessSet)) -ne 4) { throw 'The Stage 8 guard did not report the observed worker count.' }
+
+$validSession = @{ ClientAddress = '172.19.0.3'; ContainerAddress = '172.19.0.3'; ServerAddress = '172.19.0.2'; PostgresAddress = '172.19.0.2' }
+$invalidSessions = @(
+    @{ ClientAddress = '172.19.0.9' }, @{ ClientAddress = '' }, @{ ContainerAddress = '' }, @{ ContainerAddress = 'fe80::1' },
+    @{ ServerAddress = '172.19.0.7' }, @{ ServerAddress = '' }, @{ PostgresAddress = '' }
+)
+foreach ($override in $invalidSessions) {
+    $facts = $validSession.Clone()
+    foreach ($name in $override.Keys) { $facts[$name] = $override[$name] }
+    Assert-Stage8Rejected { Assert-Stage8SessionCorrelation @facts } 'The Stage 8 guard accepted an uncorrelated database session.'
+}
+Assert-Stage8SessionCorrelation @validSession
 
 $validLaravel = [pscustomobject] @{
     environment = 'testing'; debug = $false; database_default = 'pgsql'; connection_driver = 'pgsql';
@@ -211,6 +223,6 @@ Write-Output (
     'Stage8RuntimeGuardMatrix: PASS ' +
     "($($invalidTargets.Count) targets, $($invalidContainers.Count) container identities, $($invalidMounts.Count) mount shapes, " +
     "$($invalidBindings.Count) bindings, $($invalidServers.Count) server identities, $($invalidWorkers.Count) worker values, " +
-    "$($invalidProcessSets.Count) process sets, $($invalidLaravel.Count) Laravel/database facts, $($invalidHttpFacts.Count) HTTP envelopes, " +
+    "$($invalidProcessSets.Count) process sets, $($invalidSessions.Count) session correlations, $($invalidLaravel.Count) Laravel/database facts, $($invalidHttpFacts.Count) HTTP envelopes, " +
     "3 wrong containers; live=$(-not $SkipLiveRuntime))"
 )

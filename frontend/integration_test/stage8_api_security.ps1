@@ -122,6 +122,37 @@ function Assert-Stage8NoBytes {
     if ($null -ne $Response.Bytes -and $Response.Bytes.Length -gt 0 -and [int] $Response.StatusCode -eq 200) { throw 'production defect: P1 Stage 8 protected file bytes were returned to an unauthorized actor.' }
 }
 
+# Section 64: the private blob is never reachable through a public web path of the same server.
+function Assert-Stage8NoPublicPath {
+    param([string] $ApiBaseUrl, [string] $StorageKey, $Fixture)
+    $null = Resolve-Stage8ApiTarget $ApiBaseUrl
+    if ([string]::IsNullOrEmpty($StorageKey)) { throw 'integration-harness defect: Stage 8 public-path probe needs the storage key.' }
+    $origin = ([Uri] $ApiBaseUrl).GetLeftPart([UriPartial]::Authority)
+    $encoded = @($StorageKey.Split('/') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
+    foreach ($path in @("/storage/$encoded", "/$encoded", "/storage/app/private/$encoded")) {
+        $handler = [Net.Http.HttpClientHandler]::new()
+        $handler.AllowAutoRedirect = $false
+        $client = [Net.Http.HttpClient]::new($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds(30)
+        $response = $null
+        try {
+            try { $response = $client.GetAsync("$origin$path").GetAwaiter().GetResult() }
+            catch { throw 'environment/runtime defect: Stage 8 public-path probe transport failed.' }
+            $bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+            $hash = [Security.Cryptography.SHA256]::Create()
+            try { $checksum = ([BitConverter]::ToString($hash.ComputeHash([byte[]] $bytes))).Replace('-', '').ToLowerInvariant() }
+            finally { $hash.Dispose() }
+            if (([int] $response.StatusCode -ge 200 -and [int] $response.StatusCode -lt 300) -or $checksum -ceq [string] $Fixture.sha256) {
+                throw 'production defect: P1 Stage 8 private file is reachable through a public path.'
+            }
+        }
+        finally {
+            if ($null -ne $response) { $response.Dispose() }
+            $client.Dispose(); $handler.Dispose()
+        }
+    }
+}
+
 function Assert-Stage8ReplayOutcome {
     param($First, $Replay, [int] $Status, [string[]] $StableFields)
     # The caller already judged the first response; a new-key Start may legitimately answer 200 after a 201.
@@ -357,7 +388,8 @@ function Invoke-Stage8SecurityMatrix {
     }
     $download = Invoke-Stage8Call $Context student "/files/$mainFile/download" -Binary
     Assert-Stage8Download $download $Context.Files.Files['answer_pdf']
-    Add-Stage8Evidence $Context 'auth_role_tenant_assignment' ([pscustomobject] @{ probes = $probes.Count; foreign_attempt = $foreign.AttemptId; foreign_file = $foreign.FileId; main_file = $mainFile })
+    Assert-Stage8NoPublicPath $Context.ApiBaseUrl ([string] (Get-Stage8Row $after files $mainFile).storage_key) $Context.Files.Files['answer_pdf']
+    Add-Stage8Evidence $Context 'auth_role_tenant_assignment' ([pscustomobject] @{ probes = $probes.Count; foreign_attempt = $foreign.AttemptId; foreign_file = $foreign.FileId; main_file = $mainFile; public_paths = 3 })
     $foreign
 }
 
@@ -370,7 +402,6 @@ function Invoke-Stage8TransportMatrix {
     $peer = [string] $m.users.d_matrix_peer
     $finalAttempt = [string] $UiEvidence.attempt_ids[1]
     $startPath = "/student/blitz/$matrix/attempts"
-    $start = @('idempotency_key', 'body', 'intent', 'attempt_id')
     $number = 200
     $next = { $script:stage8TransportKey++; New-Stage8Key $script:stage8TransportKey }
     $script:stage8TransportKey = $number
@@ -384,16 +415,16 @@ function Invoke-Stage8TransportMatrix {
         @{ Actor = 'individual_teacher'; Method = 'POST'; Path = "/teacher/blitz/$idleBlitz/archive"; Body = @{ protected = $true }; Fields = @('body'); Required = @('body') },
         @{ Actor = 'individual_teacher'; Method = 'GET'; Path = "/teacher/blitz/$($m.assessments.monitoring)/monitoring?unexpected=1"; Fields = @('unexpected'); Required = @('unexpected') },
         @{ Actor = 'd_matrix_peer'; Method = 'GET'; Path = "/student/blitz/$matrix`?unexpected=1"; Fields = @('unexpected'); Required = @('unexpected') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Body = @{ intent = 'start_normal' }; Fields = $start; Required = @('idempotency_key') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = 'malformed-key'; Body = @{ intent = 'start_normal' }; Fields = $start; Required = @('idempotency_key') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); RawBody = ''; Fields = $start },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); RawBody = '{}'; Fields = $start; Required = @('intent') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'start_third' }; Fields = $start; Required = @('intent') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Body = @{ intent = 'start_normal' }; Fields = @('idempotency_key'); Required = @('idempotency_key') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = 'malformed-key'; Body = @{ intent = 'start_normal' }; Fields = @('idempotency_key'); Required = @('idempotency_key') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); RawBody = ''; Fields = @('body', 'intent'); Required = @('body', 'intent') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); RawBody = '{}'; Fields = @('intent'); Required = @('intent') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'start_third' }; Fields = @('intent'); Required = @('intent') },
         @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'start_normal'; deadline_at = '2100-01-01T00:00:00Z' }; Fields = @('deadline_at'); Required = @('deadline_at') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'resume' }; Fields = $start; Required = @('attempt_id') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'start_normal'; attempt_id = $finalAttempt }; Fields = $start; Required = @('attempt_id') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'start_replacement'; attempt_id = $finalAttempt }; Fields = $start; Required = @('attempt_id') },
-        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'resume'; attempt_id = '08000000000040008000000003000001' }; Fields = $start; Required = @('attempt_id') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'resume' }; Fields = @('attempt_id'); Required = @('attempt_id') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'start_normal'; attempt_id = $finalAttempt }; Fields = @('attempt_id'); Required = @('attempt_id') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'start_replacement'; attempt_id = $finalAttempt }; Fields = @('attempt_id'); Required = @('attempt_id') },
+        @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = $startPath; Key = (& $next); Body = @{ intent = 'resume'; attempt_id = '08000000000040008000000003000001' }; Fields = @('attempt_id'); Required = @('attempt_id') },
         @{ Actor = 'd_matrix_peer'; Method = 'POST'; Path = "$startPath`?unexpected=1"; Key = (& $next); Body = @{ intent = 'start_normal' }; Fields = @('unexpected'); Required = @('unexpected') },
         @{ Actor = 'student'; Method = 'POST'; Path = "/student/attempts/$finalAttempt/submit"; Body = @{}; Fields = @('idempotency_key'); Required = @('idempotency_key') },
         @{ Actor = 'student'; Method = 'POST'; Path = "/student/attempts/$finalAttempt/submit"; Key = 'malformed-key'; Body = @{}; Fields = @('idempotency_key'); Required = @('idempotency_key') },
@@ -407,7 +438,9 @@ function Invoke-Stage8TransportMatrix {
         @{ Actor = 'individual_teacher'; Method = 'POST'; Path = "/teacher/blitz/$matrix/students/$peer/attempt-exception"; Key = (& $next); Body = @{ reason_type = 'technical'; reason = '   ' }; Fields = @('reason'); Required = @('reason') },
         @{ Actor = 'individual_teacher'; Method = 'POST'; Path = "/teacher/blitz/$matrix/students/$peer/attempt-exception"; Key = (& $next); Body = @{ reason_type = 'technical'; reason = 'E2E S08'; attempt_id = $finalAttempt }; Fields = @('attempt_id'); Required = @('attempt_id') },
         @{ Actor = 'teacher'; Method = 'PUT'; Path = "/teacher/topics/$($m.topics.practice)/result-pair"; Body = @{ homework_assessment_id = $m.assessments.practice_homework; blitz_assessment_id = $null }; Fields = @('blitz_assessment_id'); Required = @('blitz_assessment_id') },
-        @{ Actor = 'teacher'; Method = 'PUT'; Path = "/teacher/topics/$($m.topics.practice)/result-pair"; Body = @{ homework_assessment_id = $m.assessments.practice_homework; blitz_assessment_id = 'not-a-uuid' }; Fields = @('blitz_assessment_id'); Required = @('blitz_assessment_id') }
+        @{ Actor = 'teacher'; Method = 'PUT'; Path = "/teacher/topics/$($m.topics.practice)/result-pair"; Body = @{ homework_assessment_id = $m.assessments.practice_homework; blitz_assessment_id = 'not-a-uuid' }; Fields = @('blitz_assessment_id'); Required = @('blitz_assessment_id') },
+        @{ Actor = 'teacher'; Method = 'PUT'; Path = "/teacher/topics/$($m.topics.practice)/result-pair"; Body = @{ homework_assessment_id = $m.assessments.practice_homework; blitz_assessment_id = $m.assessments.practice_blitz; unexpected_field = 1 }; Fields = @('unexpected_field'); Required = @('unexpected_field') },
+        @{ Actor = 'individual_teacher'; Method = 'POST'; Path = "/teacher/blitz/$idleBlitz/schedule"; Body = @{ scheduled_at = '2100-01-01T09:00:00+05:00'; unexpected_field = 1 }; Fields = @('unexpected_field'); Required = @('unexpected_field') }
     )
     foreach ($probe in $probes) { $probe.Status = 422; $probe.Code = 'validation_failed' }
     Assert-Stage8NegativeProbes $Context $probes 'strict transport matrix' | Out-Null

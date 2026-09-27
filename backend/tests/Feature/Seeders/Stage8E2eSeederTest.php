@@ -355,9 +355,19 @@ class Stage8E2eSeederTest extends TestCase
         DB::table('question_choice_options')->insert(['id' => (string) Str::uuid(), 'institution_id' => $manifest['institutions']['target'],
             'question_id' => $builderQuestion, 'option_text' => 'E2E S08 UI option', 'is_correct' => true, 'position' => 1] + $stamps);
 
+        // A rejected upload may leave a File row without an answer link; it is still owned through its key.
+        $raceDirectory = 'student-submissions/'.$manifest['institutions']['individual'].'/'.$raceFile->attemptId.'/'.$manifest['questions']['race_file']['file_based'];
+        $orphanKey = $raceDirectory.'/'.Stage8E2eSeeder::id(8_000_002).'.docx';
+        $disk->put($orphanKey, 'E2E S08 unlinked staged bytes');
+        $orphanFile = (string) Str::uuid();
+        DB::table('files')->insert(['id' => $orphanFile, 'institution_id' => $manifest['institutions']['individual'], 'uploaded_by_user_id' => $manifest['users']['d_race_file'],
+            'category' => 'student_submission', 'original_name' => 'e2e_s08_orphan.docx', 'storage_disk' => 'stage8_seeder_test', 'storage_key' => $orphanKey,
+            'mime_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'extension' => 'docx', 'size_bytes' => 29] + $stamps);
+
         $state = $seeder->ownedState();
         $this->assertCount(count($manifest['attempts']) + 3, $state['db']['assessment_attempts']);
-        $this->assertCount(1, $state['db']['files']);
+        $this->assertCount(2, $state['db']['files']);
+        $this->assertSame([$orphanFile], $state['unlinked_files']);
         $this->assertCount(1, $state['db']['attempt_answers']);
         $this->assertCount(count($manifest['exceptions']) + 1, $state['db']['blitz_attempt_exceptions']);
         $this->assertCount(6, $state['db']['idempotency_records']);
@@ -366,7 +376,7 @@ class Stage8E2eSeederTest extends TestCase
         $this->assertSame([$builderQuestion], $state['dynamic']['questions']);
         $this->assertCount(1, $state['dynamic']['question_choice_options']);
         $this->assertCount(1, $state['dynamic']['assessment_students']);
-        $this->assertCount(1, $state['blobs']);
+        $this->assertCount(2, $state['blobs']);
         $predecessor = collect($state['directories'])->pluck('key')->first(fn (string $key): bool => str_contains($key, $raceFile->attemptId)).'/'.Stage8E2eSeeder::id(8_000_001).'.pdf';
         $disk->put($predecessor, 'E2E S08 replaced predecessor bytes');
 
@@ -382,6 +392,7 @@ class Stage8E2eSeederTest extends TestCase
         foreach ([...array_column($state['blobs'], 'key'), $predecessor] as $key) {
             $this->assertFalse($disk->exists($key), $key);
         }
+        $this->assertFalse($disk->exists($raceDirectory), 'empty owned submission directory removed');
         $this->assertSame('E2E S08 unrelated private bytes', $disk->get($unrelatedKey));
         $this->assertSame($prefixBefore, $prefixSentinel->fresh()->getAttributes());
         $this->assertSame($sentinels, $seeder->sentinelState());
@@ -418,6 +429,34 @@ class Stage8E2eSeederTest extends TestCase
             $this->assertSame($before, $this->structuralSnapshot());
             $this->assertSame(1, DB::table('assessment_attempts')->where('id', $start->attemptId)->count());
             DB::table($table)->where('id', $id)->update(array_intersect_key($original, $change));
+        }
+    }
+
+    public function test_sentinel_graph_is_idempotent_and_never_silently_accepts_a_change(): void
+    {
+        $seeder = new Stage8E2eSeeder;
+        $seeder->ensureSentinels();
+        $state = $seeder->sentinelState();
+        $seeder->ensureSentinels();
+        $this->assertSame($state, $seeder->sentinelState());
+        $institution = Stage8E2eSeeder::sentinelId(1);
+        DB::table('institutions')->where('id', $institution)->update(['name' => 'E2E S08 changed sentinel']);
+        foreach (['ensureSentinels', 'removeSentinels'] as $operation) {
+            try {
+                $seeder->{$operation}();
+                $this->fail('A changed sentinel was accepted by '.$operation.'.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('sentinel row changed', $exception->getMessage());
+            }
+        }
+        $this->assertSame(1, DB::table('institutions')->where('id', $institution)->count());
+        DB::table('institutions')->where('id', $institution)->update(['name' => 'E2E S08 Unrelated Sentinel Institution']);
+        Storage::disk('stage8_seeder_test')->put(Stage8E2eSeeder::sentinelBlob()['key'], 'tampered');
+        try {
+            $seeder->ensureSentinels();
+            $this->fail('A changed sentinel blob was accepted.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('sentinel blob changed', $exception->getMessage());
         }
     }
 

@@ -51,6 +51,8 @@ function Assert-Stage8ManualSmoke {
     if ($activation.Count -ne 1) { throw 'production defect: The mobile activation left no single completed activation result.' }
 }
 
+# Completion always removes the temporary adb reverse mapping, so the device serial is required there.
+if ($CompleteManualSmokeAndCleanup -and $AndroidDevice -cnotmatch '\A[A-Za-z0-9._:-]{1,128}\z') { throw 'Completion needs -AndroidDevice <serial> (letters, digits, dot, colon, dash, underscore).' }
 $apiTarget = Resolve-Stage8ApiTarget -ApiBaseUrl "http://127.0.0.1:$ApiPort/api/v1"
 Assert-Stage8DedicatedRuntime -ApiTarget $apiTarget | Out-Null
 try {
@@ -62,19 +64,18 @@ try {
         Assert-Stage8CleanupDiskIdentity (Invoke-Stage8ManualSeeder cleanupOwnedState)
         Assert-Stage8CleanupFacts -Facts (Get-Stage8DatabaseFacts -PriorFacts $facts) -SentinelsBefore $sentinels
         Invoke-Stage8ManualSeeder removeSentinels | Out-Null
-        if ($AndroidDevice) {
-            & adb -s $AndroidDevice reverse --remove "tcp:$ApiPort" | Out-Null
-            $remaining = @(& adb -s $AndroidDevice reverse --list 2>$null | Where-Object { $_ -match "tcp:$ApiPort" })
-            if ($remaining.Count -ne 0) { throw 'The temporary Android reverse mapping is still present.' }
-            Write-Output 'Stage8AndroidReverse: removed'
-        }
+        & adb -s $AndroidDevice reverse --remove "tcp:$ApiPort" | Out-Null
+        $remaining = @(& adb -s $AndroidDevice reverse --list 2>$null | Where-Object { $_ -match "tcp:$ApiPort\b" })
+        if ($LASTEXITCODE -ne 0 -or $remaining.Count -ne 0) { throw 'The temporary Android reverse mapping could not be confirmed removed.' }
+        Write-Output 'Stage8AndroidReverse: removed'
         Write-Output 'Stage8ManualSmokeCleanup: PASS (manifest rows/blobs removed, unrelated sentinels unchanged then removed)'
         return
     }
     Invoke-Stage8ManualSeeder ensureSentinels | Out-Null
     $sentinels = Get-Stage8SentinelFacts
+    $priorFacts = Get-Stage8DatabaseFacts
     Assert-Stage8CleanupDiskIdentity (Invoke-Stage8ManualSeeder cleanupOwnedState)
-    Assert-Stage8CleanupFacts -Facts (Get-Stage8DatabaseFacts) -SentinelsBefore $sentinels
+    Assert-Stage8CleanupFacts -Facts (Get-Stage8DatabaseFacts -PriorFacts $priorFacts) -SentinelsBefore $sentinels
     Invoke-Stage8ManualSeeder run | Out-Null
     $facts = Get-Stage8DatabaseFacts
     Assert-Stage8Baseline $facts
@@ -91,6 +92,6 @@ try {
     Write-Output '  5. Start; the countdown decreases. Answer one Question (single choice or short written) and save.'
     Write-Output '  6. Leave and reopen the Blitz; Resume keeps the same remaining time.'
     Write-Output '  7. Submit with the open written Question unanswered; the summary shows Submitted and no score.'
-    Write-Output "Then run: .\prepare_stage8_manual_smoke.ps1 -ApiPort $ApiPort -CompleteManualSmokeAndCleanup [-AndroidDevice <serial>]"
+    Write-Output "Then run: .\prepare_stage8_manual_smoke.ps1 -ApiPort $ApiPort -CompleteManualSmokeAndCleanup -AndroidDevice <serial>"
 }
 finally { $password = $null }

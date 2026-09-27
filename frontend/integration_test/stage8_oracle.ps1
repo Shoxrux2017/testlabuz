@@ -146,6 +146,9 @@ function Assert-Stage8BlitzLifecycle {
     # A [string] parameter turns $null into '', so an unactivated Blitz arrives as an empty mode.
     if ([string]::IsNullOrEmpty($TimerMode)) {
         foreach ($field in @('activated_at', 'synchronized_ends_at', 'activated_by_user_id')) { if ($null -ne $Blitz.$field) { throw 'production defect: Unactivated Stage 8 Blitz carries activation timing.' } }
+        if ($Status -ceq 'scheduled' -and $null -eq $Blitz.scheduled_at) { throw 'production defect: Scheduled Stage 8 Blitz has no scheduled time.' }
+        if ($Status -ceq 'draft' -and $null -ne $Blitz.scheduled_at) { throw 'production defect: Draft Stage 8 Blitz carries a scheduled time.' }
+        if ($Status -ceq 'archived' -and $null -eq $Blitz.archived_at) { throw 'production defect: Archived Stage 8 Blitz has no archive instant.' }
         return
     }
     if ($null -eq $Blitz.activated_at) { throw 'production defect: Activated Stage 8 Blitz has no activation instant.' }
@@ -154,6 +157,7 @@ function Assert-Stage8BlitzLifecycle {
     }
     elseif ($null -ne $Blitz.synchronized_ends_at) { throw 'production defect: Individual Stage 8 Blitz has a common end.' }
     if ($Status -ceq 'closed' -and $null -eq $Blitz.closed_at) { throw 'production defect: Closed Stage 8 Blitz has no close instant.' }
+    if ($Status -ceq 'archived' -and $null -eq $Blitz.archived_at) { throw 'production defect: Archived Stage 8 Blitz has no archive instant.' }
     if ($Status -ceq 'active' -and ($null -ne $Blitz.closed_at -or $null -ne $Blitz.archived_at)) { throw 'production defect: Active Stage 8 Blitz has terminal timestamps.' }
 }
 
@@ -373,8 +377,13 @@ function Assert-Stage8StartReplay {
 
 function Assert-Stage8KeyReuseOutcome {
     param($Response)
-    if ([int] $Response.StatusCode -ne 409 -or $null -eq $Response.Json -or $Response.Json.code -cne 'idempotency_key_reused') {
+    if ([int] $Response.StatusCode -ne 409 -or $null -eq $Response.Json -or $null -eq $Response.Json.PSObject.Properties['code'] -or $Response.Json.code -cne 'idempotency_key_reused') {
         throw 'production defect: Stage 8 key reused with a changed request was not rejected as idempotency_key_reused.'
+    }
+    $properties = @($Response.Json.PSObject.Properties.Name | Sort-Object)
+    if (($properties -join ',') -cne 'code,errors,message' -or [string]::IsNullOrWhiteSpace([string] $Response.Json.message) -or
+        $Response.Json.errors -isnot [pscustomobject] -or @($Response.Json.errors.PSObject.Properties).Count -ne 0) {
+        throw 'production defect: Stage 8 idempotency_key_reused envelope must be exactly {message, code, errors = {}}.'
     }
 }
 
@@ -417,8 +426,11 @@ function Assert-Stage8LateWriteUnchanged {
 
 # Exactly one complete serialization per race; the harness never forces which request wins.
 # ActualValue is the caller's reading of the persisted answer: the raced value, the pre-race value or neither.
+# FrozenValue is the same reading of the Submit response, which the Submit builds inside its own transaction.
+# Timestamps have whole-second precision, so only the frozen snapshot can expose a write committed after the freeze.
 function Assert-Stage8RaceBranch {
-    param($ResultWrite, $ResultSubmit, $Facts, [string] $AttemptId, [string] $QuestionId, [ValidateSet('written', 'prior', 'other')][string] $ActualValue)
+    param($ResultWrite, $ResultSubmit, $Facts, [string] $AttemptId, [string] $QuestionId, [ValidateSet('written', 'prior', 'other')][string] $ActualValue,
+        [ValidateSet('written', 'prior', 'other')][string] $FrozenValue)
     $attempt = Get-Stage8Row $Facts assessment_attempts $AttemptId
     if ([int] $ResultSubmit.StatusCode -ne 200) { throw 'production defect: Stage 8 race Submit did not succeed.' }
     Assert-Stage8TerminalAttempt $attempt student_submit ([string] $attempt.submitted_at)
@@ -432,6 +444,7 @@ function Assert-Stage8RaceBranch {
     if ($null -eq $branch -or $ActualValue -cne $(if ($branch -ceq 'write_first') { 'written' } else { 'prior' })) {
         throw 'production defect: Stage 8 race result matches neither approved serialized branch.'
     }
+    if ($FrozenValue -cne $ActualValue) { throw 'production defect: Stage 8 answer changed after the Submit freeze (frozen snapshot differs from persisted value).' }
     if ((ConvertTo-Stage8Instant $answer[0].updated_at) -gt (ConvertTo-Stage8Instant $attempt.locked_at)) { throw 'production defect: Stage 8 answer changed after the Submit freeze.' }
     Assert-Stage8NoOrphanBlob $Facts
     $branch
@@ -605,7 +618,8 @@ function Invoke-Stage8GuardedScheduler {
     if (-not $match.Success) { throw 'production defect: blitz:reconcile-timeouts output format changed.' }
     $counts = [pscustomobject] @{ candidates = [int] $match.Groups['c'].Value; finalized = [int] $match.Groups['f'].Value; failures = [int] $match.Groups['x'].Value }
     $expectedCandidates = @($facts.candidates).Count
-    if ($counts.candidates -ne $expectedCandidates -or $counts.failures -ne 0 -or ($Invocation -ceq 'Second' -and $counts.finalized -ne 0)) {
+    $expectedFinalized = if ($Invocation -ceq 'First') { @($facts.superset | Where-Object { $_.due }).Count } else { 0 }
+    if ($counts.candidates -ne $expectedCandidates -or $counts.failures -ne 0 -or $counts.finalized -ne $expectedFinalized) {
         throw 'production defect: blitz:reconcile-timeouts counts differ from the guarded candidate set.'
     }
     Assert-Stage8SentinelsUnchanged $sentinelsBefore (& $SentinelProvider) "Scheduler $Invocation invocation"

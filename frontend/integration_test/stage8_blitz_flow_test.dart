@@ -215,6 +215,14 @@ Future<void> _teacherOfficialActivation(
   final detail = h.byKey('teacherBlitzDetailScreen');
   await h.waitWidget(detail, 'official candidate Blitz');
   // The locked pair keeps its Homework and cohort; its empty Blitz side can still be filled.
+  await h.waitWidget(
+    h.byKey('teacherBlitzSetOfficialButton'),
+    'official action',
+  );
+  expect(
+    h.textIn(h.byKey('teacherBlitzSetOfficialButton'), 'Set as Official Blitz'),
+    findsOneWidget,
+  );
   await h.tap(h.byKey('teacherBlitzSetOfficialButton'));
   await h.waitWidget(
     h.byKey('teacherBlitzConfirmDialog'),
@@ -256,8 +264,16 @@ Future<String> _studentFirstAttempt(
     'Student Blitz detail',
   );
   await _expectDecreasingCountdown(h, 'synchronized pre-Start countdown');
-  expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
-  expect(h.byKey('studentBlitzAttemptShell'), findsNothing);
+  _expectNoQuestionContent(h);
+  final refresh = h.byKey('studentBlitzRefreshButton');
+  await h.tap(refresh);
+  await h.until(
+    () =>
+        refresh.evaluate().length == 1 &&
+        h.tester.widget<ButtonStyleButton>(refresh).onPressed != null,
+    'pre-Start refresh settled',
+  );
+  _expectNoQuestionContent(h);
   await h.checkpoint('pre_start_viewed', {});
 
   await h.tap(h.byKey('studentBlitzStartButton'));
@@ -563,12 +579,12 @@ Future<void> _teacherMonitoringAndGrant(
   final m = h.manifest;
   final student = m.user('student');
   final peer = m.user('peer');
-  await h.go(
-    AppRoutePaths.teacherBlitzMonitoringLocation(
-      m.topic('official'),
-      m.assessment('main'),
-    ),
-  );
+  final topic = m.topic('official');
+  final main = m.assessment('main');
+  await h.go(AppRoutePaths.teacherBlitzDetailLocation(topic, main));
+  await h.waitWidget(h.byKey('teacherBlitzMonitorButton'), 'Monitor action');
+  await h.tap(h.byKey('teacherBlitzMonitorButton'));
+  await h.waitRoute(AppRoutePaths.teacherBlitzMonitoringLocation(topic, main));
   final screen = h.byKey('teacherBlitzMonitoringScreen');
   await h.waitWidget(screen, 'monitoring screen');
   final studentRow = h.byKey('teacherBlitzMonitoringStudent:$student');
@@ -580,6 +596,13 @@ Future<void> _teacherMonitoringAndGrant(
     'initial monitoring snapshot',
   );
   _expectNoChecking(h, screen);
+  // Monitoring polls only while the app is resumed, so the test window must keep focus.
+  final lifecycle = WidgetsBinding.instance.lifecycleState;
+  expect(
+    lifecycle == null || lifecycle == AppLifecycleState.resumed,
+    isTrue,
+    reason: 'The Windows test window must keep focus (lifecycle: $lifecycle).',
+  );
   // The runner starts the peer's Attempt through the API; polling alone must reveal it.
   await h.checkpoint('monitoring_open', {});
   await h.until(
@@ -588,6 +611,13 @@ Future<void> _teacherMonitoringAndGrant(
     timeout: const Duration(seconds: 40),
   );
 
+  expect(
+    h.textIn(
+      h.byKey('teacherBlitzGrantButton:$student'),
+      'Grant additional attempt',
+    ),
+    findsOneWidget,
+  );
   await h.tap(h.byKey('teacherBlitzGrantButton:$student'));
   await h.waitWidget(
     h.byKey('teacherBlitzAttemptExceptionDialog'),
@@ -624,6 +654,17 @@ Future<void> _studentReplacement(
   await h.go(
     AppRoutePaths.studentBlitzDetailLocation(m.topic('official'), main),
   );
+  await h.waitWidget(
+    h.byKey('studentBlitzStartAdditionalButton'),
+    'additional attempt action',
+  );
+  expect(
+    h.textIn(
+      h.byKey('studentBlitzStartAdditionalButton'),
+      'Start additional attempt',
+    ),
+    findsOneWidget,
+  );
   await h.tap(h.byKey('studentBlitzStartAdditionalButton'));
   await h.waitWidget(
     h.byKey('studentBlitzStartAdditionalDialog'),
@@ -641,7 +682,7 @@ Future<void> _studentReplacement(
   keys['start2'] = h.keys.issued[5];
   expect(
     _countdownSeconds(h),
-    greaterThan(1700),
+    greaterThanOrEqualTo(1790),
     reason: 'The replacement gets its own full duration.',
   );
   final short = m.question('main', 'short_written');
@@ -671,7 +712,11 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
     h.byKey('studentBlitzDetailScreen'),
     'timeout Blitz detail',
   );
-  expect(h.byKey('studentBlitzIndividualTiming'), findsOneWidget);
+  await h.waitWidget(
+    h.byKey('studentBlitzIndividualTiming'),
+    'individual pre-Start timing',
+  );
+  expect(h.byKey('studentBlitzStartButton'), findsOneWidget);
   expect(
     h.byKey('studentBlitzCountdownValue'),
     findsNothing,
@@ -706,6 +751,11 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
     timeout: const Duration(seconds: 120),
   );
   expect(
+    h.textIn(h.byKey('studentBlitzFinalizationSummary'), '1 of 2'),
+    findsOneWidget,
+    reason: 'Only the saved answer counts; the unsaved local draft does not.',
+  );
+  expect(
     h.keys.issued.length,
     8,
     reason: 'Timeout never submits or starts again.',
@@ -714,6 +764,21 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
 }
 
 // ---------------------------------------------------------------- shared checks
+
+void _expectNoQuestionContent(Stage8Harness h) {
+  expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
+  expect(h.byKey('studentBlitzAttemptShell'), findsNothing);
+  expect(
+    find.textContaining(
+      RegExp(
+        r'E2E S08 (Single Choice|Multiple Choice|True False|Short Written|'
+        r'Open Written|File Based|Matching|Ordering|Fill In Blank|Unanswered)',
+      ),
+    ),
+    findsNothing,
+    reason: 'Question prompts stay hidden before Start.',
+  );
+}
 
 Future<void> _waitText(Stage8Harness h, Finder scope, String text) => h.until(
   () => h.textIn(scope, text).evaluate().isNotEmpty,

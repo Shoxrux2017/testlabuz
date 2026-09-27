@@ -339,7 +339,21 @@ class Stage8E2eSeeder extends Seeder
             $state['blobs'][] = ['disk' => $disk, 'key' => $file->storage_key];
         }
         $this->require($fileRows->count() === $fileLinks->count(), 'Stage 8 linked File missing.');
-        $state['db']['files'] = $fileRows->pluck('id')->all();
+        // A File row without an answer link (for example a rejected upload) is still owned through its key.
+        $unlinked = DB::table('files')->whereIn('uploaded_by_user_id', $manifest['users'])->whereNotIn('id', $fileRows->pluck('id'))->get();
+        foreach ($unlinked as $file) {
+            $parts = explode('/', (string) $file->storage_key);
+            $attempt = count($parts) === 5 ? $attempts->get($parts[2]) : null;
+            $question = count($parts) === 5 ? $questions->get($parts[3]) : null;
+            $this->require($attempt !== null && $question !== null && $parts[0] === 'student-submissions' && $parts[1] === $attempt->institution_id
+                && $question->assessment_id === $attempt->assessment_id && $question->type === 'file_based'
+                && $file->institution_id === $attempt->institution_id && $file->uploaded_by_user_id === $attempt->student_id
+                && $file->category === 'student_submission' && $file->storage_disk === $disk
+                && $this->isSubmissionKey($file->storage_key, 'student-submissions/'.$attempt->institution_id.'/'.$attempt->id.'/'.$question->id),
+                'Unowned Stage 8 File row.');
+        }
+        $state['db']['files'] = [...$fileRows->pluck('id')->all(), ...$unlinked->pluck('id')->all()];
+        $state['unlinked_files'] = $unlinked->pluck('id')->all();
         // The owned Attempt + file-Question namespace also holds compensated and replaced blobs.
         // Enumerate exact keys, validate every basename and never delete an institution/prefix tree.
         foreach ($attemptRows as $attempt) {
@@ -401,6 +415,14 @@ class Stage8E2eSeeder extends Seeder
             foreach ($state['blobs'] as $blob) {
                 $this->require(Storage::disk($blob['disk'])->delete($blob['key']), 'Stage 8 private blob cleanup failed.');
             }
+            foreach ($state['directories'] as $directory) {
+                $disk = Storage::disk($directory['disk']);
+                foreach ([$directory['key'], dirname($directory['key'])] as $path) {
+                    if ($disk->directoryExists($path) && $disk->allFiles($path) === [] && $disk->allDirectories($path) === []) {
+                        $this->require($disk->deleteDirectory($path), 'Stage 8 empty submission directory cleanup failed.');
+                    }
+                }
+            }
         });
     }
 
@@ -419,7 +441,9 @@ class Stage8E2eSeeder extends Seeder
         $disk = $this->privateDisk();
         $blob = self::sentinelBlob();
         if ($present === 0) {
-            $this->require(! Storage::disk($disk)->exists($blob['key']), 'Stage 8 sentinel blob exists without its rows.');
+            $storage = Storage::disk($disk);
+            $this->require(! $storage->exists($blob['key']) || $storage->get($blob['key']) === $blob['bytes'], 'Stage 8 sentinel blob exists without its rows.');
+            $this->require($storage->put($blob['key'], $blob['bytes']), 'Stage 8 sentinel blob write failed.');
             DB::transaction(function () use ($rows): void {
                 $password = Hash::make(Str::random(64));
                 foreach ($rows as $table => $tableRows) {
@@ -429,21 +453,11 @@ class Stage8E2eSeeder extends Seeder
                     DB::table($table)->insert($tableRows);
                 }
             });
-            $this->require(Storage::disk($disk)->put($blob['key'], $blob['bytes']), 'Stage 8 sentinel blob write failed.');
 
             return;
         }
         $this->require($present === $expected, 'Stage 8 sentinel graph is partial.');
-        foreach ($rows as $table => $tableRows) {
-            $primaryKey = self::PRIMARY_KEYS[$table] ?? 'id';
-            foreach ($tableRows as $row) {
-                $actual = (array) DB::table($table)->where($primaryKey, $row[$primaryKey])->first();
-                foreach ($row as $column => $value) {
-                    $this->require(in_array($column, ['created_at', 'updated_at', 'designated_at', 'cohort_snapshotted_at', 'locked_at', 'activated_at', 'closed_at', 'started_at', 'deadline_at', 'submitted_at', 'finalized_at', 'assigned_at'], true)
-                        || $actual[$column] === $value, 'Stage 8 sentinel row changed: '.$table.'.'.$column);
-                }
-            }
-        }
+        $this->requireSentinelIdentity($rows);
         $this->require(Storage::disk($disk)->get($blob['key']) === $blob['bytes'], 'Stage 8 sentinel blob changed.');
     }
 
@@ -473,6 +487,8 @@ class Stage8E2eSeeder extends Seeder
     {
         $this->guard();
         $rows = self::sentinelRows();
+        // Only the exact declared graph may be removed; a changed row stops the removal.
+        $this->requireSentinelIdentity($rows);
         DB::transaction(function () use ($rows): void {
             foreach (array_reverse(array_keys($rows)) as $table) {
                 $primaryKey = self::PRIMARY_KEYS[$table] ?? 'id';
@@ -485,6 +501,24 @@ class Stage8E2eSeeder extends Seeder
         $blob = self::sentinelBlob();
         if ($disk->exists($blob['key'])) {
             $this->require($disk->delete($blob['key']), 'Stage 8 sentinel blob cleanup failed.');
+        }
+    }
+
+    /** Every present sentinel row must still equal its declaration, apart from timestamps. */
+    private function requireSentinelIdentity(array $rows): void
+    {
+        $timestamps = ['created_at', 'updated_at', 'designated_at', 'cohort_snapshotted_at', 'locked_at', 'activated_at', 'closed_at', 'started_at', 'deadline_at', 'submitted_at', 'finalized_at', 'assigned_at'];
+        foreach ($rows as $table => $tableRows) {
+            $primaryKey = self::PRIMARY_KEYS[$table] ?? 'id';
+            foreach ($tableRows as $row) {
+                $actual = DB::table($table)->where($primaryKey, $row[$primaryKey])->first();
+                if ($actual === null) {
+                    continue;
+                }
+                foreach ($row as $column => $value) {
+                    $this->require(in_array($column, $timestamps, true) || ((array) $actual)[$column] === $value, 'Stage 8 sentinel row changed: '.$table.'.'.$column);
+                }
+            }
         }
     }
 

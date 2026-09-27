@@ -19,6 +19,20 @@ $context = $null
 $startedAt = [DateTime]::UtcNow
 $plan = @('runtime_guard', 'pure_verifiers', 'sentinel_capture', 'prior_manifest_cleanup', 'prior_cleanup_oracle', 'seeder_test', 'fresh_seed',
     'baseline_oracle', 'test_files', 'windows_flow', 'api_scenarios', 'guarded_scheduler', 'post_flow_oracle', 'restart', 'post_restart_oracle', 'final_cleanup', 'cleanup_oracle')
+$executed = [Collections.Generic.List[string]]::new()
+
+# Steps must complete in exactly the audited plan order; the final PASS requires the whole plan.
+function Complete-Stage8Step {
+    param([string] $Step)
+    if ($executed.Count -ge $plan.Count -or $plan[$executed.Count] -cne $Step) { throw "integration-harness defect: Stage 8 step $Step ran out of the audited plan order." }
+    $executed.Add($Step)
+}
+
+# The password may reach diagnostics raw or JSON-escaped (for example inside a Dart error payload).
+function Get-Stage8SecretForms {
+    if ([string]::IsNullOrEmpty($password)) { return @() }
+    @($password, $password.Replace('\', '\\').Replace('"', '\"'), ($password | ConvertTo-Json -Compress).Trim('"')) | Select-Object -Unique
+}
 
 function Assert-Stage8FlutterExecutable {
     if (-not (Test-Path -LiteralPath $FlutterExecutable -PathType Leaf)) { throw 'Stage 8 Flutter executable is absent.' }
@@ -93,7 +107,7 @@ function Test-Stage8UiCheckpoint {
         'builder_archived' {
             $blitz = Get-Stage8Row $facts blitz_tasks ([string] $Checkpoint.blitz_id) assessment_id
             $assessment = Get-Stage8Row $facts assessments ([string] $Checkpoint.blitz_id)
-            if ([string] $Checkpoint.blitz_id -cnotin @($facts.dynamic.assessments) -or $assessment.topic_id -cne $m.topics.builder -or $assessment.title -cne 'E2E S08 UI Blitz edited' -or
+            if ([string] $Checkpoint.blitz_id -cnotin @($facts.dynamic.assessments) -or $assessment.topic_id -cne $m.topics.builder -or $assessment.title -cne 'E2E S08 UI Blitz edited' -or $assessment.assignment_mode -cne 'group' -or
                 $blitz.status -cne 'archived' -or $null -eq $blitz.archived_at -or $null -ne $blitz.activated_at -or [int] $blitz.duration_seconds -ne 300) { throw 'production defect: Builder smoke Blitz did not persist its authored lifecycle.' }
             $questions = @(Get-Stage8Rows $facts questions assessment_id $Checkpoint.blitz_id)
             if ($questions.Count -ne 1 -or $questions[0].type -cne 'true_false') { throw 'production defect: Builder smoke Question was not persisted.' }
@@ -200,7 +214,7 @@ exit $LASTEXITCODE
                 $name = $names[$next]
                 $checkpointPath = Join-Path $evidenceRoot ("checkpoint-$name.json")
                 if (Test-Path -LiteralPath $checkpointPath) {
-                    $checkpoint = Get-Content -LiteralPath $checkpointPath -Raw | ConvertFrom-Json
+                    $checkpoint = [IO.File]::ReadAllText($checkpointPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
                     if ([int] $checkpoint.version -ne 1 -or $checkpoint.checkpoint -cne $name) { throw 'Stage 8 UI checkpoint identity mismatch.' }
                     Test-Stage8UiCheckpoint -Checkpoint $checkpoint -Baseline $Baseline -State $state
                     $ackPath = Join-Path $evidenceRoot ("checkpoint-$name.ack.json")
@@ -216,12 +230,12 @@ exit $LASTEXITCODE
         }
         $process.WaitForExit()
         if ($process.ExitCode -ne 0) {
-            $diagnostics = Protect-Stage8Diagnostic ($stdout.GetAwaiter().GetResult() + "`n" + $stderr.GetAwaiter().GetResult()) @($password)
+            $diagnostics = Protect-Stage8Diagnostic ($stdout.GetAwaiter().GetResult() + "`n" + $stderr.GetAwaiter().GetResult()) @(Get-Stage8SecretForms)
             throw ('Stage 8 Windows UI process failed: ' + $diagnostics)
         }
         if ($next -ne $names.Count) { throw 'Stage 8 Windows UI omitted mandatory DB checkpoints.' }
         Write-Host 'Stage8WindowsUiProcess: PASS exit_code=0'
-        $ui = Get-Content -LiteralPath (Join-Path $evidenceRoot 'ui-evidence.json') -Raw | ConvertFrom-Json
+        $ui = [IO.File]::ReadAllText((Join-Path $evidenceRoot 'ui-evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
         $facts = Get-Stage8DatabaseFacts
         $attemptIds = @('start1', 'start2' | ForEach-Object { [string] (Get-Stage8IdempotencyRecord $facts $ui.keys.$_ student.blitz.attempt.start).result_resource_id })
         $ui | Add-Member attempt_ids $attemptIds
@@ -253,36 +267,41 @@ try {
     Write-Output "Stage8Runtime: $(Initialize-Stage8Runtime -ApiTarget $apiTarget)"
     $runtime = Assert-Stage8DedicatedRuntime -ApiTarget $apiTarget
     Write-Output "Stage8RuntimeGuard: PASS workers=$($runtime.Workers) client=$($runtime.ClientAddress)"
-    # pure_verifiers
+    Complete-Stage8Step runtime_guard
     & (Join-Path $PSScriptRoot 'verify_stage8_runtime_guard.ps1') -ApiPort $ApiPort
     foreach ($verifier in @('verify_stage8_test_files.ps1', 'verify_stage8_concurrency_probe.ps1', 'verify_stage8_oracle.ps1', 'verify_stage8_api_security.ps1')) { & (Join-Path $PSScriptRoot $verifier) }
-    # sentinel_capture
+    Complete-Stage8Step pure_verifiers
     Invoke-Stage8Seeder ensureSentinels | Out-Null
     $sentinels = Get-Stage8SentinelFacts
     Write-Output 'Stage8UnrelatedSentinels: captured'
-    # prior_manifest_cleanup on the real configured private disk, then its oracle.
-    $priorPresent = @((Get-Stage8DatabaseFacts).tables.PSObject.Properties | Where-Object { @($_.Value).Count -gt 0 }).Count -gt 0
+    Complete-Stage8Step sentinel_capture
+    # Prior manifest state is removed on the real configured private disk; its oracle re-reads every prior ID.
+    $priorFacts = Get-Stage8DatabaseFacts
+    $priorRows = 0; foreach ($property in $priorFacts.tables.PSObject.Properties) { $priorRows += @($property.Value).Count }
+    $priorBlobs = @($priorFacts.blobs).Count
     Assert-Stage8CleanupDiskIdentity (Invoke-Stage8Seeder cleanupOwnedState)
-    Assert-Stage8CleanupFacts -Facts (Get-Stage8DatabaseFacts) -SentinelsBefore $sentinels
-    Write-Output "Stage8PriorManifestCleanup: PASS disk=local prior_manifest_present=$priorPresent"
-    # seeder_test on its isolated disk
+    Complete-Stage8Step prior_manifest_cleanup
+    Assert-Stage8CleanupFacts -Facts (Get-Stage8DatabaseFacts -PriorFacts $priorFacts) -SentinelsBefore $sentinels
+    Write-Output "Stage8PriorManifestCleanup: PASS disk=local prior_rows_removed=$priorRows prior_blobs_removed=$priorBlobs"
+    Complete-Stage8Step prior_cleanup_oracle
     & docker exec $runtime.ContainerName php artisan test tests/Feature/Seeders/Stage8E2eSeederTest.php
     if ($LASTEXITCODE -ne 0) { throw 'Stage 8 focused seeder verification failed.' }
-    # fresh_seed + baseline_oracle
+    Complete-Stage8Step seeder_test
     Invoke-Stage8Seeder run | Out-Null
+    Complete-Stage8Step fresh_seed
     $baseline = Get-Stage8DatabaseFacts
     Assert-Stage8Baseline $baseline
     Assert-Stage8SentinelsUnchanged $sentinels $baseline.sentinels 'seeding'
     Write-Output 'Stage8BaselineOracle: PASS'
-    # test_files
+    Complete-Stage8Step baseline_oracle
     $fixtures = New-Stage8FixtureManifest -DestinationRoot (Join-Path ([IO.Path]::GetTempPath()) ('testlabuz-stage8-fixtures-' + [guid]::NewGuid().ToString('N')))
     Assert-Stage8FixtureManifest $fixtures
-    # windows_flow
+    Complete-Stage8Step test_files
     $evidenceRoot = Join-Path ([IO.Path]::GetTempPath()) ('testlabuz-stage8-evidence-' + [guid]::NewGuid().ToString('N'))
     [void] [IO.Directory]::CreateDirectory($evidenceRoot)
     $context = New-Stage8ApiContext -ApiBaseUrl $apiBaseUrl -Password $password -Manifest $baseline.manifest -FileManifest $fixtures -Runtime $runtime
     $uiEvidence = @(Invoke-Stage8WindowsFlow -Baseline $baseline)[-1]
-    # api_scenarios
+    Complete-Stage8Step windows_flow
     Invoke-Stage8SecurityMatrix $context $uiEvidence | Out-Null
     Invoke-Stage8TransportMatrix $context $uiEvidence
     $execution = Invoke-Stage8ExecutionMatrix $context
@@ -294,49 +313,58 @@ try {
     Invoke-Stage8UnsetTimer $context
     Invoke-Stage8LateWrites $context
     Invoke-Stage8Races $context
-    Invoke-Stage8TeacherClose $context
+    Invoke-Stage8TeacherClose $context $execution
     Invoke-Stage8MonitoringApi $context
-    # guarded_scheduler
+    Complete-Stage8Step api_scenarios
     Invoke-Stage8SchedulerPhase $context
-    # post_flow_oracle
+    Complete-Stage8Step guarded_scheduler
     $postFlow = Get-Stage8DatabaseFacts
     Assert-Stage8TenantRows $postFlow
     Assert-Stage8NoStageNineScoring $postFlow
     Assert-Stage8SentinelsUnchanged $sentinels $postFlow.sentinels 'the automated flow'
     foreach ($key in $context.RejectedKeys) { Assert-Stage8NoIdempotencyRecord $postFlow $key }
     Write-Output 'Stage8PostFlowOracle: PASS'
-    # restart
+    Complete-Stage8Step post_flow_oracle
     $monitoringBefore = Get-Stage8MonitoringState $context
     & docker restart $runtime.ContainerName | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Stage 8 backend restart failed.' }
     Wait-Stage8HttpBoundary -ApiTarget $apiTarget
     $runtime = Assert-Stage8DedicatedRuntime -ApiTarget $apiTarget
     $context.Runtime = $runtime
-    # post_restart_oracle
+    Complete-Stage8Step restart
     $afterRestart = Get-Stage8DatabaseFacts
     Assert-Stage8Equal $afterRestart.tables $postFlow.tables 'DB state after backend restart'
     Assert-Stage8Equal $afterRestart.blobs $postFlow.blobs 'private files after backend restart'
     Invoke-Stage8PostRestartReplays $context $execution $activation $uiEvidence $monitoringBefore
-    $evidence = [ordered] @{ sha = $auditedSha; api_port = $ApiPort; ui = $uiEvidence; scenarios = $context.Evidence; rejected_keys = $context.RejectedKeys.Count
-        duration_seconds = [math]::Round(([DateTime]::UtcNow - $startedAt).TotalSeconds) }
+    Complete-Stage8Step post_restart_oracle
+    $evidence = [ordered] @{ sha = $auditedSha; api_port = $ApiPort; ui = $uiEvidence; scenarios = $context.Evidence; rejected_keys = $context.RejectedKeys.Count }
     Close-Stage8ApiContext $context $false
     $context = $null
-    # final_cleanup + cleanup_oracle
     $beforeCleanup = Get-Stage8DatabaseFacts
     Assert-Stage8CleanupDiskIdentity (Invoke-Stage8Seeder cleanupOwnedState)
+    Complete-Stage8Step final_cleanup
     Assert-Stage8CleanupFacts -Facts (Get-Stage8DatabaseFacts -PriorFacts $beforeCleanup) -SentinelsBefore $sentinels
     Invoke-Stage8Seeder removeSentinels | Out-Null
     Write-Output 'Stage8FinalCleanup: PASS (manifest rows/blobs removed, unrelated sentinels unchanged then removed)'
-    $evidencePath = Join-Path $evidenceRoot 'stage8-evidence.json'
+    Complete-Stage8Step cleanup_oracle
+    # Local generated files go before the PASS line, so a PASS never leaves them behind.
+    Remove-Stage8FixtureManifest -Root $fixtures.Root
+    $fixtures = $null
+    Remove-Stage8LocalRoot -Root $evidenceRoot -Kind evidence
+    $evidenceRoot = $null
+    if (($executed -join ',') -cne ($plan -join ',')) { throw 'integration-harness defect: Stage 8 run did not execute the whole audited plan.' }
+    $evidence.executed_steps = @($executed)
+    $evidence.duration_seconds = [math]::Round(([DateTime]::UtcNow - $startedAt).TotalSeconds)
+    $evidencePath = Join-Path ([IO.Path]::GetTempPath()) ('testlabuz-stage8-evidence-' + $auditedSha.Substring(0, 12) + '-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.json')
     [IO.File]::WriteAllText($evidencePath, ($evidence | ConvertTo-Json -Depth 30), [Text.UTF8Encoding]::new($false))
-    Write-Output "Stage8AutomatedEvidence: PASS duration_seconds=$($evidence.duration_seconds) evidence=$evidencePath"
+    Write-Output "Stage8AutomatedEvidence: PASS duration_seconds=$($evidence.duration_seconds) steps=$($executed.Count) evidence=$evidencePath"
 }
 catch { $operationFailed = $true; throw }
 finally {
     $cleanupErrors = [Collections.Generic.List[string]]::new()
     if ($null -ne $context) { try { Close-Stage8ApiContext $context $operationFailed } catch { $cleanupErrors.Add('Stage 8 API session cleanup failed.') } }
     try { if ($null -ne $fixtures) { Remove-Stage8FixtureManifest -Root $fixtures.Root } } catch { $cleanupErrors.Add('Stage 8 generated fixture cleanup failed.') }
-    try { if ($null -ne $evidenceRoot) { Remove-Stage8LocalRoot -Root $evidenceRoot -Kind evidence -KeepNames @('stage8-evidence.json') } } catch { $cleanupErrors.Add('Stage 8 local evidence cleanup failed.') }
+    try { if ($null -ne $evidenceRoot) { Remove-Stage8LocalRoot -Root $evidenceRoot -Kind evidence } } catch { $cleanupErrors.Add('Stage 8 local evidence cleanup failed.') }
     $password = $null
     if ($cleanupErrors.Count -gt 0 -and -not $operationFailed) { throw ($cleanupErrors -join ' ') }
     if ($operationFailed) { Write-Output 'Stage8Run: FAILED; manifest-owned DB/private state is preserved for diagnosis and is removed by the next invocation.' }

@@ -5,6 +5,8 @@ Set-StrictMode -Version Latest
 $script:Stage8ProbeWindowSeconds = 30
 $script:Stage8ProbeDeadlineMarginSeconds = 60
 $script:Stage8ProbeLockTypes = @('transactionid', 'tuple')
+$script:Stage8BlockerMaxHoldSeconds = 120
+$script:Stage8RequestTimeoutSeconds = 120
 
 # Pure evaluation of observer samples. Only one sample may prove overlap: both waiters must be there together.
 function Get-Stage8OverlapEvidence {
@@ -103,7 +105,7 @@ echo json_encode(['status' => $attempt?->status, 'deadline_at' => $attempt?->dea
 }
 
 function Start-Stage8Blocker {
-    param([Parameter(Mandatory = $true)][string] $AttemptId, [int] $MaximumHoldSeconds = 120)
+    param([Parameter(Mandatory = $true)][string] $AttemptId, [int] $MaximumHoldSeconds = $script:Stage8BlockerMaxHoldSeconds)
     $containerPath = '/tmp/testlabuz-stage8-blocker-' + [guid]::NewGuid().ToString('N') + '.php'
     $program = @'
 <?php
@@ -154,7 +156,11 @@ try {
         Stop-Stage8Blocker ([pscustomobject] @{ Process = $process; ContainerPath = $containerPath })
         throw 'integration-harness defect: Stage 8 blocker did not acquire the Attempt lock in time.'
     }
-    try { $ready = $line.Result | ConvertFrom-Json } catch { throw 'integration-harness defect: Stage 8 blocker returned invalid JSON.' }
+    try { $ready = $line.Result | ConvertFrom-Json }
+    catch {
+        Stop-Stage8Blocker ([pscustomobject] @{ Process = $process; ContainerPath = $containerPath })
+        throw 'integration-harness defect: Stage 8 blocker returned invalid JSON.'
+    }
     if ($ready.locked -ne $true -or [string] $ready.attempt_id -cne $AttemptId -or [int] $ready.pid -le 0) {
         Stop-Stage8Blocker ([pscustomobject] @{ Process = $process; ContainerPath = $containerPath })
         throw 'integration-harness defect: Stage 8 blocker locked the wrong Attempt.'
@@ -246,7 +252,7 @@ function Start-Stage8RaceRequest {
 }
 
 function Receive-Stage8RaceRequest {
-    param([Parameter(Mandatory = $true)] $Job, [int] $TimeoutSeconds = 120)
+    param([Parameter(Mandatory = $true)] $Job, [int] $TimeoutSeconds = $script:Stage8RequestTimeoutSeconds)
     try {
         if (-not (Wait-Job -Job $Job -Timeout $TimeoutSeconds)) { throw 'environment/runtime defect: Stage 8 race request did not finish in time.' }
         if ($Job.State -cne 'Completed') { throw 'environment/runtime defect: Stage 8 race request process failed; payload withheld.' }
@@ -277,7 +283,8 @@ function Invoke-Stage8OverlapProbe {
     $timing = Get-Stage8AttemptTiming -AttemptId $AttemptId
     if ($timing.status -cne 'in_progress' -or $null -eq $timing.deadline_at) { throw 'integration-harness defect: Stage 8 race requires an in-progress manifest Attempt.' }
     $margin = ([DateTimeOffset] $timing.deadline_at - [DateTimeOffset] $timing.now).TotalSeconds
-    if ($margin -lt $script:Stage8ProbeWindowSeconds + $script:Stage8ProbeDeadlineMarginSeconds + 30) {
+    # Worst case: blocker hold limit plus both requests finishing, then the contract's 60 s safety margin.
+    if ($margin -lt $script:Stage8BlockerMaxHoldSeconds + $script:Stage8RequestTimeoutSeconds + $script:Stage8ProbeDeadlineMarginSeconds) {
         throw 'integration-harness defect: Stage 8 race Attempt is too close to its deadline for a safe overlap window; use another fixture.'
     }
     $events = [Collections.Generic.List[string]]::new()
