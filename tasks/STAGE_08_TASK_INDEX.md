@@ -13,13 +13,13 @@
 | Previous Stage | `Stage 7 — Closed / PASS` |
 | Previous Stage closure merge | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Current source of truth | `GitHub main — ChatGPT must re-check it before any readiness/handoff decision` |
-| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); integration/closure tasks Prepared / Not started` |
+| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 Approved / Not started (readiness revalidated on d96b569); closure Prepared / Not started` |
 | Detailed task contracts | `Final planning package reviewed and approved; execution remains per-task gated` |
 | Backend Phase 2 | `PASS — run #2 on 1c56cde (run #1 on 232ebcd NOT ACCEPTED; fixes FIX-001…003 delivered; see §17)` |
 | Frontend Phase 2 | `PASS — run #2 on 2a59651 (run #1 on 03c6581 NOT ACCEPTED; fix FIX-001 delivered; see §18)` |
-| Integration | `Not started` |
+| Integration | `S08-INT-001 Approved / Not started — readiness revalidated on d96b569 (see §19)` |
 | Closure | `Not started` |
-| Next permitted gate | `S08-INT-001 readiness revalidation on current main` |
+| Next permitted gate | `S08-INT-001 integration-asset implementation` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -41,7 +41,8 @@ focused fixes `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`, and run
 (PR #270) and `S08-FE-006` (PR #272) are `Accepted / Delivered`. `S08-FE-PHASE-2` run #1
 (2026-09-26, audited `03c6581`) was `NOT ACCEPTED`; the focused fix `S08-FE-PHASE-2-FIX-001`
 (PR #275) is `Accepted / Delivered`, and run #2 (2026-09-27, audited `2a59651`) is `PASS` (see
-§18). The integration and closure tasks remain `Prepared / Not started`.
+§18). `S08-INT-001` readiness is `Approved / Not started` (revalidated 2026-09-27 on
+`d96b569`, see §19); the closure review remains `Prepared / Not started`.
 
 All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
 reviewed and approved planning package. Their existence or historical planning
@@ -332,7 +333,7 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 | `17` | `S08-FE-006` | `Frontend` | `Teacher monitoring + exception grant + approved mobile quick actions` | `FE-001…005 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `Accepted` | `Delivered — PR #272, merge 48776a1a6936feab158338c4385169911400d24d` | `tasks/frontend/stage-08/S08-FE-006-teacher-live-monitoring-exception-mobile.md` |
 | `18` | `S08-FE-PHASE-2` | `Frontend review` | `Full Stage 8 frontend review + full verification` | `FE-001…006 Accepted / Delivered + Backend Phase 2 PASS` | `Approved` | `PASS` | `Run #1 on 03c6581 NOT ACCEPTED; run #2 on 2a59651 PASS — P1 = 0, P2 = 0, P3 = 0, flutter test 3422 passed (see §18)` | `tasks/frontend/stage-08/S08-FE-PHASE-2-frontend-block-review.md` |
 | `18a` | `S08-FE-PHASE-2-FIX-001` | `Frontend fix` | `Countdown baseline at adoption, detail re-read on app return, Teacher route-owner generations, test gaps` | `Phase 2 run #1 + owner decisions FE-D1/FE-D2` | `Approved` | `Accepted` | `Delivered — PR #275, merge 2a5965182a3a30fc0f2e44c4c59fbedd8e0ce854` | `tasks/frontend/stage-08/S08-FE-PHASE-2-FIX-001-countdown-baseline-and-route-ownership.md` |
-| `19` | `S08-INT-001` | `Integration` | `Guarded real-stack Blitz E2E/security/persistence verification` | `Both Phase 2 checkpoints PASS` | `Approved` | `Prepared` | `Not started` | `tasks/integration/stage-08/S08-INT-001-stage-08-real-stack-integration.md` |
+| `19` | `S08-INT-001` | `Integration` | `Guarded real-stack Blitz E2E/security/persistence verification` | `Both Phase 2 checkpoints PASS` | `Approved` | `Approved — revalidated 2026-09-27 on d96b569 (see §19)` | `Not started` | `tasks/integration/stage-08/S08-INT-001-stage-08-real-stack-integration.md` |
 | `20` | `STAGE_08_CLOSURE_REVIEW` | `Closure` | `Final Stage-wide architecture/security/delivery review` | `S08-INT-001 PASS + required fixes/delivery` | `Approved` | `Prepared` | `Not started` | `tasks/STAGE_08_CLOSURE_REVIEW.md` |
 
 ### Status-column semantics
@@ -343,8 +344,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
   `S08-DOC-001`, `S08-BE-001…010` and `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`.
   `S08-BE-PHASE-2` is `PASS` (run #2, see §17). `S08-FE-001…006` are
   `Accepted / Delivered`. `S08-FE-PHASE-2-FIX-001` is `Accepted / Delivered` and
-  `S08-FE-PHASE-2` is `PASS` (run #2, see §18). The integration and closure tasks remain
-  `Prepared / Not started`.
+  `S08-FE-PHASE-2` is `PASS` (run #2, see §18). `S08-INT-001` is `Approved / Not started`
+  (see §19); the closure review remains `Prepared / Not started`.
 - ChatGPT changes the exact next implementation task to current `Approved` only
   after re-checking current `origin/main`, dependency delivery and the final
   self-contained contract.
@@ -410,9 +411,9 @@ S08-FE-006 Accepted / Delivered (PR #272, 48776a1)
     ↓
 S08-FE-PHASE-2 PASS (run #2, 2a59651; run #1 on 03c6581 NOT ACCEPTED; FIX-001 PR #275)
     ↓
-ChatGPT re-checks current main and S08-INT-001 readiness
+S08-INT-001 readiness Approved (2026-09-27, d96b569; see §19)
     ↓
-S08-INT-001 Prepared / Not started (Accepted / Delivered / PASS required before proceeding)
+S08-INT-001 Approved / Not started (Accepted / Delivered / PASS required before proceeding)
     ↓
 ChatGPT verifies closure entry conditions on current main
     ↓
@@ -941,12 +942,12 @@ Current planning-package state:
 Stage 7 closure                  = PASS
 Stage 8 decomposition            = Approved
 Stage 8 Stage status             = Approved
-Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); integration/closure tasks Prepared / Not started
+Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 Approved / Not started (readiness revalidated on d96b569); closure Prepared / Not started
 Detailed task contracts          = Final planning package reviewed and approved; execution remains per-task gated
-Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); integration/closure tasks Prepared / Not started
+Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 Approved / Not started (readiness revalidated on d96b569); closure Prepared / Not started
 Backend Phase 2                  = PASS (run #2, 1c56cde; run #1 on 232ebcd NOT ACCEPTED)
 Frontend Phase 2                 = PASS (run #2, 2a59651; run #1 on 03c6581 NOT ACCEPTED)
-Integration                      = NOT STARTED
+Integration                      = S08-INT-001 Approved / Not started (readiness revalidated on d96b569)
 Closure                          = NOT STARTED
 STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 ```
@@ -954,7 +955,7 @@ STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 The next permitted workflow action is:
 
 ```text
-S08-INT-001 readiness revalidation on current main
+S08-INT-001 integration-asset implementation
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
@@ -1576,4 +1577,83 @@ S08-FE-PHASE-2 run #2 = PASS
 P1 = 0, P2 = 0, P3 = 0
 Next required activity = S08-INT-001 readiness revalidation on current main (checkpoint §53); both
 Phase 2 PASS records (backend run #2 on 1c56cde, frontend run #2 on 2a59651) are valid.
+```
+
+## 19. Integration Readiness (2026-09-27)
+
+### S08-INT-001 readiness revalidation (2026-09-27, main d96b569)
+
+Entry gate on `origin/main` `d96b569720dd7b232ccf0fdd8cb0e14bfefb3964` (PR #276; tree
+identical to `f4dbb2b`):
+- Both Phase 2 PASS records remain valid.
+  - `S08-BE-PHASE-2` PASS (run #2, `1c56cde`): `backend/` and `docker/` are unchanged between `1c56cde` and `d96b569`.
+  - `S08-FE-PHASE-2` PASS (run #2, `2a59651`): only `tasks/STAGE_08_TASK_INDEX.md` changed after `2a59651`.
+- The complete accepted Stage 8 implementation is on the audited main.
+
+**Checked against the delivered code.** Five independent read-only reviews covered the items below, and a sixth fact-checked the corrections against the code:
+- the Student Start/Resume, Submit and answer PUT matrices and their lock order;
+- Teacher activation, the result pair and cohort, Blitz-first Homework compatibility, the grant, Close, monitoring and the Scheduler scanner;
+- authentication, roles, Tenant isolation, the protected download, request-validation order, the error envelope, the pre-Start keys and the Student item IDs;
+- the Flutter keys, labels and native boundaries (`idempotencyKeyGeneratorProvider`, `studentSubmissionFilePickerProvider`, `localFileActionsProvider`, `appConfigProvider` / `API_BASE_URL`), and the desktop/mobile matrix;
+- the Stage 7 harness patterns.
+
+**Two runtime measurements on the `testlabuz-app:latest` image**, with `PHP_CLI_SERVER_WORKERS=4`:
+- `php -S` alone: one master and four workers.
+- `php artisan serve`: a single server plus a warning without `--no-reload`; one master and four workers with it.
+
+**Corrections marked "Revalidation 2026-09-27" in the contract:**
+- §1: Claude holds both roles, with a fresh-context reviewer at preflight and at the final review; owner decision INT-D1; option A delivery; the implementation baseline.
+- §10: `--no-reload` is required for the four workers (Laravel `v13.24.0`). The runner creates the container only when it is absent, with the exact spec in §10, and never recreates it. The database password is passed by name.
+- §13: the guard checks the command and the `/proc` worker count, and that no scheduler process runs in the container.
+- §14.1.3: the delivered lock shape is accepted: the second waiter waits on the first waiter's tuple lock, and the chain ends at the blocker. The blocker runs only its `SELECT ... FOR UPDATE`. The blocker and observer run inside the container and are excluded by PID.
+- §22: seeded matching and ordering item IDs must not sort into answer order (D1).
+- §26: schema facts; a locked-pair designation sets `updated_at`.
+- §33: the `idempotency_records` columns.
+- §34.1.1: `meta.missing_fields` is allowed only for `institution_settings_incomplete`.
+- §34.1.4: which endpoints need `Idempotency-Key` or an empty body; queries are rejected everywhere except the Teacher Blitz list; validation runs before the `404` lookup on detail and command endpoints; UUIDs are case-insensitive.
+- §34.1.4A: the delivered Start matrix (D3):
+  - a timed-out Resume target → `blitz_time_expired`;
+  - after Close, with a new key → `blitz_not_active`;
+  - `start_normal` when an exception row exists → `attempts_exhausted`;
+  - a reused key with a foreign `attempt_id` → `idempotency_key_reused`;
+  - a due read reconciles the whole Blitz.
+- §34.1.5: Close-finalized Attempts → `attempt_not_editable`; `waiting_for_teacher_review` and `checked` only through seeded Attempts.
+- §34.1.6: only Blitz visibility and the recipient are checked before the claim, so a reused key with any other visible recipient or Blitz → `idempotency_key_reused`; the eligibility codes.
+- §35: probes send `Accept: application/json`; the file route; Teacher answer PUT returns `403`.
+- §40: the activation fingerprint and the replay after Close.
+- §44.1: the scanner uses the application clock; the command output; which Student, monitoring, Close and grant paths also finalize due Attempts, and that none of them may reach the Scheduler Blitz before the first command.
+- §47A.5 and §47A.8: due-time PUT reconciliation; the file blob is staged before the lock.
+- §59 and §60: Close has no key; monitoring serves only an Active Blitz.
+- §66: the container rule; `-FlutterExecutable` is the pinned SDK; the password source.
+- §72 and §73: the preflight additions; where the focused checks run.
+- §77: the Android preparation hand-off to the Project Owner.
+- §94: current readiness.
+
+**Observations outside this task. Nothing is changed for them:**
+- `Stage7E2eSeeder.php:348,354` assigns ordered matching and ordering item IDs. This is fixture data from a closed Stage.
+- By code reading, not executed: an unauthenticated API request without `Accept: application/json` probably reaches Laravel's default guest redirect to a missing `login` route. It would then return `500 server_error` instead of `401`. The Flutter client sends that header. This will be checked during execution and reported separately.
+- `testlabuz-postgres-1` has been stopped since the host restart. The executor starts it; `testlabuz-demo-app` is not touched.
+
+### Project Owner decision INT-D1 (2026-09-27)
+
+Question: who executes the Windows real-stack runner and the Android manual smoke, which
+contract §1 assigned to the Project Owner or CI?
+
+Decision: **A**.
+- Claude executes the Windows runner and the direct API/DB scenarios.
+- The Project Owner performs the Android manual smoke (§§78-80) by hand, from the checklist that `prepare_stage8_manual_smoke.ps1` prints.
+
+Reason: it is the only evidence not produced by the same agent that wrote the code and the
+harness.
+
+### Verdict
+
+No material conflict. Current readiness: `Approved / Not started`.
+
+```text
+Implementation baseline = origin/main after this docs PR merges (tree outside tasks/ = d96b569)
+Next permitted gate     = S08-INT-001 integration-asset implementation
+                          -> Integration Harness Preflight (Claude + fresh-context reviewer)
+                          -> Windows real-stack execution (Claude)
+                          -> Android manual smoke (Project Owner)
 ```
