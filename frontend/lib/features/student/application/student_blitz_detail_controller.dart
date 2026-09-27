@@ -8,8 +8,10 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../data/student_blitz_repository_impl.dart';
+import '../domain/student_blitz.dart';
 import '../domain/student_blitz_route_target.dart';
 import 'student_active_blitz_controller.dart';
+import 'student_blitz_countdown_clock.dart';
 import 'student_blitz_detail_state.dart';
 import 'student_session_key.dart';
 
@@ -98,12 +100,15 @@ class StudentBlitzDetailController extends Notifier<StudentBlitzDetailState> {
   Future<void> _load(StudentSessionKey key) async {
     final generation = ++_generation;
     final requestTarget = target;
+    final clock = ref.read(studentBlitzStopwatchFactoryProvider);
     final retained = state.blitz;
+    final retainedClock = retained == null ? null : state.adoptionClock;
     state = StudentBlitzDetailState(
       status: retained == null
           ? StudentBlitzDetailStatus.loading
           : StudentBlitzDetailStatus.refreshing,
       blitz: retained,
+      adoptionClock: retainedClock,
     );
     try {
       final blitz = await ref
@@ -123,6 +128,14 @@ class StudentBlitzDetailController extends Notifier<StudentBlitzDetailState> {
       state = StudentBlitzDetailState(
         status: StudentBlitzDetailStatus.data,
         blitz: blitz,
+        // An equal timing snapshot keeps its baseline; only a different one
+        // is a new adoption.
+        adoptionClock:
+            retained != null &&
+                retainedClock != null &&
+                _isSameTimingSnapshot(retained, blitz)
+            ? retainedClock
+            : (clock()..start()),
       );
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, key, requestTarget) ||
@@ -170,6 +183,18 @@ class StudentBlitzDetailController extends Notifier<StudentBlitzDetailState> {
           .read(studentActiveBlitzControllerProvider.notifier)
           .refreshAfterExecution(key);
     }
+  }
+
+  bool _isSameTimingSnapshot(StudentBlitzDetail kept, StudentBlitzDetail next) {
+    final keptDeadline = kept.timing.deadlineAt;
+    final nextDeadline = next.timing.deadlineAt;
+    return kept.id.toLowerCase() == next.id.toLowerCase() &&
+        kept.timing.serverNow.isAtSameMomentAs(next.timing.serverNow) &&
+        kept.timing.remainingSeconds == next.timing.remainingSeconds &&
+        (keptDeadline == null
+            ? nextDeadline == null
+            : nextDeadline != null &&
+                  keptDeadline.isAtSameMomentAs(nextDeadline));
   }
 
   bool _canPublish(

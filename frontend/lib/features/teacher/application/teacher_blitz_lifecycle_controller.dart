@@ -75,6 +75,7 @@ class TeacherBlitzLifecycleController
   _LifecycleOperation? _reviewedOperation;
   String? _pendingActivationKey;
   var _operationGeneration = 0;
+  var _routeOwnerGeneration = 0;
 
   String get _topicKey => target.topicId.toLowerCase();
 
@@ -211,11 +212,23 @@ class TeacherBlitzLifecycleController
     _emit(const TeacherBlitzLifecycleState());
   }
 
-  void invalidateRouteCompletions() {
+  /// A screen instance claims this route; a popping older instance of the
+  /// same route can then no longer end the newer instance's work.
+  int enterRoute() => ++_routeOwnerGeneration;
+
+  /// With [ownerGeneration], only the current route owner may invalidate.
+  void invalidateRouteCompletions([int? ownerGeneration]) {
+    if (_isStaleRouteOwner(ownerGeneration)) {
+      return;
+    }
     _operationGeneration += 1;
   }
 
-  void leaveRoute() {
+  /// With [ownerGeneration], only the current route owner may leave.
+  void leaveRoute([int? ownerGeneration]) {
+    if (_isStaleRouteOwner(ownerGeneration)) {
+      return;
+    }
     invalidateRouteCompletions();
     _pendingActivationKey = null;
     _releaseActiveLease();
@@ -223,6 +236,9 @@ class TeacherBlitzLifecycleController
       _emit(const TeacherBlitzLifecycleState());
     }
   }
+
+  bool _isStaleRouteOwner(int? ownerGeneration) =>
+      ownerGeneration != null && ownerGeneration != _routeOwnerGeneration;
 
   /// Publishes [next] with Retry availability derived from the pending key.
   void _emit(TeacherBlitzLifecycleState next) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,8 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
 import 'package:testlabuz_client/features/auth/domain/user_role.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_blitz_lifecycle_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
@@ -610,6 +614,85 @@ void main() {
     expect(find.byKey(const Key('teacherBlitzMonitoringScreen')), findsNothing);
     expect(blitz.fetchIds, isEmpty);
     expect(blitz.monitoringIds, isEmpty);
+  });
+
+  testWidgets('Monitor during the Back transition keeps monitoring live', (
+    tester,
+  ) async {
+    final blitz = _activeBlitz();
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherBlitzDetailLocation(_topicId, _blitzId),
+      blitz: blitz,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('teacherBlitzMonitorButton')));
+    await tester.pumpAndSettle();
+    expect(blitz.monitoringIds, hasLength(1));
+
+    // The old monitoring screen is still animating out when the Teacher
+    // opens monitoring again; its late leave must not stop the new screen.
+    await tester.tap(find.byKey(const Key('teacherBlitzMonitoringBackButton')));
+    await tester.pump(const Duration(milliseconds: 50));
+    _router(
+      tester,
+    ).go(AppRoutePaths.teacherBlitzMonitoringLocation(_topicId, _blitzId));
+    await tester.pumpAndSettle();
+    final reads = blitz.monitoringIds.length;
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+
+    expect(
+      _routerPath(tester),
+      AppRoutePaths.teacherBlitzMonitoringLocation(_topicId, _blitzId),
+    );
+    expect(find.text('Live · updates every 5 seconds'), findsOneWidget);
+    expect(blitz.monitoringIds.length, greaterThan(reads));
+  });
+
+  testWidgets('reopening a Blitz during the Back transition keeps its work', (
+    tester,
+  ) async {
+    final pending = Completer<TeacherBlitz>();
+    final blitz = FakeTeacherBlitzRepository(
+      onFetch: (id) async => teacherBlitz(id: id),
+      onActivate: (_, _) => pending.future,
+    );
+    await _pumpApp(
+      tester,
+      location: AppRoutePaths.teacherBlitzDetailLocation(_topicId, _blitzId),
+      blitz: blitz,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('teacherBlitzBackButton')));
+    await tester.pump(const Duration(milliseconds: 50));
+    _router(
+      tester,
+    ).go(AppRoutePaths.teacherBlitzDetailLocation(_topicId, _blitzId));
+    await tester.pump();
+    await tester.pump();
+    // The reopened screen activates while the old one is still animating out.
+    final activation =
+        ProviderScope.containerOf(tester.element(find.byType(TestLabUzApp)))
+            .read(
+              teacherBlitzLifecycleControllerProvider(
+                TeacherBlitzRouteTarget(topicId: _topicId, blitzId: _blitzId),
+              ).notifier,
+            )
+            .activate();
+    // Let the old screen finish its exit and run its post-frame leave; the
+    // activation progress keeps animating, so settle explicitly.
+    for (var frame = 0; frame < 10; frame += 1) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    pending.complete(teacherBlitz(status: TeacherBlitzStatus.active));
+    await activation;
+    await tester.pumpAndSettle();
+
+    expect(blitz.activateRequests, hasLength(1));
+    expect(find.text('Blitz activated successfully.'), findsOneWidget);
   });
 
   testWidgets('Monitor opens monitoring and Back returns to the Blitz', (

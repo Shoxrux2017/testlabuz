@@ -32,6 +32,9 @@ class TeacherBlitzMonitoringScreen extends ConsumerStatefulWidget {
 class _TeacherBlitzMonitoringScreenState
     extends ConsumerState<TeacherBlitzMonitoringScreen> {
   late TeacherBlitzMonitoringController _monitoring;
+
+  /// Set once this instance owns the live route; null until then.
+  int? _liveRouteOwner;
   late final AppLifecycleListener _appLifecycle;
 
   @override
@@ -51,20 +54,27 @@ class _TeacherBlitzMonitoringScreenState
       return;
     }
     final previous = _monitoring;
+    final previousOwner = _liveRouteOwner;
+    _liveRouteOwner = null;
     _bindTarget();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      previous.leaveLiveRoute();
-    });
+    if (previousOwner != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        previous.leaveLiveRoute(previousOwner);
+      });
+    }
   }
 
   @override
   void dispose() {
     _appLifecycle.dispose();
     final monitoring = _monitoring;
+    final owner = _liveRouteOwner;
     // Provider state may not change while the tree is finalizing.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      monitoring.leaveLiveRoute();
-    });
+    if (owner != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        monitoring.leaveLiveRoute(owner);
+      });
+    }
     super.dispose();
   }
 
@@ -81,7 +91,7 @@ class _TeacherBlitzMonitoringScreenState
       if (appState != null && appState != AppLifecycleState.resumed) {
         monitoring.setAppResumed(false);
       }
-      monitoring.enterLiveRoute();
+      _liveRouteOwner = monitoring.enterLiveRoute();
     });
   }
 

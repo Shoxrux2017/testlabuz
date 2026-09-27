@@ -38,6 +38,7 @@ class TeacherBlitzMonitoringController
   var _requestActive = false;
   var _generation = 0;
   var _routeEpoch = 0;
+  var _routeOwnerGeneration = 0;
   var _routeOwned = false;
   var _routeLeft = false;
   var _appResumed = true;
@@ -75,18 +76,25 @@ class TeacherBlitzMonitoringController
     return _stateForOwnership();
   }
 
-  /// The monitoring route is now the current foreground owner.
-  void enterLiveRoute() {
-    if (!_isAlive) {
-      return;
+  /// The monitoring route is now the current foreground owner. Returns the
+  /// owner generation; a popping older screen of the same route can then no
+  /// longer stop the newer one.
+  int enterLiveRoute() {
+    final generation = ++_routeOwnerGeneration;
+    if (_isAlive) {
+      _routeOwned = true;
+      _routeLeft = false;
+      _publish(state);
     }
-    _routeOwned = true;
-    _routeLeft = false;
-    _publish(state);
+    return generation;
   }
 
-  /// Stops polling and drops every later publication for this route.
-  void leaveLiveRoute() {
+  /// Stops polling and drops every later publication for this route. With
+  /// [ownerGeneration], only the current owner may leave.
+  void leaveLiveRoute([int? ownerGeneration]) {
+    if (ownerGeneration != null && ownerGeneration != _routeOwnerGeneration) {
+      return;
+    }
     _routeOwned = false;
     _routeLeft = true;
     _routeEpoch += 1;

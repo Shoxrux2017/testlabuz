@@ -52,8 +52,32 @@ class _StudentBlitzDetailScreenState
   /// until a newer server snapshot arrives.
   StudentBlitzCountdownAnchor? _expiredPreStartAnchor;
   bool _leaving = false;
+  late final AppLifecycleListener _appLifecycle;
 
   StudentBlitzRouteTarget get _target => widget.target;
+
+  @override
+  void initState() {
+    super.initState();
+    // A countdown stands still while the app is hidden or the device sleeps;
+    // one detail read on return re-anchors it from a fresh server snapshot.
+    // It never sends a Start or replays one.
+    _appLifecycle = AppLifecycleListener(
+      onShow: () {
+        if (mounted) {
+          ref
+              .read(studentBlitzDetailControllerProvider(_target).notifier)
+              .refresh();
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _appLifecycle.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -203,6 +227,7 @@ class _StudentBlitzDetailScreenState
       StudentBlitzDetailStatus.data ||
       StudentBlitzDetailStatus.refreshing => _PreStartContent(
         blitz: detail.blitz!,
+        adoptionClock: detail.adoptionClock,
         refreshing: detail.status == StudentBlitzDetailStatus.refreshing,
         busy: !start.acceptsNewRequest,
         expiredPreStartAnchor: _expiredPreStartAnchor,
@@ -485,6 +510,7 @@ class _StudentBlitzDetailScreenState
 /// not started; every other pre-Start shape has no effective countdown.
 StudentBlitzCountdownAnchor? studentBlitzPreStartAnchor(
   StudentBlitzDetail blitz,
+  Stopwatch adoptionClock,
 ) {
   final deadline = blitz.timing.deadlineAt;
   final remaining = blitz.timing.remainingSeconds;
@@ -499,6 +525,7 @@ StudentBlitzCountdownAnchor? studentBlitzPreStartAnchor(
     deadlineAt: deadline,
     serverNow: blitz.timing.serverNow,
     remainingSeconds: remaining,
+    adoptionClock: adoptionClock,
   );
 }
 
@@ -682,6 +709,7 @@ class _TerminalExecution extends ConsumerWidget {
 class _PreStartContent extends StatelessWidget {
   const _PreStartContent({
     required this.blitz,
+    required this.adoptionClock,
     required this.refreshing,
     required this.busy,
     required this.expiredPreStartAnchor,
@@ -691,6 +719,9 @@ class _PreStartContent extends StatelessWidget {
   });
 
   final StudentBlitzDetail blitz;
+
+  /// Started when [blitz] was published by the detail controller.
+  final Stopwatch? adoptionClock;
   final bool refreshing;
   final bool busy;
   final StudentBlitzCountdownAnchor? expiredPreStartAnchor;
@@ -702,7 +733,10 @@ class _PreStartContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final attempts = blitz.attempts;
     final duration = formatStudentBlitzDuration(blitz.durationSeconds);
-    final classAnchor = studentBlitzPreStartAnchor(blitz);
+    final clock = adoptionClock;
+    final classAnchor = clock == null
+        ? null
+        : studentBlitzPreStartAnchor(blitz, clock);
     return SingleChildScrollView(
       key: const Key('studentBlitzDetailScroll'),
       padding: const EdgeInsets.all(16),

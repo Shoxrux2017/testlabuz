@@ -10,9 +10,11 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_detail_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_blitz_question_builder_screen.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_question_configuration_fields.dart';
 
@@ -98,6 +100,66 @@ void main() {
     expect(find.text('Question created successfully.'), findsOneWidget);
     expect(find.text('Total points: 20'), findsOneWidget);
   });
+
+  testWidgets(
+    'a locked official pair does not block Blitz Question authoring',
+    (tester) async {
+      final question = teacherHomeworkQuestions()[5];
+      final repository = FakeTeacherBlitzRepository(
+        onFetch: (id) async => teacherBlitz(id: id, questions: [question]),
+        onAddQuestion: (id, _) async => teacherBlitz(
+          id: id,
+          questions: [question, _openWritten(position: 2)],
+        ),
+        onUpdateQuestion: (_, _) async => teacherBlitz(
+          questions: [_openWritten(position: 1, id: question.id)],
+        ),
+      );
+      // The Homework locked the pair first; this Draft Blitz is its official
+      // Blitz. Only Homework authoring is bound by that lock.
+      final pairs = FakeTeacherTopicResultPairRepository(
+        onFetch: (topicId) async => TeacherTopicResultPair(
+          id: '95000000-0000-0000-0000-000000000001',
+          topicId: topicId,
+          homeworkAssessmentId: '50000000-0000-0000-0000-000000000001',
+          blitzAssessmentId: _blitzId,
+          cohortSnapshottedAt: DateTime.utc(2026, 9, 17, 12),
+          lockedAt: DateTime.utc(2026, 9, 17, 12),
+          designatedAt: DateTime.utc(2026, 9, 17, 12),
+          createdAt: DateTime.utc(2026, 9, 17, 12),
+          updatedAt: DateTime.utc(2026, 9, 17, 12),
+        ),
+      );
+      await _pumpBuilder(tester, repository: repository, pairs: pairs);
+
+      await _openAddEditor(tester);
+      await _selectType(tester, TeacherQuestionType.openWritten);
+      await tester.enterText(
+        find.byKey(const Key('teacherQuestionPromptField')),
+        'Explain the timed method.',
+      );
+      await tester.enterText(
+        find.byKey(const Key('teacherQuestionPointsField')),
+        '2',
+      );
+      await tester.tap(
+        find.byKey(const Key('teacherQuestionEditorSubmitButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.addQuestionRequests, hasLength(1));
+
+      await _openEditEditor(tester, question.id);
+      await tester.enterText(
+        find.byKey(const Key('teacherQuestionPromptField')),
+        'A clearer written prompt.',
+      );
+      await tester.tap(
+        find.byKey(const Key('teacherQuestionEditorSubmitButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(repository.updateQuestionRequests, hasLength(1));
+    },
+  );
 
   testWidgets('Edit starts from the current Question and skips no-op PATCH', (
     tester,
@@ -408,6 +470,7 @@ void main() {
 Future<void> _pumpBuilder(
   WidgetTester tester, {
   required FakeTeacherBlitzRepository repository,
+  FakeTeacherTopicResultPairRepository? pairs,
 }) async {
   await tester.binding.setSurfaceSize(const Size(1180, 820));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -422,6 +485,8 @@ Future<void> _pumpBuilder(
         ),
         appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
         teacherBlitzRepositoryProvider.overrideWithValue(repository),
+        if (pairs != null)
+          teacherTopicResultPairRepositoryProvider.overrideWithValue(pairs),
       ],
       child: const MaterialApp(
         home: TeacherBlitzQuestionBuilderScreen(

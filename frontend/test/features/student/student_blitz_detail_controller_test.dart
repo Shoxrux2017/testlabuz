@@ -103,6 +103,42 @@ void main() {
     );
   });
 
+  test('a published snapshot starts its countdown baseline; an equal re-read '
+      'keeps it', () async {
+    final harness = await _Harness.loaded();
+    final first = harness.state.adoptionClock!;
+    expect(first.isRunning, isTrue);
+
+    harness.controller.refresh();
+    expect(harness.state.status, StudentBlitzDetailStatus.refreshing);
+    expect(harness.state.adoptionClock, same(first));
+
+    // The server cuts server_now to whole seconds; two reads can be equal.
+    harness.pending.last.complete(studentBlitzDetail());
+    await flushStudentControllers();
+    expect(harness.state.status, StudentBlitzDetailStatus.data);
+    expect(harness.state.adoptionClock, same(first));
+  });
+
+  test('a newer snapshot starts a new countdown baseline', () async {
+    final harness = await _Harness.loaded();
+    final first = harness.state.adoptionClock!;
+
+    harness.controller.refresh();
+    harness.pending.last.complete(
+      studentBlitzDetail(
+        timing: studentBlitzTiming(
+          serverNow: DateTime.utc(2026, 9, 17, 12, 1),
+          remainingSeconds: 240,
+        ),
+      ),
+    );
+    await flushStudentControllers();
+
+    expect(harness.state.adoptionClock, isNot(same(first)));
+    expect(harness.state.adoptionClock!.isRunning, isTrue);
+  });
+
   test('reconcile supersedes an older in-flight read', () async {
     final harness = await _Harness.loaded();
     harness.controller.refresh();
