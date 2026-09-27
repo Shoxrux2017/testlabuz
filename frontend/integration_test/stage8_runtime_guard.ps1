@@ -36,6 +36,10 @@ function Exit-Stage8HarnessLock {
 
 function Test-Stage8ManualSmokePending { Test-Path -LiteralPath $script:Stage8ManualSmokeMarker }
 
+function Get-Stage8ManualSmokePendingMessage {
+    "a prepared Android manual smoke is pending (marker $script:Stage8ManualSmokeMarker); finish it with prepare_stage8_manual_smoke.ps1 -CompleteManualSmokeAndCleanup or withdraw it with -AbandonManualSmoke."
+}
+
 $script:Stage8RequiredEnvironment = @{
     APP_ENV = 'testing'
     APP_DEBUG = 'false'
