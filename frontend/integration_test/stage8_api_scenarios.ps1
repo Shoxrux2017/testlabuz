@@ -453,55 +453,80 @@ function Get-Stage8FrozenAnswer {
     $states[0].answer
 }
 
-# Sections 47A.7-47A.8: real write-vs-Submit races, proven simultaneous inside PostgreSQL first.
-function Invoke-Stage8Races {
-    param($Context)
+function Assert-Stage8SingleSubmitResult {
+    param($Facts, [string] $AttemptId)
+    if (@($Facts.tables.idempotency_records | Where-Object { $_.operation -ceq 'student.blitz.attempt.submit' -and $_.result_resource_id -ceq $AttemptId }).Count -ne 1) {
+        throw 'production defect: A race did not leave exactly one Submit result.'
+    }
+}
+
+# Section 47A.7: typed write (A) vs Submit (B) on one isolated Attempt, with the given request queued first.
+function Invoke-Stage8TypedRace {
+    param($Context, [string] $Fixture, [string] $Actor, [ValidateSet('A', 'B')][string] $First, [int] $StartKey, [int] $SubmitKey)
     $m = $Context.Manifest
     $base = $Context.ApiBaseUrl
-    $results = [ordered] @{}
-    $typedStart = Invoke-Stage8Start $Context d_race_typed $m.assessments.race_typed (New-Stage8StartRequest (New-Stage8Key 530) start_normal)
-    Assert-Stage8ApiSuccess $typedStart 201
-    $typedAttempt = [string] $typedStart.Json.data.id
-    $typedQuestion = [string] $m.questions.race_typed.short_written
-    Assert-Stage8ApiSuccess (Invoke-Stage8Answer $Context d_race_typed $typedAttempt $typedQuestion @{ type = 'short_written'; text = 'E2E S08 race prior' })
-    $submitKey = New-Stage8Key 531
-    $probe = Invoke-Stage8OverlapProbe -AttemptId $typedAttempt -Runtime $Context.Runtime `
-        -RequestA @{ Method = 'PUT'; Url = "$base/student/attempts/$typedAttempt/answers/$typedQuestion"; Body = (@{ type = 'short_written'; text = 'E2E S08 race written' } | ConvertTo-Json -Compress) } -TokenA (Get-Stage8Token $Context d_race_typed -Fresh) `
-        -RequestB @{ Method = 'POST'; Url = "$base/student/attempts/$typedAttempt/submit"; Key = $submitKey; Body = '{}' } -TokenB (Get-Stage8Token $Context d_race_typed -Fresh)
+    $start = Invoke-Stage8Start $Context $Actor $m.assessments.$Fixture (New-Stage8StartRequest (New-Stage8Key $StartKey) start_normal)
+    Assert-Stage8ApiSuccess $start 201
+    $attempt = [string] $start.Json.data.id
+    $question = [string] $m.questions.$Fixture.short_written
+    Assert-Stage8ApiSuccess (Invoke-Stage8Answer $Context $Actor $attempt $question @{ type = 'short_written'; text = 'E2E S08 race prior' })
+    $probe = Invoke-Stage8OverlapProbe -AttemptId $attempt -Runtime $Context.Runtime -First $First `
+        -RequestA @{ Method = 'PUT'; Url = "$base/student/attempts/$attempt/answers/$question"; Body = (@{ type = 'short_written'; text = 'E2E S08 race written' } | ConvertTo-Json -Compress) } -TokenA (Get-Stage8Token $Context $Actor -Fresh) `
+        -RequestB @{ Method = 'POST'; Url = "$base/student/attempts/$attempt/submit"; Key = (New-Stage8Key $SubmitKey); Body = '{}' } -TokenB (Get-Stage8Token $Context $Actor -Fresh)
     $facts = Get-Stage8Facts
-    $answer = @(Get-Stage8Rows $facts attempt_answers attempt_id $typedAttempt)[0]
+    $answer = @(Get-Stage8Rows $facts attempt_answers attempt_id $attempt)[0]
     $text = [string] @($facts.tables.answer_text_values | Where-Object answer_id -CEQ $answer.id)[0].text_value
     $value = Get-Stage8RaceValue $text 'E2E S08 race written' 'E2E S08 race prior'
-    $frozen = Get-Stage8FrozenAnswer $probe.B $typedQuestion
+    $frozen = Get-Stage8FrozenAnswer $probe.B $question
     $frozenValue = Get-Stage8RaceValue $(if ($null -ne $frozen) { $frozen.text }) 'E2E S08 race written' 'E2E S08 race prior'
-    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $typedAttempt $typedQuestion $value $frozenValue
-    if (@($facts.tables.idempotency_records | Where-Object { $_.operation -ceq 'student.blitz.attempt.submit' -and $_.result_resource_id -ceq $typedAttempt }).Count -ne 1) { throw 'production defect: Typed race did not leave exactly one Submit result.' }
-    $results.typed = [pscustomobject] @{ attempt = $typedAttempt; branch = $branch; first_launched = $probe.FirstLaunched; evidence = $probe.Evidence }
+    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $attempt $question $value $frozenValue $probe.FirstQueued
+    Assert-Stage8SingleSubmitResult $facts $attempt
+    [pscustomobject] @{ attempt = $attempt; first_queued = $probe.FirstQueued; branch = $branch; evidence = $probe.Evidence }
+}
 
-    $fileStart = Invoke-Stage8Start $Context d_race_file $m.assessments.race_file (New-Stage8StartRequest (New-Stage8Key 532) start_normal)
-    Assert-Stage8ApiSuccess $fileStart 201
-    $fileAttempt = [string] $fileStart.Json.data.id
-    $fileQuestion = [string] $m.questions.race_file.file_based
-    $priorUpload = Invoke-Stage8Call $Context d_race_file "/student/attempts/$fileAttempt/answers/$fileQuestion" PUT -FilePath $Context.Files.Files['answer_pdf'].path
+# Section 47A.8: file replacement (A) vs Submit (B) on one isolated Attempt, with the given request queued first.
+function Invoke-Stage8FileRace {
+    param($Context, [string] $Fixture, [string] $Actor, [ValidateSet('A', 'B')][string] $First, [int] $StartKey, [int] $SubmitKey)
+    $m = $Context.Manifest
+    $base = $Context.ApiBaseUrl
+    $start = Invoke-Stage8Start $Context $Actor $m.assessments.$Fixture (New-Stage8StartRequest (New-Stage8Key $StartKey) start_normal)
+    Assert-Stage8ApiSuccess $start 201
+    $attempt = [string] $start.Json.data.id
+    $question = [string] $m.questions.$Fixture.file_based
+    $priorUpload = Invoke-Stage8Call $Context $Actor "/student/attempts/$attempt/answers/$question" PUT -FilePath $Context.Files.Files['answer_pdf'].path
     Assert-Stage8ApiSuccess $priorUpload
-    $fileKey = New-Stage8Key 533
-    $probe = Invoke-Stage8OverlapProbe -AttemptId $fileAttempt -Runtime $Context.Runtime `
-        -RequestA @{ Method = 'PUT'; Url = "$base/student/attempts/$fileAttempt/answers/$fileQuestion"; FilePath = $Context.Files.Files['replacement_docx'].path } -TokenA (Get-Stage8Token $Context d_race_file -Fresh) `
-        -RequestB @{ Method = 'POST'; Url = "$base/student/attempts/$fileAttempt/submit"; Key = $fileKey; Body = '{}' } -TokenB (Get-Stage8Token $Context d_race_file -Fresh)
+    $priorFileId = [string] $priorUpload.Json.data.answer.file.id
+    $probe = Invoke-Stage8OverlapProbe -AttemptId $attempt -Runtime $Context.Runtime -First $First `
+        -RequestA @{ Method = 'PUT'; Url = "$base/student/attempts/$attempt/answers/$question"; FilePath = $Context.Files.Files['replacement_docx'].path } -TokenA (Get-Stage8Token $Context $Actor -Fresh) `
+        -RequestB @{ Method = 'POST'; Url = "$base/student/attempts/$attempt/submit"; Key = (New-Stage8Key $SubmitKey); Body = '{}' } -TokenB (Get-Stage8Token $Context $Actor -Fresh)
     $facts = Get-Stage8Facts
-    $answer = @(Get-Stage8Rows $facts attempt_answers attempt_id $fileAttempt)[0]
+    $answer = @(Get-Stage8Rows $facts attempt_answers attempt_id $attempt)[0]
     $file = Get-Stage8Row $facts files (Get-Stage8Row $facts answer_files $answer.id answer_id).file_id
     $value = Get-Stage8RaceValue $file.checksum_sha256 $Context.Files.Files['replacement_docx'].sha256 $Context.Files.Files['answer_pdf'].sha256
     # Each upload is a new File row, so the frozen File id names the branch exactly.
     $writtenFileId = if ([int] $probe.A.StatusCode -eq 200) { [string] $probe.A.Json.data.answer.file.id } else { '' }
-    $frozen = Get-Stage8FrozenAnswer $probe.B $fileQuestion
-    $frozenValue = Get-Stage8RaceValue $(if ($null -ne $frozen) { $frozen.file.id }) $writtenFileId ([string] $priorUpload.Json.data.answer.file.id)
-    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $fileAttempt $fileQuestion $value $frozenValue
-    if ([string] $file.id -cne $(if ($value -ceq 'written') { $writtenFileId } else { [string] $priorUpload.Json.data.answer.file.id })) { throw 'production defect: The persisted raced File is not the one its branch uploaded.' }
-    if (@($facts.tables.idempotency_records | Where-Object { $_.operation -ceq 'student.blitz.attempt.submit' -and $_.result_resource_id -ceq $fileAttempt }).Count -ne 1) { throw 'production defect: File race did not leave exactly one Submit result.' }
-    $fixture = if ($value -ceq 'written') { 'replacement_docx' } else { 'answer_pdf' }
-    Assert-Stage8File $facts $file (Get-Stage8FileExpectation $Context.Files $fixture) (Get-Stage8Row $facts assessment_attempts $fileAttempt) $fileQuestion
-    $results.file = [pscustomobject] @{ attempt = $fileAttempt; branch = $branch; first_launched = $probe.FirstLaunched; evidence = $probe.Evidence }
+    $frozen = Get-Stage8FrozenAnswer $probe.B $question
+    $frozenValue = Get-Stage8RaceValue $(if ($null -ne $frozen) { $frozen.file.id }) $writtenFileId $priorFileId
+    $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $attempt $question $value $frozenValue $probe.FirstQueued
+    if ([string] $file.id -cne $(if ($value -ceq 'written') { $writtenFileId } else { $priorFileId })) { throw 'production defect: The persisted raced File is not the one its branch uploaded.' }
+    if ($branch -ceq 'submit_first' -and (@($facts.tables.files | Where-Object uploaded_by_user_id -CEQ ([string] $m.users.$Actor) | ForEach-Object id) -join ',') -cne $priorFileId) {
+        throw 'production defect: A race upload rejected after the Submit left a File row.'
+    }
+    Assert-Stage8SingleSubmitResult $facts $attempt
+    $fixtureName = if ($value -ceq 'written') { 'replacement_docx' } else { 'answer_pdf' }
+    Assert-Stage8File $facts $file (Get-Stage8FileExpectation $Context.Files $fixtureName) (Get-Stage8Row $facts assessment_attempts $attempt) $question
+    [pscustomobject] @{ attempt = $attempt; first_queued = $probe.FirstQueued; branch = $branch; evidence = $probe.Evidence }
+}
+
+# Sections 47A.7-47A.8: real write-vs-Submit races, proven simultaneous inside PostgreSQL first.
+# Each race runs in both queue orders on its own Attempt (owner decision 2026-09-27).
+function Invoke-Stage8Races {
+    param($Context)
+    $results = [ordered] @{}
+    $results.typed_write_queued_first = Invoke-Stage8TypedRace $Context race_typed d_race_typed A 530 531
+    $results.typed_submit_queued_first = Invoke-Stage8TypedRace $Context race_typed_2 d_race_typed_2 B 534 535
+    $results.file_write_queued_first = Invoke-Stage8FileRace $Context race_file d_race_file A 532 533
+    $results.file_submit_queued_first = Invoke-Stage8FileRace $Context race_file_2 d_race_file_2 B 536 537
     Add-Stage8Evidence $Context 'write_vs_submit_races' ([pscustomobject] $results)
 }
 

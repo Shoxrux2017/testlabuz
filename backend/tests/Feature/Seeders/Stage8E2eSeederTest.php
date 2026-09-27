@@ -224,7 +224,7 @@ class Stage8E2eSeederTest extends TestCase
         $this->assertSame('draft', DB::table('blitz_tasks')->where('assessment_id', $assessments['unset'])->value('status'));
         $this->assertSame(1, DB::table('questions')->where('assessment_id', $assessments['unset'])->count());
 
-        $expected = ['late_typed' => [6, 'd_late_typed'], 'late_file' => [8, 'd_late_file'], 'race_typed' => [3600, 'd_race_typed'], 'race_file' => [3600, 'd_race_file'],
+        $expected = ['late_typed' => [6, 'd_late_typed'], 'late_file' => [8, 'd_late_file'], 'race_typed' => [3600, 'd_race_typed'], 'race_file' => [3600, 'd_race_file'], 'race_typed_2' => [3600, 'd_race_typed_2'], 'race_file_2' => [3600, 'd_race_file_2'],
             'matrix_timeout' => [3, 'd_timeout_resume'], 'matrix_late_submit' => [3, 'd_late_submit'], 'timeout_ui' => [45, 'd_timeout_ui']];
         foreach ($expected as $name => [$duration, $student]) {
             $blitz = DB::table('blitz_tasks')->where('assessment_id', $assessments[$name])->sole();
@@ -233,6 +233,7 @@ class Stage8E2eSeederTest extends TestCase
             $this->assertSame(0, DB::table('assessment_attempts')->where('assessment_id', $assessments[$name])->count(), $name);
         }
         $this->assertSame('file_based', DB::table('questions')->where('assessment_id', $assessments['race_file'])->value('type'));
+        $this->assertSame('file_based', DB::table('questions')->where('assessment_id', $assessments['race_file_2'])->value('type'));
         $this->assertSame('file_based', DB::table('questions')->where('assessment_id', $assessments['late_file'])->value('type'));
         $forward = DB::table('assessment_attempts')->where('assessment_id', $assessments['forward_status'])->orderBy('status')->get();
         $this->assertSame(['checked', 'waiting_for_teacher_review'], $forward->pluck('status')->all());

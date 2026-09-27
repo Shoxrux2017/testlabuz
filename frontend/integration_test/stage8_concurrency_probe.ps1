@@ -93,6 +93,11 @@ function Assert-Stage8RaceVerdict {
         [array]::IndexOf($Events, 'blocker_locked') -lt 0 -or [array]::IndexOf($Events, 'blocker_locked') -gt $overlap) {
         throw 'CONCURRENCY EVIDENCE = INCOMPLETE: blocker release/overlap order is invalid.'
     }
+    # The winner is judged against the queue order, so the first request must be proven queued before the second starts.
+    $queued = [array]::IndexOf($Events, 'first_request_queued')
+    if ($queued -lt 0 -or 'first_request_not_queued' -cin $Events -or [array]::IndexOf($Events, 'requests_started') -lt $queued) {
+        throw 'CONCURRENCY EVIDENCE = INCOMPLETE: the first request was not proven queued before the second started.'
+    }
 }
 
 function Get-Stage8AttemptTiming {
@@ -267,8 +272,8 @@ function Receive-Stage8RaceRequest {
     finally { Remove-Job -Job $Job -Force -ErrorAction SilentlyContinue }
 }
 
-# Full Section 14.1 protocol for one race. It never forces a winner: the first request is chosen at random
-# and the business oracle judges the resulting branch.
+# Full Section 14.1 protocol for one race. The caller picks which request queues first, and the business
+# oracle requires that request to win (each race runs in both orders, owner decision 2026-09-27).
 # The second request starts only once the first waits in the lock queue. The PHP built-in server can otherwise
 # accept both connections in one worker and serve them one after the other, so they would never overlap.
 function Invoke-Stage8OverlapProbe {
@@ -278,7 +283,9 @@ function Invoke-Stage8OverlapProbe {
         [Parameter(Mandatory = $true)][string] $TokenA,
         [Parameter(Mandatory = $true)][hashtable] $RequestB,
         [Parameter(Mandatory = $true)][string] $TokenB,
-        [Parameter(Mandatory = $true)][psobject] $Runtime
+        [Parameter(Mandatory = $true)][psobject] $Runtime,
+        # A = the answer write, B = the Submit; the caller runs each race in both orders.
+        [Parameter(Mandatory = $true)][ValidateSet('A', 'B')][string] $First
     )
     $timing = Get-Stage8AttemptTiming -AttemptId $AttemptId
     if ($timing.status -cne 'in_progress' -or $null -eq $timing.deadline_at) { throw 'integration-harness defect: Stage 8 race requires an in-progress manifest Attempt.' }
@@ -292,7 +299,7 @@ function Invoke-Stage8OverlapProbe {
     try {
         $blocker = Start-Stage8Blocker -AttemptId $AttemptId
         $events.Add('blocker_locked')
-        $aFirst = (Get-Random -Minimum 0 -Maximum 2) -eq 0
+        $aFirst = $First -ceq 'A'
         if ($aFirst) { $jobA = Start-Stage8RaceRequest -Request $RequestA -Token $TokenA } else { $jobB = Start-Stage8RaceRequest -Request $RequestB -Token $TokenB }
         $queued = Watch-Stage8LockOverlap -BlockerPid $blocker.Pid -ApplicationAddress $Runtime.ClientAddress -Waiters 1
         if ($queued.timed_out) { $events.Add('first_request_not_queued') } else { $events.Add('first_request_queued') }
@@ -322,5 +329,5 @@ function Invoke-Stage8OverlapProbe {
         $codeB = if ($null -ne $resultB.Json -and $null -ne $resultB.Json.PSObject.Properties['code']) { $resultB.Json.code } else { '' }
         throw "$($_.Exception.Message) [A=$($resultA.StatusCode) $codeA; B=$($resultB.StatusCode) $codeB; samples=$(@($observation.samples).Count); lock_waiters_per_sample=$seen; events=$($events -join ',')]"
     }
-    [pscustomobject] @{ Evidence = $evidence; Events = $events.ToArray(); A = $resultA; B = $resultB; FirstLaunched = $(if ($aFirst) { 'A' } else { 'B' }) }
+    [pscustomobject] @{ Evidence = $evidence; Events = $events.ToArray(); A = $resultA; B = $resultB; FirstQueued = $First }
 }

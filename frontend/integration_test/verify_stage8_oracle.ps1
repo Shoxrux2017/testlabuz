@@ -237,17 +237,19 @@ $raceAttempt = [pscustomobject] @{ id = 'n1'; status = 'submitted'; finalization
 $raceFacts = [pscustomobject] @{ tables = (New-Stage8Tables @{ assessment_attempts = @($raceAttempt); attempt_answers = @($answer) }); blobs = @(); public_blobs = @() }
 $ok = [pscustomobject] @{ StatusCode = 200; Json = $null }
 $notEditable = [pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'attempt_not_editable' } }
-if ((Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written written) -cne 'write_first' -or (Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior prior) -cne 'submit_first') { throw 'integration-harness defect: Oracle verifier rejected a valid race branch.' }
+if ((Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written written A) -cne 'write_first' -or (Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior prior B) -cne 'submit_first') { throw 'integration-harness defect: Oracle verifier rejected a valid race branch.' }
 $script:checks += 2
-Confirm-Stage8Reject 'write 200 but persisted pre-race value' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 prior prior }
-Confirm-Stage8Reject 'write 409 but persisted raced value' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 written written }
-Confirm-Stage8Reject 'race value matching neither branch' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 other other }
-Confirm-Stage8Reject 'race write with another conflict code' { Assert-Stage8RaceBranch ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'blitz_time_expired' } }) $ok $raceFacts n1 q1 prior prior }
-Confirm-Stage8Reject 'race Submit failing' { Assert-Stage8RaceBranch $ok ([pscustomobject] @{ StatusCode = 409; Json = $null }) $raceFacts n1 q1 written written }
+Confirm-Stage8Reject 'write 200 but persisted pre-race value' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 prior prior A }
+Confirm-Stage8Reject 'write 409 but persisted raced value' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 written written B }
+Confirm-Stage8Reject 'race value matching neither branch' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 other other A }
+Confirm-Stage8Reject 'race write with another conflict code' { Assert-Stage8RaceBranch ([pscustomobject] @{ StatusCode = 409; Json = [pscustomobject] @{ code = 'blitz_time_expired' } }) $ok $raceFacts n1 q1 prior prior B }
+Confirm-Stage8Reject 'race Submit failing' { Assert-Stage8RaceBranch $ok ([pscustomobject] @{ StatusCode = 409; Json = $null }) $raceFacts n1 q1 written written A }
 $postFreeze = Copy-Stage8Synthetic $raceFacts; $postFreeze.tables.attempt_answers[0].updated_at = '2026-09-27 10:06:00+00'
-Confirm-Stage8Reject 'answer write committed after the Submit freeze (later second)' { Assert-Stage8RaceBranch $ok $ok $postFreeze n1 q1 written written }
-Confirm-Stage8Reject 'write 200 persisted after a Submit whose frozen snapshot shows the prior value (same second)' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written prior }
-Confirm-Stage8Reject 'Submit-first branch whose frozen snapshot differs' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior written }
+Confirm-Stage8Reject 'answer write committed after the Submit freeze (later second)' { Assert-Stage8RaceBranch $ok $ok $postFreeze n1 q1 written written A }
+Confirm-Stage8Reject 'write 200 persisted after a Submit whose frozen snapshot shows the prior value (same second)' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written prior A }
+Confirm-Stage8Reject 'Submit-first branch whose frozen snapshot differs' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior written B }
+Confirm-Stage8Reject 'write won although the Submit was queued first' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written written B }
+Confirm-Stage8Reject 'Submit won although the write was queued first' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior prior A }
 
 # Concurrency evidence is re-checked here as part of the race oracle.
 $attemptId = '08000000-0000-4000-8000-000003000099'

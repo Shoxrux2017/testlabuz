@@ -84,15 +84,17 @@ Test-Stage8Incomplete 'waiter queued on another relation' @($otherRelation)
 $advisory = Copy-Stage8Synthetic $validSample; $advisory.waiting_locks[0].locktype = 'advisory'
 Test-Stage8Incomplete 'waiter queued on another lock type' @($advisory)
 
-$events = @('blocker_locked', 'requests_started', 'overlap_observed', 'blocker_released')
+$events = @('blocker_locked', 'first_request_queued', 'requests_started', 'overlap_observed', 'blocker_released')
 Assert-Stage8RaceVerdict -Evidence $valid -Events $events -MarkedPass $true
 $script:checks++
 $none = Get-Stage8OverlapEvidence -Samples @($one) @context
 Assert-Stage8RaceVerdict -Evidence $none -Events @('blocker_locked', 'requests_started', 'blocker_released') -MarkedPass $false
 Confirm-Stage8Reject 'overlap_observed=false while race marked PASS' { Assert-Stage8RaceVerdict -Evidence $none -Events @('blocker_locked', 'requests_started', 'blocker_released') -MarkedPass $true }
-Confirm-Stage8Reject 'timeout reached but PASS emitted' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'requests_started', 'window_timed_out', 'overlap_observed', 'blocker_released') -MarkedPass $true }
-Confirm-Stage8Reject 'blocker released before overlap evidence' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'requests_started', 'blocker_released', 'overlap_observed') -MarkedPass $true }
-Confirm-Stage8Reject 'blocker never released' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'requests_started', 'overlap_observed') -MarkedPass $true }
+Confirm-Stage8Reject 'timeout reached but PASS emitted' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'first_request_queued', 'requests_started', 'window_timed_out', 'overlap_observed', 'blocker_released') -MarkedPass $true }
+Confirm-Stage8Reject 'blocker released before overlap evidence' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'first_request_queued', 'requests_started', 'blocker_released', 'overlap_observed') -MarkedPass $true }
+Confirm-Stage8Reject 'blocker never released' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'first_request_queued', 'requests_started', 'overlap_observed') -MarkedPass $true }
+Confirm-Stage8Reject 'first request never proven queued' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'first_request_not_queued', 'requests_started', 'overlap_observed', 'blocker_released') -MarkedPass $true }
+Confirm-Stage8Reject 'second request started before the first was queued' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('blocker_locked', 'requests_started', 'first_request_queued', 'overlap_observed', 'blocker_released') -MarkedPass $true }
 Confirm-Stage8Reject 'overlap before blocker lock' { Assert-Stage8RaceVerdict -Evidence $valid -Events @('overlap_observed', 'blocker_locked', 'blocker_released') -MarkedPass $true }
 $forged = Copy-Stage8Synthetic $valid; $forged.waiting_application_pids = @(101, 101)
 Confirm-Stage8Reject 'forged evidence with one distinct PID' { Assert-Stage8RaceVerdict -Evidence $forged -Events $events -MarkedPass $true }

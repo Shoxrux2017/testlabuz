@@ -424,13 +424,14 @@ function Assert-Stage8LateWriteUnchanged {
     Assert-Stage8NoOrphanBlob $After
 }
 
-# Exactly one complete serialization per race; the harness never forces which request wins.
+# Exactly one complete serialization per race. Each race runs in both queue orders (owner decision 2026-09-27),
+# and PostgreSQL grants the Attempt row lock in queue order, so the request queued first must win.
 # ActualValue is the caller's reading of the persisted answer: the raced value, the pre-race value or neither.
 # FrozenValue is the same reading of the Submit response, which the Submit builds inside its own transaction.
 # Timestamps have whole-second precision, so only the frozen snapshot can expose a write committed after the freeze.
 function Assert-Stage8RaceBranch {
     param($ResultWrite, $ResultSubmit, $Facts, [string] $AttemptId, [string] $QuestionId, [ValidateSet('written', 'prior', 'other')][string] $ActualValue,
-        [ValidateSet('written', 'prior', 'other')][string] $FrozenValue)
+        [ValidateSet('written', 'prior', 'other')][string] $FrozenValue, [Parameter(Mandatory = $true)][ValidateSet('A', 'B')][string] $FirstQueued)
     $attempt = Get-Stage8Row $Facts assessment_attempts $AttemptId
     if ([int] $ResultSubmit.StatusCode -ne 200) { throw 'production defect: Stage 8 race Submit did not succeed.' }
     Assert-Stage8TerminalAttempt $attempt student_submit ([string] $attempt.submitted_at)
@@ -445,6 +446,7 @@ function Assert-Stage8RaceBranch {
         throw 'production defect: Stage 8 race result matches neither approved serialized branch.'
     }
     if ($FrozenValue -cne $ActualValue) { throw 'production defect: Stage 8 answer changed after the Submit freeze (frozen snapshot differs from persisted value).' }
+    if ($branch -cne $(if ($FirstQueued -ceq 'A') { 'write_first' } else { 'submit_first' })) { throw 'production defect: Stage 8 race winner is not the request queued first on the Attempt lock.' }
     if ((ConvertTo-Stage8Instant $answer[0].updated_at) -gt (ConvertTo-Stage8Instant $attempt.locked_at)) { throw 'production defect: Stage 8 answer changed after the Submit freeze.' }
     Assert-Stage8NoOrphanBlob $Facts
     $branch

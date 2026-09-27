@@ -33,7 +33,7 @@ class Stage8E2eSeeder extends Seeder
 
     private const TEACHERS = ['target' => 'teacher', 'foreign' => 'foreign_teacher', 'unset' => 'unset_teacher', 'individual' => 'individual_teacher'];
 
-    private const INDIVIDUAL_STUDENTS = ['d_matrix', 'd_matrix_peer', 'd_timeout_resume', 'd_late_submit', 'd_waiting', 'd_checked', 'd_first', 'd_second', 'd_timeout_ui', 'd_late_typed', 'd_late_file', 'd_race_typed', 'd_race_file', 'd_close_due', 'd_close_future', 'd_close_never', 'mon_due', 'mon_exception', 'mon_never', 'mon_inactive', 'mon_submitted'];
+    private const INDIVIDUAL_STUDENTS = ['d_matrix', 'd_matrix_peer', 'd_timeout_resume', 'd_late_submit', 'd_waiting', 'd_checked', 'd_first', 'd_second', 'd_timeout_ui', 'd_late_typed', 'd_late_file', 'd_race_typed', 'd_race_file', 'd_close_due', 'd_close_future', 'd_close_never', 'mon_due', 'mon_exception', 'mon_never', 'mon_inactive', 'mon_submitted', 'd_race_typed_2', 'd_race_file_2'];
 
     /** Group => [institution, members since creation, members who joined after the official cohort]. */
     private const GROUPS = [
@@ -77,6 +77,9 @@ class Stage8E2eSeeder extends Seeder
         'race_file' => ['blitz', 'individual', 'selected_students', 'active', 3600, 'file', ['d_race_file']],
         'close' => ['blitz', 'individual', 'selected_students', 'active', 600, 'short', ['d_close_due', 'd_close_future', 'd_close_never']],
         'monitoring' => ['blitz', 'individual', 'selected_students', 'active', 600, 'short', ['mon_due', 'mon_exception', 'mon_never', 'mon_inactive', 'mon_submitted']],
+        // Each race runs in both queue orders (owner decision 2026-09-27), so each order has its own Attempt.
+        'race_typed_2' => ['blitz', 'individual', 'selected_students', 'active', 3600, 'short', ['d_race_typed_2']],
+        'race_file_2' => ['blitz', 'individual', 'selected_students', 'active', 3600, 'file', ['d_race_file_2']],
     ];
 
     /** Pair => [Topic, official Homework, official Blitz, cohort established, locked]. */
