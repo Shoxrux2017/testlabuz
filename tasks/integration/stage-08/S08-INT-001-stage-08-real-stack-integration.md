@@ -53,6 +53,20 @@ contract revalidation.
 
 Do **not** create a duplicate `CODEX-PROMPT`.
 
+Revalidation 2026-09-27: the Project Owner assigned Claude both the ChatGPT and the Codex roles
+(Stage 8 index §17). Claude performs every "ChatGPT" and "Codex" step below. Because author
+and reviewer are the same agent, an independent fresh-context review is part of the
+Integration Harness Preflight (§72) and of the final review (§90).
+
+Owner decision INT-D1 = A (2026-09-27):
+- Claude executes the Windows real-stack runner (§66) and the direct API/DB scenarios.
+- The Project Owner performs the Android manual smoke (§§78-80) by hand, prepared by §77.
+
+Delivery follows option A: Claude creates the branch, commits, pushes and opens the PR, and
+the Project Owner merges. Implementation baseline: `origin/main` after the merge of the
+docs PR that records this revalidation. Its tree outside `tasks/` equals
+`d96b569720dd7b232ccf0fdd8cb0e14bfefb3964`.
+
 ---
 
 # 2. Integration Workflow
@@ -475,6 +489,51 @@ read/write bind
 
 Do not change repository Docker configuration.
 
+Revalidation 2026-09-27 — server command and provisioning.
+
+The installed Laravel `v13.24.0` ignores `PHP_CLI_SERVER_WORKERS` unless `artisan serve`
+gets `--no-reload` (`backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/ServeCommand.php:112-123`).
+Without the flag it prints a warning and starts a single server. Measured on the
+`testlabuz-app:latest` image with `PHP_CLI_SERVER_WORKERS=4`:
+- without the flag: one `php -S 0.0.0.0:8000` process;
+- with the flag: one `php -S 0.0.0.0:8000` master and four worker children.
+
+The dedicated Stage 8 container therefore runs:
+
+```text
+php artisan serve --host=0.0.0.0 --port=8000 --no-reload
+```
+
+This replaces "keep the existing server command" above. It is integration-runtime
+configuration only; `docker/docker-compose.yml` and `docker/php/Dockerfile` stay unchanged.
+
+The Stage 7 container was created by hand, and its runner only validated it. For Stage 8
+the runner creates the container when it is absent, with exactly:
+
+```text
+image        testlabuz-app:latest (the compose-built app image)
+name         testlabuz-stage8-e2e-app
+network      testlabuz_default
+restart      no; AutoRemove false
+publish      127.0.0.1:<ApiPort>:8000
+bind         <repository>/backend -> /var/www/html (read/write)
+volume       testlabuz-stage8-e2e-private-files -> /var/www/html/storage/app/private (read/write)
+working dir  /var/www/html
+environment  APP_ENV=testing, APP_DEBUG=false, APP_URL=http://127.0.0.1:<ApiPort>,
+             CACHE_STORE=file, SESSION_DRIVER=file, QUEUE_CONNECTION=sync,
+             DB_CONNECTION=pgsql, DB_HOST=postgres, DB_PORT=5432,
+             DB_DATABASE=testlabuz_testing, DB_USERNAME=testlabuz, DB_PASSWORD,
+             PHP_CLI_SERVER_WORKERS=4
+command      php artisan serve --host=0.0.0.0 --port=8000 --no-reload
+```
+
+Rules for the runner:
+- `DB_PASSWORD` is read from `POSTGRES_PASSWORD` in `docker/.env`. It is held only in the child-process environment and passed to Docker by name (`-e DB_PASSWORD`). It never appears on a command line, in a log or in evidence.
+- The runner never removes, recreates or reconfigures an existing container. An existing `testlabuz-stage8-e2e-app` that fails the §13 guard stops the run.
+- The runner never starts, stops or recreates PostgreSQL. The executor starts `testlabuz-postgres-1` beforehand.
+
+The recommended `ApiPort` is `18008`.
+
 ---
 
 # 11. Stage 8 Private File Runtime
@@ -604,6 +663,13 @@ required `/proc` facts.
 
 The static worker check is necessary but is not authoritative concurrency
 evidence. Section 14.1 dynamic lock-wait evidence is authoritative.
+
+Revalidation 2026-09-27: the environment variable alone is not enough, because Laravel silently drops it
+without `--no-reload` (§10). The guard therefore also requires:
+- the container command is exactly the §10 command, including `--no-reload`;
+- `/proc` shows exactly one `php -S 0.0.0.0:8000` master process whose parent is that `php artisan serve` process;
+- that master has exactly four `php -S 0.0.0.0:8000` child processes;
+- no `schedule:run` or `schedule:work` process runs in the container.
 
 ## PostgreSQL identity
 
@@ -810,6 +876,29 @@ A bounded evidence object may be equivalent to:
 Do not use elapsed time alone as proof.
 
 Do not print unrelated full SQL text or secrets.
+
+Revalidation 2026-09-27 — observed lock shape and session correlation.
+
+The delivered typed-answer PUT and Submit first take `FOR SHARE` locks on the parent Topic,
+Assessment and Blitz rows, then `FOR UPDATE` on the Attempt row. `FOR SHARE` locks do not
+conflict with each other, so the Attempt row is the first lock either request can wait on.
+PostgreSQL then queues them like this:
+- the first waiter waits on the blocker's transaction (`wait_event = transactionid`), and `pg_blocking_pids` returns the blocker;
+- the second waiter waits on the row's tuple lock, held by the first waiter (`wait_event = tuple`), and `pg_blocking_pids` returns the first waiter.
+
+Both have `wait_event_type = Lock`. The proof accepts this shape:
+- each waiter's blocking chain, followed through `pg_blocking_pids`, must end at the blocker PID;
+- every PID on that chain other than the blocker must be one of the two counted application waiters;
+- the blocker transaction runs only the §14.1.1 `SELECT ... FOR UPDATE` on the manifest Attempt.
+
+"Both blocked in the manifest Attempt lock queue" means exactly this chain.
+
+The recommended blocker and observer are PHP processes inside the Stage 8 app container that
+use its configured connection. The pattern is in
+`backend/tests/Feature/Homework/HomeworkDeadlineFinalizationConcurrencyTest.php`: record
+`pg_backend_pid()`, and poll after `pg_stat_clear_snapshot()`. The harness then never handles
+database credentials. Their sessions share the container's `client_addr`, so they are
+excluded by their recorded backend PIDs, not by address.
 
 ## 14.1.4 Release and finish
 
@@ -1258,6 +1347,16 @@ Use deterministic IDs/text/points.
 
 Ensure Student-safe resource contains no correct-answer data.
 
+Revalidation 2026-09-27: Student payloads expose matching and ordering item IDs, and production creates them
+as random UUIDv4 (owner decision D1, Backend Phase 2). The seeder writes rows directly, so
+it must not assign deterministic IDs in answer order: sorting the item IDs of a seeded
+matching or ordering Question must not recover the correct order or pairs.
+- Use a fixed permutation of the `08000000-...` IDs.
+- `Stage8E2eSeederTest` and the §38 oracle assert that ID order does not reveal the answer key, in the shape of `backend/tests/Feature/Student/Concerns/AssertsQuestionItemIdentifierPrivacy.php`.
+
+The Stage 7 fixture assigns these IDs in order (`backend/database/seeders/Stage7E2eSeeder.php:348,354`).
+It is test data from a closed Stage and this task does not change it.
+
 At least one separate Builder smoke scenario must exercise real Teacher Question
 mutation through Flutter UI, but the full nine-type authoring matrix need not be
 rebuilt manually in E2E because focused frontend/backend tests already cover it.
@@ -1411,6 +1510,12 @@ homework_assessment_id / blitz_assessment_id / cohort_snapshotted_at unchanged
 ```
 
 No exception/Submit/monitoring flow changes pair identity.
+
+Revalidation 2026-09-27: schema facts for the oracle.
+- There is no cohort table. The cohort is the `assessment_students` rows of the pair's assessments; `topic_result_pairs.cohort_snapshotted_at` marks it.
+- `blitz_tasks` is keyed by `assessment_id`, and `assignment_mode` lives on `assessments`.
+- Designating a Blitz on a locked pair (§50) is a pair mutation and sets `topic_result_pairs.updated_at` to that instant. `locked_at`, `cohort_snapshotted_at` and `homework_assessment_id` stay unchanged.
+- The "updated_at not churned" rule applies to the later Homework Start (§47A.3).
 
 ---
 
@@ -1601,6 +1706,16 @@ Do not log tokens/passwords.
 Verify failed/late operations do not leave incomplete committed claims where the
 production contract forbids them.
 
+Revalidation 2026-09-27: `idempotency_records` has these columns:
+- `id`, `institution_id`, `user_id`, `operation`;
+- `idempotency_key`, a PostgreSQL `uuid` column (there is no separate normalized column);
+- `request_fingerprint`, `result_resource_type`, `result_resource_id`, `response_status`, `completed_at`, `created_at` and `updated_at`.
+
+The table is unique on (institution, user, operation, key). Submit uses the shared route
+`POST /student/attempts/{attempt}/submit` with the Blitz-specific operation
+`student.blitz.attempt.submit`. Claims are written inside the domain transaction, so a
+rolled-back failure leaves no row.
+
 ---
 
 # 34. API Security Assets
@@ -1681,6 +1796,10 @@ only fields belonging to the deliberately invalid request vector may appear
 Do not assert human message copy beyond non-blank/privacy-safe content. Machine
 code and status are authoritative.
 
+Revalidation 2026-09-27: one delivered error carries an extra field. `409 institution_settings_incomplete`
+adds a top-level `meta.missing_fields`, which §47A.4 requires; the envelope check accepts
+`meta` for that code only. The delivered error layer adds no request-tracing field.
+
 ## 34.1.2 Authentication / role matrix
 
 | Probe | Expected | Persistence / bytes |
@@ -1744,6 +1863,24 @@ Do not accept `404` or `409` for these deliberately malformed request shapes.
 A separate well-formed request may of course later fail a business/resource
 predicate with the exact business/privacy code defined elsewhere in this matrix.
 
+Revalidation 2026-09-27 — delivered request rules:
+
+| Endpoint | `Idempotency-Key` | Body |
+|---|---|---|
+| Teacher activate | required UUID | empty, or `{}` as `application/json` |
+| Teacher close / archive | not read | empty, or `{}` as `application/json` |
+| Teacher schedule | not read | JSON object; unknown keys rejected |
+| Teacher grant | required UUID | `{reason_type, reason}`; unknown keys rejected |
+| Student Start | required UUID | `{intent}`, plus `attempt_id` only for `resume` |
+| Student Submit | required UUID | empty, or `{}` as `application/json` |
+| Student answer PUT | not read | JSON `{type, ...}`, or multipart `type=file_based` + `file` |
+
+- The missing and malformed `Idempotency-Key` rows apply only to the four endpoints that require it.
+- The empty-body rows apply to activate, close, archive and Submit.
+- Query parameters are rejected on every Stage 8 endpoint except the Teacher Blitz list `GET /teacher/blitz`. The list accepts `topic_id`, `group_id`, `status`, `page` and `per_page`, and a malformed `topic_id` or `group_id` there returns `404`.
+- On the Stage 8 detail and command endpoints, request validation runs before resource resolution. A malformed request therefore returns `422` even when its path names a foreign or missing resource; the `404` rows use well-formed requests.
+- UUIDs are matched case-insensitively and stored lowercased, so an uppercase canonical UUID is valid. "Malformed" and "non-canonical" probes use values that are not UUIDs, for example missing hyphens or the wrong length.
+
 ## 34.1.4A Student Start intent/idempotency matrix
 
 All probes use:
@@ -1783,6 +1920,38 @@ reconciliation is explicitly allowed.
 The harness must prove `intent` and Resume `attempt_id` are semantic request
 identity and must never reconstruct them from current server state.
 
+Revalidation 2026-09-27 — the delivered Start matrix (owner decision D3, Backend Phase 2; FE-PHASE-2 §25).
+Where it differs from the rows above, this list wins.
+
+**Resume of an own terminal target, with a new key**
+- `timed_out_finalized` → `409 blitz_time_expired`.
+- `submitted` (`student_submit`), `waiting_for_teacher_review` or `checked` → `409 attempt_not_editable`.
+
+**Blitz no longer Active** (for example after Teacher Close)
+- Any Start, Resume or replacement with a new key → `409 blitz_not_active`.
+- A completed key still replays its stored `200`/`201` (see **Replay** below).
+
+**`start_normal` with a new key after a terminal #1**
+- An exception row exists, used or unused → `409 attempts_exhausted`.
+- No exception row, and #1 is `timed_out_finalized` → `409 blitz_time_expired`.
+- No exception row, and #1 is terminal in any other way → `409 attempts_exhausted`.
+- Once #2 exists, `start_normal` → `attempts_exhausted`.
+
+**`start_replacement` with a new key**
+- #2 is `timed_out_finalized` → `409 blitz_time_expired`.
+
+**Key reuse**
+- The key-reuse check runs before the Resume target lookup. A completed key reused with a foreign `attempt_id` returns `409 idempotency_key_reused`, not `404`.
+- The `404 resource_not_found` row uses a fresh key.
+
+**Due Resume target**
+- It triggers the canonical timeout reconciliation of every due in-progress Attempt of that Blitz, not only the target.
+- The persistence comparison allows exactly those canonical timeout fields on those Attempts.
+
+**Replay**
+- A replay returns the stored status with the Attempt's current state at the current server time.
+- `start_normal` always resolves to #1.
+
 ## 34.1.5 Submit terminal/idempotency matrix
 
 | Probe | Expected | Allowed persistence outcome |
@@ -1797,6 +1966,11 @@ The last row is intentionally not "zero writes": deadline reconciliation is the
 one allowed authoritative mutation and must persist only the canonical timeout
 fields owned by the timeout engine.
 
+Revalidation 2026-09-27:
+- A Close-finalized Attempt (`submitted` + `task_closed_auto_finalize`) returns `409 attempt_not_editable`, because the Submit status check runs before the Blitz-active check.
+- No Stage 8 production path creates `waiting_for_teacher_review` or `checked`. Those two probes use manifest-owned Attempts seeded directly in those statuses, with every scoring field null (the schema allows it), in their own isolated Blitz.
+- A due-time Submit reconciles every due in-progress Attempt of that Blitz.
+
 ## 34.1.6 Exception-grant idempotency matrix
 
 | Probe | Expected | Allowed persistence outcome |
@@ -1804,6 +1978,30 @@ fields owned by the timeout engine.
 | Same completed grant key + same Student/Blitz/reason fingerprint | `201` success | same exception; zero duplicate grant; no second eligibility mutation; no Attempt #2 creation merely from replay |
 | Same grant key + changed reason/Student/Blitz fingerprint | `409 idempotency_key_reused` | existing exception/#1 eligibility unchanged; no new claim/result |
 | Different new key after exception already exists | `409 blitz_attempt_exception_already_granted` | exactly one existing exception remains; original reason/timestamp unchanged; #1 eligibility not toggled again; no Attempt #2; no successful/incomplete new grant claim |
+
+Revalidation 2026-09-27: before the idempotency claim the grant checks only two things:
+- that the Teacher can see the Blitz;
+- that the Student is an active Student recipient of it.
+
+Either failure returns `404 resource_not_found`. Every lifecycle and eligibility check runs
+after the claim.
+
+"Same key with a changed Student or Blitz" therefore returns `409 idempotency_key_reused`
+whenever the changed target passes those two checks, for example a Student with no #1 or a
+Draft Blitz, as pinned by
+`backend/tests/Feature/Teacher/TeacherBlitzAttemptExceptionIdempotencyTest.php:74-99`.
+
+Grant eligibility, for a new key:
+- The Blitz must be Active (otherwise `409 blitz_attempt_exception_not_allowed`).
+- An existing exception → `409 blitz_attempt_exception_already_granted`.
+- No #1 → `409 blitz_normal_attempt_required`.
+- #1 in progress before its deadline → `409 blitz_attempt_exception_not_allowed`.
+- #1 in progress and due → it is finalized at its deadline, then the grant proceeds.
+
+Request and replay:
+- `reason_type` is `technical` or `other_valid`.
+- `reason` is trimmed, required and at most 4000 characters.
+- A replay returns `201` with the same exception, even after Close.
 
 ## 34.1.7 Persistence comparison rule
 
@@ -1880,6 +2078,11 @@ Teacher direct Student-submission File ID
 ```
 
 Do not weaken that probe to `403 forbidden`.
+
+Revalidation 2026-09-27:
+- Every probe sends `Accept: application/json`, as the Flutter client does.
+- The Teacher probe uses the only file route, `GET /files/{file}/download`, which Teachers may call; it returns `404` for a Student-submission File.
+- Teacher → Student answer PUT returns `403 forbidden` from the role middleware. No backend test pins that row; the integration probe does.
 
 ---
 
@@ -2077,6 +2280,11 @@ Direct API fixture:
 
 After later lifecycle progression/restart, same completed key must remain
 historically replayable as defined by production contract.
+
+Revalidation 2026-09-27:
+- The activation fingerprint is the route's Blitz. "Different route" means the same Teacher's activate on another Blitz, which returns `409 idempotency_key_reused`.
+- Keys are scoped by operation, so the same key on another operation is not a conflict.
+- A replay after Close or Archive returns `200` with the current Blitz resource (for example `status = closed`) and writes nothing. `activated_at` never changes.
 
 ---
 
@@ -2359,6 +2567,23 @@ Do not substitute:
 
 The guard query itself must discover **all** current global candidates first and
 then prove ownership.
+
+Revalidation 2026-09-27 — the delivered scanner (`backend/app/Actions/Blitz/ReconcileDueBlitzTimeouts.php:19-30`):
+- It compares `deadline_at` with the application clock `now()`, not the database clock. `guardScanNow` is therefore Laravel `now()` read inside the Stage 8 app container, in the same PHP call as the scan.
+- The predicate is otherwise as above.
+- `blitz_tasks` is keyed by `assessment_id`, so candidates are unique without `DISTINCT`.
+- The command prints `Candidates: N; finalized attempts: N; failures: N.` and exits non-zero when failures > 0.
+- `routes/console.php` schedules it every minute. The Stage 8 container runs no scheduler process (§13).
+
+Other paths also finalize due Attempts outside the Scheduler:
+- A Student's detail read, active list (`GET /student/blitz/active`), Start or Resume, answer PUT or Submit reconciles a Blitz when that Student's own Attempt in it is due. The reconciliation then finalizes every due Attempt of that Blitz (`backend/app/Actions/Student/ReconcileStudentBlitzTimeouts.php`).
+- The monitoring read and Teacher Close finalize the Blitz's due Attempts directly.
+- A grant finalizes only the recipient's own due #1.
+
+Between the moment the Scheduler fixture becomes due and the first guarded command, the
+runner sends none of these requests for the Scheduler Blitz. That includes any request by a
+Student who has an Attempt in it, including the active list. Otherwise the §44.4
+first-invocation expectation is void, and the runner must stop rather than adjust it.
 
 ## 44.2 Exact candidate ownership
 
@@ -2814,6 +3039,15 @@ Using an isolated fixture J Attempt:
 
 The late PUT must never become part of the frozen Attempt.
 
+Revalidation 2026-09-27: a due-time PUT goes through these steps:
+1. it commits no write;
+2. the canonical reconciliation finalizes every due in-progress Attempt of that Blitz;
+3. the request returns `409 blitz_time_expired`.
+
+That is why each fixture J probe has its own Blitz. Two related cases are not the §47A.5
+probe: a PUT on an Attempt that is already `timed_out_finalized` returns
+`409 attempt_not_editable`, and a PUT after Teacher Close returns `409 blitz_not_active`.
+
 ## 47A.6 Direct Late File-Answer Write
 
 Using a different isolated fixture J Attempt:
@@ -2969,6 +3203,11 @@ observed final result matches exactly one complete serialized branch
 ```
 
 A correct final branch without overlap evidence is not concurrency PASS.
+
+Revalidation 2026-09-27: the delivered file PUT stores the File B blob on the private disk before it opens
+its transaction and waits for the Attempt lock. While the blocker holds the lock, File B's
+blob therefore already exists. In the Submit-first branch the PUT deletes that staged blob
+when it is rejected. The post-race oracle proves the compensation, not a mid-race sample.
 
 ---
 
@@ -3244,6 +3483,12 @@ Do not rely solely on UI Close.
 
 Use direct API + oracle for exact mixed timing semantics.
 
+Revalidation 2026-09-27:
+- Close reads no `Idempotency-Key` and takes an empty or `{}` body.
+- A repeated Close on a closed Blitz returns `200` with no write.
+- The close instant is stored at whole-second precision.
+- After Close, monitoring returns `409 task_closed` (§60).
+
 ---
 
 # 60. Monitoring API Scenario
@@ -3265,6 +3510,11 @@ Also prove:
 - replacement #2 becomes current when started;
 - inactive historical recipient remains in assignment roster where fixture
   supports that state.
+
+Revalidation 2026-09-27: monitoring serves only an Active Blitz.
+- Closed → `409 task_closed`; Archived → `409 task_archived`; Draft or Scheduled → `409 task_not_active`.
+- The response is `data.{blitz{id, status, duration_seconds, activated_at, timing{mode, synchronized_ends_at, server_now}}, summary{assigned, not_started, in_progress, finalized, waiting_for_teacher_review, attempt_exceptions_granted}, students[...]}`, with `score = null` on every row.
+- The §65 post-restart monitoring check uses a Blitz that is still Active.
 
 ---
 
@@ -3592,6 +3842,11 @@ Responsibilities:
 
 Fail immediately on a failed required phase.
 
+Revalidation 2026-09-27:
+- Step 3 follows §10: create the container only when it is absent, and never recreate it.
+- Step 14 runs `flutter test` from `frontend/` with the pinned SDK. `-FlutterExecutable` points at `frontend/.fvm/flutter_sdk/bin/flutter.bat`, because the `fvm` CLI is not on PATH on the execution machine.
+- `STAGE8_E2E_PASSWORD` is read from the process environment, or else from the Windows user environment. It is never printed.
+
 Do not continue and report false aggregate PASS.
 
 ## 66.1 `Invoke-Stage8PriorManifestCleanup`
@@ -3833,6 +4088,15 @@ NOT ACCEPTED
 
 Do not run full real-stack before PASS.
 
+Revalidation 2026-09-27: the preflight also checks:
+- the §10 command with `--no-reload`;
+- the §13 `/proc` worker count;
+- the §14.1.3 lock shape;
+- the §22 item-ID rule;
+- the §44.1 application-clock scan.
+
+A fresh-context reviewer runs it alongside Claude (§1).
+
 ---
 
 # 73. Focused Asset Verification Before Delivery
@@ -3872,6 +4136,11 @@ Do not run:
 during Codex integration-asset implementation.
 
 The full runner waits for ChatGPT preflight PASS.
+
+Revalidation 2026-09-27: where the focused checks run on the execution machine.
+- `Stage8E2eSeederTest` runs inside a container on `testlabuz_default` against `testlabuz_testing`: the compose `app` service, or the Stage 8 container once it exists.
+- The PowerShell verifiers run with Windows PowerShell.
+- The Dart checks use `frontend/.fvm/flutter_sdk/bin/dart format` and `flutter analyze` on the Stage 8 `integration_test` files.
 
 ---
 
@@ -4096,6 +4365,12 @@ STAGE8_E2E_PASSWORD
 ```
 
 from Project Owner environment.
+
+Revalidation 2026-09-27 (owner decision INT-D1 = A):
+- The Project Owner sets `STAGE8_E2E_PASSWORD` in the Windows user environment before execution. The runner and this script read it and never print it.
+- Claude runs this preparation and hands the Project Owner the printed checklist, the fixture identifiers and the `adb reverse tcp:<ApiPort> tcp:<ApiPort>` command.
+- The Project Owner performs §§78-80 by hand and reports the result.
+- Claude then runs the cleanup mode and the §82 oracle.
 
 ---
 
@@ -4775,3 +5050,6 @@ Current ChatGPT readiness approval   = REQUIRED before Codex handoff
 Next gate after final integration PASS = ChatGPT verifies closure entry conditions on current main
 Closure Review release              = all entry conditions verified by ChatGPT
 ```
+
+Revalidation 2026-09-27: current readiness is `Approved / Not started` on `origin/main`
+`d96b569720dd7b232ccf0fdd8cb0e14bfefb3964` (Stage 8 index §19).
