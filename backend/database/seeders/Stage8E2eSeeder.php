@@ -33,7 +33,7 @@ class Stage8E2eSeeder extends Seeder
 
     private const TEACHERS = ['target' => 'teacher', 'foreign' => 'foreign_teacher', 'unset' => 'unset_teacher', 'individual' => 'individual_teacher'];
 
-    private const INDIVIDUAL_STUDENTS = ['d_matrix', 'd_matrix_peer', 'd_timeout_resume', 'd_late_submit', 'd_waiting', 'd_checked', 'd_first', 'd_second', 'd_timeout_ui', 'd_late_typed', 'd_late_file', 'd_race_typed', 'd_race_file', 'd_close_due', 'd_close_future', 'd_close_never', 'mon_due', 'mon_exception', 'mon_never', 'mon_inactive', 'mon_submitted', 'd_race_typed_2', 'd_race_file_2'];
+    private const INDIVIDUAL_STUDENTS = ['d_matrix', 'd_matrix_peer', 'd_timeout_resume', 'd_late_submit', 'd_waiting', 'd_checked', 'd_first', 'd_second', 'd_timeout_ui', 'd_late_typed', 'd_late_file', 'd_race_typed', 'd_race_file', 'd_close_due', 'd_close_future', 'd_close_never', 'mon_due', 'mon_exception', 'mon_never', 'mon_inactive', 'mon_submitted', 'd_race_typed_2', 'd_race_file_2', 'd_timeout_peer'];
 
     /** Group => [institution, members since creation, members who joined after the official cohort]. */
     private const GROUPS = [
@@ -64,7 +64,8 @@ class Stage8E2eSeeder extends Seeder
         'unset' => ['blitz', 'unset', 'group', 'draft', 600, 'short', []],
         'matrix' => ['blitz', 'individual', 'selected_students', 'active', 7200, 'nine', ['d_matrix', 'd_matrix_peer']],
         'matrix_other' => ['blitz', 'individual', 'selected_students', 'active', 7200, 'short', ['d_matrix']],
-        'matrix_timeout' => ['blitz', 'individual', 'selected_students', 'active', 3, 'short', ['d_timeout_resume']],
+        // The peer's seeded due Attempt proves that a due Resume reconciles the whole Blitz, not only its target.
+        'matrix_timeout' => ['blitz', 'individual', 'selected_students', 'active', 3, 'short', ['d_timeout_resume', 'd_timeout_peer']],
         'matrix_late_submit' => ['blitz', 'individual', 'selected_students', 'active', 3, 'short', ['d_late_submit']],
         'forward_status' => ['blitz', 'individual', 'selected_students', 'active', 7200, 'short', ['d_waiting', 'd_checked']],
         'activation_idem' => ['blitz', 'individual', 'selected_students', 'draft', 7200, 'short', ['d_second']],
@@ -101,6 +102,7 @@ class Stage8E2eSeeder extends Seeder
         'mon_submitted_1' => ['monitoring', 'mon_submitted', 1, 'submitted', 'history', 'history_submitted', 'student_submit', 'own_duration'],
         'waiting_1' => ['forward_status', 'd_waiting', 1, 'waiting_for_teacher_review', 'history', 'history_submitted', 'student_submit', 'own_duration'],
         'checked_1' => ['forward_status', 'd_checked', 1, 'checked', 'history', 'history_submitted', 'student_submit', 'own_duration'],
+        'timeout_peer_1' => ['matrix_timeout', 'd_timeout_peer', 1, 'in_progress', 'history', null, null, 'own_duration'],
     ];
 
     /** Seeded exception => [Assessment, Student, invalidated Attempt, replacement Attempt, granted]. */

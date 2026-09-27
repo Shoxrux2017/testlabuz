@@ -251,6 +251,47 @@ Confirm-Stage8Reject 'Submit-first branch whose frozen snapshot differs' { Asser
 Confirm-Stage8Reject 'write won although the Submit was queued first' { Assert-Stage8RaceBranch $ok $ok $raceFacts n1 q1 written written B }
 Confirm-Stage8Reject 'Submit won although the write was queued first' { Assert-Stage8RaceBranch $notEditable $ok $raceFacts n1 q1 prior prior A }
 
+# Audited checkout: clean at start, and the same clean commit before PASS.
+$sha = 'a' * 40
+Confirm-Stage8Accept { Assert-Stage8AuditedCheckout ([pscustomobject] @{ Sha = $sha; Clean = $true }) }
+Confirm-Stage8Accept { Assert-Stage8AuditedCheckout ([pscustomobject] @{ Sha = $sha; Clean = $true }) ([pscustomobject] @{ Sha = $sha; Clean = $true }) }
+Confirm-Stage8Reject 'a dirty checkout at start' { Assert-Stage8AuditedCheckout ([pscustomobject] @{ Sha = $sha; Clean = $false }) }
+Confirm-Stage8Reject 'a malformed start commit' { Assert-Stage8AuditedCheckout ([pscustomobject] @{ Sha = 'HEAD'; Clean = $true }) }
+Confirm-Stage8Reject 'a checkout that became dirty' { Assert-Stage8AuditedCheckout ([pscustomobject] @{ Sha = $sha; Clean = $true }) ([pscustomobject] @{ Sha = $sha; Clean = $false }) }
+Confirm-Stage8Reject 'a commit that changed during the run' { Assert-Stage8AuditedCheckout ([pscustomobject] @{ Sha = $sha; Clean = $true }) ([pscustomobject] @{ Sha = ('b' * 40); Clean = $true }) }
+
+# Due-time requests: only canonical timeout reconciliation of due Attempts of that Blitz.
+function New-Stage8DueAttempt { param([string] $Id, [string] $Blitz, [string] $Deadline)
+    [pscustomobject] @{ id = $Id; assessment_id = $Blitz; attempt_number = 1; status = 'in_progress'; finalization_reason = $null; started_at = '2026-09-27 09:59:57+00'
+        deadline_at = $Deadline; submitted_at = $null; finalized_at = $null; locked_at = $null; official_score_eligible = $true; updated_at = '2026-09-27 09:59:57+00' }
+}
+function Set-Stage8TimedOut { param($Row) $Row.status = 'timed_out_finalized'; $Row.finalization_reason = 'timeout_auto_submit'; $Row.finalized_at = $Row.deadline_at; $Row.locked_at = $Row.deadline_at; $Row.updated_at = '2026-09-27 10:00:05+00' }
+# PS 5.1 ConvertTo-Json turns nested empty arrays into {}, so each fact set is built fresh, never JSON-copied.
+function New-Stage8DueFacts { param([string] $ObservedAt, [switch] $Reconciled, [scriptblock] $Mutate = {})
+    $rows = @((New-Stage8DueAttempt t1 due '2026-09-27 10:00:00+00'), (New-Stage8DueAttempt peer due '2020-01-03 00:00:03+00'),
+        (New-Stage8DueAttempt later due '2026-09-27 11:00:00+00'), (New-Stage8DueAttempt other elsewhere '2026-09-27 09:00:00+00'))
+    if ($Reconciled) { Set-Stage8TimedOut $rows[0]; Set-Stage8TimedOut $rows[1] }
+    $facts = [pscustomobject] @{ observed_at = $ObservedAt; blobs = @([pscustomobject] @{ key = 'k'; checksum = 'c' }); tables = (New-Stage8Tables @{
+        assessment_attempts = $rows; idempotency_records = @([pscustomobject] @{ id = 'i1'; idempotency_key = 'k1' }) }) }
+    & $Mutate $facts
+    $facts
+}
+$dueBefore = New-Stage8DueFacts '2026-09-27T10:00:04.000000Z'
+function Test-Stage8DueCase { param([string] $Label, [scriptblock] $Mutate)
+    $after = New-Stage8DueFacts '2026-09-27T10:00:06.000000Z' -Reconciled -Mutate $Mutate
+    Confirm-Stage8Reject $Label { Assert-Stage8OnlyTimeoutReconciliation $dueBefore $after due | Out-Null }
+}
+Confirm-Stage8Accept { if ((Assert-Stage8OnlyTimeoutReconciliation $dueBefore (New-Stage8DueFacts '2026-09-27T10:00:06.000000Z' -Reconciled) due) -ne 2) { throw 'wrong finalized count' } }
+Test-Stage8DueCase 'a due Attempt of the Blitz left in progress' { param($f) $f.tables.assessment_attempts[1] = (New-Stage8DueAttempt peer due '2020-01-03 00:00:03+00') }
+Test-Stage8DueCase 'reconciliation changing a non-timeout column' { param($f) $f.tables.assessment_attempts[0].official_score_eligible = $false }
+Test-Stage8DueCase 'due-time request recording an explicit Submit' { param($f) $f.tables.assessment_attempts[0].submitted_at = '2026-09-27 10:00:00+00' }
+Test-Stage8DueCase 'a not-yet-due Attempt finalized' { param($f) Set-Stage8TimedOut $f.tables.assessment_attempts[2] }
+Test-Stage8DueCase 'an Attempt of another Blitz changed' { param($f) Set-Stage8TimedOut $f.tables.assessment_attempts[3] }
+Test-Stage8DueCase 'a claim left for the rejected key' { param($f) $f.tables.idempotency_records = @($f.tables.idempotency_records[0], [pscustomobject] @{ id = 'i2'; idempotency_key = 'rejected' }) }
+Test-Stage8DueCase 'a private blob changed' { param($f) $f.blobs = @([pscustomobject] @{ key = 'k'; checksum = 'changed' }) }
+Test-Stage8DueCase 'a new Attempt created' { param($f) $f.tables.assessment_attempts = @($f.tables.assessment_attempts) + @(New-Stage8DueAttempt t2 due '2026-09-27 11:00:00+00') }
+Test-Stage8DueCase 'timeout finalized at the request instead of the deadline' { param($f) $f.tables.assessment_attempts[0].finalized_at = '2026-09-27 10:00:04+00' }
+
 # Concurrency evidence is re-checked here as part of the race oracle.
 $attemptId = '08000000-0000-4000-8000-000003000099'
 $probeContext = @{ BlockerPid = 77; ObserverPid = 88; ApplicationAddress = '172.19.0.3'; Database = 'testlabuz_testing'; WorkerCount = 4; LockedAttemptId = $attemptId; ExpectedAttemptId = $attemptId }

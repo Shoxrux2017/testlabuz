@@ -199,8 +199,14 @@ function Invoke-Stage8ExecutionMatrix {
     $timeoutAttempt = [string] $timeoutStart.Json.data.id
     Wait-Stage8ServerPast ([string] $timeoutStart.Json.data.deadline_at)
     $dueResume = New-Stage8StartRequest (& $key) resume $timeoutAttempt
+    $beforeDue = Get-Stage8Facts
+    $peerAttempt = [string] $m.attempts.timeout_peer_1
+    if ((Get-Stage8Row $beforeDue assessment_attempts $peerAttempt).status -cne 'in_progress') { throw 'integration-harness defect: The due peer Attempt was reconciled before the due Resume.' }
     Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz $dueResume) 409 blitz_time_expired $Context $dueResume.Key
     $timedOut = Get-Stage8Facts
+    # The due Resume reconciles every due Attempt of its Blitz: the target and the seeded peer, each at its own deadline.
+    if ((Assert-Stage8OnlyTimeoutReconciliation $beforeDue $timedOut $timeoutBlitz) -ne 2) { throw 'production defect: The due Resume did not reconcile exactly the two due Attempts of its Blitz.' }
+    Assert-Stage8TerminalAttempt (Get-Stage8Row $timedOut assessment_attempts $peerAttempt) timeout_auto_submit ''
     Assert-Stage8TerminalAttempt (Get-Stage8Row $timedOut assessment_attempts $timeoutAttempt) timeout_auto_submit ''
     foreach ($probe in @(
             { param($k) Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz (New-Stage8StartRequest $k resume $timeoutAttempt) },
@@ -225,8 +231,10 @@ function Invoke-Stage8ExecutionMatrix {
     if ([int] $timeoutReplacement.Json.data.attempt_number -ne 2) { throw 'production defect: start_replacement after a timed-out #1 did not create #2.' }
     Wait-Stage8ServerPast ([string] $timeoutReplacement.Json.data.deadline_at)
     $dueResume2 = New-Stage8StartRequest (& $key) resume $timeoutAttempt2
+    $beforeDue2 = Get-Stage8Facts
     Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz $dueResume2) 409 blitz_time_expired $Context $dueResume2.Key
     $timedOut2 = Get-Stage8Facts
+    if ((Assert-Stage8OnlyTimeoutReconciliation $beforeDue2 $timedOut2 $timeoutBlitz) -ne 1) { throw 'production defect: The due Resume of #2 did not reconcile exactly #2.' }
     Assert-Stage8TerminalAttempt (Get-Stage8Row $timedOut2 assessment_attempts $timeoutAttempt2) timeout_auto_submit ''
     if ((Assert-Stage8AttemptHistory $timedOut2 $timeoutBlitz $timeoutStudent).Attempts.Count -ne 2) { throw 'production defect: Timed-out replacement history is not exactly #1 and #2.' }
     $k = & $key; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_timeout_resume $timeoutBlitz (New-Stage8StartRequest $k start_replacement)) 409 blitz_time_expired $Context $k
@@ -237,8 +245,10 @@ function Invoke-Stage8ExecutionMatrix {
     $lateAttempt = [string] $lateStart.Json.data.id
     Wait-Stage8ServerPast ([string] $lateStart.Json.data.deadline_at)
     $k = & $key
+    $beforeLate = Get-Stage8Facts
     Assert-Stage8Rejection (Invoke-Stage8Submit $Context d_late_submit $lateAttempt $k) 409 blitz_time_expired $Context $k
     $lateFacts = Get-Stage8Facts
+    if ((Assert-Stage8OnlyTimeoutReconciliation $beforeLate $lateFacts $m.assessments.matrix_late_submit) -ne 1) { throw 'production defect: The late Submit committed more than the timeout reconciliation of its Attempt.' }
     Assert-Stage8TerminalAttempt (Get-Stage8Row $lateFacts assessment_attempts $lateAttempt) timeout_auto_submit ''
     foreach ($seeded in @(@{ Actor = 'd_waiting'; Attempt = [string] $m.attempts.waiting_1 }, @{ Actor = 'd_checked'; Attempt = [string] $m.attempts.checked_1 })) {
         $k = & $key; Assert-Stage8Rejection (Invoke-Stage8Submit $Context $seeded.Actor $seeded.Attempt $k) 409 attempt_not_editable $Context $k
@@ -503,14 +513,14 @@ function Invoke-Stage8FileRace {
     $answer = @(Get-Stage8Rows $facts attempt_answers attempt_id $attempt)[0]
     $file = Get-Stage8Row $facts files (Get-Stage8Row $facts answer_files $answer.id answer_id).file_id
     $value = Get-Stage8RaceValue $file.checksum_sha256 $Context.Files.Files['replacement_docx'].sha256 $Context.Files.Files['answer_pdf'].sha256
-    # Each upload is a new File row, so the frozen File id names the branch exactly.
-    $writtenFileId = if ([int] $probe.A.StatusCode -eq 200) { [string] $probe.A.Json.data.answer.file.id } else { '' }
+    # A replacement refills the answer's existing File row (same ID), so the frozen name and size name the branch.
     $frozen = Get-Stage8FrozenAnswer $probe.B $question
-    $frozenValue = Get-Stage8RaceValue $(if ($null -ne $frozen) { $frozen.file.id }) $writtenFileId $priorFileId
+    $frozenFile = if ($null -ne $frozen) { "$($frozen.file.original_name)|$($frozen.file.size_bytes)" } else { $null }
+    $written = $Context.Files.Files['replacement_docx']; $prior = $Context.Files.Files['answer_pdf']
+    $frozenValue = Get-Stage8RaceValue $frozenFile "$($written.original_name)|$($written.size_bytes)" "$($prior.original_name)|$($prior.size_bytes)"
     $branch = Assert-Stage8RaceBranch $probe.A $probe.B $facts $attempt $question $value $frozenValue $probe.FirstQueued
-    if ([string] $file.id -cne $(if ($value -ceq 'written') { $writtenFileId } else { $priorFileId })) { throw 'production defect: The persisted raced File is not the one its branch uploaded.' }
-    if ($branch -ceq 'submit_first' -and (@($facts.tables.files | Where-Object uploaded_by_user_id -CEQ ([string] $m.users.$Actor) | ForEach-Object id) -join ',') -cne $priorFileId) {
-        throw 'production defect: A race upload rejected after the Submit left a File row.'
+    if ((@($facts.tables.files | Where-Object uploaded_by_user_id -CEQ ([string] $m.users.$Actor) | ForEach-Object id) -join ',') -cne $priorFileId -or [string] $file.id -cne $priorFileId) {
+        throw 'production defect: A race left other than the answer''s single File row.'
     }
     Assert-Stage8SingleSubmitResult $facts $attempt
     $fixtureName = if ($value -ceq 'written') { 'replacement_docx' } else { 'answer_pdf' }
@@ -573,6 +583,8 @@ function Invoke-Stage8TeacherClose {
     Assert-Stage8ApiSuccess $grantReplay 201
     if ([string] $grantReplay.Json.data.id -cne $Execution.exception) { throw 'production defect: A grant replay after Close returned another exception.' }
     $k = New-Stage8Key 554; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_matrix $matrix (New-Stage8StartRequest $k start_normal)) 409 blitz_not_active $Context $k
+    $k = New-Stage8Key 556; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_matrix $matrix (New-Stage8StartRequest $k start_replacement)) 409 blitz_not_active $Context $k
+    $k = New-Stage8Key 557; Assert-Stage8Rejection (Invoke-Stage8Start $Context d_matrix $matrix (New-Stage8StartRequest $k resume $Execution.attempt2)) 409 blitz_not_active $Context $k
     $k = New-Stage8Key 555; Assert-Stage8Rejection (Invoke-Stage8Grant $Context individual_teacher $matrix ([string] $m.users.d_matrix_peer) $k 'E2E S08 after Close') 409 blitz_attempt_exception_not_allowed $Context $k
     Assert-Stage8RowsUnchanged $matrixClosed (Get-Stage8Facts) @('assessment_attempts', 'blitz_attempt_exceptions', 'idempotency_records', 'blitz_tasks') 'replays and rejections on the closed matrix Blitz'
     Add-Stage8Evidence $Context 'teacher_close' ([pscustomobject] @{ blitz = $blitz; closed_at = [string] $blitzRow.closed_at; future = $futureAttempt; due = [string] $m.attempts.close_due_1 })

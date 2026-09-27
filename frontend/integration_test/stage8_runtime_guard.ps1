@@ -11,19 +11,61 @@ $script:Stage8DockerNetworkName = 'testlabuz_default'
 $script:Stage8BackendRoot = '/var/www/html'
 $script:Stage8PrivateRoot = '/var/www/html/storage/app/private'
 $script:Stage8PrivateVolumeName = 'testlabuz-stage8-e2e-private-files'
+$script:Stage8HarnessMutexName = 'Local\TestLabUzStage8Harness'
+$script:Stage8ManualSmokeMarker = Join-Path ([IO.Path]::GetTempPath()) 'testlabuz-stage8-manual-smoke.pending'
 
-# Only the short wrapper/path reaches argv. Program and optional inputs travel over stdin.
+# The runner and the manual-smoke script clean and reseed the same manifest, so only one may run at a time,
+# and nothing may reseed while a prepared manual smoke is pending on the owner's device.
+function Enter-Stage8HarnessLock {
+    $mutex = [Threading.Mutex]::new($false, $script:Stage8HarnessMutexName)
+    $acquired = $false
+    try { $acquired = $mutex.WaitOne(0) }
+    catch [Threading.AbandonedMutexException] { $acquired = $true }
+    if (-not $acquired) {
+        $mutex.Dispose()
+        throw 'environment/runtime defect: another Stage 8 harness run is active on this machine.'
+    }
+    $mutex
+}
+
+function Exit-Stage8HarnessLock {
+    param([AllowNull()] $Mutex)
+    if ($null -eq $Mutex) { return }
+    try { $Mutex.ReleaseMutex() } finally { $Mutex.Dispose() }
+}
+
+function Test-Stage8ManualSmokePending { Test-Path -LiteralPath $script:Stage8ManualSmokeMarker }
+
+$script:Stage8RequiredEnvironment = @{
+    APP_ENV = 'testing'
+    APP_DEBUG = 'false'
+    DB_CONNECTION = 'pgsql'
+    DB_HOST = 'postgres'
+    DB_PORT = '5432'
+    DB_DATABASE = 'testlabuz_testing'
+}
+$script:Stage8NamedEnvironment = @('APP_ENV', 'APP_DEBUG', 'DB_CONNECTION', 'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'PHP_CLI_SERVER_WORKERS')
+
+function Get-Stage8InputSecrets {
+    param([string] $InputJson)
+    try { $parsed = $InputJson | ConvertFrom-Json } catch { return @() }
+    if ($parsed -isnot [pscustomobject]) { return @() }
+    @($parsed.PSObject.Properties | ForEach-Object { [string] $_.Value } | Where-Object { $_.Length -ge 4 })
+}
+
+# Only the short wrapper/path reaches argv. The program travels over stdin into a private file; the input
+# travels over php's own stdin and is never written to a file.
 function Invoke-Stage8ContainerPhp {
     param(
         [Parameter(Mandatory = $true)][string] $Program,
         [string] $InputJson = '{}',
-        [string] $BackendContainerName = $script:Stage8BackendContainerName
+        [string] $BackendContainerName = $script:Stage8BackendContainerName,
+        [ValidateRange(1, 3600)][int] $TimeoutSeconds = 300
     )
     if ($BackendContainerName -cne $script:Stage8BackendContainerName) {
         throw 'Stage 8 PHP transport requires the exact dedicated backend container.'
     }
     $containerPath = '/tmp/testlabuz-stage8-program-' + [guid]::NewGuid().ToString('N') + '.php'
-    $encodedInput = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($InputJson))
     $bootstrap = @'
 <?php
 use Illuminate\Support\Facades\DB;
@@ -31,24 +73,56 @@ use Illuminate\Support\Facades\Storage;
 require '/var/www/html/vendor/autoload.php';
 $app = require '/var/www/html/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+// Only the harness's own fail-closed messages leave the container; every other failure stays silent.
+set_exception_handler(static function (Throwable $exception): void {
+    if (get_class($exception) === RuntimeException::class
+        && preg_match('/\A(?:Static |Unowned )?Stage 8 [^\r\n]{0,300}\z/', $exception->getMessage()) === 1) {
+        echo json_encode(['stage8_refusal' => $exception->getMessage()], JSON_THROW_ON_ERROR);
+        exit(3);
+    }
+    exit(1);
+});
+$stage8Raw = (string) stream_get_contents(STDIN);
+if (str_starts_with($stage8Raw, "\xEF\xBB\xBF")) { $stage8Raw = substr($stage8Raw, 3); }
+$stage8Input = json_decode($stage8Raw, true, 512, JSON_THROW_ON_ERROR);
+unset($stage8Raw);
 '@
-    $content = $bootstrap + "`n" + '$stage8Input = json_decode(base64_decode(' + "'$encodedInput'" + '), true, 512, JSON_THROW_ON_ERROR);' + "`n" + $Program
+    $content = $bootstrap + "`n" + $Program
+    $knownFailure = $null
     try {
         $originalOutputEncoding = $OutputEncoding
         try {
             $OutputEncoding = [Text.UTF8Encoding]::new($false)
             $null = @($content | & docker exec -i $BackendContainerName sh -c "umask 077; set -C; cat > '$containerPath'" 2>&1)
-            if ($LASTEXITCODE -ne 0) { throw 'Stage 8 restricted PHP transport failed.' }
+            if ($LASTEXITCODE -ne 0) { $knownFailure = 'Stage 8 restricted PHP transport failed.'; throw $knownFailure }
+            # timeout bounds the PHP process inside the container; stopping the docker client alone would not.
+            $output = @($InputJson | & docker exec -i $BackendContainerName timeout --kill-after=10 $TimeoutSeconds php $containerPath 2>&1)
+            $exitCode = $LASTEXITCODE
         }
         finally { $OutputEncoding = $originalOutputEncoding }
-        $output = @(& docker exec $BackendContainerName php $containerPath 2>&1)
-        if ($LASTEXITCODE -ne 0) { throw 'Stage 8 container PHP operation failed; raw output withheld.' }
+        if ($exitCode -eq 124 -or $exitCode -eq 137) {
+            $knownFailure = "environment/runtime defect: Stage 8 container PHP timed out after $TimeoutSeconds s."
+            throw $knownFailure
+        }
+        if ($exitCode -eq 3) {
+            $refusal = $null
+            try { $refusal = [string] ((($output | ForEach-Object { [string] $_ }) -join "`n") | ConvertFrom-Json).stage8_refusal } catch { $refusal = $null }
+            if (-not [string]::IsNullOrWhiteSpace($refusal)) {
+                foreach ($secret in @(Get-Stage8InputSecrets $InputJson)) { $refusal = $refusal.Replace($secret, '[REDACTED]') }
+                $knownFailure = "Stage 8 container PHP refused: $refusal"
+                throw $knownFailure
+            }
+        }
+        if ($exitCode -ne 0) { throw 'Stage 8 container PHP operation failed.' }
         try { return (($output -join "`n") | ConvertFrom-Json) }
-        catch { throw 'Stage 8 container PHP operation returned invalid JSON; raw output withheld.' }
+        catch { $knownFailure = 'Stage 8 container PHP operation returned invalid JSON; raw output withheld.'; throw $knownFailure }
     }
-    catch { throw 'Stage 8 container PHP operation failed; raw diagnostics withheld to protect inputs.' }
+    catch {
+        if ($null -ne $knownFailure) { throw $knownFailure }
+        throw 'Stage 8 container PHP operation failed; raw diagnostics withheld to protect inputs.'
+    }
     finally {
-        $content = $null; $encodedInput = $null; $InputJson = $null; $output = $null
+        $content = $null; $InputJson = $null; $output = $null
         $null = @(& docker exec $BackendContainerName rm -f -- $containerPath 2>&1)
         if ($LASTEXITCODE -ne 0) { throw 'Stage 8 restricted container-script cleanup failed.' }
     }
@@ -189,6 +263,66 @@ function Assert-Stage8PortBindingFacts {
             throw 'The selected Stage 8 API port is not actively bound exactly once to loopback.'
         }
     }
+}
+
+# Only named values are read; the full Docker environment is never printed or returned.
+function Assert-Stage8ContainerEnvironment {
+    param([AllowEmptyCollection()][Parameter(Mandatory = $true)][object[]] $Environment)
+    $named = @{}
+    foreach ($entry in $Environment) {
+        $text = [string] $entry
+        $separator = $text.IndexOf('=')
+        if ($separator -gt 0 -and $text.Substring(0, $separator) -cin $script:Stage8NamedEnvironment) {
+            $named[$text.Substring(0, $separator)] = $text.Substring($separator + 1)
+        }
+    }
+    foreach ($name in $script:Stage8RequiredEnvironment.Keys) {
+        if ([string] $named[$name] -cne $script:Stage8RequiredEnvironment[$name]) {
+            throw "The dedicated Stage 8 backend container has an unsafe $name value."
+        }
+    }
+    Assert-Stage8WorkerEnvironment -Value ([string] $named['PHP_CLI_SERVER_WORKERS'])
+    $named
+}
+
+# Static configuration of an inspected container: everything that must hold before it may be started.
+function Assert-Stage8ContainerConfiguration {
+    param([Parameter(Mandatory = $true)][psobject] $Inspection, [Parameter(Mandatory = $true)][int] $ApiPort)
+    Assert-Stage8ContainerFacts -InspectionCount 1 -ContainerName ([string] $Inspection.Name.TrimStart('/')) -Running $true `
+        -AutoRemove ([bool] $Inspection.HostConfig.AutoRemove) -WorkingDirectory ([string] $Inspection.Config.WorkingDir) -Image ([string] $Inspection.Config.Image) `
+        -Command @($Inspection.Config.Cmd | ForEach-Object { [string] $_ }) -Platform ([string] $Inspection.Platform) -RestartPolicy ([string] $Inspection.HostConfig.RestartPolicy.Name)
+    Assert-Stage8MountFacts -Mounts @($Inspection.Mounts) -ExpectedBackendSource (Get-Stage8BackendSource)
+    # A stopped container has no active binding yet, so only its configured binding is judged here.
+    $configured = @($Inspection.HostConfig.PortBindings.($script:Stage8BackendContainerPort))
+    Assert-Stage8PortBindingFacts -ConfiguredBindings $configured -ActiveBindings $configured -ApiPort $ApiPort
+    if ([string] $Inspection.HostConfig.NetworkMode -cne $script:Stage8DockerNetworkName) {
+        throw 'The dedicated Stage 8 backend container is not configured on the approved Docker network.'
+    }
+    Assert-Stage8ContainerEnvironment -Environment @($Inspection.Config.Env)
+}
+
+# A null client address is a local socket inside the PostgreSQL container, which is foreign too.
+function Assert-Stage8DatabaseExclusivity {
+    param([Parameter(Mandatory = $true)] $Facts, [Parameter(Mandatory = $true)][string] $ClientAddress)
+    if ($null -eq $Facts.PSObject.Properties['sessions']) { throw 'integration-harness defect: the Stage 8 session listing is missing.' }
+    $foreign = @(@($Facts.sessions) | Where-Object { [string] $_.client_addr -cne $ClientAddress })
+    if ($foreign.Count -ne 0) {
+        throw 'environment/runtime defect: another client uses testlabuz_testing; stop it (for example a backend test run) and rerun.'
+    }
+}
+
+# A run owns testlabuz_testing: any other client (a backend test run, a psql session) could wipe or change its state.
+function Assert-Stage8ExclusiveDatabase {
+    param([Parameter(Mandatory = $true)][string] $ClientAddress)
+    if ($ClientAddress -cnotmatch '\A[0-9]{1,3}(?:\.[0-9]{1,3}){3}\z') { throw 'integration-harness defect: the Stage 8 client address is required.' }
+    $program = @'
+if (!app()->environment('testing') || DB::selectOne('select current_database() as name')->name !== 'testlabuz_testing') {
+    throw new RuntimeException('Stage 8 exclusive-database identity failed.');
+}
+$sessions = DB::select("select host(client_addr) as client_addr from pg_stat_activity where datname = current_database() and backend_type = 'client backend' and pid <> pg_backend_pid()");
+echo json_encode(['sessions' => $sessions], JSON_THROW_ON_ERROR);
+'@
+    Assert-Stage8DatabaseExclusivity (Invoke-Stage8ContainerPhp -Program $program) $ClientAddress
 }
 
 function Assert-Stage8ServerFacts {
@@ -395,34 +529,11 @@ function Assert-Stage8DedicatedRuntime {
         -Platform $(if ($null -eq $inspection) { '' } else { [string] $inspection.Platform }) `
         -RestartPolicy $(if ($null -eq $inspection) { '' } else { [string] $inspection.HostConfig.RestartPolicy.Name })
 
-    Assert-Stage8MountFacts -Mounts @($inspection.Mounts) -ExpectedBackendSource (Get-Stage8BackendSource)
+    $containerEnvironment = Assert-Stage8ContainerConfiguration -Inspection $inspection -ApiPort $ApiTarget.Port
     Assert-Stage8PortBindingFacts `
         -ConfiguredBindings @($inspection.HostConfig.PortBindings.($script:Stage8BackendContainerPort)) `
         -ActiveBindings @($inspection.NetworkSettings.Ports.($script:Stage8BackendContainerPort)) `
         -ApiPort $ApiTarget.Port
-
-    # Only named values are read; the full Docker environment is never printed.
-    $containerEnvironment = @{}
-    foreach ($entry in @($inspection.Config.Env)) {
-        $separator = ([string] $entry).IndexOf('=')
-        if ($separator -gt 0) {
-            $containerEnvironment[$entry.Substring(0, $separator)] = $entry.Substring($separator + 1)
-        }
-    }
-    $requiredEnvironment = @{
-        APP_ENV = 'testing'
-        APP_DEBUG = 'false'
-        DB_CONNECTION = 'pgsql'
-        DB_HOST = 'postgres'
-        DB_PORT = '5432'
-        DB_DATABASE = 'testlabuz_testing'
-    }
-    foreach ($name in $requiredEnvironment.Keys) {
-        if ([string] $containerEnvironment[$name] -cne $requiredEnvironment[$name]) {
-            throw "The dedicated Stage 8 backend container has an unsafe $name value."
-        }
-    }
-    Assert-Stage8WorkerEnvironment -Value ([string] $containerEnvironment['PHP_CLI_SERVER_WORKERS'])
 
     $postgresOutput = & docker inspect $script:Stage8PostgresContainerName 2>$null
     if ($LASTEXITCODE -ne 0) { throw 'The approved Stage 8 PostgreSQL container could not be inspected.' }
@@ -506,10 +617,7 @@ function Initialize-Stage8Runtime {
         $inspection = @(& docker inspect $script:Stage8BackendContainerName 2>$null | ConvertFrom-Json)
         if ($LASTEXITCODE -ne 0 -or $inspection.Count -ne 1) { throw 'The existing Stage 8 runtime could not be inspected.' }
         $static = $inspection[0]
-        Assert-Stage8ContainerFacts -InspectionCount 1 -ContainerName ([string] $static.Name.TrimStart('/')) -Running $true `
-            -AutoRemove ([bool] $static.HostConfig.AutoRemove) -WorkingDirectory ([string] $static.Config.WorkingDir) -Image ([string] $static.Config.Image) `
-            -Command @($static.Config.Cmd | ForEach-Object { [string] $_ }) -Platform ([string] $static.Platform) -RestartPolicy ([string] $static.HostConfig.RestartPolicy.Name)
-        Assert-Stage8MountFacts -Mounts @($static.Mounts) -ExpectedBackendSource (Get-Stage8BackendSource)
+        Assert-Stage8ContainerConfiguration -Inspection $static -ApiPort $ApiTarget.Port | Out-Null
         if ([string] $static.State.Running -cne 'True') {
             & docker start $script:Stage8BackendContainerName | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'The existing Stage 8 runtime could not be started.' }

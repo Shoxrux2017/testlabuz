@@ -410,6 +410,40 @@ function Assert-Stage8NoActivationWrites {
     Assert-Stage8NoIdempotencyRecord $After $Key
 }
 
+# Sections 34.1.4A, 34.1.5 and 34.1.7: a due-time request may commit only the canonical timeout reconciliation of
+# the due in-progress Attempts of its Blitz. Every other owned row and blob stays unchanged. Attempts due when the
+# before snapshot was taken must be finalized; one that fell due only between the two snapshots may be either.
+function Assert-Stage8OnlyTimeoutReconciliation {
+    param([Parameter(Mandatory = $true)] $Before, [Parameter(Mandatory = $true)] $After, [Parameter(Mandatory = $true)][string] $AssessmentId)
+    foreach ($property in $After.tables.PSObject.Properties) {
+        if ($property.Name -ceq 'assessment_attempts') { continue }
+        Assert-Stage8Equal @($property.Value) @($Before.tables.($property.Name)) "due-time request leaves $($property.Name) unchanged"
+    }
+    Assert-Stage8Equal @($After.blobs) @($Before.blobs) 'due-time request leaves private blobs unchanged'
+    $beforeRows = @($Before.tables.assessment_attempts)
+    Assert-Stage8Set @($After.tables.assessment_attempts | ForEach-Object { [string] $_.id }) @($beforeRows | ForEach-Object { [string] $_.id }) 'due-time request creates or removes no Attempt'
+    $mustBefore = ConvertTo-Stage8Instant $Before.observed_at
+    $mayBefore = ConvertTo-Stage8Instant $After.observed_at
+    $reconciliationColumns = @('status', 'finalization_reason', 'finalized_at', 'locked_at', 'updated_at')
+    $finalized = 0
+    foreach ($row in $beforeRows) {
+        $current = Get-Stage8Row $After assessment_attempts ([string] $row.id)
+        $candidate = [string] $row.assessment_id -ceq $AssessmentId -and $row.status -ceq 'in_progress'
+        $must = $candidate -and (ConvertTo-Stage8Instant $row.deadline_at) -le $mustBefore
+        $may = $candidate -and (ConvertTo-Stage8Instant $row.deadline_at) -le $mayBefore
+        if (-not $must -and (-not $may -or $current.status -ceq 'in_progress')) {
+            Assert-Stage8Equal $current $row "due-time request leaves Attempt $($row.id) unchanged"
+            continue
+        }
+        Assert-Stage8TerminalAttempt $current timeout_auto_submit ''
+        foreach ($column in $row.PSObject.Properties.Name) {
+            if ($column -cnotin $reconciliationColumns) { Assert-Stage8Equal $current.$column $row.$column "due-time reconciliation keeps $column" }
+        }
+        $finalized++
+    }
+    $finalized
+}
+
 function Assert-Stage8LateWriteUnchanged {
     param($Before, $After, [string] $AttemptId)
     $answers = @(Get-Stage8Rows $Before attempt_answers attempt_id $AttemptId)
@@ -530,6 +564,18 @@ function Assert-Stage8CleanupDiskIdentity {
     }
 }
 
+# The container runs the live backend tree, so the evidence names a commit only if the checkout under test is
+# clean at start and still clean on the same commit before PASS.
+function Assert-Stage8AuditedCheckout {
+    param([Parameter(Mandatory = $true)] $Start, $Current)
+    if ([string] $Start.Sha -cnotmatch '\A[a-f0-9]{40}\z' -or $Start.Clean -ne $true) {
+        throw 'environment/runtime defect: the checkout has uncommitted changes under backend/, frontend/ or docker/; the evidence could not name the code under test.'
+    }
+    if ($null -ne $Current -and ($Current.Clean -ne $true -or [string] $Current.Sha -cne [string] $Start.Sha)) {
+        throw 'environment/runtime defect: the audited checkout changed during the run.'
+    }
+}
+
 # The runner executes exactly this order; the verifier proves unsafe orders are rejected.
 function Assert-Stage8RunnerPlan {
     param([string[]] $Plan)
@@ -636,6 +682,7 @@ function Wait-Stage8TimestampBoundary {
     while ($watch.Elapsed.TotalSeconds -lt 10) {
         $clock = Invoke-Stage8ContainerPhp -Program 'echo json_encode(["now"=>now()->utc()->format("Y-m-d\\TH:i:s\\Z")], JSON_THROW_ON_ERROR);'
         if ([DateTimeOffset] $clock.now -gt $recorded) { return }
+        Start-Sleep -Milliseconds 200
     }
     throw 'environment/runtime defect: Server clock did not advance beyond the recorded timestamp within the bounded wait.'
 }

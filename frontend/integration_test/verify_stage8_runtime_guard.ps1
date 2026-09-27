@@ -171,6 +171,55 @@ foreach ($override in $invalidSessions) {
 }
 Assert-Stage8SessionCorrelation @validSession
 
+# Static configuration judged before a stopped container may start.
+function New-Stage8Inspection {
+    param([hashtable] $Override = @{})
+    $environment = [Collections.Generic.List[string]]::new()
+    foreach ($entry in @('APP_ENV=testing', 'APP_DEBUG=false', 'DB_CONNECTION=pgsql', 'DB_HOST=postgres', 'DB_PORT=5432', 'DB_DATABASE=testlabuz_testing', 'PHP_CLI_SERVER_WORKERS=4', 'DB_PASSWORD=never-returned')) {
+        $name = $entry.Substring(0, $entry.IndexOf('='))
+        if ($Override.ContainsKey("env:$name")) { if ($null -ne $Override["env:$name"]) { $environment.Add("$name=$($Override["env:$name"])") } } else { $environment.Add($entry) }
+    }
+    $bindings = if ($Override.ContainsKey('Bindings')) { $Override['Bindings'] } else { @([pscustomobject] @{ HostIp = '127.0.0.1'; HostPort = [string] $ApiPort }) }
+    [pscustomobject] @{
+        Name = '/testlabuz-stage8-e2e-app'
+        Platform = 'linux'
+        State = [pscustomobject] @{ Running = $false }
+        Config = [pscustomobject] @{ WorkingDir = '/var/www/html'; Image = 'testlabuz-app:latest'; Cmd = @('php', 'artisan', 'serve', '--host=0.0.0.0', '--port=8000', '--no-reload'); Env = $environment.ToArray() }
+        HostConfig = [pscustomobject] @{
+            AutoRemove = $false
+            RestartPolicy = [pscustomobject] @{ Name = 'no' }
+            NetworkMode = $(if ($Override.ContainsKey('NetworkMode')) { $Override['NetworkMode'] } else { 'testlabuz_default' })
+            PortBindings = [pscustomobject] @{ '8000/tcp' = $bindings }
+        }
+        Mounts = @($backendMount, $privateMount)
+    }
+}
+$invalidConfigurations = @(
+    @{ Bindings = @([pscustomobject] @{ HostIp = '0.0.0.0'; HostPort = [string] $ApiPort }) }, @{ Bindings = @() },
+    @{ Bindings = @([pscustomobject] @{ HostIp = '127.0.0.1'; HostPort = [string] ($ApiPort + 1) }) },
+    @{ 'env:DB_DATABASE' = 'testlabuz' }, @{ 'env:DB_DATABASE' = 'testlabuz_demo' }, @{ 'env:APP_ENV' = 'local' }, @{ 'env:DB_HOST' = 'remote' },
+    @{ 'env:PHP_CLI_SERVER_WORKERS' = $null }, @{ 'env:PHP_CLI_SERVER_WORKERS' = '1' }, @{ 'env:APP_DEBUG' = $null },
+    @{ NetworkMode = 'bridge' }, @{ NetworkMode = 'host' }, @{ NetworkMode = '' }
+)
+foreach ($override in $invalidConfigurations) {
+    Assert-Stage8Rejected { Assert-Stage8ContainerConfiguration -Inspection (New-Stage8Inspection $override) -ApiPort $ApiPort | Out-Null } 'The Stage 8 guard accepted a stopped container with an unsafe static configuration.'
+}
+$named = Assert-Stage8ContainerConfiguration -Inspection (New-Stage8Inspection) -ApiPort $ApiPort
+if ($named.ContainsKey('DB_PASSWORD') -or $named['DB_DATABASE'] -cne 'testlabuz_testing') { throw 'The Stage 8 guard returned an environment value it must never read.' }
+
+$own = [pscustomobject] @{ client_addr = '172.19.0.3' }
+Assert-Stage8DatabaseExclusivity ([pscustomobject] @{ sessions = @() }) '172.19.0.3'
+Assert-Stage8DatabaseExclusivity ([pscustomobject] @{ sessions = @($own, $own) }) '172.19.0.3'
+$invalidExclusivity = @(
+    [pscustomobject] @{ sessions = @([pscustomobject] @{ client_addr = '172.19.0.9' }) },
+    [pscustomobject] @{ sessions = @($own, [pscustomobject] @{ client_addr = $null }) },
+    [pscustomobject] @{ sessions = @([pscustomobject] @{ client_addr = '172.19.0.30' }) },
+    [pscustomobject] @{}
+)
+foreach ($facts in $invalidExclusivity) {
+    Assert-Stage8Rejected { Assert-Stage8DatabaseExclusivity $facts '172.19.0.3' } 'The Stage 8 guard accepted another client on testlabuz_testing.'
+}
+
 $validLaravel = [pscustomobject] @{
     environment = 'testing'; debug = $false; database_default = 'pgsql'; connection_driver = 'pgsql';
     pdo_driver = 'pgsql'; database = 'testlabuz_testing'; pending_migrations = 0
@@ -216,13 +265,38 @@ foreach ($wrong in @('testlabuz-app-1', 'testlabuz-stage7-e2e-app', 'testlabuz-d
 
 if (-not $SkipLiveRuntime) {
     $runtime = Assert-Stage8DedicatedRuntime -ApiTarget $apiTarget
-    Write-Output "Stage8RuntimeGuardLive: PASS target=$($runtime.ApiBaseUrl) database=$($runtime.Database) workers=$($runtime.Workers) client=$($runtime.ClientAddress)"
+    Assert-Stage8ExclusiveDatabase -ClientAddress $runtime.ClientAddress
+    # Transport: input over stdin, safe refusals pass through redacted, everything else stays generic, time is bounded.
+    if ((Invoke-Stage8ContainerPhp -Program 'echo json_encode(["echo" => $stage8Input["value"]], JSON_THROW_ON_ERROR);' -InputJson '{"value":"stage8-stdin-probe"}').echo -cne 'stage8-stdin-probe') {
+        throw 'The Stage 8 PHP transport did not deliver its input over stdin.'
+    }
+    $messages = @{}
+    $probes = @{
+        refusal = @{ Program = 'throw new RuntimeException("Stage 8 verifier refusal probe.");'; Input = '{}'; Timeout = 60 }
+        redacted = @{ Program = 'throw new RuntimeException("Stage 8 verifier echoes " . $stage8Input["password"] . ".");'; Input = '{"password":"stage8-canary-secret"}'; Timeout = 60 }
+        generic = @{ Program = 'throw new LogicException("stage8-canary-internal");'; Input = '{}'; Timeout = 60 }
+        subclass = @{ Program = 'throw new UnexpectedValueException("Stage 8 subclass must stay generic.");'; Input = '{}'; Timeout = 60 }
+        timeout = @{ Program = 'sleep(5); echo "{}";'; Input = '{}'; Timeout = 1 }
+    }
+    foreach ($name in $probes.Keys) {
+        try { Invoke-Stage8ContainerPhp -Program $probes[$name].Program -InputJson $probes[$name].Input -TimeoutSeconds $probes[$name].Timeout | Out-Null; $messages[$name] = '' }
+        catch { $messages[$name] = $_.Exception.Message }
+    }
+    if ($messages.refusal -cne 'Stage 8 container PHP refused: Stage 8 verifier refusal probe.' -or
+        $messages.redacted -cne 'Stage 8 container PHP refused: Stage 8 verifier echoes [REDACTED].' -or
+        $messages.generic -cnotlike 'Stage 8 container PHP operation failed*' -or $messages.generic -clike '*canary*' -or
+        $messages.subclass -cnotlike 'Stage 8 container PHP operation failed*' -or
+        $messages.timeout -cnotlike 'environment/runtime defect: Stage 8 container PHP timed out*') {
+        throw 'The Stage 8 PHP transport reported a failure unsafely or not at all.'
+    }
+    Write-Output "Stage8RuntimeGuardLive: PASS target=$($runtime.ApiBaseUrl) database=$($runtime.Database) workers=$($runtime.Workers) client=$($runtime.ClientAddress) exclusive=True transport=5"
 }
 
 Write-Output (
     'Stage8RuntimeGuardMatrix: PASS ' +
     "($($invalidTargets.Count) targets, $($invalidContainers.Count) container identities, $($invalidMounts.Count) mount shapes, " +
     "$($invalidBindings.Count) bindings, $($invalidServers.Count) server identities, $($invalidWorkers.Count) worker values, " +
-    "$($invalidProcessSets.Count) process sets, $($invalidSessions.Count) session correlations, $($invalidLaravel.Count) Laravel/database facts, $($invalidHttpFacts.Count) HTTP envelopes, " +
+    "$($invalidProcessSets.Count) process sets, $($invalidSessions.Count) session correlations, $($invalidConfigurations.Count) static configurations, $($invalidExclusivity.Count) exclusivity facts, " +
+    "$($invalidLaravel.Count) Laravel/database facts, $($invalidHttpFacts.Count) HTTP envelopes, " +
     "3 wrong containers; live=$(-not $SkipLiveRuntime))"
 )

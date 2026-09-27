@@ -210,7 +210,8 @@ do {
         'blockers' => array_values(array_filter(array_map('intval', explode(',', trim((string) $row->blockers, '{}')))))],
         DB::select("select pid, datname, host(client_addr) as client_addr, state, wait_event_type, wait_event, pg_blocking_pids(pid)::text as blockers from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid()"));
     $locks = array_map(fn ($row) => ['pid' => (int) $row->pid, 'locktype' => $row->locktype, 'relation' => $row->relation],
-        DB::select("select pid, locktype, relation::regclass::text as relation from pg_locks where not granted"));
+        // Only lock rows of this database's sessions; transaction-ID rows carry no database, so filter by session.
+        DB::select("select pid, locktype, relation::regclass::text as relation from pg_locks where not granted and pid in (select pid from pg_stat_activity where datname = current_database())"));
     $sample = ['observed_at' => now()->utc()->format('Y-m-d\TH:i:s.u\Z'), 'sessions' => $sessions, 'waiting_locks' => $locks];
     $waiters = array_filter($sessions, fn ($s) => $s['pid'] !== $blocker && $s['client_addr'] === $address && $s['state'] === 'active' && $s['wait_event_type'] === 'Lock');
     $samples[] = $sample;
