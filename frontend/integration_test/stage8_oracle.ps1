@@ -652,7 +652,7 @@ function Invoke-Stage8GuardedScheduler {
         [scriptblock] $FactsProvider = { Get-Stage8SchedulerSafetyFacts },
         [scriptblock] $SentinelProvider = { Get-Stage8SentinelFacts },
         [scriptblock] $Invoker = {
-            $output = @(& docker exec testlabuz-stage8-e2e-app php artisan blitz:reconcile-timeouts 2>&1)
+            $output = @(& docker exec testlabuz-stage8-e2e-app timeout --kill-after=10 300 php artisan blitz:reconcile-timeouts 2>&1)
             [pscustomobject] @{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
         }
     )
@@ -661,6 +661,7 @@ function Invoke-Stage8GuardedScheduler {
     Assert-Stage8SchedulerSafeToRun -Facts $facts -Invocation $Invocation
     $sentinelsBefore = & $SentinelProvider
     $result = & $Invoker
+    if ([int] $result.ExitCode -eq 124 -or [int] $result.ExitCode -eq 137) { throw 'environment/runtime defect: blitz:reconcile-timeouts timed out after 300 s.' }
     if ([int] $result.ExitCode -ne 0) { throw 'production defect: blitz:reconcile-timeouts failed.' }
     $match = [regex]::Match([string] $result.Output, 'Candidates: (?<c>[0-9]+); finalized attempts: (?<f>[0-9]+); failures: (?<x>[0-9]+)\.')
     if (-not $match.Success) { throw 'production defect: blitz:reconcile-timeouts output format changed.' }

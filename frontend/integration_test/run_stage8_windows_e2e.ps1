@@ -262,11 +262,12 @@ exit $LASTEXITCODE
 }
 
 $operationFailed = $false
+$stateTouched = $false
 $harnessLock = $null
 try {
     $harnessLock = Enter-Stage8HarnessLock
     if (Test-Stage8ManualSmokePending) {
-        throw 'environment/runtime defect: a prepared Android manual smoke is pending; finish it with prepare_stage8_manual_smoke.ps1 -CompleteManualSmokeAndCleanup first.'
+        throw ('environment/runtime defect: ' + (Get-Stage8ManualSmokePendingMessage))
     }
     Assert-Stage8RunnerPlan $plan
     Assert-Stage8FlutterExecutable
@@ -287,6 +288,7 @@ try {
     & (Join-Path $PSScriptRoot 'verify_stage8_runtime_guard.ps1') -ApiPort $ApiPort
     foreach ($verifier in @('verify_stage8_test_files.ps1', 'verify_stage8_concurrency_probe.ps1', 'verify_stage8_oracle.ps1', 'verify_stage8_api_security.ps1')) { & (Join-Path $PSScriptRoot $verifier) }
     Complete-Stage8Step pure_verifiers
+    $stateTouched = $true
     Invoke-Stage8Seeder ensureSentinels | Out-Null
     $sentinels = Get-Stage8SentinelFacts
     Write-Output 'Stage8UnrelatedSentinels: captured'
@@ -388,5 +390,6 @@ finally {
     $password = $null
     Exit-Stage8HarnessLock $harnessLock
     if ($cleanupErrors.Count -gt 0 -and -not $operationFailed) { throw ($cleanupErrors -join ' ') }
-    if ($operationFailed) { Write-Output 'Stage8Run: FAILED; manifest-owned DB/private state is preserved for diagnosis and is removed by the next invocation.' }
+    if ($operationFailed -and $stateTouched) { Write-Output 'Stage8Run: FAILED; manifest-owned DB/private state is preserved for diagnosis and is removed by the next invocation.' }
+    elseif ($operationFailed) { Write-Output 'Stage8Run: FAILED before any Stage 8 manifest state was changed.' }
 }

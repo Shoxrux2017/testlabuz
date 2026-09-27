@@ -361,6 +361,11 @@ $changing = { $script:sentinelCalls++; if ($script:sentinelCalls -eq 1) { $senti
 Confirm-Stage8Reject 'unrelated Scheduler sentinel changed after the command' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider $changing -Invoker $invoker | Out-Null }
 Confirm-Stage8Reject 'Scheduler output count differing from the guarded set' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = 'Candidates: 2; finalized attempts: 2; failures: 0.' } } | Out-Null }
 Confirm-Stage8Reject 'first Scheduler invocation finalizing fewer due Attempts' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = 'Candidates: 1; finalized attempts: 0; failures: 0.' } } | Out-Null }
+$timeoutMessage = ''
+try { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 124; Output = '' } } | Out-Null }
+catch { $timeoutMessage = $_.Exception.Message }
+if ($timeoutMessage -cnotlike 'environment/runtime defect: blitz:reconcile-timeouts timed out*') { throw 'integration-harness defect: Oracle verifier did not classify a Scheduler timeout.' }
+$script:checks++
 Confirm-Stage8Reject 'second Scheduler invocation finalizing again' { Invoke-Stage8GuardedScheduler -Invocation Second -FactsProvider { $empty } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = 'Candidates: 0; finalized attempts: 1; failures: 0.' } } | Out-Null }
 Confirm-Stage8Reject 'Scheduler failures reported' { Invoke-Stage8GuardedScheduler -Invocation First -FactsProvider { $schedulerOnly } -SentinelProvider { $sentinel } -Invoker { [pscustomobject] @{ ExitCode = 1; Output = 'Candidates: 1; finalized attempts: 0; failures: 1.' } } | Out-Null }
 

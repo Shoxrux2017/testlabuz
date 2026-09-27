@@ -264,12 +264,12 @@ class Stage8E2eSeeder extends Seeder
             // Only the Builder smoke Topic is authored through the UI; every other Topic must stay static.
             $this->require($assessment->topic_id === $manifest['topics']['builder'] && $assessment->type === 'blitz'
                 && $assessment->institution_id === $topic['institution_id'] && $assessment->teacher_id === $topic['teacher_id'],
-                'Unexpected runtime Stage 8 assessment ownership.');
+                'Stage 8 runtime assessment ownership is unexpected.');
         }
         $state['dynamic']['assessments'] = $dynamicAssessments->pluck('id')->all();
         $ownedAssessments = collect($expectedRows['assessments'])->merge($dynamicAssessments->map(fn (object $row): array => (array) $row))->keyBy('id');
         $state['dynamic']['blitz_tasks'] = DB::table('blitz_tasks')->whereIn('assessment_id', $state['dynamic']['assessments'])->pluck('assessment_id')->all();
-        $this->require(DB::table('homework_assignments')->whereIn('assessment_id', $state['dynamic']['assessments'])->doesntExist(), 'Unexpected runtime Stage 8 Homework.');
+        $this->require(DB::table('homework_assignments')->whereIn('assessment_id', $state['dynamic']['assessments'])->doesntExist(), 'Stage 8 runtime Homework is unexpected.');
 
         $questions = DB::table('questions')->whereIn('assessment_id', $ownedAssessments->keys())->get();
         foreach ($questions as $question) {
@@ -369,7 +369,7 @@ class Stage8E2eSeeder extends Seeder
                 $directory = 'student-submissions/'.$attempt->institution_id.'/'.$attempt->id.'/'.$question->id;
                 $state['directories'][] = ['disk' => $disk, 'key' => $directory];
                 foreach (Storage::disk($disk)->allFiles($directory) as $key) {
-                    $this->require($this->isSubmissionKey($key, $directory), 'Unexpected file in Stage 8 submission namespace.');
+                    $this->require($this->isSubmissionKey($key, $directory), 'Stage 8 submission namespace holds an unexpected file.');
                     $state['blobs'][] = ['disk' => $disk, 'key' => $key];
                 }
             }
@@ -382,7 +382,7 @@ class Stage8E2eSeeder extends Seeder
             $user = $users[$record->user_id];
             $this->require(in_array($record->operation, self::IDEMPOTENCY_OPERATIONS, true) && $record->institution_id === $user['institution_id']
                 && in_array($record->result_resource_id, $owners[$record->result_resource_type] ?? [], true),
-                'Unowned or incomplete idempotency record in Stage 8 actor scope.');
+                'Stage 8 actor scope holds an unowned or incomplete idempotency record.');
         }
         $state['db']['idempotency_records'] = $records->pluck('id')->all();
         $state['db']['personal_access_tokens'] = DB::table('personal_access_tokens')->where('tokenable_type', (new User)->getMorphClass())
