@@ -225,7 +225,7 @@ class Stage8E2eSeederTest extends TestCase
         $this->assertSame(1, DB::table('questions')->where('assessment_id', $assessments['unset'])->count());
 
         $expected = ['late_typed' => [6, 'd_late_typed'], 'late_file' => [8, 'd_late_file'], 'race_typed' => [3600, 'd_race_typed'], 'race_file' => [3600, 'd_race_file'], 'race_typed_2' => [3600, 'd_race_typed_2'], 'race_file_2' => [3600, 'd_race_file_2'],
-            'matrix_timeout' => [3, 'd_timeout_resume'], 'matrix_late_submit' => [3, 'd_late_submit'], 'timeout_ui' => [45, 'd_timeout_ui']];
+            'matrix_late_submit' => [3, 'd_late_submit'], 'timeout_ui' => [45, 'd_timeout_ui']];
         foreach ($expected as $name => [$duration, $student]) {
             $blitz = DB::table('blitz_tasks')->where('assessment_id', $assessments[$name])->sole();
             $this->assertSame(['active', 'individual', $duration, null], [$blitz->status, $blitz->timer_start_mode_snapshot, $blitz->duration_seconds, $blitz->synchronized_ends_at], $name);
@@ -234,6 +234,12 @@ class Stage8E2eSeederTest extends TestCase
         }
         $this->assertSame('file_based', DB::table('questions')->where('assessment_id', $assessments['race_file'])->value('type'));
         $this->assertSame('file_based', DB::table('questions')->where('assessment_id', $assessments['race_file_2'])->value('type'));
+        $timeoutBlitz = DB::table('blitz_tasks')->where('assessment_id', $assessments['matrix_timeout'])->sole();
+        $this->assertSame(['active', 'individual', 3, null], [$timeoutBlitz->status, $timeoutBlitz->timer_start_mode_snapshot, $timeoutBlitz->duration_seconds, $timeoutBlitz->synchronized_ends_at]);
+        $this->assertEqualsCanonicalizing([$users['d_timeout_resume'], $users['d_timeout_peer']], DB::table('assessment_students')->where('assessment_id', $assessments['matrix_timeout'])->pluck('student_id')->all());
+        $peer = DB::table('assessment_attempts')->where('assessment_id', $assessments['matrix_timeout'])->sole();
+        $this->assertSame([$manifest['attempts']['timeout_peer_1'], $users['d_timeout_peer'], 1, 'in_progress'], [$peer->id, $peer->student_id, $peer->attempt_number, $peer->status]);
+        $this->assertTrue(Carbon::parse($peer->deadline_at)->equalTo(Carbon::parse($peer->started_at)->addSeconds(3)) && Carbon::parse($peer->deadline_at)->lt(now()));
         $this->assertSame('file_based', DB::table('questions')->where('assessment_id', $assessments['late_file'])->value('type'));
         $forward = DB::table('assessment_attempts')->where('assessment_id', $assessments['forward_status'])->orderBy('status')->get();
         $this->assertSame(['checked', 'waiting_for_teacher_review'], $forward->pluck('status')->all());
@@ -254,12 +260,12 @@ class Stage8E2eSeederTest extends TestCase
         $candidates = DB::table('blitz_tasks')->where('status', 'active')->whereExists(fn ($query) => $query->selectRaw('1')->from('assessment_attempts')
             ->whereColumn('assessment_attempts.institution_id', 'blitz_tasks.institution_id')->whereColumn('assessment_attempts.assessment_id', 'blitz_tasks.assessment_id')
             ->where('assessment_attempts.status', 'in_progress')->where('assessment_attempts.deadline_at', '<=', now()))->get(['institution_id', 'assessment_id']);
-        $withCloseAndMonitoring = [$manifest['assessments']['scheduler'], $manifest['assessments']['close'], $manifest['assessments']['monitoring']];
+        $withCloseAndMonitoring = [$manifest['assessments']['scheduler'], $manifest['assessments']['close'], $manifest['assessments']['monitoring'], $manifest['assessments']['matrix_timeout']];
         $this->assertEqualsCanonicalizing($withCloseAndMonitoring, $candidates->pluck('assessment_id')->all());
         $superset = DB::table('blitz_tasks')->join('assessment_attempts', fn ($join) => $join->on('assessment_attempts.assessment_id', '=', 'blitz_tasks.assessment_id')
             ->on('assessment_attempts.institution_id', '=', 'blitz_tasks.institution_id'))->where('blitz_tasks.status', 'active')
             ->where('assessment_attempts.status', 'in_progress')->whereNotNull('assessment_attempts.deadline_at')->pluck('assessment_attempts.id')->all();
-        $this->assertEqualsCanonicalizing([$manifest['attempts']['sched_due_1'], $manifest['attempts']['sched_future_2'], $manifest['attempts']['close_due_1'], $manifest['attempts']['mon_due_1']], $superset);
+        $this->assertEqualsCanonicalizing([$manifest['attempts']['sched_due_1'], $manifest['attempts']['sched_future_2'], $manifest['attempts']['close_due_1'], $manifest['attempts']['mon_due_1'], $manifest['attempts']['timeout_peer_1']], $superset);
 
         $future = DB::table('assessment_attempts')->where('id', $manifest['attempts']['sched_future_2'])->sole();
         $this->assertSame([2, 'in_progress', true], [$future->attempt_number, $future->status, $future->official_score_eligible]);
@@ -270,8 +276,8 @@ class Stage8E2eSeederTest extends TestCase
         $exception = DB::table('blitz_attempt_exceptions')->where('id', $manifest['exceptions']['sched_future'])->sole();
         $this->assertSame([$manifest['attempts']['sched_future_1'], $future->id], [$exception->invalidated_attempt_id, $exception->replacement_attempt_id]);
 
-        // The close and monitoring fixtures are terminalized by their scenarios before the runner's first command.
-        DB::table('blitz_tasks')->whereIn('assessment_id', [$manifest['assessments']['close'], $manifest['assessments']['monitoring']])
+        // The close, monitoring and timed-out-matrix fixtures are terminalized by their scenarios before the runner's first command.
+        DB::table('blitz_tasks')->whereIn('assessment_id', [$manifest['assessments']['close'], $manifest['assessments']['monitoring'], $manifest['assessments']['matrix_timeout']])
             ->update(['status' => 'closed', 'closed_at' => now()]);
         $sentinels = $seeder->sentinelState();
         $this->assertSame(['candidates' => 1, 'finalized_attempts' => 1, 'failures' => 0], app(ReconcileDueBlitzTimeouts::class)());

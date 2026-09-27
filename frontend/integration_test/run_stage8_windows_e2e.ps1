@@ -50,6 +50,15 @@ function Read-Stage8Password {
     $value
 }
 
+function Get-Stage8CheckoutState {
+    param([Parameter(Mandatory = $true)][string] $Root)
+    $sha = [string] (& git -C $Root rev-parse HEAD)
+    if ($LASTEXITCODE -ne 0) { throw 'Stage 8 runner could not record the audited Git SHA.' }
+    $changes = @(& git -C $Root status --porcelain --untracked-files=all -- backend frontend docker)
+    if ($LASTEXITCODE -ne 0) { throw 'Stage 8 runner could not read the checkout status.' }
+    [pscustomobject] @{ Sha = $sha.Trim(); Clean = ($changes.Count -eq 0) }
+}
+
 function Invoke-Stage8Seeder {
     param([ValidateSet('run', 'cleanupOwnedState', 'ensureSentinels', 'removeSentinels')][string] $Operation)
     $program = @'
@@ -253,12 +262,18 @@ exit $LASTEXITCODE
 }
 
 $operationFailed = $false
+$harnessLock = $null
 try {
+    $harnessLock = Enter-Stage8HarnessLock
+    if (Test-Stage8ManualSmokePending) {
+        throw 'environment/runtime defect: a prepared Android manual smoke is pending; finish it with prepare_stage8_manual_smoke.ps1 -CompleteManualSmokeAndCleanup first.'
+    }
     Assert-Stage8RunnerPlan $plan
     Assert-Stage8FlutterExecutable
     $repositoryRoot = Split-Path -Parent $frontendRoot
-    $auditedSha = (& git -C $repositoryRoot rev-parse HEAD).Trim()
-    if ($LASTEXITCODE -ne 0 -or $auditedSha -cnotmatch '\A[a-f0-9]{40}\z') { throw 'Stage 8 runner could not record the audited Git SHA.' }
+    $checkout = Get-Stage8CheckoutState -Root $repositoryRoot
+    Assert-Stage8AuditedCheckout $checkout
+    $auditedSha = $checkout.Sha
     Write-Output "Stage8Run: sha=$auditedSha command=run_stage8_windows_e2e.ps1 ApiPort=$ApiPort plan=$($plan -join ',')"
     $password = Read-Stage8Password
     $apiTarget = Resolve-Stage8ApiTarget $apiBaseUrl
@@ -266,7 +281,8 @@ try {
     # runtime_guard
     Write-Output "Stage8Runtime: $(Initialize-Stage8Runtime -ApiTarget $apiTarget)"
     $runtime = Assert-Stage8DedicatedRuntime -ApiTarget $apiTarget
-    Write-Output "Stage8RuntimeGuard: PASS workers=$($runtime.Workers) client=$($runtime.ClientAddress)"
+    Assert-Stage8ExclusiveDatabase -ClientAddress $runtime.ClientAddress
+    Write-Output "Stage8RuntimeGuard: PASS workers=$($runtime.Workers) client=$($runtime.ClientAddress) exclusive_database=True"
     Complete-Stage8Step runtime_guard
     & (Join-Path $PSScriptRoot 'verify_stage8_runtime_guard.ps1') -ApiPort $ApiPort
     foreach ($verifier in @('verify_stage8_test_files.ps1', 'verify_stage8_concurrency_probe.ps1', 'verify_stage8_oracle.ps1', 'verify_stage8_api_security.ps1')) { & (Join-Path $PSScriptRoot $verifier) }
@@ -284,7 +300,7 @@ try {
     Assert-Stage8CleanupFacts -Facts (Get-Stage8DatabaseFacts -PriorFacts $priorFacts) -SentinelsBefore $sentinels
     Write-Output "Stage8PriorManifestCleanup: PASS disk=local prior_rows_removed=$priorRows prior_blobs_removed=$priorBlobs"
     Complete-Stage8Step prior_cleanup_oracle
-    & docker exec $runtime.ContainerName php artisan test tests/Feature/Seeders/Stage8E2eSeederTest.php
+    & docker exec $runtime.ContainerName timeout --kill-after=10 900 php artisan test tests/Feature/Seeders/Stage8E2eSeederTest.php
     if ($LASTEXITCODE -ne 0) { throw 'Stage 8 focused seeder verification failed.' }
     Complete-Stage8Step seeder_test
     Invoke-Stage8Seeder run | Out-Null
@@ -316,6 +332,7 @@ try {
     Invoke-Stage8TeacherClose $context $execution
     Invoke-Stage8MonitoringApi $context
     Complete-Stage8Step api_scenarios
+    Assert-Stage8ExclusiveDatabase -ClientAddress $runtime.ClientAddress
     Invoke-Stage8SchedulerPhase $context
     Complete-Stage8Step guarded_scheduler
     $postFlow = Get-Stage8DatabaseFacts
@@ -353,6 +370,9 @@ try {
     Remove-Stage8LocalRoot -Root $evidenceRoot -Kind evidence
     $evidenceRoot = $null
     if (($executed -join ',') -cne ($plan -join ',')) { throw 'integration-harness defect: Stage 8 run did not execute the whole audited plan.' }
+    Assert-Stage8ExclusiveDatabase -ClientAddress $runtime.ClientAddress
+    Assert-Stage8AuditedCheckout $checkout (Get-Stage8CheckoutState -Root $repositoryRoot)
+    $evidence.checkout_clean = $true
     $evidence.executed_steps = @($executed)
     $evidence.duration_seconds = [math]::Round(([DateTime]::UtcNow - $startedAt).TotalSeconds)
     $evidencePath = Join-Path ([IO.Path]::GetTempPath()) ('testlabuz-stage8-evidence-' + $auditedSha.Substring(0, 12) + '-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.json')
@@ -366,6 +386,7 @@ finally {
     try { if ($null -ne $fixtures) { Remove-Stage8FixtureManifest -Root $fixtures.Root } } catch { $cleanupErrors.Add('Stage 8 generated fixture cleanup failed.') }
     try { if ($null -ne $evidenceRoot) { Remove-Stage8LocalRoot -Root $evidenceRoot -Kind evidence } } catch { $cleanupErrors.Add('Stage 8 local evidence cleanup failed.') }
     $password = $null
+    Exit-Stage8HarnessLock $harnessLock
     if ($cleanupErrors.Count -gt 0 -and -not $operationFailed) { throw ($cleanupErrors -join ' ') }
     if ($operationFailed) { Write-Output 'Stage8Run: FAILED; manifest-owned DB/private state is preserved for diagnosis and is removed by the next invocation.' }
 }
