@@ -268,19 +268,24 @@ class StudentAttemptAnswerEditorController
           _withStatus(current, StudentAnswerSaveStatus.uncertain, failure),
         );
         _queue.scheduleRecovery(_recover);
-      } else if (!identical(current.draft, entry.draft)) {
-        // The rejection is for the sent value; typing made meanwhile is a new
-        // value and is saved as usual.
-        _finishQuestion(id, _withStatus(current, StudentAnswerSaveStatus.idle));
-        _queue.finished(id, dirty: current.isDirty);
-        _reconcileFailure(failure);
       } else {
-        _finishQuestion(
-          id,
-          _withStatus(current, StudentAnswerSaveStatus.failure, failure),
-        );
-        _queue.rejected(id);
+        // The refresh starts first, so no queued save competes with it.
         _reconcileFailure(failure);
+        if (current.holdsSentValue(snapshot)) {
+          _finishQuestion(
+            id,
+            _withStatus(current, StudentAnswerSaveStatus.failure, failure),
+          );
+          _queue.rejected(id);
+        } else {
+          // The rejection is for the sent value; typing made meanwhile is a
+          // new value and is saved as usual.
+          _finishQuestion(
+            id,
+            _withStatus(current, StudentAnswerSaveStatus.idle),
+          );
+          _queue.finished(id, dirty: current.isDirty);
+        }
       }
       _evaluateFlush();
     }

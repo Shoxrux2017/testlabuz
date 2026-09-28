@@ -603,6 +603,80 @@ void main() {
       expect(h.h.answers.saves, hasLength(2));
     });
 
+    test(
+      'typing made during a save waits for the check after time_expired',
+      () async {
+        final h = await _Harness.create();
+        write(h, 'First');
+        h.h.timers.elapse(second);
+        write(h, 'First more');
+        // Leaving the field makes the newer draft due at once.
+        h.controller.saveNow(_written);
+        h.h.answers.saves.single.fail(
+          studentServerFailure(ApiErrorCodes.blitzTimeExpired, statusCode: 409),
+        );
+        await flushStudentControllers();
+        expect(h.h.answers.saves, hasLength(1));
+        expect(h.h.replays, hasLength(1));
+        expect(h.h.execution.localTimeExpired, isTrue);
+      },
+    );
+
+    test('a save that ends after local zero queues nothing more', () async {
+      final h = await _Harness.create();
+      write(h, 'Typed');
+      h.h.timers.elapse(second);
+      write(h, 'Typed more');
+      h.h.executionController.markLocalTimeExpired(
+        h.h.execution.countdownAnchor!,
+      );
+      await flushStudentControllers();
+      h.h.answers.saves.single.complete(
+        blitzMutationResult(
+          2,
+          StudentQuestionType.openWritten,
+          const StudentTextAnswerValue(text: 'Typed'),
+        ),
+      );
+      await flushStudentControllers();
+      // A replay that re-opens writes does not send the pre-zero draft.
+      await h.h.completeReplay(blitzExecutionAttempt());
+      h.h.timers.elapse(const Duration(minutes: 1));
+      await flushStudentControllers();
+      expect(h.h.answers.saves, hasLength(1));
+    });
+
+    test(
+      'editors stay read-only after a Submit conflict until a check',
+      () async {
+        final h = await _Harness.create();
+        h.h.executionController.requireReconciliation(
+          studentServerFailure(
+            ApiErrorCodes.businessConflict,
+            statusCode: 409,
+          ).failure,
+        );
+        await flushStudentControllers();
+        expect(h.state.canEdit(_written), isFalse);
+      },
+    );
+
+    test('a 422 after retyping the sent value shows the failure', () async {
+      final h = await _Harness.create();
+      write(h, 'First');
+      h.h.timers.elapse(second);
+      write(h, 'Firs');
+      write(h, 'First');
+      h.h.answers.saves.single.fail(
+        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+      );
+      await flushStudentControllers();
+      expect(h.state.hasFailedSave, isTrue);
+      h.h.timers.elapse(const Duration(minutes: 1));
+      await flushStudentControllers();
+      expect(h.h.answers.saves, hasLength(1));
+    });
+
     test('a 422 does not reject typing made during that save', () async {
       final h = await _Harness.create();
       write(h, 'First');

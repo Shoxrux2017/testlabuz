@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../../core/network/api_failure.dart';
 import '../domain/student_answer_draft.dart';
 import '../domain/student_answer_mutation.dart';
@@ -26,6 +28,13 @@ class StudentQuestionAnswerEditorState {
   final bool isDirty;
   final StudentAnswerSaveStatus saveStatus;
   final ApiFailure? failure;
+
+  /// The draft still holds the value [mutation] sent, even if it was edited
+  /// and changed back meanwhile.
+  bool holdsSentValue(StudentAnswerMutation mutation) =>
+      validation == null &&
+      jsonEncode(draft.toMutation(question).toJson()) ==
+          jsonEncode(mutation.toJson());
 }
 
 class StudentAttemptAnswerEditorState {

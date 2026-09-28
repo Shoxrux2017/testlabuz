@@ -1615,6 +1615,41 @@ void main() {
       expect(_sentText(h.repository.saves.last), 'Old');
     });
 
+    test(
+      'typing made during a save waits for the refresh after a deadline rejection',
+      () async {
+        final h = await ready();
+        h.parent.refreshShowsRefreshing = true;
+        h.editText('First');
+        h.timers.elapse(second);
+        h.editText('First more');
+        // Leaving the field makes the newer draft due at once.
+        h.controller.saveNow(_id(4));
+        h.repository.saves.single.fail(
+          studentServerFailure(ApiErrorCodes.deadlinePassed, statusCode: 422),
+        );
+        await h.flush();
+        expect(h.parent.refreshCalls, 1);
+        expect(h.repository.saves, hasLength(1));
+      },
+    );
+
+    test('a 422 after retyping the sent value shows the failure', () async {
+      final h = await ready();
+      h.editText('First');
+      h.timers.elapse(second);
+      h.editText('Firs');
+      h.editText('First');
+      h.repository.saves.single.fail(
+        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+      );
+      await h.flush();
+      expect(h.state.hasFailedSave, isTrue);
+      h.timers.elapse(const Duration(minutes: 1));
+      await h.flush();
+      expect(h.repository.saves, hasLength(1));
+    });
+
     test('a 422 does not reject typing made during that save', () async {
       final h = await ready();
       h.editText('First');
@@ -2001,11 +2036,25 @@ class _Parent extends StudentHomeworkAttemptController {
   @override
   StudentHomeworkAttemptState build() => initial;
   @override
-  void refresh() => refreshCalls += 1;
+  void refresh() {
+    refreshCalls += 1;
+    if (refreshShowsRefreshing) {
+      state = StudentHomeworkAttemptState(
+        status: StudentHomeworkAttemptLoadStatus.refreshing,
+        attempt: state.attempt,
+        publicationToken: state.publicationToken,
+        readToken: state.readToken,
+      );
+    }
+  }
+
   var readsAfterWrite = 0;
   @override
   void refreshAfterWrite() => readsAfterWrite += 1;
   void publish(StudentHomeworkAttemptState next) => state = next;
+
+  /// Makes [refresh] show a running read, as the real controller does.
+  var refreshShowsRefreshing = false;
 
   final accepted = <StudentAttemptAnswerMutationResult>[];
   var acceptsMutations = true;

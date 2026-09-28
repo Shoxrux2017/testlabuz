@@ -26,7 +26,7 @@ class StudentBlitzAnswerEditorState {
 
   /// The Attempt is running and its time has not run out on this device.
   /// Drafts stay editable while a replay re-checks the Attempt; only saving
-  /// waits for write authority.
+  /// waits for write authority. A failed check makes them read-only.
   final bool isRunning;
   final String? activeQuestionId;
   final StudentAnswerMutation? pendingMutationSnapshot;

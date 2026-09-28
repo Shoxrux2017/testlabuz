@@ -272,7 +272,11 @@ class StudentBlitzAnswerEditorController
         _evaluateFlush();
         return;
       }
-      if (identical(current.draft, entry.draft)) {
+      // The replay is requested first, so no queued save competes with it.
+      if (_reconciledCodes.contains(failure.serverCode)) {
+        unawaited(execution.reconcileAfterRejectedWrite(failure));
+      }
+      if (current.holdsSentValue(snapshot)) {
         _finishQuestion(
           id,
           _withStatus(current, StudentAnswerSaveStatus.failure, failure),
@@ -282,12 +286,9 @@ class StudentBlitzAnswerEditorController
         // The rejection is for the sent value; typing made meanwhile is a new
         // value and is saved as usual.
         _finishQuestion(id, _withStatus(current, StudentAnswerSaveStatus.idle));
-        _queue.finished(id, dirty: current.isDirty);
+        _finishInQueue(id, dirty: current.isDirty);
       }
       _evaluateFlush();
-      if (_reconciledCodes.contains(failure.serverCode)) {
-        unawaited(execution.reconcileAfterRejectedWrite(failure));
-      }
     } catch (_) {
       // The PUT may have committed; only a check can show its outcome.
       if (_canPublish(generation, key, id, snapshot)) {
@@ -378,9 +379,8 @@ class StudentBlitzAnswerEditorController
     );
     _lastPublication = parent.publicationToken;
     state = _synchronize(resolved, parent);
-    _queue
-      ..resetRecovery()
-      ..finished(id, dirty: dirty);
+    _queue.resetRecovery();
+    _finishInQueue(id, dirty: dirty);
     _pump();
     _evaluateFlush();
   }
@@ -395,6 +395,19 @@ class StudentBlitzAnswerEditorController
       if (entry.value.isDirty && entry.value.validation == null) {
         _queue.dueNow(entry.key);
       }
+    }
+  }
+
+  /// Reports a finished save to the queue. A save that ends after local zero
+  /// queues nothing again, even if a later replay re-opens writes.
+  void _finishInQueue(String id, {required bool dirty}) {
+    final parent = ref.read(
+      studentBlitzExecutionControllerProvider(target.routeTarget),
+    );
+    if (parent.localTimeExpired) {
+      _queue.forget(id);
+    } else {
+      _queue.finished(id, dirty: dirty);
     }
   }
 
@@ -487,7 +500,7 @@ class StudentBlitzAnswerEditorController
     );
     _lastPublication = parent.publicationToken;
     state = _synchronize(saved, parent);
-    _queue.finished(id, dirty: dirty);
+    _finishInQueue(id, dirty: dirty);
   }
 
   StudentBlitzAnswerEditorState _synchronize(
@@ -568,9 +581,12 @@ class StudentBlitzAnswerEditorController
       parent.attempt != null &&
       _matchesAttempt(parent.attempt!);
 
+  // A failed check keeps the Attempt read-only until a check confirms it again.
   bool _isRunning(StudentBlitzExecutionState parent) =>
       !_cleared &&
-      parent.isExecuting &&
+      (parent.status == StudentBlitzExecutionStatus.active ||
+          parent.status == StudentBlitzExecutionStatus.refreshing) &&
+      parent.attempt?.status == StudentBlitzAttemptStatus.inProgress &&
       !parent.localTimeExpired &&
       parent.attempt != null &&
       _matchesAttempt(parent.attempt!);
