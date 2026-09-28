@@ -973,6 +973,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
+| Stage 8 — Blitz Task Workflow | `Closed` | `Stage 9 planning/decomposition only` |
 
 Current Stage 5 progress:
 
@@ -1092,6 +1093,51 @@ their historical completion handoffs.
   ChatGPT determined that existing evidence remains valid.
 - Next permitted action: Stage 8 — Blitz Task Workflow planning/decomposition
   only. Stage 8 implementation is not authorized by this closure.
+
+Current Stage 8 progress:
+
+This is the current project state; the Stage 5-7 progress sections above preserve
+their historical completion handoffs.
+
+- Roles since 2026-09-23: Claude performs the ChatGPT roles (contracts, readiness,
+  review, acceptance, checkpoints, closure) and the Codex role (implementation);
+  the Project Owner merges every PR.
+- Stage 8 planning/decomposition: Approved / Delivered.
+- `S08-DOC-001`: Accepted / Delivered — PR #233,
+  merge `4d6039cae5a0561f2e2c540748c76a3f3f5a1039`.
+- `S08-BE-001…010`: Accepted / Delivered.
+- Stage 8 Backend Phase 2: PASS — run #2 audited `1c56cde0e2d32883866f9f68fa3445ed8232d839`
+  (2354 passed; run #1 on `232ebcd` NOT ACCEPTED; fixes `S08-BE-PHASE-2-FIX-001…003`).
+- `S08-FE-001…006`: Accepted / Delivered.
+- Stage 8 Frontend Phase 2: PASS — run #2 audited `2a5965182a3a30fc0f2e44c4c59fbedd8e0ce854`
+  (3422 passed; analyze clean; format 838/0; Windows and Android debug builds PASS;
+  run #1 on `03c6581` NOT ACCEPTED; fix `S08-FE-PHASE-2-FIX-001`).
+- `S08-INT-001`: Accepted / Delivered / PASS — assets PR #278; focused fixes
+  `S08-INT-001-FIX-001` (PR #280) and `S08-INT-001-FIX-002` (PR #281).
+- Integration Harness Preflight: PASS (#2).
+- Windows real-stack: PASS — run #2 on `8cc174fac52b2c5d309fa05775f32f10c0e331d3`,
+  17/17 steps, 8/8 UI checkpoints, 15/15 API scenarios, four write-vs-Submit races
+  with proven lock overlap.
+- Android real-stack manual smoke: PASS — Project Owner, 2026-09-28, emulator
+  Android 36 (Teacher Activate/Monitor; Student Start/Save/Submit).
+- API/security, DB/private-file oracle, backend restart persistence and cleanup: PASS.
+- Stage 8 Closure Review: PASS — STAGE CLOSED, 2026-09-28. The read-only audit on
+  `1f6333b` was NOT READY on one documentation contradiction; `S08-CLOSURE-FIX-001`
+  (PR #283, completion PR #284; documentation and tests only) resolved it.
+  P1=0, P2=0; P3 fixed or deliberately deferred with rationale.
+- Stage 8 — Blitz Task Workflow: Closed.
+- Accepted product main before closure bookkeeping:
+  `5dd0df63c282fcd61b5f3d3530a9bd2f5d01aae4`.
+- Closure-only bookkeeping delivery: `docs/stage8-closure`; final post-merge main
+  synchronization is verified after the merge.
+- No product verification rerun is required for closure bookkeeping; the existing
+  evidence remains valid.
+- Recorded follow-ups: an unauthenticated API request without
+  `Accept: application/json` returns `500` instead of `401` (separate fix right after
+  this closure); `CL-6` and `CL-7` deferred to Stage 9; autosave is a later-stage
+  candidate.
+- Next permitted action: Stage 9 — Checking and Scoring planning/decomposition
+  only. Stage 9 implementation is not authorized by this closure.
 
 ---
 

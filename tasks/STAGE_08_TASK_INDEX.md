@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 8 — Blitz Task Workflow` |
-| Stage status | `Approved — implementation proceeds only through current per-task readiness` |
+| Stage status | `Closed / PASS` |
 | Verification model | `Workflow v3 — Lean Verification + Backend/Frontend Phase 2 + Real-Stack Integration` |
 | Decomposition status | `Approved` |
 | Historical planning baseline `origin/main` | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
@@ -13,13 +13,13 @@
 | Previous Stage | `Stage 7 — Closed / PASS` |
 | Previous Stage closure merge | `962ef5d02a7b2e379c401a2083106abbdf42bb1c` |
 | Current source of truth | `GitHub main — ChatGPT must re-check it before any readiness/handoff decision` |
-| Stage 8 implementation | `In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 PASS / Accepted (Windows run #2 and Android manual smoke on 8cc174f; S08-INT-001-FIX-001 Accepted / Delivered PR #280, 87e52d3; S08-INT-001-FIX-002 Accepted / Delivered PR #281, 8cc174f); closure Prepared / Not started` |
+| Stage 8 implementation | `Complete — S08-DOC-001, S08-BE-001…010, S08-FE-001…006 and all focused fixes Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 PASS / Accepted (8cc174f); S08-CLOSURE-FIX-001 Accepted / Delivered (PR #283, #284); closure PASS — STAGE CLOSED (2026-09-28)` |
 | Detailed task contracts | `Final planning package reviewed and approved; execution remains per-task gated` |
 | Backend Phase 2 | `PASS — run #2 on 1c56cde (run #1 on 232ebcd NOT ACCEPTED; fixes FIX-001…003 delivered; see §17)` |
 | Frontend Phase 2 | `PASS — run #2 on 2a59651 (run #1 on 03c6581 NOT ACCEPTED; fix FIX-001 delivered; see §18)` |
 | Integration | `S08-INT-001 PASS / Accepted — Windows run #2 and Android manual smoke on 8cc174f (see §21)` |
-| Closure | `In progress — read-only audit NOT READY (CL-1 docs contradiction); S08-CLOSURE-FIX-001 delivered with its record (see §22)` |
-| Next permitted gate | `Substantive Stage 8 closure verdict on the main that contains S08-CLOSURE-FIX-001` |
+| Closure | `PASS — STAGE CLOSED (2026-09-28); accepted product main 5dd0df63c282fcd61b5f3d3530a9bd2f5d01aae4; see §§22-23 and tasks/STAGE_08_CLOSURE_REVIEW.md` |
+| Next permitted gate | `Stage 9 — Checking and Scoring planning/decomposition only` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -43,8 +43,8 @@ focused fixes `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`, and run
 (PR #275) is `Accepted / Delivered`, and run #2 (2026-09-27, audited `2a59651`) is `PASS` (see
 §18). `S08-INT-001` is `PASS / Accepted` (2026-09-28, audited `8cc174f`, see §§19-21): its assets
 (PR #278) and the focused fixes `S08-INT-001-FIX-001` (PR #280) and `S08-INT-001-FIX-002` (PR #281)
-are `Accepted / Delivered`. The closure review is in progress: its read-only audit is `NOT READY` until
-`S08-CLOSURE-FIX-001` (documentation alignment and test gaps) is delivered (see §22).
+are `Accepted / Delivered`. The Stage Closure Review is `PASS — STAGE CLOSED` (2026-09-28, see §§22-23);
+`S08-CLOSURE-FIX-001` is `Accepted / Delivered`. Stage 8 is `Closed / PASS`.
 
 All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
 reviewed and approved planning package. Their existence or historical planning
@@ -338,8 +338,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 | `19` | `S08-INT-001` | `Integration` | `Guarded real-stack Blitz E2E/security/persistence verification` | `Both Phase 2 checkpoints PASS` | `Approved` | `PASS` | `Accepted — Windows run #2 and Android manual smoke PASS on 8cc174f; P1 = 0, P2 = 0, P3 = 0 (see §21)` | `tasks/integration/stage-08/S08-INT-001-stage-08-real-stack-integration.md` |
 | `19a` | `S08-INT-001-FIX-001` | `Integration fix` | `Harness preflight #1 fixes: pre-start guard, audited checkout, due-time comparisons, run-safety P3s` | `Preflight #1 + owner decision INT-D4` | `Approved` | `Accepted` | `Delivered — PR #280, merge 87e52d30405214ade4d49602219de8de34c86efb` | `tasks/integration/stage-08/S08-INT-001-FIX-001-harness-preflight-fixes.md` |
 | `19b` | `S08-INT-001-FIX-002` | `Integration fix` | `Preflight #2 run-safety P3s: seeder refusal messages, manual-smoke marker recovery, bounded Scheduler command` | `Preflight #2 + owner decision INT-D5` | `Approved` | `Accepted` | `Delivered — PR #281, merge 8cc174fac52b2c5d309fa05775f32f10c0e331d3` | `tasks/integration/stage-08/S08-INT-001-FIX-002-preflight2-run-safety.md` |
-| `20` | `STAGE_08_CLOSURE_REVIEW` | `Closure` | `Final Stage-wide architecture/security/delivery review` | `S08-INT-001 PASS + required fixes/delivery` | `Approved` | `In progress` | `Read-only audit NOT READY (CL-1); S08-CLOSURE-FIX-001 (see §22)` | `tasks/STAGE_08_CLOSURE_REVIEW.md` |
-| `20a` | `S08-CLOSURE-FIX-001` | `Closure fix` | `docs/01-09 alignment (D3 Start matrix, mobile grant, open-assessment guard) and two frontend test gaps` | `Closure audit + owner decision CL-D1` | `Approved` | `Approved` | `Delivered with its record (see §22)` | `tasks/S08-CLOSURE-FIX-001-docs-alignment-and-test-gaps.md` |
+| `20` | `STAGE_08_CLOSURE_REVIEW` | `Closure` | `Final Stage-wide architecture/security/delivery review` | `S08-INT-001 PASS + required fixes/delivery` | `Approved` | `PASS` | `Completed / PASS — STAGE CLOSED 2026-09-28 (see §23)` | `tasks/STAGE_08_CLOSURE_REVIEW.md` |
+| `20a` | `S08-CLOSURE-FIX-001` | `Closure fix` | `docs/01-09 alignment (D3 Start matrix, mobile grant, open-assessment guard) and two frontend test gaps` | `Closure audit + owner decision CL-D1` | `Approved` | `Accepted` | `Delivered — PR #283 (2c68c0b) + completion PR #284 (5dd0df6)` | `tasks/S08-CLOSURE-FIX-001-docs-alignment-and-test-gaps.md` |
 
 ### Status-column semantics
 
@@ -351,7 +351,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
   `Accepted / Delivered`. `S08-FE-PHASE-2-FIX-001` is `Accepted / Delivered` and
   `S08-FE-PHASE-2` is `PASS` (run #2, see §18). `S08-INT-001` is `PASS / Accepted` and
   `S08-INT-001-FIX-001` and `S08-INT-001-FIX-002` are `Accepted / Delivered` (see §§20-21); the
-  closure review is in progress (read-only audit `NOT READY`; `S08-CLOSURE-FIX-001`, see §22).
+  closure review is `PASS — STAGE CLOSED` and `S08-CLOSURE-FIX-001` is `Accepted / Delivered` (see §§22-23).
+  Stage 8 is `Closed / PASS`.
 - ChatGPT changes the exact next implementation task to current `Approved` only
   after re-checking current `origin/main`, dependency delivery and the final
   self-contained contract.
@@ -427,7 +428,11 @@ S08-INT-001 PASS / Accepted (Windows run #2 + Android manual smoke on 8cc174f; s
     ↓
 Claude verified closure entry conditions on 1f6333b; read-only audit NOT READY (see §22)
     ↓
-S08-CLOSURE-FIX-001 -> substantive closure verdict -> closure bookkeeping
+S08-CLOSURE-FIX-001 Accepted / Delivered (PR #283, #284)
+    ↓
+STAGE_08_CLOSURE_REVIEW PASS — STAGE CLOSED (2026-09-28; see §23)
+    ↓
+Stage 9 — Checking and Scoring planning/decomposition only
 ```
 
 ### 8.1 Manual task workflow
@@ -951,21 +956,21 @@ Current planning-package state:
 ```text
 Stage 7 closure                  = PASS
 Stage 8 decomposition            = Approved
-Stage 8 Stage status             = Approved
-Stage 8 implementation           = In progress — S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 PASS / Accepted (Windows run #2 and Android manual smoke on 8cc174f; S08-INT-001-FIX-001 Accepted / Delivered PR #280, 87e52d3; S08-INT-001-FIX-002 Accepted / Delivered PR #281, 8cc174f); closure Prepared / Not started
+Stage 8 Stage status             = Closed / PASS
+Stage 8 implementation           = Complete — S08-DOC-001, S08-BE-001…010, S08-FE-001…006 and all focused fixes Accepted / Delivered; S08-BE-PHASE-2 PASS (run #2, 1c56cde); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 PASS / Accepted (8cc174f); S08-CLOSURE-FIX-001 Accepted / Delivered (PR #283, #284); closure PASS — STAGE CLOSED (2026-09-28)
 Detailed task contracts          = Final planning package reviewed and approved; execution remains per-task gated
-Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHASE-2-FIX-001…003 Accepted / Delivered; S08-BE-PHASE-2 PASS; S08-FE-001 Accepted / Delivered (PR #262, 15508f3); S08-FE-002 Accepted / Delivered (PR #264, b5b24b1); S08-FE-003 Accepted / Delivered (PR #266, a37dd02); S08-FE-004 Accepted / Delivered (PR #268, 466119a); S08-FE-005 Accepted / Delivered (PR #270, 05d06ec); S08-FE-006 Accepted / Delivered (PR #272, 48776a1); S08-FE-PHASE-2-FIX-001 Accepted / Delivered (PR #275, 2a59651); S08-FE-PHASE-2 PASS (run #2, 2a59651); S08-INT-001 PASS / Accepted (Windows run #2 and Android manual smoke on 8cc174f; S08-INT-001-FIX-001 Accepted / Delivered PR #280, 87e52d3; S08-INT-001-FIX-002 Accepted / Delivered PR #281, 8cc174f); closure Prepared / Not started
+Current per-task readiness       = All Stage 8 tasks final (see the task table); no Stage 8 task remains open
 Backend Phase 2                  = PASS (run #2, 1c56cde; run #1 on 232ebcd NOT ACCEPTED)
 Frontend Phase 2                 = PASS (run #2, 2a59651; run #1 on 03c6581 NOT ACCEPTED)
 Integration                      = S08-INT-001 PASS / Accepted (Windows run #2 + Android manual smoke on 8cc174f; see §21)
-Closure                          = IN PROGRESS (read-only audit NOT READY; S08-CLOSURE-FIX-001)
+Closure                          = PASS — STAGE CLOSED (2026-09-28)
 STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 ```
 
 The next permitted workflow action is:
 
 ```text
-Substantive Stage 8 closure verdict on the main that contains S08-CLOSURE-FIX-001
+Stage 9 — Checking and Scoring planning/decomposition only
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
@@ -2165,3 +2170,32 @@ Review             = fresh-context read-only re-verification on 2c68c0b
 
 Verdict: `S08-CLOSURE-FIX-001 = Accepted / Delivered` once this completion merges. Next: the
 substantive closure verdict and the closure bookkeeping (closure contract §§34-41).
+
+## 23. Stage Closure — Completed (2026-09-28)
+
+```text
+Closure Read-Only Review   = PASS
+Closure verdict            = STAGE CLOSED
+Stage 8 status             = Closed / PASS
+Read-only audit main       = 1f6333b004da4ce1252a3d73db5e2bd62935345a
+Accepted product main      = 5dd0df63c282fcd61b5f3d3530a9bd2f5d01aae4 (before closure bookkeeping)
+Closure fix                = S08-CLOSURE-FIX-001: PR #283 (2c68c0b) + completion PR #284 (5dd0df6);
+                             documentation and tests only
+Findings                   = P1 = 0; P2 = 0 (CL-1 fixed); P3 fixed or deliberately deferred with
+                             rationale (§22; CL-D1, D5, INT-D4/D6/D7)
+Evidence validity          = Backend Phase 2, Frontend Phase 2 and S08-INT-001 evidence valid; no
+                             product verification rerun required for closure bookkeeping
+Executed closure record    = tasks/STAGE_08_CLOSURE_REVIEW.md
+Next permitted gate        = Stage 9 — Checking and Scoring planning/decomposition only
+```
+
+`S08-CLOSURE-FIX-001` is `Accepted / Delivered`: the re-verification on `2c68c0b` passed and its
+completion (PR #284) closed the two remaining `CL-2`/`CL-3` locations.
+
+Recorded follow-ups:
+- `INT-D9`: an unauthenticated API request without `Accept: application/json` returns `500`
+  instead of `401`. A separate fix task runs right after this closure; it is not Stage 9 work.
+- `CL-6`, `CL-7`: deferred to Stage 9.
+- `INT-D2`: autosave in place of the per-Question Save button is a candidate for a later stage.
+
+Stage 9 implementation is not authorized by this closure.
