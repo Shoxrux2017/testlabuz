@@ -36,8 +36,6 @@ class StudentAnswerAutosave {
   Timer? _recovery;
   var _recoveryStep = 0;
 
-  bool isTracked(String id) => _tracked.contains(id);
-
   void changed(String id) {
     _rejected.remove(id);
     _tracked.add(id);
@@ -56,12 +54,6 @@ class StudentAnswerAutosave {
     _markDue(id);
   }
 
-  void allDueNow() {
-    for (final id in _tracked.toList()) {
-      dueNow(id);
-    }
-  }
-
   String? next(bool Function(String id) canSend) {
     for (final id in _tracked) {
       if (_due.contains(id) && canSend(id)) return id;
@@ -74,9 +66,12 @@ class StudentAnswerAutosave {
   void finished(String id, {required bool dirty}) {
     if (!dirty) {
       forget(id);
-    } else if (!_debounces.containsKey(id)) {
-      _markDue(id);
+      return;
     }
+    // A draft undone during its save was forgotten as clean; the saved value
+    // made it dirty again, so it is tracked again.
+    _tracked.add(id);
+    if (!_debounces.containsKey(id)) _markDue(id);
   }
 
   void rejected(String id) {

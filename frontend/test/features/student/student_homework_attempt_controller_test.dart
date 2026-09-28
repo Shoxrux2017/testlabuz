@@ -703,6 +703,30 @@ void main() {
       expect(view.read(), same(published));
     });
 
+    test(
+      'a write that meets an in-flight read replaces that read with a new one',
+      () async {
+        final (h, view) = await loaded();
+        h.controller.refresh();
+        expect(h.repository.requests, hasLength(2));
+        // The in-flight read may have been served before the write committed.
+        h.controller.refreshAfterWrite();
+        expect(h.repository.requests, hasLength(3));
+        h.repository.requests[1].complete(
+          _attempt(number: 2, questions: [_shortQuestion]),
+        );
+        await h.flush();
+        expect(view.read().status, StudentHomeworkAttemptLoadStatus.refreshing);
+        expect(view.read().attempt!.attemptNumber, 1);
+        h.repository.requests[2].complete(
+          _attempt(number: 3, questions: [_shortQuestion]),
+        );
+        await h.flush();
+        expect(view.read().status, StudentHomeworkAttemptLoadStatus.data);
+        expect(view.read().attempt!.attemptNumber, 3);
+      },
+    );
+
     test('rejects while refreshing or after the Attempt is terminal', () async {
       final (h, view) = await loaded();
       final readToken = view.read().readToken;

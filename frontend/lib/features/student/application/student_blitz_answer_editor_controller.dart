@@ -74,6 +74,7 @@ class StudentBlitzAnswerEditorController
     final attempt = parent.attempt;
     if (_cleared || attempt == null || !_matchesAttempt(attempt)) {
       _lastPublication = null;
+      _stopAutosave();
       return StudentBlitzAnswerEditorState();
     }
     final previous = resetScope ? StudentBlitzAnswerEditorState() : state;
@@ -85,7 +86,11 @@ class StudentBlitzAnswerEditorController
       _lastPublication = publication;
       next = _synchronize(previous, parent);
     } else {
-      next = _copyState(previous, isAuthoritative: _hasSaveAuthority(parent));
+      next = _copyState(
+        previous,
+        isAuthoritative: _hasSaveAuthority(parent),
+        isRunning: _isRunning(parent),
+      );
     }
     // Saves that waited for the write gate, and a waiting flush, continue
     // after this build publishes.
@@ -140,8 +145,13 @@ class StudentBlitzAnswerEditorController
   }
 
   /// Sends every changed Question without waiting, for example when the app
-  /// goes to the background.
-  void saveAllNow() => _queueEveryDirtyQuestion();
+  /// goes to the background. Nothing is queued after local zero.
+  void saveAllNow() {
+    final parent = ref.read(
+      studentBlitzExecutionControllerProvider(target.routeTarget),
+    );
+    if (!parent.localTimeExpired) _queueEveryDirtyQuestion();
+  }
 
   /// Sends every pending change and completes with `true` once all answers are
   /// saved, or `false` as soon as one cannot be saved, the time is over, or
@@ -159,7 +169,7 @@ class StudentBlitzAnswerEditorController
     }
     final completer = Completer<bool>();
     _flush = completer;
-    state = _copyState(state, isFlushing: true);
+    state = _copyState(state);
     _queueEveryDirtyQuestion();
     _evaluateFlush();
     return completer.future;
@@ -262,11 +272,18 @@ class StudentBlitzAnswerEditorController
         _evaluateFlush();
         return;
       }
-      _finishQuestion(
-        id,
-        _withStatus(current, StudentAnswerSaveStatus.failure, failure),
-      );
-      _queue.rejected(id);
+      if (identical(current.draft, entry.draft)) {
+        _finishQuestion(
+          id,
+          _withStatus(current, StudentAnswerSaveStatus.failure, failure),
+        );
+        _queue.rejected(id);
+      } else {
+        // The rejection is for the sent value; typing made meanwhile is a new
+        // value and is saved as usual.
+        _finishQuestion(id, _withStatus(current, StudentAnswerSaveStatus.idle));
+        _queue.finished(id, dirty: current.isDirty);
+      }
       _evaluateFlush();
       if (_reconciledCodes.contains(failure.serverCode)) {
         unawaited(execution.reconcileAfterRejectedWrite(failure));
@@ -358,7 +375,6 @@ class StudentBlitzAnswerEditorController
         ),
       },
       isEligible: state.isEligible,
-      isFlushing: state.isFlushing,
     );
     _lastPublication = parent.publicationToken;
     state = _synchronize(resolved, parent);
@@ -436,9 +452,7 @@ class StudentBlitzAnswerEditorController
     final completer = _flush;
     if (completer == null) return;
     _flush = null;
-    if (ref.mounted && state.isFlushing) {
-      state = _copyState(state, isFlushing: false);
-    }
+    if (ref.mounted && state.isFlushing) state = _copyState(state);
     completer.complete(saved);
   }
 
@@ -470,7 +484,6 @@ class StudentBlitzAnswerEditorController
         ),
       },
       isEligible: state.isEligible,
-      isFlushing: state.isFlushing,
     );
     _lastPublication = parent.publicationToken;
     state = _synchronize(saved, parent);
@@ -527,6 +540,7 @@ class StudentBlitzAnswerEditorController
       questions: questions,
       isEligible: true,
       isAuthoritative: _hasSaveAuthority(parent),
+      isRunning: _isRunning(parent),
       activeQuestionId: terminal ? null : previous.activeQuestionId,
       pendingMutationSnapshot: terminal
           ? null
@@ -534,7 +548,7 @@ class StudentBlitzAnswerEditorController
       isReconciling: !terminal && previous.isReconciling,
       isTerminal: terminal,
       sourcePublication: preservedUncertainty ? null : parent.publicationToken,
-      isFlushing: !terminal && previous.isFlushing,
+      isFlushing: _flush != null,
     );
   }
 
@@ -551,6 +565,13 @@ class StudentBlitzAnswerEditorController
   bool _hasSaveAuthority(StudentBlitzExecutionState parent) =>
       !_cleared &&
       parent.acceptsWrites &&
+      parent.attempt != null &&
+      _matchesAttempt(parent.attempt!);
+
+  bool _isRunning(StudentBlitzExecutionState parent) =>
+      !_cleared &&
+      parent.isExecuting &&
+      !parent.localTimeExpired &&
       parent.attempt != null &&
       _matchesAttempt(parent.attempt!);
 
@@ -694,9 +715,10 @@ class StudentBlitzAnswerEditorController
       questions: {...state.questions, id: entry},
       isEligible: state.isEligible,
       isAuthoritative: state.isAuthoritative,
+      isRunning: state.isRunning,
       isTerminal: state.isTerminal,
       sourcePublication: state.sourcePublication,
-      isFlushing: state.isFlushing,
+      isFlushing: _flush != null,
     );
   }
 
@@ -704,20 +726,21 @@ class StudentBlitzAnswerEditorController
     StudentBlitzAnswerEditorState previous, {
     Map<String, StudentQuestionAnswerEditorState>? questions,
     bool? isAuthoritative,
+    bool? isRunning,
     String? activeQuestionId,
     StudentAnswerMutation? pendingMutationSnapshot,
     bool? isReconciling,
-    bool? isFlushing,
   }) => StudentBlitzAnswerEditorState(
     questions: questions ?? previous.questions,
     isEligible: _activeSessionKey != null && !_cleared,
     isAuthoritative: isAuthoritative ?? previous.isAuthoritative,
+    isRunning: isRunning ?? previous.isRunning,
     activeQuestionId: activeQuestionId ?? previous.activeQuestionId,
     pendingMutationSnapshot:
         pendingMutationSnapshot ?? previous.pendingMutationSnapshot,
     isReconciling: isReconciling ?? previous.isReconciling,
     isTerminal: previous.isTerminal,
     sourcePublication: previous.sourcePublication,
-    isFlushing: isFlushing ?? previous.isFlushing,
+    isFlushing: _flush != null,
   );
 }

@@ -292,6 +292,33 @@ void main() {
     );
   }
 
+  testWidgets('a failed Homework refresh keeps the Attempt on screen', (
+    tester,
+  ) async {
+    final parentRefresh = Completer<StudentHomeworkDetail>();
+    var parents = 0;
+    await _pump(
+      tester,
+      homeworkRepository: _HomeworkRepository(
+        onDetail: (_) =>
+            ++parents == 1 ? Future.value(_homework()) : parentRefresh.future,
+      ),
+      attemptRepository: _AttemptRepository(
+        onFetch: (_) => Future.value(_attempt()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Refresh Attempt'));
+    await tester.pump();
+    parentRefresh.completeError(studentLocalFailure(ApiFailureKind.connection));
+    await tester.pumpAndSettle();
+    expect(find.text('Attempt 2'), findsOneWidget);
+    expect(
+      find.byKey(const Key('studentHomeworkAttemptRefreshFailure')),
+      findsOneWidget,
+    );
+  });
+
   for (final status in StudentHomeworkDetailStatus.values.where(
     (status) => status != StudentHomeworkDetailStatus.data,
   )) {

@@ -235,7 +235,8 @@ class _StudentBlitzSubmitControlsState
                 Text(studentBlitzSubmitBlockerMessage(blocker)),
                 const SizedBox(height: 8),
               ],
-              if (_notSaved) ...[
+              // Shown until the answers are saved and Submit is ready.
+              if (_notSaved && readiness.readyToken == null) ...[
                 Semantics(
                   liveRegion: true,
                   child: const Text(

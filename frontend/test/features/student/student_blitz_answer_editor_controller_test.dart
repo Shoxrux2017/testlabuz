@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
@@ -526,6 +528,10 @@ void main() {
       await flushStudentControllers();
       expect(h.h.answers.saves, isEmpty);
       expect(await h.controller.flushAll(), isFalse);
+      // Going to the background after zero queues nothing either.
+      h.controller
+        ..saveAllNow()
+        ..saveNow(_written);
       // Even a replay that re-opens writes sends nothing queued before zero.
       await h.h.completeReplay(blitzExecutionAttempt());
       h.h.timers.elapse(const Duration(minutes: 1));
@@ -576,6 +582,93 @@ void main() {
       );
       await flushStudentControllers();
       expect(await flush, isFalse);
+      expect(h.state.isFlushing, isFalse);
+    });
+
+    test('a change undone during its save is sent after that save', () async {
+      final h = await _Harness.create();
+      write(h, 'Typed');
+      h.h.timers.elapse(second);
+      // Back to the empty server value while the save runs: the draft is clean.
+      write(h, '');
+      h.h.answers.saves.single.complete(
+        blitzMutationResult(
+          2,
+          StudentQuestionType.openWritten,
+          const StudentTextAnswerValue(text: 'Typed'),
+        ),
+      );
+      await flushStudentControllers();
+      expect(h.entry(_written).isDirty, isTrue);
+      expect(h.h.answers.saves, hasLength(2));
+    });
+
+    test('a 422 does not reject typing made during that save', () async {
+      final h = await _Harness.create();
+      write(h, 'First');
+      h.h.timers.elapse(second);
+      write(h, 'First more');
+      h.h.answers.saves.single.fail(
+        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+      );
+      await flushStudentControllers();
+      expect(h.state.hasFailedSave, isFalse);
+      h.h.timers.elapse(second);
+      await flushStudentControllers();
+      expect(h.h.answers.saves, hasLength(2));
+      expect(h.h.answers.saves.last.mutation.toJson(), {
+        'type': 'open_written',
+        'text': 'First more',
+      });
+    });
+
+    test(
+      'typing continues during an automatic check and is sent after it',
+      () async {
+        final h = await _Harness.create();
+        await h.uncertainSave(studentLocalFailure(ApiFailureKind.timeout));
+        h.h.timers.elapse(const Duration(seconds: 2));
+        await flushStudentControllers();
+        expect(h.h.replays, hasLength(1));
+        expect(h.state.canEdit(_written), isTrue);
+        write(h, 'During the check');
+        h.h.timers.elapse(second);
+        await flushStudentControllers();
+        // The check holds the write gate; the change waits in the queue.
+        expect(h.h.answers.saves, hasLength(1));
+        await h.h.completeReplay(blitzExecutionAttempt());
+        expect(
+          (h.entry(_written).draft as StudentOpenWrittenDraft).text,
+          'During the check',
+        );
+        // The unconfirmed true/false answer changed first, so it goes first.
+        expect(h.h.answers.saves, hasLength(2));
+        h.h.answers.saves.last.complete(
+          blitzMutationResult(
+            1,
+            StudentQuestionType.trueFalse,
+            const StudentBooleanAnswerValue(value: true),
+          ),
+        );
+        await flushStudentControllers();
+        expect(h.h.answers.saves, hasLength(3));
+        expect(h.h.answers.saves.last.mutation.toJson(), {
+          'type': 'open_written',
+          'text': 'During the check',
+        });
+      },
+    );
+
+    test('flushAll stops when the execution drops the Attempt', () async {
+      final h = await _Harness.create();
+      write(h, 'Pending');
+      bool? saved;
+      unawaited(h.controller.flushAll().then((value) => saved = value));
+      await flushStudentControllers();
+      expect(h.h.answers.saves, hasLength(1));
+      h.h.executionController.clearLocalState();
+      await flushStudentControllers();
+      expect(saved, isFalse);
     });
 
     test('pending timers stop when the editor is disposed', () async {

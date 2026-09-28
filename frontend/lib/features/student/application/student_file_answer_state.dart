@@ -1,4 +1,3 @@
-import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_question.dart';
@@ -83,7 +82,6 @@ class StudentFileAnswerState {
         entry != null &&
         selected != null &&
         entry.question.answerUi is StudentFileAnswerUi &&
-        entry.failure?.serverCode != ApiErrorCodes.validationFailed &&
         validateStudentSubmissionSelection(
               selected,
               entry.question.answerUi as StudentFileAnswerUi,

@@ -806,8 +806,11 @@ void main() {
           );
           await h.flush();
           final serverFailure = h.entry.failure;
+          final previousQuestion = h.entry.question;
 
           final repick = h.controller.chooseFile(_questionId);
+          expect(h.entry.status, StudentFileAnswerStatus.selecting);
+          expect(h.entry.failure, same(serverFailure));
           final currentQuestion = _question(maxSize: 10);
           final currentAttempt = _attempt(
             saved: true,
@@ -815,6 +818,8 @@ void main() {
           );
           h.parent.publish(_data(currentAttempt));
           await h.flush();
+          final currentFile = h.entry.serverFile;
+          expect(currentFile, isNotNull);
           h.parent.publish(
             StudentHomeworkAttemptState(
               status: status,
@@ -829,6 +834,9 @@ void main() {
           expect(h.entry.failure, same(serverFailure));
           expect(h.entry.status, StudentFileAnswerStatus.failure);
           expect(h.entry.rejectedFileName, 'answer.pdf');
+          expect(h.entry.question, isNot(same(previousQuestion)));
+          expect(h.entry.question, same(currentQuestion));
+          expect(h.entry.serverFile, same(currentFile));
           expect(h.state.activeQuestionId, isNull);
           expect(h.state.canUpload(_questionId), isFalse);
           await h.controller.uploadAnswer(_questionId);
@@ -1234,13 +1242,14 @@ void main() {
       },
     );
 
-    test('a rejected patch falls back to one Attempt refresh', () async {
+    test('a rejected patch falls back to one fresh Attempt read', () async {
       final h = _Harness();
       h.parent.acceptsMutations = false;
       await h.pick();
       h.repository.uploads.single.complete(_result());
       await h.flush();
-      expect(h.parent.refreshCalls, 1);
+      expect(h.parent.readsAfterWrite, 1);
+      expect(h.parent.refreshCalls, 0);
     });
 
     for (final (code, status) in [
@@ -1495,6 +1504,10 @@ class _Parent extends StudentHomeworkAttemptController {
   void refresh() {
     refreshCalls += 1;
   }
+
+  var readsAfterWrite = 0;
+  @override
+  void refreshAfterWrite() => readsAfterWrite += 1;
 
   void publish(StudentHomeworkAttemptState next) {
     state = next;

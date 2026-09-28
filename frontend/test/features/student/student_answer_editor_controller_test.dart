@@ -1584,7 +1584,7 @@ void main() {
       },
     );
 
-    test('a rejected patch falls back to one Attempt refresh', () async {
+    test('a rejected patch falls back to one fresh Attempt read', () async {
       final h = await ready();
       h.parent.acceptsMutations = false;
       h.editText('Answer');
@@ -1593,7 +1593,46 @@ void main() {
         _result(answer: const StudentTextAnswerValue(text: 'Answer')),
       );
       await h.flush();
-      expect(h.parent.refreshCalls, 1);
+      expect(h.parent.readsAfterWrite, 1);
+      expect(h.parent.refreshCalls, 0);
+    });
+
+    test('a change undone during its save is sent after that save', () async {
+      final h = _Harness(attempt: _attempt(shortText: 'Old'));
+      await h.flush();
+      h.editText('New');
+      h.timers.elapse(second);
+      expect(_sentText(h.repository.saves.single), 'New');
+      // Back to the saved value while the save runs: the draft is clean.
+      h.editText('Old');
+      h.timers.elapse(second);
+      h.repository.saves.single.complete(
+        _result(answer: const StudentTextAnswerValue(text: 'New')),
+      );
+      await h.flush();
+      expect(h.entry(StudentQuestionType.shortWritten).isDirty, isTrue);
+      expect(h.repository.saves, hasLength(2));
+      expect(_sentText(h.repository.saves.last), 'Old');
+    });
+
+    test('a 422 does not reject typing made during that save', () async {
+      final h = await ready();
+      h.editText('First');
+      h.timers.elapse(second);
+      h.editText('First more');
+      h.repository.saves.single.fail(
+        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+      );
+      await h.flush();
+      expect(h.state.hasFailedSave, isFalse);
+      expect(
+        h.entry(StudentQuestionType.shortWritten).saveStatus,
+        isNot(StudentAnswerSaveStatus.failure),
+      );
+      h.timers.elapse(second);
+      await h.flush();
+      expect(h.repository.saves, hasLength(2));
+      expect(_sentText(h.repository.saves.last), 'First more');
     });
 
     test('one save at a time, in the order Questions first changed', () async {
@@ -1775,6 +1814,22 @@ void main() {
       expect(h.repository.saves, isEmpty);
     });
 
+    test('flushAll stops when the Attempt is no longer found', () async {
+      final h = await ready();
+      h.editText('Pending');
+      bool? saved;
+      unawaited(h.controller.flushAll().then((value) => saved = value));
+      await h.flush();
+      expect(h.repository.saves, hasLength(1));
+      h.parent.publish(
+        const StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.notFound,
+        ),
+      );
+      await h.flush();
+      expect(saved, isFalse);
+    });
+
     test('pending timers stop when the editor is disposed', () async {
       final h = await ready();
       h.editText('Unsent');
@@ -1947,6 +2002,9 @@ class _Parent extends StudentHomeworkAttemptController {
   StudentHomeworkAttemptState build() => initial;
   @override
   void refresh() => refreshCalls += 1;
+  var readsAfterWrite = 0;
+  @override
+  void refreshAfterWrite() => readsAfterWrite += 1;
   void publish(StudentHomeworkAttemptState next) => state = next;
 
   final accepted = <StudentAttemptAnswerMutationResult>[];

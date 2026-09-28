@@ -9,6 +9,7 @@ class StudentBlitzAnswerEditorState {
     Map<String, StudentQuestionAnswerEditorState> questions = const {},
     this.isEligible = false,
     this.isAuthoritative = false,
+    this.isRunning = false,
     this.activeQuestionId,
     this.pendingMutationSnapshot,
     this.isReconciling = false,
@@ -22,6 +23,11 @@ class StudentBlitzAnswerEditorState {
 
   /// The current execution publication allows writes.
   final bool isAuthoritative;
+
+  /// The Attempt is running and its time has not run out on this device.
+  /// Drafts stay editable while a replay re-checks the Attempt; only saving
+  /// waits for write authority.
+  final bool isRunning;
   final String? activeQuestionId;
   final StudentAnswerMutation? pendingMutationSnapshot;
   final bool isReconciling;
@@ -54,7 +60,7 @@ class StudentBlitzAnswerEditorState {
   // snapshot and a later change is saved afterwards.
   bool canEdit(String questionId) =>
       isEligible &&
-      isAuthoritative &&
+      isRunning &&
       !isTerminal &&
       !isFlushing &&
       questions.containsKey(questionId.toLowerCase());

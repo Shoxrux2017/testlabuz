@@ -66,6 +66,16 @@ class StudentHomeworkAttemptController
     }
   }
 
+  /// Re-reads the Attempt after a confirmed write that could not be patched
+  /// in. A read already in flight may have been served before that write, so
+  /// it is replaced by a new read instead of being awaited.
+  void refreshAfterWrite() {
+    final key = _activeSessionKey;
+    if (key != null && _matchesSession(key)) {
+      unawaited(_load(key, retainAttempt: true));
+    }
+  }
+
   void retry() {
     if (state.status == StudentHomeworkAttemptLoadStatus.error) {
       refresh();

@@ -228,10 +228,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     if (question == null || !state.canChoose(id)) return;
     final previous = state.questions[id]!;
     final selected = previous.selectedFile;
-    if (selected == null ||
-        previous.failure?.serverCode == ApiErrorCodes.validationFailed) {
-      return;
-    }
+    if (selected == null) return;
     final error = validateStudentSubmissionSelection(
       selected,
       question.answerUi as StudentFileAnswerUi,
@@ -309,7 +306,11 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
             result: result,
             expectedReadToken: operation.readToken,
           );
-      if (!patched) _refreshAttempt();
+      if (!patched) {
+        ref
+            .read(studentHomeworkAttemptControllerProvider(target).notifier)
+            .refreshAfterWrite();
+      }
     } on StudentSubmissionSourceUnavailable {
       if (!_canPublish(operation, generation)) return;
       _finish(

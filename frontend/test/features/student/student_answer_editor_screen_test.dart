@@ -374,10 +374,7 @@ void main() {
       final harness = await _pump(tester);
       await _rejectSave(tester, harness, 'draft');
       expect(
-        _inside(
-          4,
-          find.text('This answer was not accepted. Change it to save again.'),
-        ),
+        _inside(4, find.text('Review your answer before saving again.')),
         findsOneWidget,
       );
       expect(find.textContaining('Raw server failure'), findsNothing);
@@ -921,6 +918,88 @@ void main() {
         expect(tester.getSize(_card(position)).width, lessThanOrEqualTo(320));
         expect(tester.takeException(), isNull);
       }
+    },
+  );
+
+  testWidgets(
+    'the Attempt keeps its scroll position after a save, an upload and a reload',
+    (tester) async {
+      final harness = await _pump(tester, surface: AppDeviceSurface.mobile);
+      await tester.ensureVisible(
+        _inside(9, find.byKey(ValueKey('studentSaveStatus${_questionId(9)}'))),
+      );
+      await tester.pumpAndSettle();
+      // Matches the view before and after it got a PageStorageKey.
+      final view = find.byWidgetPredicate(
+        (widget) =>
+            widget is SingleChildScrollView &&
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>).value ==
+                'studentHomeworkAttemptScroll',
+      );
+      double offset() => tester
+          .state<ScrollableState>(
+            find.descendant(of: view, matching: find.byType(Scrollable)).first,
+          )
+          .position
+          .pixels;
+      final start = offset();
+      expect(start, greaterThan(0));
+
+      harness.editor.updateDraft(
+        _questionId(4),
+        const StudentShortWrittenDraft(text: 'Saved'),
+      );
+      await _autosave(tester);
+      harness.repository.saves.single.complete(
+        const StudentTextAnswerValue(text: 'Saved'),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(offset(), start, reason: 'after a save');
+
+      await harness.container
+          .read(studentFileAnswerControllerProvider(_target).notifier)
+          .chooseFile(_questionId(6));
+      await tester.pump();
+      harness.repository.uploads.single.complete(
+        StudentAttemptAnswerMutationResult(
+          questionId: _questionId(6),
+          type: StudentQuestionType.fileBased,
+          answer: StudentFileAnswerValue(
+            file: StudentSubmissionFile(
+              id: _id(60),
+              originalName: 'answer.pdf',
+              extension: 'pdf',
+              sizeBytes: 10,
+            ),
+          ),
+          updatedAt: DateTime.utc(2026, 9, 10, 8),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(offset(), start, reason: 'after an upload');
+
+      final attempt = harness.container
+          .read(studentHomeworkAttemptControllerProvider(_target))
+          .attempt;
+      harness.parent.publishState(
+        StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.refreshing,
+          attempt: attempt,
+        ),
+      );
+      await tester.pump();
+      harness.parent.publishState(
+        StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.data,
+          attempt: attempt,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(offset(), start, reason: 'after a reload');
     },
   );
 

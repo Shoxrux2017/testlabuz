@@ -2199,10 +2199,10 @@ Future offline and performance features may include:
 3. Sync when internet returns
 4. Faster file loading
 5. Optimized mobile performance
-7. Desktop performance improvements
-8. Large institution optimization
-9. Background upload support
-10. Better handling of unstable connections
+6. Desktop performance improvements
+7. Large institution optimization
+8. Background upload support
+9. Better handling of unstable connections
 
 These features can make the platform more reliable for real classroom use.
 

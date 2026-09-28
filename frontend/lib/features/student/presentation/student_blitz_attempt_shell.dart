@@ -165,8 +165,16 @@ class StudentBlitzAttemptShell extends ConsumerWidget {
                       key: ValueKey(('blitzFile', target, question.id)),
                       state: file,
                       isTerminal: false,
-                      canChoose: gateIdle && fileState.canChoose(question.id),
-                      canUpload: gateIdle && fileState.canUpload(question.id),
+                      // Saving before Submit or leaving makes every editor
+                      // read-only, file choices included.
+                      canChoose:
+                          gateIdle &&
+                          !editorState.isFlushing &&
+                          fileState.canChoose(question.id),
+                      canUpload:
+                          gateIdle &&
+                          !editorState.isFlushing &&
+                          fileState.canUpload(question.id),
                       canDiscard:
                           gateIdle &&
                           fileState.isAuthoritative &&

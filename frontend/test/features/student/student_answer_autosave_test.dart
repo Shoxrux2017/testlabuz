@@ -37,16 +37,15 @@ void main() {
     expect(autosave.next((id) => id != 'b'), 'a');
   });
 
-  test('dueNow skips the wait and allDueNow queues every dirty Question', () {
+  test('dueNow skips the wait of one Question only', () {
     autosave
       ..changed('a')
       ..changed('b')
       ..dueNow('b');
     expect(autosave.next((_) => true), 'b');
     expect(dueSignals, 1);
-    autosave.allDueNow();
-    expect(autosave.next((id) => id == 'a'), 'a');
-    expect(timers.pendingCount, 0);
+    expect(autosave.next((id) => id == 'a'), isNull);
+    expect(timers.pendingCount, 1);
     autosave.dueNow('explicit');
     expect(autosave.next((id) => id == 'explicit'), 'explicit');
   });
@@ -65,7 +64,22 @@ void main() {
         ..sending('a')
         ..finished('a', dirty: false);
       expect(autosave.next((_) => true), isNull);
-      expect(autosave.isTracked('a'), isFalse);
+    },
+  );
+
+  test(
+    'a Question undone during its save is due again if the save left it dirty',
+    () {
+      autosave
+        ..changed('a')
+        ..dueNow('a')
+        ..sending('a')
+        // The draft went back to the server value, so it was clean.
+        ..forget('a')
+        // The save stored the other value, so the draft is dirty again.
+        ..finished('a', dirty: true);
+      expect(autosave.next((_) => true), 'a');
+      expect(dueSignals, 2);
     },
   );
 
@@ -86,8 +100,8 @@ void main() {
       ..changed('a')
       ..dueNow('a')
       ..sending('a')
-      ..rejected('a');
-    autosave.allDueNow();
+      ..rejected('a')
+      ..dueNow('a');
     expect(autosave.next((_) => true), isNull);
     autosave.changed('a');
     timers.elapse(const Duration(seconds: 1));
@@ -118,8 +132,8 @@ void main() {
       ..clear();
     expect(timers.pendingCount, 0);
     expect(autosave.next((_) => true), isNull);
-    expect(autosave.isTracked('a'), isFalse);
     timers.elapse(const Duration(minutes: 1));
+    expect(autosave.next((_) => true), isNull);
     expect(recoveries, 0);
     expect(dueSignals, 1);
   });

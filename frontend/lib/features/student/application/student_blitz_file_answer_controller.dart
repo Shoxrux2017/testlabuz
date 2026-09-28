@@ -218,10 +218,7 @@ class StudentBlitzFileAnswerController
     if (question == null || !state.canChoose(id)) return;
     final previous = state.questions[id]!;
     final selected = previous.selectedFile;
-    if (selected == null ||
-        previous.failure?.serverCode == ApiErrorCodes.validationFailed) {
-      return;
-    }
+    if (selected == null) return;
     final error = validateStudentSubmissionSelection(
       selected,
       question.answerUi as StudentFileAnswerUi,
@@ -712,7 +709,6 @@ class StudentBlitzFileAnswerController
       id,
       selected,
       previousFileId,
-      state.sourceAttemptPublication,
       ref
           .read(studentBlitzExecutionControllerProvider(target.routeTarget))
           .readToken,
@@ -885,14 +881,12 @@ class _FileOperation {
     this.questionId,
     this.selectedFile,
     this.previousServerFileId,
-    this.sourcePublication,
     this.readToken,
   );
   final StudentSessionKey session;
   final String questionId;
   final StudentSubmissionUploadFile? selectedFile;
   final String? previousServerFileId;
-  final StudentAttemptPublicationToken? sourcePublication;
 
   /// The execution read this operation started from; a text save patching the
   /// Attempt meanwhile does not reject this upload's own patch.

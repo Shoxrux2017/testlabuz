@@ -153,7 +153,7 @@ class StudentAttemptAnswerEditorController
     }
     final completer = Completer<bool>();
     _flush = completer;
-    state = _copyState(state, isFlushing: true);
+    state = _copyState(state);
     _queueEveryDirtyQuestion();
     _evaluateFlush();
     return completer.future;
@@ -248,7 +248,11 @@ class StudentAttemptAnswerEditorController
             result: result,
             expectedReadToken: readToken,
           );
-      if (!patched) _refreshAttempt();
+      if (!patched) {
+        ref
+            .read(studentHomeworkAttemptControllerProvider(target).notifier)
+            .refreshAfterWrite();
+      }
       _pump();
       _evaluateFlush();
     } on ApiRequestException catch (exception) {
@@ -264,6 +268,12 @@ class StudentAttemptAnswerEditorController
           _withStatus(current, StudentAnswerSaveStatus.uncertain, failure),
         );
         _queue.scheduleRecovery(_recover);
+      } else if (!identical(current.draft, entry.draft)) {
+        // The rejection is for the sent value; typing made meanwhile is a new
+        // value and is saved as usual.
+        _finishQuestion(id, _withStatus(current, StudentAnswerSaveStatus.idle));
+        _queue.finished(id, dirty: current.isDirty);
+        _reconcileFailure(failure);
       } else {
         _finishQuestion(
           id,
@@ -396,7 +406,8 @@ class StudentAttemptAnswerEditorController
         state.hasUncertainMutation ||
         state.hasInvalidDraft ||
         state.hasFailedSave ||
-        parent.status == StudentHomeworkAttemptLoadStatus.error) {
+        parent.status == StudentHomeworkAttemptLoadStatus.error ||
+        parent.status == StudentHomeworkAttemptLoadStatus.notFound) {
       _endFlush(false);
       return;
     }
@@ -414,9 +425,7 @@ class StudentAttemptAnswerEditorController
     final completer = _flush;
     if (completer == null) return;
     _flush = null;
-    if (ref.mounted && state.isFlushing) {
-      state = _copyState(state, isFlushing: false);
-    }
+    if (ref.mounted && state.isFlushing) state = _copyState(state);
     completer.complete(saved);
   }
 
@@ -493,7 +502,7 @@ class StudentAttemptAnswerEditorController
       isReconciling: !terminal && previous.isReconciling,
       terminalAttempt: terminal ? attempt : null,
       sourceAttemptPublication: preservedUncertainty ? null : sourcePublication,
-      isFlushing: !terminal && previous.isFlushing,
+      isFlushing: _flush != null,
     );
   }
 
@@ -692,7 +701,7 @@ class StudentAttemptAnswerEditorController
       sourceAttemptPublication: preservePublication
           ? state.sourceAttemptPublication
           : null,
-      isFlushing: state.isFlushing,
+      isFlushing: _flush != null,
     );
   }
 
@@ -703,7 +712,6 @@ class StudentAttemptAnswerEditorController
     String? activeQuestionId,
     StudentAnswerMutation? pendingMutationSnapshot,
     bool? isReconciling,
-    bool? isFlushing,
   }) => StudentAttemptAnswerEditorState(
     questions: questions ?? previous.questions,
     isEligible: _activeSessionKey != null && !_cleared,
@@ -714,6 +722,6 @@ class StudentAttemptAnswerEditorController
     isReconciling: isReconciling ?? previous.isReconciling,
     terminalAttempt: previous.terminalAttempt,
     sourceAttemptPublication: previous.sourceAttemptPublication,
-    isFlushing: isFlushing ?? previous.isFlushing,
+    isFlushing: _flush != null,
   );
 }

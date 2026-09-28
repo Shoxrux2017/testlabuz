@@ -336,7 +336,8 @@ class _StudentHomeworkAttemptScreenState
     } else if (sessionKey != null &&
         retainsCurrentAttempt &&
         (homeworkState.status == StudentHomeworkDetailStatus.data ||
-            homeworkState.status == StudentHomeworkDetailStatus.refreshing) &&
+            homeworkState.status == StudentHomeworkDetailStatus.refreshing ||
+            homeworkState.status == StudentHomeworkDetailStatus.error) &&
         homeworkState.homework != null &&
         homeworkState.homework!.id.toLowerCase() == target.homeworkId &&
         homeworkState.homework!.topic.id.toLowerCase() == target.topicId) {
@@ -352,6 +353,8 @@ class _StudentHomeworkAttemptScreenState
         refreshFailure:
             attemptState.status == StudentHomeworkAttemptLoadStatus.error
             ? attemptState.failure
+            : homeworkState.status == StudentHomeworkDetailStatus.error
+            ? homeworkState.failure
             : null,
         onRetryRefresh: refresh,
       );
@@ -626,8 +629,16 @@ class _AttemptContent extends ConsumerWidget {
                       key: ValueKey((target, sessionKey, question.id)),
                       state: file,
                       isTerminal: fileState.isTerminal,
-                      canChoose: gateIdle && fileState.canChoose(question.id),
-                      canUpload: gateIdle && fileState.canUpload(question.id),
+                      // Saving before Submit or leaving makes every editor
+                      // read-only, file choices included.
+                      canChoose:
+                          gateIdle &&
+                          !editorState.isFlushing &&
+                          fileState.canChoose(question.id),
+                      canUpload:
+                          gateIdle &&
+                          !editorState.isFlushing &&
+                          fileState.canUpload(question.id),
                       canDiscard: gateIdle && fileState.canDiscard(question.id),
                       isReconciling: fileState.isReconciling || !gateIdle,
                       canTransfer:

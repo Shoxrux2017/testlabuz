@@ -142,6 +142,97 @@ void main() {
     expect(_submitEnabled(tester), isTrue);
   });
 
+  testWidgets('Submit saves a pending answer first, then confirms', (
+    tester,
+  ) async {
+    final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
+    await _tap(tester, find.text('True'));
+    await tester.pump();
+    final file = find.byType(StudentFileAnswerEditor);
+    expect(tester.widget<StudentFileAnswerEditor>(file).canChoose, isTrue);
+    await _tap(tester, find.byKey(const Key('studentBlitzSubmitButton')));
+    await tester.pump();
+    expect(find.text('Saving answers…'), findsOneWidget);
+    expect(
+      find.byKey(const Key('studentBlitzSubmitCancelSaving')),
+      findsOneWidget,
+    );
+    // Saving makes every editor read-only, file choices included.
+    expect(tester.widget<StudentFileAnswerEditor>(file).canChoose, isFalse);
+    expect(h.answers.saves, hasLength(1));
+    h.answers.saves.single.complete(
+      blitzMutationResult(
+        1,
+        StudentQuestionType.trueFalse,
+        const StudentBooleanAnswerValue(value: true),
+      ),
+    );
+    await _settle(tester);
+    expect(find.text('Submit Blitz?'), findsOneWidget);
+    expect(find.text('Answered: 1 of 3'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await _settle(tester);
+    expect(h.attempts.submits, isEmpty);
+  });
+
+  testWidgets('Cancel stops saving before Submit', (tester) async {
+    final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
+    await _tap(tester, find.text('True'));
+    await tester.pump();
+    await _tap(tester, find.byKey(const Key('studentBlitzSubmitButton')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('studentBlitzSubmitCancelSaving')));
+    await tester.pump();
+    expect(find.text('Saving answers…'), findsNothing);
+    expect(
+      find.text('Some answers are not saved yet. Check the marked questions.'),
+      findsNothing,
+    );
+    h.answers.saves.single.complete(
+      blitzMutationResult(
+        1,
+        StudentQuestionType.trueFalse,
+        const StudentBooleanAnswerValue(value: true),
+      ),
+    );
+    await _settle(tester);
+    // The cancelled Submit opens no confirmation once the save lands.
+    expect(find.text('Submit Blitz?'), findsNothing);
+    expect(_saveStatus(tester, 1), 'Saved');
+    expect(_submitEnabled(tester), isTrue);
+    expect(h.attempts.submits, isEmpty);
+  });
+
+  testWidgets('the not-saved message clears once the answer is saved', (
+    tester,
+  ) async {
+    final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
+    await _tap(tester, find.text('True'));
+    await tester.pump();
+    await _tap(tester, find.byKey(const Key('studentBlitzSubmitButton')));
+    await tester.pump();
+    h.answers.saves.single.fail(
+      studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+    );
+    await _settle(tester);
+    const message =
+        'Some answers are not saved yet. Check the marked questions.';
+    expect(find.text(message), findsOneWidget);
+    await _tap(tester, find.text('False'));
+    await tester.pump();
+    await _autosave(tester, h);
+    h.answers.saves.last.complete(
+      blitzMutationResult(
+        1,
+        StudentQuestionType.trueFalse,
+        const StudentBooleanAnswerValue(value: false),
+      ),
+    );
+    await _settle(tester);
+    expect(find.text(message), findsNothing);
+    expect(_submitEnabled(tester), isTrue);
+  });
+
   testWidgets('a cleared written answer is saved as empty', (tester) async {
     final h = await _Harness.executing(
       tester,

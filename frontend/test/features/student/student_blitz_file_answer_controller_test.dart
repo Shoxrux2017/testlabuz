@@ -374,7 +374,9 @@ void main() {
 
   test('local countdown zero disables choose and upload', () async {
     final h = await _Harness.create();
-    await h.pick();
+    await h.candidateAfterCheck();
+    expect(h.state.canChoose(_file), isTrue);
+    expect(h.state.canUpload(_file), isTrue);
     h.h.executionController.markLocalTimeExpired(
       h.h.execution.countdownAnchor!,
     );
@@ -383,9 +385,25 @@ void main() {
     expect(h.state.canUpload(_file), isFalse);
     await h.controller.uploadAnswer(_file);
     await h.controller.chooseFile(_file);
-    // Only the upload started before local zero was sent.
     expect(h.h.answers.uploads, hasLength(1));
     expect(h.h.picker.requests, hasLength(1));
+  });
+
+  test('a file chosen as the time runs out is never uploaded', () async {
+    final h = await _Harness.create();
+    final choose = h.controller.chooseFile(_file);
+    h.h.executionController.markLocalTimeExpired(
+      h.h.execution.countdownAnchor!,
+    );
+    await flushStudentControllers();
+    h.h.picker.pending.single.complete(blitzUploadFile());
+    await choose;
+    await flushStudentControllers();
+    expect(h.h.answers.uploads, isEmpty);
+    // Even a replay that re-opens writes does not upload it.
+    await h.h.completeReplay(blitzExecutionAttempt());
+    await flushStudentControllers();
+    expect(h.h.answers.uploads, isEmpty);
   });
 
   test(
@@ -407,7 +425,8 @@ void main() {
 
   test('a claimed Submit gate blocks file writes', () async {
     final h = await _Harness.create();
-    await h.pick();
+    await h.candidateAfterCheck();
+    expect(h.state.canUpload(_file), isTrue);
     h.h.listen(
       studentBlitzExecutionOperationGateProvider(blitzExecutionTarget),
     );
@@ -424,7 +443,6 @@ void main() {
     await h.controller.uploadAnswer(_file);
     await h.controller.chooseFile(_file);
     h.controller.discardSelectedFile(_file);
-    // Only the upload started by the choice before the claim was sent.
     expect(h.h.answers.uploads, hasLength(1));
     expect(h.h.picker.requests, hasLength(1));
     expect(h.entry.selectedFile, isNotNull);
@@ -553,6 +571,19 @@ class _Harness {
     final choose = controller.chooseFile(_file);
     h.picker.pending.last.complete(file ?? blitzUploadFile());
     await choose;
+  }
+
+  /// A chosen file whose upload was unconfirmed and then found missing: it
+  /// stays selected with `Retry upload`, and nothing is in flight.
+  Future<void> candidateAfterCheck() async {
+    await pick();
+    h.answers.uploads.single.fail(studentLocalFailure(ApiFailureKind.timeout));
+    await flushStudentControllers();
+    final check = controller.checkCurrentAttempt();
+    await flushStudentControllers();
+    await h.completeReplay(blitzExecutionAttempt());
+    await check;
+    await flushStudentControllers();
   }
 
   Future<void> uncertainUpload() async {

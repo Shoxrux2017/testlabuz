@@ -132,7 +132,7 @@ String studentAnswerSaveFailureMessage(ApiFailure failure) =>
     switch (failure.serverCode) {
       ApiErrorCodes.selectionLimitExceeded => 'Too many options are selected.',
       ApiErrorCodes.validationFailed =>
-        'This answer was not accepted. Change it to save again.',
+        'Review your answer before saving again.',
       ApiErrorCodes.deadlinePassed => 'The Homework deadline has passed.',
       ApiErrorCodes.attemptNotEditable => 'This attempt is no longer editable.',
       ApiErrorCodes.taskClosed ||
@@ -140,8 +140,8 @@ String studentAnswerSaveFailureMessage(ApiFailure failure) =>
       ApiErrorCodes.taskNotActive => 'This Homework is no longer editable.',
       ApiErrorCodes.resourceNotFound => 'This Attempt is no longer available.',
       ApiErrorCodes.businessConflict =>
-        'The Attempt changed. This answer was not saved.',
-      _ => 'This answer was not saved. Change it to save again.',
+        'The Attempt changed. Review its reloaded state before saving again.',
+      _ => 'Your draft has been kept. Review it before saving again.',
     };
 
 String formatStudentSubmissionBytes(int bytes) {
