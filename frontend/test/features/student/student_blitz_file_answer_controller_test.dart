@@ -455,18 +455,21 @@ void main() {
       expect(h.entry.status, StudentFileAnswerStatus.uploading);
     });
 
-    test('a file chosen while a replay runs uploads once writes reopen', () async {
-      final h = await _Harness.create();
-      final choose = h.controller.chooseFile(_file);
-      final replay = h.h.executionController.refreshCurrentAttempt();
-      h.h.picker.pending.last.complete(blitzUploadFile());
-      await choose;
-      expect(h.h.answers.uploads, isEmpty);
-      await h.h.completeReplay(blitzExecutionAttempt());
-      await replay;
-      await flushStudentControllers();
-      expect(h.h.answers.uploads, hasLength(1));
-    });
+    test(
+      'a file chosen while a replay runs uploads once writes reopen',
+      () async {
+        final h = await _Harness.create();
+        final choose = h.controller.chooseFile(_file);
+        final replay = h.h.executionController.refreshCurrentAttempt();
+        h.h.picker.pending.last.complete(blitzUploadFile());
+        await choose;
+        expect(h.h.answers.uploads, isEmpty);
+        await h.h.completeReplay(blitzExecutionAttempt());
+        await replay;
+        await flushStudentControllers();
+        expect(h.h.answers.uploads, hasLength(1));
+      },
+    );
 
     test('a rejected file is dropped and named', () async {
       final h = await _Harness.create();
@@ -480,30 +483,36 @@ void main() {
       expect(h.state.hasPendingSelection, isFalse);
     });
 
-    test('an uncertain upload is checked automatically after two seconds', () async {
-      final h = await _Harness.create();
-      await h.pick();
-      final starts = h.h.pendingStarts.length;
-      h.h.answers.uploads.single.fail(
-        studentLocalFailure(ApiFailureKind.timeout),
-      );
-      await flushStudentControllers();
-      expect(h.entry.status, StudentFileAnswerStatus.uncertain);
-      h.h.timers.elapse(const Duration(milliseconds: 1999));
-      expect(h.h.pendingStarts, hasLength(starts));
-      h.h.timers.elapse(const Duration(milliseconds: 1));
-      await flushStudentControllers();
-      expect(h.h.pendingStarts, hasLength(starts + 1));
-    });
+    test(
+      'an uncertain upload is checked automatically after two seconds',
+      () async {
+        final h = await _Harness.create();
+        await h.pick();
+        final starts = h.h.pendingStarts.length;
+        h.h.answers.uploads.single.fail(
+          studentLocalFailure(ApiFailureKind.timeout),
+        );
+        await flushStudentControllers();
+        expect(h.entry.status, StudentFileAnswerStatus.uncertain);
+        h.h.timers.elapse(const Duration(milliseconds: 1999));
+        expect(h.h.pendingStarts, hasLength(starts));
+        h.h.timers.elapse(const Duration(milliseconds: 1));
+        await flushStudentControllers();
+        expect(h.h.pendingStarts, hasLength(starts + 1));
+      },
+    );
 
-    test('waitForUploads completes once the running upload is stored', () async {
-      final h = await _Harness.create();
-      await h.pick();
-      final wait = h.controller.waitForUploads();
-      h.h.answers.uploads.single.complete(_result());
-      expect(await wait, isTrue);
-      expect(h.entry.status, StudentFileAnswerStatus.uploaded);
-    });
+    test(
+      'waitForUploads completes once the running upload is stored',
+      () async {
+        final h = await _Harness.create();
+        await h.pick();
+        final wait = h.controller.waitForUploads();
+        h.h.answers.uploads.single.complete(_result());
+        expect(await wait, isTrue);
+        expect(h.entry.status, StudentFileAnswerStatus.uploaded);
+      },
+    );
   });
 }
 

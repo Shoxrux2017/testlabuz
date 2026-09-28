@@ -2196,10 +2196,9 @@ Future offline and performance features may include:
 
 1. Offline material access
 2. Offline homework drafts
-3. Auto-save for answers
-4. Sync when internet returns
-5. Faster file loading
-6. Optimized mobile performance
+3. Sync when internet returns
+4. Faster file loading
+5. Optimized mobile performance
 7. Desktop performance improvements
 8. Large institution optimization
 9. Background upload support

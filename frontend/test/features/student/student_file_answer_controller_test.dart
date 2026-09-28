@@ -48,34 +48,31 @@ final _detailTarget = StudentHomeworkRouteTarget(
 );
 
 void main() {
-  test(
-    'a confirmed upload follows the patched parent publication',
-    () async {
-      final h = _Harness();
-      await h.flush();
-      final publication = h.container
-          .read(studentHomeworkAttemptControllerProvider(_target))
-          .publicationToken;
-      expect(publication, isNotNull);
-      expect(h.state.sourceAttemptPublication, same(publication));
-      await h.pick();
-      expect(h.state.sourceAttemptPublication, same(publication));
-      expect(h.state.activeQuestionId, _questionId);
-      expect(h.entry.status, StudentFileAnswerStatus.uploading);
-      h.repository.uploads.single.complete(_result());
-      await h.flush();
-      final patched = h.container
-          .read(studentHomeworkAttemptControllerProvider(_target))
-          .publicationToken;
-      expect(patched, isNot(same(publication)));
-      expect(h.state.sourceAttemptPublication, same(patched));
-      final newer = _data(_attempt());
-      h.parent.publish(newer);
-      await h.flush();
-      expect(h.state.sourceAttemptPublication, same(newer.publicationToken));
-      expect(h.entry.serverFile, isNull);
-    },
-  );
+  test('a confirmed upload follows the patched parent publication', () async {
+    final h = _Harness();
+    await h.flush();
+    final publication = h.container
+        .read(studentHomeworkAttemptControllerProvider(_target))
+        .publicationToken;
+    expect(publication, isNotNull);
+    expect(h.state.sourceAttemptPublication, same(publication));
+    await h.pick();
+    expect(h.state.sourceAttemptPublication, same(publication));
+    expect(h.state.activeQuestionId, _questionId);
+    expect(h.entry.status, StudentFileAnswerStatus.uploading);
+    h.repository.uploads.single.complete(_result());
+    await h.flush();
+    final patched = h.container
+        .read(studentHomeworkAttemptControllerProvider(_target))
+        .publicationToken;
+    expect(patched, isNot(same(publication)));
+    expect(h.state.sourceAttemptPublication, same(patched));
+    final newer = _data(_attempt());
+    h.parent.publish(newer);
+    await h.flush();
+    expect(h.state.sourceAttemptPublication, same(newer.publicationToken));
+    expect(h.entry.serverFile, isNull);
+  });
 
   test(
     'older upload overlay cannot claim a newer parent publication',
@@ -1222,17 +1219,20 @@ void main() {
       expect(h.entry.status, StudentFileAnswerStatus.uploading);
     });
 
-    test('a confirmed upload patches the Attempt instead of re-reading it', () async {
-      final h = _Harness();
-      await h.pick();
-      h.repository.uploads.single.complete(_result());
-      await h.flush();
-      expect(h.parent.refreshCalls, 0);
-      expect(h.parent.accepted, hasLength(1));
-      expect(h.entry.status, StudentFileAnswerStatus.uploaded);
-      expect(h.entry.serverFile?.id, _fileId);
-      expect(h.state.hasPendingSelection, isFalse);
-    });
+    test(
+      'a confirmed upload patches the Attempt instead of re-reading it',
+      () async {
+        final h = _Harness();
+        await h.pick();
+        h.repository.uploads.single.complete(_result());
+        await h.flush();
+        expect(h.parent.refreshCalls, 0);
+        expect(h.parent.accepted, hasLength(1));
+        expect(h.entry.status, StudentFileAnswerStatus.uploaded);
+        expect(h.entry.serverFile?.id, _fileId);
+        expect(h.state.hasPendingSelection, isFalse);
+      },
+    );
 
     test('a rejected patch falls back to one Attempt refresh', () async {
       final h = _Harness();
@@ -1266,27 +1266,30 @@ void main() {
       });
     }
 
-    test('an uncertain upload recovers automatically, then Cancel drops it', () async {
-      final h = _Harness();
-      await h.pick();
-      h.repository.uploads.single.fail(
-        studentLocalFailure(ApiFailureKind.timeout),
-      );
-      await h.flush();
-      expect(h.entry.status, StudentFileAnswerStatus.uncertain);
-      h.timers.elapse(const Duration(milliseconds: 1999));
-      expect(h.repository.reads, isEmpty);
-      h.timers.elapse(const Duration(milliseconds: 1));
-      expect(h.repository.reads, hasLength(1));
-      h.repository.reads.single.complete(_attempt());
-      await h.flush();
-      expect(h.entry.status, StudentFileAnswerStatus.ready);
-      expect(h.entry.selectedFile, isNotNull);
-      expect(h.state.canDiscard(_questionId), isTrue);
-      h.controller.discardSelectedFile(_questionId);
-      expect(h.entry.selectedFile, isNull);
-      expect(h.state.hasPendingSelection, isFalse);
-    });
+    test(
+      'an uncertain upload recovers automatically, then Cancel drops it',
+      () async {
+        final h = _Harness();
+        await h.pick();
+        h.repository.uploads.single.fail(
+          studentLocalFailure(ApiFailureKind.timeout),
+        );
+        await h.flush();
+        expect(h.entry.status, StudentFileAnswerStatus.uncertain);
+        h.timers.elapse(const Duration(milliseconds: 1999));
+        expect(h.repository.reads, isEmpty);
+        h.timers.elapse(const Duration(milliseconds: 1));
+        expect(h.repository.reads, hasLength(1));
+        h.repository.reads.single.complete(_attempt());
+        await h.flush();
+        expect(h.entry.status, StudentFileAnswerStatus.ready);
+        expect(h.entry.selectedFile, isNotNull);
+        expect(h.state.canDiscard(_questionId), isTrue);
+        h.controller.discardSelectedFile(_questionId);
+        expect(h.entry.selectedFile, isNull);
+        expect(h.state.hasPendingSelection, isFalse);
+      },
+    );
 
     test('after recovery Retry upload sends the same file again', () async {
       final h = _Harness();
@@ -1324,36 +1327,42 @@ void main() {
       expect(h.timers.pendingDelays, [const Duration(seconds: 4)]);
     });
 
-    test('waitForUploads completes once the running upload is stored', () async {
-      final h = _Harness();
-      expect(await h.controller.waitForUploads(), isTrue);
-      await h.pick();
-      var settled = false;
-      final wait = h.controller.waitForUploads().then((saved) {
-        settled = true;
-        return saved;
-      });
-      await h.flush();
-      expect(settled, isFalse);
-      h.repository.uploads.single.complete(_result());
-      expect(await wait, isTrue);
-    });
+    test(
+      'waitForUploads completes once the running upload is stored',
+      () async {
+        final h = _Harness();
+        expect(await h.controller.waitForUploads(), isTrue);
+        await h.pick();
+        var settled = false;
+        final wait = h.controller.waitForUploads().then((saved) {
+          settled = true;
+          return saved;
+        });
+        await h.flush();
+        expect(settled, isFalse);
+        h.repository.uploads.single.complete(_result());
+        expect(await wait, isTrue);
+      },
+    );
 
-    test('waitForUploads is false after an uncertain upload or a cancel', () async {
-      final h = _Harness();
-      await h.pick();
-      final uncertain = h.controller.waitForUploads();
-      h.repository.uploads.single.fail(
-        studentLocalFailure(ApiFailureKind.timeout),
-      );
-      expect(await uncertain, isFalse);
+    test(
+      'waitForUploads is false after an uncertain upload or a cancel',
+      () async {
+        final h = _Harness();
+        await h.pick();
+        final uncertain = h.controller.waitForUploads();
+        h.repository.uploads.single.fail(
+          studentLocalFailure(ApiFailureKind.timeout),
+        );
+        expect(await uncertain, isFalse);
 
-      final other = _Harness();
-      await other.pick();
-      final cancelled = other.controller.waitForUploads();
-      other.controller.cancelUploadWait();
-      expect(await cancelled, isFalse);
-    });
+        final other = _Harness();
+        await other.pick();
+        final cancelled = other.controller.waitForUploads();
+        other.controller.cancelUploadWait();
+        expect(await cancelled, isFalse);
+      },
+    );
 
     test('recovery timers stop when the controller is disposed', () async {
       final h = _Harness();
@@ -1443,7 +1452,9 @@ class _Harness {
     await flush();
     final reload = controller.reloadAttempt();
     repository.reads.last.complete(
-      container.read(studentHomeworkAttemptControllerProvider(_target)).attempt!,
+      container
+          .read(studentHomeworkAttemptControllerProvider(_target))
+          .attempt!,
     );
     await reload;
     await flush();

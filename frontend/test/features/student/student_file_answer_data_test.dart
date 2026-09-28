@@ -102,11 +102,13 @@ void main() {
         subscription.read().questions[_questionId]!.selectedFile,
         same(selected),
       );
-      for (var i = 0;
-          i < 20 &&
-              subscription.read().questions[_questionId]!.status ==
-                  StudentFileAnswerStatus.uploading;
-          i++) {
+      for (
+        var i = 0;
+        i < 20 &&
+            subscription.read().questions[_questionId]!.status ==
+                StudentFileAnswerStatus.uploading;
+        i++
+      ) {
         await flushStudentControllers();
       }
       final uncertain = subscription.read().questions[_questionId]!;

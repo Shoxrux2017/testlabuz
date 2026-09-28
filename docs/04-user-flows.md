@@ -1303,7 +1303,7 @@ Students should have both desktop and mobile access. The desktop version should 
 4. The Student views assigned Topics, active Homework, Teacher-activated Blitz tasks, and progress.
 5. The Student opens an assigned Topic and studies learning materials.
 6. The Student opens assigned active Homework and sees instructions, the server-authoritative deadline/availability, and the fixed **3 normal attempts**.
-7. The Student starts the next Attempt or resumes the existing `in_progress` Attempt, then saves typed/private file answers while it remains editable.
+7. The Student starts the next Attempt or resumes the existing `in_progress` Attempt; typed and private file answers are saved automatically while it remains editable.
 8. Explicit Submit or deadline/Teacher close freezes already-committed work as a separate immutable `submitted` Attempt; Stage 7 performs no checking/scoring.
 9. Stage 9 later checks the frozen history and uses the **highest valid completed Homework score** as official.
 10. During class, the Student can access the Blitz only after Teacher activation.
@@ -1398,7 +1398,7 @@ The Student completes assigned Homework using the fixed MVP attempt model.
 3. The system shows instructions, question types, points, the server-authoritative deadline/availability, and **3 total normal attempts**.
 4. The system shows the current attempt number and remaining attempts.
 5. Starting resumes the Student's existing `in_progress` Attempt without consuming another attempt, or creates the next numbered Attempt when no such Attempt exists and the rules still permit it.
-6. The Student saves or replaces typed answers and, for file-based questions, one private supported file within the effective **15 MB** limit.
+6. The Student's typed answers are saved automatically, and for file-based questions one private supported file within the effective **15 MB** limit uploads as soon as it is chosen.
 7. Saved answers remain pending and editable only while the Attempt remains `in_progress`; an unanswered Question needs no fabricated answer row.
 8. The Student explicitly submits, or the authoritative deadline/Teacher close freezes the already-committed work.
 9. Stage 7 stores the immutable Attempt as `submitted`; it does not check answers, award points, or create Teacher-review metadata.
@@ -1464,7 +1464,7 @@ The Student attempt flow is fixed by task type.
 
 1. The Student opens assigned active Homework and sees the server-authoritative deadline plus **3 total normal attempts**.
 2. Start resumes the existing `in_progress` Attempt without consuming capacity or creates the next numbered Attempt, up to attempt 3; at most one current Attempt exists per Student/Homework.
-3. The Student saves typed/private file answers while that Attempt remains editable.
+3. Typed and private file answers are saved automatically while that Attempt remains editable.
 4. Explicit Submit or deadline/Teacher close freezes already-committed work as immutable `submitted` history without Stage 7 checking/scoring or fabricated answer rows.
 5. If another normal attempt remains and deadline/status rules allow it, the Student may start it as a separate record.
 6. After attempt 3, the system blocks a fourth normal Homework attempt.
@@ -2190,7 +2190,7 @@ After studying the materials, the Student completes the official Homework.
 1. The Student opens the Topic and official Homework.
 2. The system shows instructions, server-authoritative deadline/availability, current attempt, and remaining attempts.
 3. Start resumes the existing `in_progress` Attempt or creates the next of 3 normal Attempts; the first official Attempt atomically locks the persisted result-pair/cohort meaning.
-4. The Student saves/replaces typed or private file answers while the Attempt remains editable.
+4. Typed and private file answers are saved or replaced automatically while the Attempt remains editable.
 5. Explicit Submit or deadline/Teacher close freezes already-committed work as a separate immutable `submitted` Attempt; Stage 7 leaves answers pending and creates no row for an unanswered Question.
 6. If attempts remain and the task/deadline still allow it, the Student may start another Attempt.
 7. No fourth normal Homework Attempt is allowed.
@@ -2516,7 +2516,7 @@ The main Homework flow is:
 6. The Student opens assigned active Homework and sees the server-authoritative deadline/availability, 3 total attempts, the current attempt, and remaining attempts.
 7. Start resumes the existing `in_progress` Attempt or atomically creates the next numbered Attempt, up to attempt 3; at most one such Attempt may exist for the Student/Homework.
 8. Creation of the first official Homework Attempt atomically locks the staged official result-pair/cohort meaning as described above.
-9. The Student saves or replaces typed answers and one private file answer where required. Saved answers remain pending, and an unanswered Question needs no fabricated answer row.
+9. Typed answers and one private file answer where required are saved automatically. Saved answers remain pending, and an unanswered Question needs no fabricated answer row.
 10. Explicit Submit freezes the already-committed work, or the authoritative deadline/Teacher close freezes it first.
 11. Every Stage 7 finalization stores an immutable `submitted` Attempt. Stage 7 does not check answers, award points, create review metadata, or select an official score.
 12. The Student may use the remaining normal attempts only while Homework lifecycle and server deadline rules still allow it.
@@ -5430,7 +5430,6 @@ Possible offline and performance flows include:
 
 - Download materials for offline viewing
 - Save homework drafts offline
-- Auto-save student answers
 - Continue after connection loss
 - Synchronize answers when internet returns
 - Resume interrupted file uploads

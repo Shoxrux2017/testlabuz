@@ -1522,8 +1522,8 @@ The task, Student account, and institution must be active, and deadline/time/att
 **BR-SUB-003 — One Student owns the attempt**  
 An attempt and submission must be permanently connected to the authenticated Student. Another Student or Parent must not submit on that Student’s behalf.
 
-**BR-SUB-004 — Homework save/replace and optional background drafts**
-Stage 7 Homework must support explicit typed-answer and private file-answer save/replace on an editable `in_progress` Attempt. Each saved/replaced answer remains `checking_status = pending` with `awarded_points`, `feedback`, `checked_by_user_id`, and `checked_at` null. A Question the Student never saved requires no `attempt_answers` row merely to represent zero. Background auto-save and offline drafts are not mandatory MVP requirements; this Homework rule does not change separately approved Blitz persistence/timing behavior.
+**BR-SUB-004 — Automatic answer saving**
+Student answers on an editable `in_progress` Homework or Blitz Attempt are saved automatically; there is no Save button. A typed answer is saved one second after the Student's last change, at once when the Student leaves a text field, before Submit, and when the app goes to the background. A file answer uploads as soon as the Student chooses the file; a file the server rejects is dropped with its error and the saved file is kept. Each saved/replaced answer remains `checking_status = pending` with `awarded_points`, `feedback`, `checked_by_user_id`, and `checked_at` null. A Question the Student never answered requires no `attempt_answers` row merely to represent zero. Nothing is saved after the Blitz time has run out on the device or on the server. Offline drafts are not an MVP requirement.
 
 ### Final Submission
 

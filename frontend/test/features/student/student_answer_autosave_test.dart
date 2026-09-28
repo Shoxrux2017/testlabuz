@@ -51,20 +51,23 @@ void main() {
     expect(autosave.next((id) => id == 'explicit'), 'explicit');
   });
 
-  test('a sending Question is due again only if it is still dirty afterwards', () {
-    autosave
-      ..changed('a')
-      ..dueNow('a')
-      ..sending('a');
-    expect(autosave.next((_) => true), isNull);
-    autosave.finished('a', dirty: true);
-    expect(autosave.next((_) => true), 'a');
-    autosave
-      ..sending('a')
-      ..finished('a', dirty: false);
-    expect(autosave.next((_) => true), isNull);
-    expect(autosave.isTracked('a'), isFalse);
-  });
+  test(
+    'a sending Question is due again only if it is still dirty afterwards',
+    () {
+      autosave
+        ..changed('a')
+        ..dueNow('a')
+        ..sending('a');
+      expect(autosave.next((_) => true), isNull);
+      autosave.finished('a', dirty: true);
+      expect(autosave.next((_) => true), 'a');
+      autosave
+        ..sending('a')
+        ..finished('a', dirty: false);
+      expect(autosave.next((_) => true), isNull);
+      expect(autosave.isTracked('a'), isFalse);
+    },
+  );
 
   test('a change during the save keeps waiting for its own debounce', () {
     autosave

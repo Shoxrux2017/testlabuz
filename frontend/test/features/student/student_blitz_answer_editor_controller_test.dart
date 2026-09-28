@@ -477,10 +477,8 @@ void main() {
   group('autosave', () {
     const second = Duration(seconds: 1);
 
-    void write(_Harness h, String text) => h.controller.updateDraft(
-      _written,
-      StudentOpenWrittenDraft(text: text),
-    );
+    void write(_Harness h, String text) =>
+        h.controller.updateDraft(_written, StudentOpenWrittenDraft(text: text));
 
     test('a typed change is saved one second after the last change', () async {
       final h = await _Harness.create();
@@ -535,18 +533,21 @@ void main() {
       expect(h.h.answers.saves, isEmpty);
     });
 
-    test('an unconfirmed save is checked automatically after two seconds', () async {
-      final h = await _Harness.create();
-      await h.uncertainSave(studentLocalFailure(ApiFailureKind.timeout));
-      expect(h.state.hasUncertainMutation, isTrue);
-      expect(h.state.canEdit(_written), isTrue);
-      h.h.timers.elapse(const Duration(milliseconds: 1999));
-      await flushStudentControllers();
-      expect(h.h.replays, isEmpty);
-      h.h.timers.elapse(const Duration(milliseconds: 1));
-      await flushStudentControllers();
-      expect(h.h.replays, hasLength(1));
-    });
+    test(
+      'an unconfirmed save is checked automatically after two seconds',
+      () async {
+        final h = await _Harness.create();
+        await h.uncertainSave(studentLocalFailure(ApiFailureKind.timeout));
+        expect(h.state.hasUncertainMutation, isTrue);
+        expect(h.state.canEdit(_written), isTrue);
+        h.h.timers.elapse(const Duration(milliseconds: 1999));
+        await flushStudentControllers();
+        expect(h.h.replays, isEmpty);
+        h.h.timers.elapse(const Duration(milliseconds: 1));
+        await flushStudentControllers();
+        expect(h.h.replays, hasLength(1));
+      },
+    );
 
     test('flushAll saves pending changes and succeeds', () async {
       final h = await _Harness.create();

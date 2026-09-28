@@ -454,8 +454,8 @@ Finder _editorFinder(String questionId) => find.byWidgetPredicate(
 StudentQuestionAnswerEditor _editor(Stage8Harness h, String questionId) =>
     h.tester.widget<StudentQuestionAnswerEditor>(_editorFinder(questionId));
 
+/// Answers save automatically; this waits for the server-confirmed save.
 Future<void> _save(Stage8Harness h, String questionId) async {
-  await h.tap(h.byKey('studentSaveAnswer$questionId'));
   await h.until(() {
     if (_editorFinder(questionId).evaluate().length != 1) return false;
     final state = _editor(h, questionId).state;
@@ -502,14 +502,8 @@ Future<String> _uploadAndTransfer(Stage8Harness h) async {
   final question = h.manifest.question('main', 'file_based');
   StudentFileAnswerEditor editor() =>
       h.tester.widget<StudentFileAnswerEditor>(_fileEditorFinder(question));
+  // A chosen file uploads at once; there is no Upload button.
   await h.tap(_fileButton(h, question, 'Choose file'));
-  await h.until(
-    () =>
-        _fileEditorFinder(question).evaluate().length == 1 &&
-        editor().state.status == StudentFileAnswerStatus.ready,
-    'native picker selection accepted',
-  );
-  await h.tap(_fileButton(h, question, 'Upload answer'));
   await h.until(
     () =>
         _fileEditorFinder(question).evaluate().length == 1 &&
@@ -746,8 +740,9 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
   final open = m.question('timeout_ui', 'open_written');
   await h.enter(
     h.within(h.byKey('studentAnswerEditor$open'), find.byType(TextField)),
-    'E2E S08 unsaved local draft',
+    'E2E S08 autosaved draft',
   );
+  await _save(h, open);
   // No user action from here: local zero replays the completed Start and the server finalizes.
   await h.until(
     () =>
@@ -757,9 +752,9 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
     timeout: const Duration(seconds: 120),
   );
   expect(
-    h.textIn(h.byKey('studentBlitzFinalizationSummary'), '1 of 2'),
+    h.textIn(h.byKey('studentBlitzFinalizationSummary'), '2 of 2'),
     findsOneWidget,
-    reason: 'Only the saved answer counts; the unsaved local draft does not.',
+    reason: 'Both answers were saved automatically before the deadline.',
   );
   expect(
     h.keys.issued.length,

@@ -328,7 +328,10 @@ void main() {
       questions: {_textId: _answer(draft: 'x' * 1001)},
     );
     final readiness = fixture.evaluate();
-    _expectBlocked(readiness, StudentHomeworkSubmitBlocker.nonFileInvalidAnswer);
+    _expectBlocked(
+      readiness,
+      StudentHomeworkSubmitBlocker.nonFileInvalidAnswer,
+    );
     expect(readiness.canSubmitAfterSaving, isFalse);
   });
 

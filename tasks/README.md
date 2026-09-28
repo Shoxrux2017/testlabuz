@@ -1156,7 +1156,9 @@ their historical completion handoffs.
   contracts).
 - `FE-UX-001` (Student answer autosave, owner decision `S09-D8`) runs first, then
   `S09-DOC-001`; Stage 9 code starts only after both are delivered.
-- Next permitted action: `FE-UX-001` readiness on the merged `main`.
+- Planning package merged (PR #287, `main` `3ad88fb`).
+- `FE-UX-001`: implemented; PR open, awaiting review and the Project Owner smoke.
+- Next permitted action: after `FE-UX-001` merges, `S09-DOC-001` readiness.
 
 ---
 

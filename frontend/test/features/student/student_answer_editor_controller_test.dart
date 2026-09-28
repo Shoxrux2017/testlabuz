@@ -1556,28 +1556,33 @@ void main() {
       expect(_sentText(h.repository.saves.last), 'Draft plus');
     });
 
-    test('a successful save patches the Attempt instead of re-reading it', () async {
-      final h = await ready();
-      h.editText(' Kept spacing ');
-      final draft = h.entry(StudentQuestionType.shortWritten).draft;
-      h.timers.elapse(second);
-      h.repository.saves.single.complete(
-        _result(answer: const StudentTextAnswerValue(text: ' Kept spacing ')),
-      );
-      await h.flush();
-      expect(h.parent.refreshCalls, 0);
-      expect(h.parent.accepted, hasLength(1));
-      final entry = h.entry(StudentQuestionType.shortWritten);
-      expect(entry.saveStatus, StudentAnswerSaveStatus.saved);
-      expect(entry.isDirty, isFalse);
-      expect(entry.draft, same(draft));
-      expect(
-        h.state.sourceAttemptPublication,
-        same(h.container
-            .read(studentHomeworkAttemptControllerProvider(h.target))
-            .publicationToken),
-      );
-    });
+    test(
+      'a successful save patches the Attempt instead of re-reading it',
+      () async {
+        final h = await ready();
+        h.editText(' Kept spacing ');
+        final draft = h.entry(StudentQuestionType.shortWritten).draft;
+        h.timers.elapse(second);
+        h.repository.saves.single.complete(
+          _result(answer: const StudentTextAnswerValue(text: ' Kept spacing ')),
+        );
+        await h.flush();
+        expect(h.parent.refreshCalls, 0);
+        expect(h.parent.accepted, hasLength(1));
+        final entry = h.entry(StudentQuestionType.shortWritten);
+        expect(entry.saveStatus, StudentAnswerSaveStatus.saved);
+        expect(entry.isDirty, isFalse);
+        expect(entry.draft, same(draft));
+        expect(
+          h.state.sourceAttemptPublication,
+          same(
+            h.container
+                .read(studentHomeworkAttemptControllerProvider(h.target))
+                .publicationToken,
+          ),
+        );
+      },
+    );
 
     test('a rejected patch falls back to one Attempt refresh', () async {
       final h = await ready();
@@ -1621,21 +1626,24 @@ void main() {
       expect(h.timers.pendingCount, 0);
     });
 
-    test('saveAllNow sends every dirty valid Question without waiting', () async {
-      final h = await ready();
-      h.editText('Short');
-      h.edit(
-        StudentQuestionType.openWritten,
-        const StudentTextAnswerValue(text: 'Open'),
-      );
-      h.controller.saveAllNow();
-      expect(h.repository.saves, hasLength(1));
-      h.repository.saves.single.complete(
-        _result(answer: const StudentTextAnswerValue(text: 'Short')),
-      );
-      await h.flush();
-      expect(h.repository.saves, hasLength(2));
-    });
+    test(
+      'saveAllNow sends every dirty valid Question without waiting',
+      () async {
+        final h = await ready();
+        h.editText('Short');
+        h.edit(
+          StudentQuestionType.openWritten,
+          const StudentTextAnswerValue(text: 'Open'),
+        );
+        h.controller.saveAllNow();
+        expect(h.repository.saves, hasLength(1));
+        h.repository.saves.single.complete(
+          _result(answer: const StudentTextAnswerValue(text: 'Short')),
+        );
+        await h.flush();
+        expect(h.repository.saves, hasLength(2));
+      },
+    );
 
     test('an invalid draft is not sent until it becomes valid', () async {
       final h = await ready();
@@ -1651,40 +1659,44 @@ void main() {
       expect(h.repository.saves, hasLength(1));
     });
 
-    test('an uncertain save recovers automatically and keeps new typing', () async {
-      final h = await ready();
-      h.editText('Sent');
-      h.timers.elapse(second);
-      h.repository.saves.single.fail(studentLocalFailure(ApiFailureKind.timeout));
-      await h.flush();
-      expect(h.state.hasUncertainMutation, isTrue);
-      expect(h.state.canEdit(_id(4)), isTrue);
-      h.editText('Sent and more');
-      h.timers.elapse(const Duration(milliseconds: 1999));
-      expect(h.repository.reads, isEmpty);
-      h.timers.elapse(const Duration(milliseconds: 1));
-      expect(h.repository.reads, hasLength(1));
-      h.repository.reads.single.complete(_attempt(shortText: 'Sent'));
-      await h.flush();
-      expect(h.state.hasUncertainMutation, isFalse);
-      expect(h.parent.refreshCalls, 1);
-      h.parent.publish(_parentState(_attempt(shortText: 'Sent')));
-      await h.flush();
-      final entry = h.entry(StudentQuestionType.shortWritten);
-      expect((entry.draft as StudentShortWrittenDraft).text, 'Sent and more');
-      expect(
-        (entry.serverAnswer! as StudentTextAnswerValue).text,
-        'Sent',
-      );
-      expect(h.repository.saves, hasLength(2));
-      expect(_sentText(h.repository.saves.last), 'Sent and more');
-    });
+    test(
+      'an uncertain save recovers automatically and keeps new typing',
+      () async {
+        final h = await ready();
+        h.editText('Sent');
+        h.timers.elapse(second);
+        h.repository.saves.single.fail(
+          studentLocalFailure(ApiFailureKind.timeout),
+        );
+        await h.flush();
+        expect(h.state.hasUncertainMutation, isTrue);
+        expect(h.state.canEdit(_id(4)), isTrue);
+        h.editText('Sent and more');
+        h.timers.elapse(const Duration(milliseconds: 1999));
+        expect(h.repository.reads, isEmpty);
+        h.timers.elapse(const Duration(milliseconds: 1));
+        expect(h.repository.reads, hasLength(1));
+        h.repository.reads.single.complete(_attempt(shortText: 'Sent'));
+        await h.flush();
+        expect(h.state.hasUncertainMutation, isFalse);
+        expect(h.parent.refreshCalls, 1);
+        h.parent.publish(_parentState(_attempt(shortText: 'Sent')));
+        await h.flush();
+        final entry = h.entry(StudentQuestionType.shortWritten);
+        expect((entry.draft as StudentShortWrittenDraft).text, 'Sent and more');
+        expect((entry.serverAnswer! as StudentTextAnswerValue).text, 'Sent');
+        expect(h.repository.saves, hasLength(2));
+        expect(_sentText(h.repository.saves.last), 'Sent and more');
+      },
+    );
 
     test('recovery backs off while it stays uncertain', () async {
       final h = await ready();
       h.editText('Sent');
       h.timers.elapse(second);
-      h.repository.saves.single.fail(studentLocalFailure(ApiFailureKind.timeout));
+      h.repository.saves.single.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
+      );
       await h.flush();
       h.timers.elapse(const Duration(seconds: 2));
       h.repository.reads.single.fail(
@@ -1694,46 +1706,54 @@ void main() {
       expect(h.timers.pendingDelays, [const Duration(seconds: 4)]);
     });
 
-    test('a validation rejection is not resent until the draft changes', () async {
-      final h = await ready();
-      h.editText('Rejected');
-      h.timers.elapse(second);
-      h.repository.saves.single.fail(
-        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
-      );
-      await h.flush();
-      expect(
-        h.entry(StudentQuestionType.shortWritten).saveStatus,
-        StudentAnswerSaveStatus.failure,
-      );
-      h.controller.saveAllNow();
-      h.timers.elapse(const Duration(minutes: 1));
-      expect(h.repository.saves, hasLength(1));
-      h.editText('Changed');
-      h.timers.elapse(second);
-      expect(h.repository.saves, hasLength(2));
-    });
+    test(
+      'a validation rejection is not resent until the draft changes',
+      () async {
+        final h = await ready();
+        h.editText('Rejected');
+        h.timers.elapse(second);
+        h.repository.saves.single.fail(
+          studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+        );
+        await h.flush();
+        expect(
+          h.entry(StudentQuestionType.shortWritten).saveStatus,
+          StudentAnswerSaveStatus.failure,
+        );
+        h.controller.saveAllNow();
+        h.timers.elapse(const Duration(minutes: 1));
+        expect(h.repository.saves, hasLength(1));
+        h.editText('Changed');
+        h.timers.elapse(second);
+        expect(h.repository.saves, hasLength(2));
+      },
+    );
 
-    test('flushAll saves pending changes, locks editing and succeeds', () async {
-      final h = await ready();
-      h.editText('Before Submit');
-      final flush = h.controller.flushAll();
-      expect(h.state.isFlushing, isTrue);
-      expect(h.state.canEdit(_id(4)), isFalse);
-      expect(h.repository.saves, hasLength(1));
-      h.repository.saves.single.complete(
-        _result(answer: const StudentTextAnswerValue(text: 'Before Submit')),
-      );
-      expect(await flush, isTrue);
-      expect(h.state.isFlushing, isFalse);
-      expect(h.state.hasDirtyDrafts, isFalse);
-    });
+    test(
+      'flushAll saves pending changes, locks editing and succeeds',
+      () async {
+        final h = await ready();
+        h.editText('Before Submit');
+        final flush = h.controller.flushAll();
+        expect(h.state.isFlushing, isTrue);
+        expect(h.state.canEdit(_id(4)), isFalse);
+        expect(h.repository.saves, hasLength(1));
+        h.repository.saves.single.complete(
+          _result(answer: const StudentTextAnswerValue(text: 'Before Submit')),
+        );
+        expect(await flush, isTrue);
+        expect(h.state.isFlushing, isFalse);
+        expect(h.state.hasDirtyDrafts, isFalse);
+      },
+    );
 
     test('flushAll stops on an uncertain save and on cancel', () async {
       final h = await ready();
       h.editText('Before Submit');
       final uncertain = h.controller.flushAll();
-      h.repository.saves.single.fail(studentLocalFailure(ApiFailureKind.timeout));
+      h.repository.saves.single.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
+      );
       expect(await uncertain, isFalse);
       expect(h.state.isFlushing, isFalse);
 
@@ -1767,9 +1787,7 @@ void main() {
       final h = await ready();
       h.editText('Too late');
       h.parent.publish(
-        _parentState(
-          _attempt(status: StudentHomeworkAttemptStatus.submitted),
-        ),
+        _parentState(_attempt(status: StudentHomeworkAttemptStatus.submitted)),
       );
       await h.flush();
       expect(h.timers.pendingCount, 0);
