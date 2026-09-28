@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:testlabuz_client/features/student/domain/student_attempt_answer.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_route_paths.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
@@ -57,8 +58,12 @@ Finder _card(int position) =>
     find.byKey(ValueKey('studentAnswerEditor${_questionId(position)}'));
 Finder _inside(int position, Finder matching) =>
     find.descendant(of: _card(position), matching: matching);
-Finder _save(int position) =>
-    find.byKey(ValueKey('studentSaveAnswer${_questionId(position)}'));
+
+/// Lets the one-second autosave of the last change run.
+Future<void> _autosave(WidgetTester tester) async {
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pump();
+}
 
 void main() {
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
@@ -76,7 +81,9 @@ void main() {
           harness.editorState.questions.containsKey(_questionId(6)),
           isFalse,
         );
-        expect(find.text('Save answer'), findsNWidgets(8));
+        expect(find.text('Save answer'), findsNothing);
+        expect(find.text('Discard changes'), findsNothing);
+        expect(find.text('Not answered'), findsNWidgets(8));
         expect(find.text('Clear answer'), findsNWidgets(6));
         expect(find.text('Select up to 2.'), findsOneWidget);
         expect(find.text('Selected: 0 / 2'), findsOneWidget);
@@ -87,7 +94,6 @@ void main() {
         expect(find.text('Match: Left A'), findsOneWidget);
         expect(find.text('Position: Item A'), findsOneWidget);
         expect(find.text('Question 4: Short answer'), findsOneWidget);
-        _expectNoSaveEnabled(tester);
         for (final label in [
           'Upload file',
           'Download',
@@ -116,12 +122,13 @@ void main() {
     });
 
     testWidgets(
-      '${surface.name} Single and True save selection without clear',
+      '${surface.name} Single and True selections save automatically without clear',
       (tester) async {
         final harness = await _pump(tester, surface: surface);
         await _tap(tester, _inside(1, find.text('Single B')));
         expect(_inside(1, find.text('Clear answer')), findsNothing);
-        await _tap(tester, _save(1));
+        expect(_inside(1, find.text('Saving…')), findsOneWidget);
+        await _autosave(tester);
         expect(
           harness.repository.saves.single.mutation,
           isA<StudentSingleChoiceMutation>().having(
@@ -135,14 +142,14 @@ void main() {
           _inside(1, find.byType(LinearProgressIndicator)),
           findsOneWidget,
         );
-        _expectNoSaveEnabled(tester);
+        // The Question stays editable while its own save runs.
         expect(
           tester
               .widget<RadioListTile<String>>(
                 _inside(1, find.byType(RadioListTile<String>)).first,
               )
               .enabled,
-          isFalse,
+          isTrue,
         );
         harness.repository.saves.single.complete(
           StudentChoiceAnswerValue(selectedOptionIds: [_id(2)]),
@@ -152,7 +159,7 @@ void main() {
         expect(_inside(1, find.textContaining('Last saved:')), findsOneWidget);
         await _tap(tester, _inside(3, find.text('False')));
         expect(_inside(3, find.text('Clear answer')), findsNothing);
-        await _tap(tester, _save(3));
+        await _autosave(tester);
         expect(
           harness.repository.saves.last.mutation,
           isA<StudentTrueFalseMutation>().having(
@@ -166,12 +173,13 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(_inside(3, find.text('Saved')), findsOneWidget);
-        expect(harness.parent.refreshes, 2);
+        // Confirmed saves patch the Attempt; nothing is re-read.
+        expect(harness.parent.refreshes, 0);
       },
     );
 
     testWidgets(
-      '${surface.name} Multiple cap deselect and explicit Save clear',
+      '${surface.name} Multiple cap, deselect and clear are saved automatically',
       (tester) async {
         final harness = await _pump(tester, surface: surface);
         await _tap(tester, _inside(2, find.text('Multiple A')));
@@ -184,15 +192,20 @@ void main() {
         expect(find.text('Selected: 2 / 2'), findsOneWidget);
         await _tap(tester, _inside(2, find.text('Multiple A')));
         expect(tester.widget<CheckboxListTile>(optionC).onChanged, isNotNull);
-        await _tap(tester, _save(2));
+        await _autosave(tester);
+        expect(
+          (harness.repository.saves.single.mutation
+                  as StudentMultipleChoiceMutation)
+              .selectedOptionIds,
+          [_id(4)],
+        );
         harness.repository.saves.single.complete(
           StudentChoiceAnswerValue(selectedOptionIds: [_id(4)]),
         );
         await tester.pumpAndSettle();
         await _tap(tester, _inside(2, find.text('Clear answer')));
-        expect(harness.repository.saves, hasLength(1));
         expect(find.text('Selected: 0 / 2'), findsOneWidget);
-        await _tap(tester, _save(2));
+        await _autosave(tester);
         expect(
           (harness.repository.saves.last.mutation
                   as StudentMultipleChoiceMutation)
@@ -202,17 +215,18 @@ void main() {
         harness.repository.saves.last.complete(null);
         await tester.pumpAndSettle();
         expect(harness.editorState.questions[_questionId(2)]!.isDirty, isFalse);
+        expect(harness.repository.saves, hasLength(2));
       },
     );
 
     testWidgets(
-      '${surface.name} written exact text validation clear and discard',
+      '${surface.name} written text is saved exactly; too-long text is not sent',
       (tester) async {
         final harness = await _pump(tester, surface: surface);
         for (final position in [4, 5]) {
           final field = _inside(position, find.byType(TextField));
           await _enter(tester, field, '  Exact Student text\nnext line  ');
-          await _tap(tester, _save(position));
+          await _autosave(tester);
           final mutation = harness.repository.saves.last.mutation;
           final sent = switch (mutation) {
             StudentShortWrittenMutation(:final text) => text,
@@ -224,25 +238,22 @@ void main() {
             StudentTextAnswerValue(text: sent),
           );
           await tester.pumpAndSettle();
-          await _enter(tester, field, 'changed');
-          await _tap(tester, _inside(position, find.text('Discard changes')));
           expect(tester.widget<TextField>(field).controller!.text, sent);
+          final saves = harness.repository.saves.length;
           final maximum = position == 4 ? 1000 : 20000;
           await _enter(tester, field, 'x' * (maximum + 1));
           expect(
             tester.widget<TextField>(field).decoration!.errorText,
             isNotNull,
           );
-          expect(
-            tester.widget<FilledButton>(_save(position)).onPressed,
-            isNull,
-          );
+          await _autosave(tester);
+          expect(harness.repository.saves, hasLength(saves));
           await _tap(tester, _inside(position, find.text('Clear answer')));
           expect(tester.widget<TextField>(field).controller!.text, '');
-          expect(
-            tester.widget<FilledButton>(_save(position)).onPressed,
-            isNotNull,
-          );
+          await _autosave(tester);
+          expect(harness.repository.saves, hasLength(saves + 1));
+          harness.repository.saves.last.complete(null);
+          await tester.pumpAndSettle();
         }
       },
     );
@@ -260,7 +271,7 @@ void main() {
           next.items!.singleWhere((item) => item.value == _id(9)).enabled,
           isFalse,
         );
-        await _tap(tester, _save(7));
+        await _autosave(tester);
         expect(
           (harness.repository.saves.single.mutation as StudentMatchingMutation)
               .pairs,
@@ -279,8 +290,13 @@ void main() {
         await tester.pumpAndSettle();
         await _tap(tester, _inside(7, find.text('Clear answer')));
         expect(tester.widget<DropdownButton<String>>(first).value, '');
-        expect(harness.repository.saves, hasLength(1));
-        expect(tester.widget<FilledButton>(_save(7)).onPressed, isNotNull);
+        await _autosave(tester);
+        expect(harness.repository.saves, hasLength(2));
+        expect(
+          (harness.repository.saves.last.mutation as StudentMatchingMutation)
+              .pairs,
+          isEmpty,
+        );
       },
     );
 
@@ -300,7 +316,7 @@ void main() {
               .enabled,
           isFalse,
         );
-        await _tap(tester, _save(8));
+        await _autosave(tester);
         final mutation =
             harness.repository.saves.single.mutation as StudentOrderingMutation;
         expect(mutation.items, hasLength(1));
@@ -311,8 +327,8 @@ void main() {
         await tester.pumpAndSettle();
         await _tap(tester, _inside(8, find.text('Clear answer')));
         expect(tester.widget<DropdownButton<int>>(first).value, 0);
-        expect(tester.widget<FilledButton>(_save(8)).onPressed, isNotNull);
-        expect(harness.repository.saves, hasLength(1));
+        await _autosave(tester);
+        expect(harness.repository.saves, hasLength(2));
       },
     );
 
@@ -327,7 +343,7 @@ void main() {
         );
         await _enter(tester, fields.first, '  Exact blank  ');
         await _enter(tester, fields.last, '   ');
-        await _tap(tester, _save(9));
+        await _autosave(tester);
         final mutation =
             harness.repository.saves.single.mutation
                 as StudentFillBlankMutation;
@@ -342,11 +358,13 @@ void main() {
           tester.widget<TextField>(fields.first).decoration!.errorText,
           contains('1000'),
         );
-        expect(tester.widget<FilledButton>(_save(9)).onPressed, isNull);
+        await _autosave(tester);
+        expect(harness.repository.saves, hasLength(1));
         await _tap(tester, _inside(9, find.text('Clear answer')));
         expect(tester.widget<TextField>(fields.first).controller!.text, '');
         expect(tester.widget<TextField>(fields.last).controller!.text, '');
-        expect(harness.repository.saves, hasLength(1));
+        await _autosave(tester);
+        expect(harness.repository.saves, hasLength(2));
       },
     );
   }
@@ -355,13 +373,14 @@ void main() {
     'deterministic failure keeps draft and accessible safe feedback',
     (tester) async {
       final harness = await _pump(tester);
-      await _enter(tester, _inside(4, find.byType(TextField)), 'draft');
-      await _tap(tester, _save(4));
-      harness.repository.saves.single.completer.completeError(
-        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+      await _rejectSave(tester, harness, 'draft');
+      expect(
+        _inside(
+          4,
+          find.text('This answer was not accepted. Change it to save again.'),
+        ),
+        findsOneWidget,
       );
-      await tester.pumpAndSettle();
-      expect(_inside(4, find.text('Could not save answer')), findsOneWidget);
       expect(find.textContaining('Raw server failure'), findsNothing);
       expect(
         tester
@@ -370,7 +389,12 @@ void main() {
             .text,
         'draft',
       );
-      expect(tester.widget<FilledButton>(_save(4)).onPressed, isNotNull);
+      // A rejected value is not resent until it changes.
+      await _autosave(tester);
+      expect(harness.repository.saves, hasLength(1));
+      await _enter(tester, _inside(4, find.byType(TextField)), 'draft 2');
+      await _autosave(tester);
+      expect(harness.repository.saves, hasLength(2));
     },
   );
 
@@ -378,9 +402,15 @@ void main() {
     'uncertainty has one owned Reload recovery and retains other drafts',
     (tester) async {
       final harness = await _pump(tester);
-      await _enter(tester, _inside(5, find.byType(TextField)), 'other draft');
       await _makeUncertain(tester, harness);
-      expect(_inside(4, find.text('Save result unconfirmed')), findsOneWidget);
+      await _enter(tester, _inside(5, find.byType(TextField)), 'other draft');
+      await _autosave(tester);
+      // One save at a time: the uncertain save blocks the others.
+      expect(harness.repository.saves, hasLength(1));
+      expect(
+        _inside(4, find.text('Save not confirmed. Checking…')),
+        findsOneWidget,
+      );
       expect(
         _inside(
           4,
@@ -390,20 +420,21 @@ void main() {
       );
       expect(find.text('Reload attempt'), findsOneWidget);
       expect(find.text('Retry Save'), findsNothing);
+      // Typing continues while the save is checked.
       expect(
         tester.widget<TextField>(_inside(4, find.byType(TextField))).enabled,
-        isFalse,
+        isTrue,
       );
       expect(
         tester.widget<TextField>(_inside(5, find.byType(TextField))).enabled,
         isTrue,
       );
-      _expectNoSaveEnabled(tester);
       harness.parent.publish(_attempt());
-      await tester.pumpAndSettle();
-      expect(find.text('Save result unconfirmed'), findsOneWidget);
-      harness.repository.nextFetch = Completer<StudentHomeworkAttempt>();
-      await _tap(tester, find.text('Reload attempt'), settle: false);
+      await tester.pump();
+      expect(find.text('Save not confirmed. Checking…'), findsOneWidget);
+      // The recovery read starts on its own two seconds after the failure.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
       expect(harness.repository.fetches, [_attemptId]);
       expect(
         tester
@@ -413,7 +444,6 @@ void main() {
             .onPressed,
         isNull,
       );
-      _expectNoSaveEnabled(tester);
       harness.repository.nextFetch!.complete(
         _attempt(answers: [_textAnswer('pending')]),
       );
@@ -443,12 +473,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(_inside(4, find.text('Save result unconfirmed')), findsOneWidget);
-      expect(find.text('Reload attempt'), findsOneWidget);
       expect(
-        tester.widget<TextField>(_inside(4, find.byType(TextField))).enabled,
-        isFalse,
+        _inside(4, find.text('Save not confirmed. Checking…')),
+        findsOneWidget,
       );
+      expect(find.text('Reload attempt'), findsOneWidget);
       expect(harness.repository.saves, hasLength(1));
     },
   );
@@ -456,7 +485,7 @@ void main() {
   for (final status in StudentHomeworkAttemptLoadStatus.values.where(
     (status) => status != StudentHomeworkAttemptLoadStatus.data,
   )) {
-    testWidgets('${status.name} retained parent cannot authorize Save', (
+    testWidgets('${status.name} retained parent cannot authorize a save', (
       tester,
     ) async {
       final harness = await _pump(tester);
@@ -475,16 +504,25 @@ void main() {
         ),
       );
       await tester.pump();
-      _expectNoSaveEnabled(tester);
+      await _autosave(tester);
       expect(harness.repository.saves, isEmpty);
       if (status == StudentHomeworkAttemptLoadStatus.error) {
+        // A failed refresh of the same in-progress Attempt keeps the answers
+        // on screen with a banner instead of replacing them.
         expect(harness.editorState.terminalAttempt, isNull);
-        expect(find.text('Unable to load Attempt'), findsOneWidget);
+        expect(
+          find.byKey(const Key('studentHomeworkAttemptRefreshFailure')),
+          findsOneWidget,
+        );
         expect(find.text('Retry'), findsOneWidget);
-        expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
+        expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(8));
+      }
+      if (status == StudentHomeworkAttemptLoadStatus.refreshing) {
+        expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(8));
       }
       harness.parent.publish(_attempt());
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
       expect(
         tester
             .widget<TextField>(_inside(4, find.byType(TextField)))
@@ -492,7 +530,7 @@ void main() {
             .text,
         'retained draft',
       );
-      expect(tester.widget<FilledButton>(_save(4)).onPressed, isNotNull);
+      expect(harness.repository.saves, hasLength(1));
     });
   }
 
@@ -512,7 +550,7 @@ void main() {
           ),
         );
         await tester.pump();
-        _expectNoSaveEnabled(tester);
+        await _autosave(tester);
         expect(harness.repository.saves, isEmpty);
       },
     );
@@ -525,7 +563,7 @@ void main() {
     await _enter(tester, _inside(4, find.byType(TextField)), 'old draft');
     harness.auth.logOut();
     await tester.pump();
-    _expectNoSaveEnabled(tester);
+    await _autosave(tester);
     expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
     expect(harness.repository.saves, isEmpty);
   });
@@ -541,7 +579,6 @@ void main() {
       expect(find.byType(StudentQuestionAnswerEditor), findsNWidgets(8));
       await _enter(tester, _inside(4, find.byType(TextField)), 'unsaved draft');
       expect(harness.editorState.hasDirtyDrafts, isTrue);
-      expect(tester.widget<FilledButton>(_save(4)).onPressed, isNotNull);
 
       final terminalAttempt = _attempt(
         status: StudentHomeworkAttemptStatus.submitted,
@@ -611,7 +648,8 @@ void main() {
           await _tap(tester, find.text('Reload attempt'), settle: false);
         } else {
           await _enter(tester, _inside(4, find.byType(TextField)), 'pending');
-          await _tap(tester, _save(4), settle: false);
+          harness.editor.saveNow(_questionId(4));
+          await tester.pump();
         }
         harness.parent.publish(
           _attempt(
@@ -642,16 +680,33 @@ void main() {
     );
   }
 
-  testWidgets('dirty Back Stay retains draft and Leave discards without Save', (
+  testWidgets('Back saves a pending change first and leaves without a dialog', (
     tester,
   ) async {
     final harness = await _pump(tester, routed: true);
     await _enter(tester, _inside(4, find.byType(TextField)), 'keep me');
-    await _tap(tester, find.byTooltip('Back to Homework'));
+    await _tap(tester, find.byTooltip('Back to Homework'), settle: false);
+    await tester.pump();
     expect(
-      find.textContaining('You have unsaved answer changes.'),
+      find.byKey(const Key('studentHomeworkSavingDialog')),
       findsOneWidget,
     );
+    expect(harness.repository.saves, hasLength(1));
+    harness.repository.saves.single.complete(
+      const StudentTextAnswerValue(text: 'keep me'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Leave Attempt?'), findsNothing);
+    expect(find.text('Homework destination'), findsOneWidget);
+  });
+
+  testWidgets('an unsaved change asks before leaving; Stay keeps it', (
+    tester,
+  ) async {
+    final harness = await _pump(tester, routed: true);
+    await _rejectSave(tester, harness, 'keep me');
+    await _tap(tester, find.byTooltip('Back to Homework'));
+    expect(find.textContaining('Some answers are not saved.'), findsOneWidget);
     await _tap(tester, find.text('Stay'));
     expect(
       tester
@@ -665,7 +720,30 @@ void main() {
     expect(find.text('Leave Attempt?'), findsOneWidget);
     await _tap(tester, find.text('Leave'));
     expect(find.text('Homework destination'), findsOneWidget);
-    expect(harness.repository.saves, isEmpty);
+    expect(harness.repository.saves, hasLength(1));
+  });
+
+  testWidgets('Cancel while saving before leaving stays on the Attempt', (
+    tester,
+  ) async {
+    final harness = await _pump(tester, routed: true);
+    await _enter(tester, _inside(4, find.byType(TextField)), 'keep me');
+    await _tap(tester, find.byTooltip('Back to Homework'), settle: false);
+    await tester.pump();
+    await _tap(tester, find.text('Cancel'));
+    expect(find.byKey(const Key('studentHomeworkSavingDialog')), findsNothing);
+    expect(find.text('Homework destination'), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(_inside(4, find.byType(TextField)))
+          .controller!
+          .text,
+      'keep me',
+    );
+    harness.repository.saves.single.complete(
+      const StudentTextAnswerValue(text: 'keep me'),
+    );
+    await tester.pumpAndSettle();
   });
 
   testWidgets('uncertain Back warns and Leave clears pending local operation', (
@@ -679,10 +757,7 @@ void main() {
     addTearDown(subscription.close);
     await _makeUncertain(tester, harness);
     await _tap(tester, find.byTooltip('Back to Homework'));
-    expect(
-      find.textContaining('A save result is still unconfirmed.'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Some answers are not saved.'), findsOneWidget);
     await _tap(tester, find.text('Leave'));
     expect(find.text('Homework destination'), findsOneWidget);
     expect(subscription.read().pendingMutationSnapshot, isNull);
@@ -700,14 +775,44 @@ void main() {
     expect(harness.repository.saves, isEmpty);
   });
 
+  testWidgets('Back waits for a running upload, then leaves', (tester) async {
+    final harness = await _pump(tester, routed: true);
+    await _tap(tester, find.text('Choose file'), settle: false);
+    await tester.pump();
+    expect(harness.repository.uploads, hasLength(1));
+    await _tap(tester, find.byTooltip('Back to Homework'), settle: false);
+    await tester.pump();
+    expect(
+      find.byKey(const Key('studentHomeworkSavingDialog')),
+      findsOneWidget,
+    );
+    harness.repository.uploads.single.complete(
+      StudentAttemptAnswerMutationResult(
+        questionId: _questionId(6),
+        type: StudentQuestionType.fileBased,
+        answer: StudentFileAnswerValue(
+          file: StudentSubmissionFile(
+            id: _id(60),
+            originalName: 'answer.pdf',
+            extension: 'pdf',
+            sizeBytes: 10,
+          ),
+        ),
+        updatedAt: DateTime.utc(2026, 9, 10, 8),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Leave Attempt?'), findsNothing);
+    expect(find.text('Homework destination'), findsOneWidget);
+  });
+
   for (final scenario in [
-    (fileUncertain: false, nonFileUncertain: false, dirty: false),
-    (fileUncertain: false, nonFileUncertain: false, dirty: true),
-    (fileUncertain: false, nonFileUncertain: true, dirty: true),
-    (fileUncertain: true, nonFileUncertain: true, dirty: true),
+    (fileUncertain: true, nonFileUncertain: false),
+    (fileUncertain: false, nonFileUncertain: true),
+    (fileUncertain: true, nonFileUncertain: true),
   ]) {
     testWidgets(
-      'file leave guard priority and both-controller preservation $scenario',
+      'unconfirmed work asks before leaving and both controllers keep it $scenario',
       (tester) async {
         final harness = await _pump(tester, routed: true);
         final fileProvider = studentFileAnswerControllerProvider(_target);
@@ -721,47 +826,24 @@ void main() {
         );
         addTearDown(fileSubscription.close);
         addTearDown(editorSubscription.close);
-        if (scenario.dirty) {
-          await _enter(
-            tester,
-            _inside(5, find.byType(TextField)),
-            'pending text',
-          );
-        }
+        harness.repository.nextFetch = Completer<StudentHomeworkAttempt>();
         if (scenario.nonFileUncertain) await _makeUncertain(tester, harness);
-        await _tap(tester, find.text('Choose file'));
-        final selection = fileSubscription
-            .read()
-            .questions[_questionId(6)]!
-            .selectedFile;
-        expect(selection, isNotNull);
         if (scenario.fileUncertain) {
-          await _tap(tester, find.text('Upload answer'), settle: false);
+          await _tap(tester, find.text('Choose file'), settle: false);
+          await tester.pump();
           harness.repository.uploads.single.completeError(
             studentLocalFailure(ApiFailureKind.timeout),
           );
           await tester.pumpAndSettle();
         }
-        final expected = scenario.fileUncertain
-            ? 'A file upload result is still unconfirmed.'
-            : scenario.nonFileUncertain
-            ? 'A save result is still unconfirmed.'
-            : 'You have unsaved answer changes.';
         final savesBeforeLeave = harness.repository.saves.length;
         final uploadsBeforeLeave = harness.repository.uploads.length;
         await _tap(tester, find.byTooltip('Back to Homework'));
-        expect(find.textContaining(expected), findsOneWidget);
-        if (scenario.fileUncertain) {
-          expect(
-            find.textContaining('A save result is still unconfirmed.'),
-            findsNothing,
-          );
-        }
-        await _tap(tester, find.text('Stay'));
         expect(
-          fileSubscription.read().questions[_questionId(6)]!.selectedFile,
-          same(selection),
+          find.textContaining('Some answers are not saved.'),
+          findsOneWidget,
         );
+        await _tap(tester, find.text('Stay'));
         expect(
           fileSubscription.read().hasUncertainUpload,
           scenario.fileUncertain,
@@ -770,9 +852,6 @@ void main() {
           editorSubscription.read().hasUncertainMutation,
           scenario.nonFileUncertain,
         );
-        if (scenario.dirty) {
-          expect(editorSubscription.read().hasDirtyDrafts, isTrue);
-        }
         await _tap(tester, find.byTooltip('Back to Homework'));
         await _tap(tester, find.text('Leave'));
         expect(find.text('Homework destination'), findsOneWidget);
@@ -786,12 +865,16 @@ void main() {
     );
   }
 
-  testWidgets('discarded local file leaves directly without uploading', (
+  testWidgets('a rejected file leaves directly with nothing pending', (
     tester,
   ) async {
     final harness = await _pump(tester, routed: true);
-    await _tap(tester, find.text('Choose file'));
-    await _tap(tester, find.text('Discard selected file'));
+    await _tap(tester, find.text('Choose file'), settle: false);
+    await tester.pump();
+    harness.repository.uploads.single.completeError(
+      studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+    );
+    await tester.pumpAndSettle();
     expect(
       harness.container
           .read(studentFileAnswerControllerProvider(_target))
@@ -801,7 +884,7 @@ void main() {
     await _tap(tester, find.byTooltip('Back to Homework'));
     expect(find.text('Leave Attempt?'), findsNothing);
     expect(find.text('Homework destination'), findsOneWidget);
-    expect(harness.repository.uploads, isEmpty);
+    expect(harness.repository.uploads, hasLength(1));
     expect(harness.repository.saves, isEmpty);
   });
 
@@ -809,13 +892,14 @@ void main() {
     tester,
   ) async {
     final harness = await _pump(tester, routed: true);
-    await _enter(tester, _inside(4, find.byType(TextField)), 'old student');
+    await _rejectSave(tester, harness, 'old student');
     await _tap(tester, find.byTooltip('Back to Homework'));
+    expect(find.text('Leave Attempt?'), findsOneWidget);
     harness.auth.replaceUser(studentUser('student-b'));
     await tester.pumpAndSettle();
     expect(find.text('Leave Attempt?'), findsNothing);
     expect(find.text('Homework destination'), findsNothing);
-    expect(harness.repository.saves, isEmpty);
+    expect(harness.repository.saves, hasLength(1));
   });
 
   testWidgets(
@@ -828,7 +912,12 @@ void main() {
         textScale: 2,
       );
       for (final position in [1, 2, 3, 4, 5, 7, 8, 9]) {
-        await tester.ensureVisible(_save(position));
+        await tester.ensureVisible(
+          _inside(
+            position,
+            find.byKey(ValueKey('studentSaveStatus${_questionId(position)}')),
+          ),
+        );
         await tester.pumpAndSettle();
         expect(tester.getSize(_card(position)).width, lessThanOrEqualTo(320));
         expect(tester.takeException(), isNull);
@@ -945,6 +1034,8 @@ void main() {
   );
 }
 
+// Time moves only in small explicit steps: a full settle could run past the
+// one-second autosave and then never end while that save shows its progress.
 Future<void> _tap(
   WidgetTester tester,
   Finder finder, {
@@ -953,30 +1044,39 @@ Future<void> _tap(
   await tester.ensureVisible(finder);
   await tester.tap(finder);
   await tester.pump();
-  if (settle && find.byType(LinearProgressIndicator).evaluate().isEmpty) {
-    await tester.pumpAndSettle();
-  }
+  if (settle) await tester.pump(const Duration(milliseconds: 400));
 }
 
 Future<void> _enter(WidgetTester tester, Finder finder, String text) async {
   await tester.ensureVisible(finder);
   await tester.enterText(finder, text);
-  await tester.pumpAndSettle();
-}
-
-void _expectNoSaveEnabled(WidgetTester tester) {
-  for (final button in tester.widgetList<FilledButton>(
-    find.widgetWithText(FilledButton, 'Save answer'),
-  )) {
-    expect(button.onPressed, isNull);
-  }
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 Future<void> _makeUncertain(WidgetTester tester, _Harness harness) async {
+  // The automatic recovery read waits until a test completes it.
+  harness.repository.nextFetch ??= Completer<StudentHomeworkAttempt>();
   await _enter(tester, _inside(4, find.byType(TextField)), 'pending');
-  await _tap(tester, _save(4), settle: false);
+  // Leaving the field saves Question 4 at once, ahead of any other change.
+  harness.editor.saveNow(_questionId(4));
+  await tester.pump();
   harness.repository.saves.last.completer.completeError(
     studentLocalFailure(ApiFailureKind.timeout),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// A save the server rejected leaves the change unsaved.
+Future<void> _rejectSave(
+  WidgetTester tester,
+  _Harness harness,
+  String text,
+) async {
+  await _enter(tester, _inside(4, find.byType(TextField)), text);
+  await _autosave(tester);
+  harness.repository.saves.last.completer.completeError(
+    studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
   );
   await tester.pumpAndSettle();
 }
@@ -1060,6 +1160,9 @@ class _Harness {
   late ProviderContainer container;
   StudentAttemptAnswerEditorState get editorState =>
       container.read(studentAttemptAnswerEditorControllerProvider(_target));
+  StudentAttemptAnswerEditorController get editor => container.read(
+    studentAttemptAnswerEditorControllerProvider(_target).notifier,
+  );
 }
 
 class _AttemptController extends StudentHomeworkAttemptController {
@@ -1069,6 +1172,8 @@ class _AttemptController extends StudentHomeworkAttemptController {
   StudentHomeworkAttemptState build() => StudentHomeworkAttemptState(
     status: StudentHomeworkAttemptLoadStatus.data,
     attempt: _attempt(),
+    publicationToken: StudentHomeworkAttemptPublicationToken(),
+    readToken: StudentHomeworkAttemptPublicationToken(),
   );
   @override
   void refresh() {
@@ -1081,8 +1186,51 @@ class _AttemptController extends StudentHomeworkAttemptController {
       attempt: attempt,
     ),
   );
+
+  /// A full read: fresh publication and read tokens.
   void publishState(StudentHomeworkAttemptState next) {
-    state = next;
+    state = StudentHomeworkAttemptState(
+      status: next.status,
+      attempt: next.attempt,
+      failure: next.failure,
+      publicationToken: StudentHomeworkAttemptPublicationToken(),
+      readToken: StudentHomeworkAttemptPublicationToken(),
+    );
+  }
+
+  @override
+  bool acceptAnswerMutation({
+    required String questionId,
+    required StudentAttemptAnswerMutationResult result,
+    required StudentHomeworkAttemptPublicationToken? expectedReadToken,
+  }) {
+    final attempt = state.attempt;
+    if (attempt == null ||
+        state.status != StudentHomeworkAttemptLoadStatus.data ||
+        !identical(expectedReadToken, state.readToken)) {
+      return false;
+    }
+    state = StudentHomeworkAttemptState(
+      status: StudentHomeworkAttemptLoadStatus.data,
+      attempt: _attempt(
+        answers: [
+          for (final answer in attempt.answers)
+            if (answer.questionId.toLowerCase() !=
+                result.questionId.toLowerCase())
+              answer,
+          if (result.answer case final value?)
+            StudentAttemptAnswerState(
+              questionId: result.questionId,
+              type: result.type,
+              value: value,
+              updatedAt: result.updatedAt!,
+            ),
+        ],
+      ),
+      publicationToken: StudentHomeworkAttemptPublicationToken(),
+      readToken: state.readToken,
+    );
+    return true;
   }
 }
 
@@ -1156,7 +1304,10 @@ class _Repository implements StudentHomeworkAttemptRepository {
     StudentQuestion question,
     StudentAnswerMutation mutation,
   ) {
-    expect(attemptId, _attemptId);
+    // Saves now also start inside pumps, where expect() is not allowed.
+    if (attemptId != _attemptId) {
+      throw StateError('Saved to an unexpected Attempt: $attemptId');
+    }
     final save = _PendingSave(question, mutation);
     saves.add(save);
     return save.completer.future;
