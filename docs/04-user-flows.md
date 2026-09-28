@@ -1204,7 +1204,7 @@ A typical mobile flow is:
 4. Activate a prepared Blitz.
 5. Monitor synchronized or individual Blitz progress.
 6. View Students affected by timeout or technical problems.
-7. Grant one Student-specific additional Blitz attempt when a valid reason exists.
+7. Grant one Student-specific additional Blitz attempt when a valid reason exists. In Stage 8 this grant is desktop-only (`S08-FE-006` §4); the mobile grant in this flow is not yet delivered.
 8. View basic result summaries.
 9. Release Student or Parent results when the institution policy requires Teacher action.
 10. Identify Students needing revision or support.
@@ -3186,9 +3186,11 @@ After mandatory authorization, valid completed same-key/same-fingerprint replay 
 
 | Fresh intent | Exact result after required authorization/lifecycle/timing checks |
 |---|---|
-| `start_normal` | Unused #1 and all preconditions pass: create #1, `201`. Own editable `in_progress` #1: same #1, `200`. Due `in_progress` #1: authoritative timeout reconciliation when the owning finalization contract is available, then `409 blitz_time_expired`. Terminal #1: `409 attempts_exhausted`, regardless of separate replacement capacity. Never creates #2. |
-| `resume` | Exact own editable `in_progress` target: only that target, `200`. Due exact `in_progress` target: canonical timeout reconciliation then `409 blitz_time_expired`. Already-terminal target, including valid later checking history: `409 attempt_not_editable`. Foreign/out-of-scope Student/Blitz/Institution target: privacy-safe `404 resource_not_found`. Never creates or switches Attempts or selects a newer one. |
-| `start_replacement` | Valid unused approved capacity with all preconditions passing: create #2, `201`. Own editable `in_progress` #2: same #2, `200`. Due `in_progress` #2: canonical timeout reconciliation then `409 blitz_time_expired`. Consumed terminal #2 or structurally valid history without approved exception/available capacity: `409 attempts_exhausted`. Invalid existing exception graph/capacity: `409 blitz_attempt_exception_not_allowed` under the invariant/public-error split. Never creates #3. |
+| `start_normal` | Unused #1 and all preconditions pass: create #1, `201`. Own editable `in_progress` #1: same #1, `200`. Due `in_progress` #1: authoritative timeout reconciliation when the owning finalization contract is available, then `409 blitz_time_expired`. Terminal #1 with status `timed_out_finalized` and no approved exception: `409 blitz_time_expired`. Otherwise terminal #1, or an approved exception exists: `409 attempts_exhausted`, regardless of separate replacement capacity. Never creates #2. |
+| `resume` | Exact own editable `in_progress` target: only that target, `200`. Due exact `in_progress` target: canonical timeout reconciliation then `409 blitz_time_expired`. Terminal target with status `timed_out_finalized`: `409 blitz_time_expired`. Otherwise terminal target, including valid later checking history: `409 attempt_not_editable`. Foreign/out-of-scope Student/Blitz/Institution target: privacy-safe `404 resource_not_found`. Never creates or switches Attempts or selects a newer one. |
+| `start_replacement` | Valid unused approved capacity with all preconditions passing: create #2, `201`. Own editable `in_progress` #2: same #2, `200`. Due `in_progress` #2: canonical timeout reconciliation then `409 blitz_time_expired`. Terminal #2 with status `timed_out_finalized`: `409 blitz_time_expired`. Consumed, otherwise terminal #2, or structurally valid history without approved exception/available capacity: `409 attempts_exhausted`. Invalid existing exception graph/capacity: `409 blitz_attempt_exception_not_allowed` under the invariant/public-error split. Never creates #3. |
+
+Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`).
 
 Every existing-Attempt return preserves its `started_at`, `deadline_at`, and number. Only a new logical `start_replacement` request/key can create #2.
 ### Blitz Activation Flow
@@ -3436,7 +3438,7 @@ Teacher can manage only assigned Blitz tasks. Student can answer only their own 
 Blitz follows the approved device model:
 
 1. Teacher desktop: create questions, set duration, designate official Blitz, review detailed results.
-2. Teacher mobile: activate Blitz, monitor class, grant one approved Student-specific exception, review basic results.
+2. Teacher mobile: activate Blitz, monitor class, grant one approved Student-specific exception, review basic results. In Stage 8 mobile delivers only Activate and basic monitoring; the exception grant is desktop-only (`S08-FE-006` §4).
 3. Student desktop/mobile: answer active Blitz under the same server timing rules.
 4. Parent mobile: view permitted released progress/results.
 5. Institution Admin desktop: configure timer-start mode and view overview.

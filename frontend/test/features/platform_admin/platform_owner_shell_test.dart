@@ -31,6 +31,14 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_institu
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
 import 'package:testlabuz_client/features/platform_admin/presentation/platform_owner_shell.dart';
+import 'package:testlabuz_client/features/student/data/student_blitz_repository_impl.dart'
+    show studentBlitzRepositoryProvider;
+import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart'
+    show studentTopicRepositoryProvider;
+
+import '../student/student_blitz_test_support.dart'
+    show FakeStudentBlitzRepository;
+import '../student/student_test_support.dart' show FakeStudentTopicRepository;
 
 void main() {
   group('Platform Owner direct routing', () {
@@ -732,6 +740,12 @@ Future<void> _pumpApp(
         ),
         platformInstitutionAdminRepositoryProvider.overrideWithValue(
           adminRepository ?? FakePlatformInstitutionAdminRepository(),
+        ),
+        studentBlitzRepositoryProvider.overrideWithValue(
+          FakeStudentBlitzRepository(),
+        ),
+        studentTopicRepositoryProvider.overrideWithValue(
+          FakeStudentTopicRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),

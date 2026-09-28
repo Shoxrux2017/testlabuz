@@ -18,8 +18,8 @@
 | Backend Phase 2 | `PASS — run #2 on 1c56cde (run #1 on 232ebcd NOT ACCEPTED; fixes FIX-001…003 delivered; see §17)` |
 | Frontend Phase 2 | `PASS — run #2 on 2a59651 (run #1 on 03c6581 NOT ACCEPTED; fix FIX-001 delivered; see §18)` |
 | Integration | `S08-INT-001 PASS / Accepted — Windows run #2 and Android manual smoke on 8cc174f (see §21)` |
-| Closure | `Not started` |
-| Next permitted gate | `Verification of STAGE_08_CLOSURE_REVIEW entry conditions on current main` |
+| Closure | `In progress — read-only audit NOT READY (CL-1 docs contradiction); S08-CLOSURE-FIX-001 delivered with its record (see §22)` |
+| Next permitted gate | `Substantive Stage 8 closure verdict on the main that contains S08-CLOSURE-FIX-001` |
 
 This index is the ChatGPT / Project Owner orchestration map for Stage 8.
 
@@ -43,7 +43,8 @@ focused fixes `S08-BE-PHASE-2-FIX-001…003` are `Accepted / Delivered`, and run
 (PR #275) is `Accepted / Delivered`, and run #2 (2026-09-27, audited `2a59651`) is `PASS` (see
 §18). `S08-INT-001` is `PASS / Accepted` (2026-09-28, audited `8cc174f`, see §§19-21): its assets
 (PR #278) and the focused fixes `S08-INT-001-FIX-001` (PR #280) and `S08-INT-001-FIX-002` (PR #281)
-are `Accepted / Delivered`. The closure review remains `Prepared / Not started`.
+are `Accepted / Delivered`. The closure review is in progress: its read-only audit is `NOT READY` until
+`S08-CLOSURE-FIX-001` (documentation alignment and test gaps) is delivered (see §22).
 
 All detailed Stage 8 task/checkpoint/integration/closure contracts form the final
 reviewed and approved planning package. Their existence or historical planning
@@ -337,7 +338,8 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
 | `19` | `S08-INT-001` | `Integration` | `Guarded real-stack Blitz E2E/security/persistence verification` | `Both Phase 2 checkpoints PASS` | `Approved` | `PASS` | `Accepted — Windows run #2 and Android manual smoke PASS on 8cc174f; P1 = 0, P2 = 0, P3 = 0 (see §21)` | `tasks/integration/stage-08/S08-INT-001-stage-08-real-stack-integration.md` |
 | `19a` | `S08-INT-001-FIX-001` | `Integration fix` | `Harness preflight #1 fixes: pre-start guard, audited checkout, due-time comparisons, run-safety P3s` | `Preflight #1 + owner decision INT-D4` | `Approved` | `Accepted` | `Delivered — PR #280, merge 87e52d30405214ade4d49602219de8de34c86efb` | `tasks/integration/stage-08/S08-INT-001-FIX-001-harness-preflight-fixes.md` |
 | `19b` | `S08-INT-001-FIX-002` | `Integration fix` | `Preflight #2 run-safety P3s: seeder refusal messages, manual-smoke marker recovery, bounded Scheduler command` | `Preflight #2 + owner decision INT-D5` | `Approved` | `Accepted` | `Delivered — PR #281, merge 8cc174fac52b2c5d309fa05775f32f10c0e331d3` | `tasks/integration/stage-08/S08-INT-001-FIX-002-preflight2-run-safety.md` |
-| `20` | `STAGE_08_CLOSURE_REVIEW` | `Closure` | `Final Stage-wide architecture/security/delivery review` | `S08-INT-001 PASS + required fixes/delivery` | `Approved` | `Prepared` | `Not started` | `tasks/STAGE_08_CLOSURE_REVIEW.md` |
+| `20` | `STAGE_08_CLOSURE_REVIEW` | `Closure` | `Final Stage-wide architecture/security/delivery review` | `S08-INT-001 PASS + required fixes/delivery` | `Approved` | `In progress` | `Read-only audit NOT READY (CL-1); S08-CLOSURE-FIX-001 (see §22)` | `tasks/STAGE_08_CLOSURE_REVIEW.md` |
+| `20a` | `S08-CLOSURE-FIX-001` | `Closure fix` | `docs/01-09 alignment (D3 Start matrix, mobile grant, open-assessment guard) and two frontend test gaps` | `Closure audit + owner decision CL-D1` | `Approved` | `Approved` | `Delivered with its record (see §22)` | `tasks/S08-CLOSURE-FIX-001-docs-alignment-and-test-gaps.md` |
 
 ### Status-column semantics
 
@@ -349,7 +351,7 @@ Do not create a second large duplicate `CODEX-PROMPT` file.
   `Accepted / Delivered`. `S08-FE-PHASE-2-FIX-001` is `Accepted / Delivered` and
   `S08-FE-PHASE-2` is `PASS` (run #2, see §18). `S08-INT-001` is `PASS / Accepted` and
   `S08-INT-001-FIX-001` and `S08-INT-001-FIX-002` are `Accepted / Delivered` (see §§20-21); the
-  closure review remains `Prepared / Not started`.
+  closure review is in progress (read-only audit `NOT READY`; `S08-CLOSURE-FIX-001`, see §22).
 - ChatGPT changes the exact next implementation task to current `Approved` only
   after re-checking current `origin/main`, dependency delivery and the final
   self-contained contract.
@@ -423,9 +425,9 @@ S08-INT-001-FIX-001 Accepted / Delivered (PR #280); Harness Preflight #2 PASS; F
     ↓
 S08-INT-001 PASS / Accepted (Windows run #2 + Android manual smoke on 8cc174f; see §21)
     ↓
-Claude verifies closure entry conditions on current main
+Claude verified closure entry conditions on 1f6333b; read-only audit NOT READY (see §22)
     ↓
-STAGE_08_CLOSURE_REVIEW Prepared / Not started
+S08-CLOSURE-FIX-001 -> substantive closure verdict -> closure bookkeeping
 ```
 
 ### 8.1 Manual task workflow
@@ -956,14 +958,14 @@ Current per-task readiness       = S08-DOC-001, S08-BE-001…010 and S08-BE-PHAS
 Backend Phase 2                  = PASS (run #2, 1c56cde; run #1 on 232ebcd NOT ACCEPTED)
 Frontend Phase 2                 = PASS (run #2, 2a59651; run #1 on 03c6581 NOT ACCEPTED)
 Integration                      = S08-INT-001 PASS / Accepted (Windows run #2 + Android manual smoke on 8cc174f; see §21)
-Closure                          = NOT STARTED
+Closure                          = IN PROGRESS (read-only audit NOT READY; S08-CLOSURE-FIX-001)
 STAGE_08_PROPOSED_DECOMPOSITION  = OBSOLETE / EXCLUDED
 ```
 
 The next permitted workflow action is:
 
 ```text
-Verification of STAGE_08_CLOSURE_REVIEW entry conditions on current origin/main
+Substantive Stage 8 closure verdict on the main that contains S08-CLOSURE-FIX-001
 ```
 
 Do not regenerate duplicate task contracts merely because this index previously
@@ -2055,4 +2057,88 @@ Next permitted gate = Claude verifies STAGE_08_CLOSURE_REVIEW entry conditions o
                       (Claude holds the closure-review role since 2026-09-23)
 Recorded follow-ups = INT-D2 (autosave candidate for the next stage); INT-D9 (unauthenticated
                       non-JSON 500 fix after closure)
+```
+
+## 22. Stage Closure Review — Read-Only Audit (2026-09-28)
+
+### Closure entry verification (closure contract §§2-5)
+
+```text
+CLOSURE_AUDITED_MAIN = 1f6333b004da4ce1252a3d73db5e2bd62935345a
+Git state            = branch main; HEAD == origin/main; ahead/behind 0/0; working tree clean
+Delivery             = all 20 pre-closure items final; the 25 delivery and focused-fix merges
+                       (S08-DOC-001, BE-001…010, BE-PHASE-2-FIX-001…003, FE-001…006,
+                       FE-PHASE-2-FIX-001, INT-001 assets, INT-001-FIX-001…002) are ancestors
+Evidence validity    = 1c56cde..1f6333b backend/: only the Stage 8 seeder and its test;
+                       2a59651..1f6333b frontend/: only integration_test/; 8cc174f..1f6333b:
+                       only tasks/ — Backend Phase 2, Frontend Phase 2 and S08-INT-001 evidence valid
+Seeder format        = vendor/bin/pint --test on the two seeder files: PASS
+```
+
+### Read-only audit
+
+Claude plus five fresh-context reviewers. Every finding was re-verified against the code and docs.
+
+| Area (closure contract) | Result |
+|---|---|
+| §§6-7 product boundary; Stage 9 boundary | PASS. Scoring fields are only written as null. No `waiting_for_teacher_review`/`checked` transition, no official score selection, no fabricated Attempt or answer row |
+| §8 documentation alignment | **FAIL**: `CL-1`, plus `CL-2` and `CL-3` |
+| §9 roadmap acceptance criterion | PASS (`docs/06-roadmap.md:1600`) |
+| §10 capability matrix; §11 required-test mapping; §12 Definition of Done | PASS: 42/42 capabilities and 18/18 test families mapped to implementation and evidence; DoD PASS apart from the documentation row |
+| §§13-15, 28-30 evidence, restart, cleanup | PASS: inventory complete, evidence valid, run #2 log and evidence JSON consistent with §21, no secrets, clean final state |
+| §§16-21 workflow, pair/cohort, timer, Attempt/exception, finalization, idempotency | PASS in code |
+| §§22, 23, 27 Student privacy, monitoring, security/Tenant matrix | PASS: P1 = 0, P2 = 0, P3 = 0 |
+| §24 desktop/mobile | PASS: the mobile Teacher matrix is enforced by the router, controller guards and tests |
+| §25 earlier-stage regressions | PASS: every shared change keeps Stage 5-7 behavior; no earlier test was deleted or weakened (the changed assertions follow approved Stage 8 contracts) |
+| §26 non-goals | PASS |
+
+### Findings
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| `CL-1` | P2 | Owner decision D3 (`timed_out_finalized` Start target → `409 blitz_time_expired`) reached only `docs/09` §20.3; `docs/04:3189-3191`, `docs/05:850-858`, `docs/07:1335` and `docs/08:1840` still stated the old matrix | Fixed in `S08-CLOSURE-FIX-001` |
+| `CL-2` | P3 | `docs/04:1203, 3439` let the Teacher grant the Student exception on mobile; the approved Stage 8 matrix (`S08-FE-006` §4) is desktop-only | Fixed in `S08-CLOSURE-FIX-001` |
+| `CL-3` | P3 | `409 topic_has_open_assessments` (Topic close/archive with open Homework or Blitz) was not documented in `docs/09` §13.8/§13.9 or BR-TOP-009 | Fixed in `S08-CLOSURE-FIX-001` |
+| `CL-4` | P3 | No Homework test covered the Question editor's "Check current Homework" action | Fixed in `S08-CLOSURE-FIX-001` |
+| `CL-5` | P3 | The Institution Admin and Platform Owner shell tests routed a Student to `/student` without faking the Student repositories | Fixed in `S08-CLOSURE-FIX-001` |
+| `CL-6` | P3 | `authorityStateAtStart` is typed `Object` in the Question builder and editor states, so the compiler no longer checks it; runtime comparison is still by identity | Deferred to Stage 9 (see below) |
+| `CL-7` | P3 | The Homework activation client does not list `official_cohort_mismatch`, which activation can return since `S08-BE-004`; the Teacher sees "could not be confirmed" instead of a definite conflict | Deferred to Stage 9 (see below) |
+
+### Project Owner decision CL-D1 (2026-09-28)
+
+Question: which closure findings are fixed before the closure verdict?
+
+Decision: **option 4 (Г).**
+- Fix the documentation findings `CL-1`…`CL-3` and the test-only findings `CL-4`…`CL-5` in
+  `S08-CLOSURE-FIX-001`, without any production code change, so every product evidence record
+  stays valid.
+- Defer `CL-6` and `CL-7` to Stage 9.
+
+### Deferred P3 dispositions (closure contract §31)
+
+| Item | Rationale for deferral |
+|---|---|
+| `CL-6` | Behavior is identical (identity comparison). The fix changes production editor code and would invalidate Frontend Phase 2 evidence; Stage 9 changes the Question editor and review flow anyway |
+| `CL-7` | Reachable only with inconsistent official-cohort data; the client fails safe (re-reads, never retries). Stage 9 reworks the official pair and score selection and should fix the client there |
+| Backend `P3-4` | A Scheduler scan index leading with `status` is a performance item at larger data volumes; correctness is proven |
+| Backend `P3-5` | A file answer is accepted only when the deadline check passes under the Attempt row lock; timeout and Submit need the same lock, so no post-freeze mutation is possible. Only the stored answer timestamp can exceed the deadline by the lock wait |
+| Backend `P3-6` | Code organization only (helper namespaces, Homework-named shared writers, inline error strings, a duplicated pair-lock rule) |
+| Backend `P3-7` scope note | The `scheduled_at` precision migration is documented (`S08-BE-PHASE-2-FIX-002`); only the out-of-scope placement remains |
+| Backend `P3-8` remainder | Test gaps for behavior verified by code review and the real-stack run (activation vs preparation race, membership end after activation, Homework GET with a Blitz Attempt ID) |
+| Backend `P3-9` | Test portability of the concurrency tests (hard-coded worker DB environment, `session_replication_role` privilege); they run in the project's Docker environment |
+| Integration harness limitations | Listed in §21 (`INT-D4`, `INT-D6`, `INT-D7`); none triggered in the evidence run |
+
+Recorded follow-ups outside the findings: `INT-D2` (autosave candidate for the next stage) and
+`INT-D9` (unauthenticated non-JSON request returns 500 instead of 401; separate fix right after the
+Stage 8 closure).
+
+### Verdict
+
+```text
+Stage 8 Closure Read-Only Review = NOT READY (closure contract §36: CL-1 documentation contradiction)
+S08-CLOSURE-FIX-001 = Approved; delivered with this record
+  (tasks/S08-CLOSURE-FIX-001-docs-alignment-and-test-gaps.md)
+Next permitted gate = after this PR merges: Claude re-verifies docs/01-09 consistency on the new
+                      main and issues the substantive closure verdict, then the closure bookkeeping
+                      delivery (closure contract §§35-41)
 ```

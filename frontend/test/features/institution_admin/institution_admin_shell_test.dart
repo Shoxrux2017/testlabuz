@@ -58,6 +58,14 @@ import 'package:testlabuz_client/features/platform_admin/domain/platform_dashboa
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_query.dart';
 import 'package:testlabuz_client/features/platform_admin/domain/platform_institution_list_repository.dart';
+import 'package:testlabuz_client/features/student/data/student_blitz_repository_impl.dart'
+    show studentBlitzRepositoryProvider;
+import 'package:testlabuz_client/features/student/data/student_topic_repository_impl.dart'
+    show studentTopicRepositoryProvider;
+
+import '../student/student_blitz_test_support.dart'
+    show FakeStudentBlitzRepository;
+import '../student/student_test_support.dart' show FakeStudentTopicRepository;
 
 void main() {
   group('Institution Admin direct routing and destination mapping', () {
@@ -1415,6 +1423,12 @@ Future<void> _pumpApp(
         institutionUserDetailRepositoryProvider.overrideWithValue(
           institutionUserDetailRepository ??
               FakeInstitutionUserDetailRepository(),
+        ),
+        studentBlitzRepositoryProvider.overrideWithValue(
+          FakeStudentBlitzRepository(),
+        ),
+        studentTopicRepositoryProvider.overrideWithValue(
+          FakeStudentTopicRepository(),
         ),
         if (signal != null)
           sessionInvalidationSignalProvider.overrideWithValue(signal),
