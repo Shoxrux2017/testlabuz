@@ -3438,7 +3438,7 @@ Teacher can manage only assigned Blitz tasks. Student can answer only their own 
 Blitz follows the approved device model:
 
 1. Teacher desktop: create questions, set duration, designate official Blitz, review detailed results.
-2. Teacher mobile: activate Blitz, monitor class, grant one approved Student-specific exception, review basic results. In Stage 8 mobile delivers only Activate and basic monitoring; the exception grant is desktop-only (`S08-FE-006` §4).
+2. Teacher mobile: activate Blitz, monitor class, grant one approved Student-specific exception, review basic results. In Stage 8 mobile delivers only Blitz read, Activate and basic monitoring; the exception grant is desktop-only (`S08-FE-006` §4).
 3. Student desktop/mobile: answer active Blitz under the same server timing rules.
 4. Parent mobile: view permitted released progress/results.
 5. Institution Admin desktop: configure timer-start mode and view overview.

@@ -79,6 +79,15 @@ tasks/STAGE_08_TASK_INDEX.md
 - A search of `docs/01-09` for the stale Start matrix finds no remaining statement.
 - `git diff --check`.
 
+## 6A. Completion (2026-09-28)
+
+The fresh-context re-verification on `2c68c0b` (PR #283 merged) passed every acceptance criterion
+and found two more locations of the same findings, completed under the same owner decision `CL-D1`:
+- `CL-2`: `docs/07` §22.4 Teacher Mobile listed the exception grant without the Stage 8 note;
+- `CL-3`: the `docs/09` Lifecycle / Task error catalogue did not list `topic_has_open_assessments`.
+
+The `docs/04` mobile note now also names Blitz read, which the approved matrix allows on mobile.
+
 ## 7. Evidence Validity
 
 Documentation and test-only changes: every Backend Phase 2, Frontend Phase 2 and `S08-INT-001`

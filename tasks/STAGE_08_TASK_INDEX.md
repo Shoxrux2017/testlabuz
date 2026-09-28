@@ -2097,8 +2097,8 @@ Claude plus five fresh-context reviewers. Every finding was re-verified against 
 | ID | Severity | Finding | Disposition |
 |---|---|---|---|
 | `CL-1` | P2 | Owner decision D3 (`timed_out_finalized` Start target → `409 blitz_time_expired`) reached only `docs/09` §20.3; `docs/04:3189-3191`, `docs/05:850-858`, `docs/07:1335` and `docs/08:1840` still stated the old matrix | Fixed in `S08-CLOSURE-FIX-001` |
-| `CL-2` | P3 | `docs/04:1203, 3439` let the Teacher grant the Student exception on mobile; the approved Stage 8 matrix (`S08-FE-006` §4) is desktop-only | Fixed in `S08-CLOSURE-FIX-001` |
-| `CL-3` | P3 | `409 topic_has_open_assessments` (Topic close/archive with open Homework or Blitz) was not documented in `docs/09` §13.8/§13.9 or BR-TOP-009 | Fixed in `S08-CLOSURE-FIX-001` |
+| `CL-2` | P3 | `docs/04:1207, 3439` and `docs/07:2351` let the Teacher grant the Student exception on mobile; the approved Stage 8 matrix (`S08-FE-006` §4) is desktop-only | Fixed in `S08-CLOSURE-FIX-001` |
+| `CL-3` | P3 | `409 topic_has_open_assessments` (Topic close/archive with open Homework or Blitz) was not documented in `docs/09` §13.8/§13.9, the `docs/09` error catalogue or BR-TOP-009 | Fixed in `S08-CLOSURE-FIX-001` |
 | `CL-4` | P3 | No Homework test covered the Question editor's "Check current Homework" action | Fixed in `S08-CLOSURE-FIX-001` |
 | `CL-5` | P3 | The Institution Admin and Platform Owner shell tests routed a Student to `/student` without faking the Student repositories | Fixed in `S08-CLOSURE-FIX-001` |
 | `CL-6` | P3 | `authorityStateAtStart` is typed `Object` in the Question builder and editor states, so the compiler no longer checks it; runtime comparison is still by identity | Deferred to Stage 9 (see below) |
@@ -2142,3 +2142,26 @@ Next permitted gate = after this PR merges: Claude re-verifies docs/01-09 consis
                       main and issues the substantive closure verdict, then the closure bookkeeping
                       delivery (closure contract §§35-41)
 ```
+
+### S08-CLOSURE-FIX-001 re-verification and completion (2026-09-28)
+
+```text
+Delivered          = PR #283, merge 2c68c0b466708508b6bb89b46840b5c5e6901d1e
+Scope              = 1f6333b..2c68c0b: docs/04, 05, 07, 08, 09, three frontend test files, tasks/;
+                     no production source
+Review             = fresh-context read-only re-verification on 2c68c0b
+```
+
+- **D3 alignment:** every rewritten Start matrix matches `docs/09` §20.3 and
+  `StartStudentBlitzAttempt.php:118-139`. No stale Start, Resume or replacement statement remains
+  in `docs/01-09`.
+- **Open-assessment rule:** `docs/09` §13.8/§13.9 and BR-TOP-009 match the guard, the precedence in
+  `CloseTeacherTopic`/`ArchiveTeacherTopic` and the exact error message.
+- **Tests:** the three changed test files pass (59 tests), and analyze and format are clean. The
+  Homework test fails on a wrong label or a wrong action.
+- **Completion under `CL-D1`:** the review found two more locations of `CL-2` (`docs/07` §22.4)
+  and `CL-3` (the `docs/09` error catalogue). Both are completed by this follow-up change, again
+  documentation only.
+
+Verdict: `S08-CLOSURE-FIX-001 = Accepted / Delivered` once this completion merges. Next: the
+substantive closure verdict and the closure bookkeeping (closure contract §§34-41).
