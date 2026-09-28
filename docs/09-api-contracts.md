@@ -2366,6 +2366,12 @@ Rules:
   no write, and preserves `closed_at` and `updated_at`.
 - `draft` or `archived` → `closed` is rejected with
   `409 topic_not_editable`.
+- A real transition requires every Homework on the Topic to be neither `draft`
+  nor `active`, and every Blitz on the Topic to be neither `draft`,
+  `scheduled` nor `active`; otherwise it returns `409 topic_has_open_assessments`
+  with message `The topic has open assessments that must be resolved before
+  closing or archiving it.` and writes nothing. The idempotent repeat and the
+  `topic_not_editable` status check are decided first.
 
 A real close sets:
 
@@ -2403,6 +2409,12 @@ Rules:
 - Repeating `archive` on an already `archived` Topic is idempotent `200`,
   performs no write, and preserves `archived_at` and `updated_at`.
 - Any invalid archive transition returns `409 topic_not_editable`.
+- A real transition requires every Homework on the Topic to be neither `draft`
+  nor `active`, and every Blitz on the Topic to be neither `draft`,
+  `scheduled` nor `active`; otherwise it returns `409 topic_has_open_assessments`
+  with message `The topic has open assessments that must be resolved before
+  closing or archiving it.` and writes nothing. The idempotent repeat and the
+  `topic_not_editable` status check are decided first.
 - Archiving preserves materials, later tasks, submissions, results, and reports.
 
 A real archive sets:

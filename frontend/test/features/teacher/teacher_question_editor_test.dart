@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
+import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_question_builder_controller.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_question_builder_screen.dart';
 
 import 'teacher_test_support.dart';
@@ -323,6 +325,71 @@ void main() {
     },
   );
 
+  testWidgets('an unreadable outcome blocks until Check current Homework', (
+    tester,
+  ) async {
+    final question = teacherHomeworkQuestions()[5];
+    var reads = 0;
+    final repository = FakeTeacherHomeworkRepository(
+      onFetch: (id) async {
+        reads += 1;
+        if (reads == 2) {
+          throw teacherLocalFailure(ApiFailureKind.connection);
+        }
+        return teacherHomework(id: id, questions: [question]);
+      },
+      onUpdateQuestion: (_, _) async =>
+          throw const TeacherQuestionMutationOutcomeUnknownException(
+            TeacherQuestionMutationOperation.update,
+          ),
+    );
+    await _pumpBuilder(tester, repository: repository);
+    await _openEditEditor(tester, question.id);
+    await tester.enterText(
+      find.byKey(const Key('teacherQuestionPromptField')),
+      'A clearer written prompt.',
+    );
+    await tester.tap(
+      find.byKey(const Key('teacherQuestionEditorSubmitButton')),
+    );
+    // The retained lease keeps the Builder progress indicator animating.
+    await _pumpFrames(tester);
+
+    expect(
+      find.text(
+        'The current Homework could not be confirmed. Check the current '
+        'Homework before taking another action.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Check current Homework'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(
+            find.byKey(const Key('teacherQuestionEditorCancelButton')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(reads, 2);
+
+    await tester.tap(
+      find.byKey(const Key('teacherQuestionEditorCheckCurrentButton')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(reads, 3, reason: 'Check current Homework reads the Homework once.');
+    expect(repository.updateQuestionRequests, hasLength(1));
+    expect(find.byKey(const Key('teacherQuestionEditorDialog')), findsNothing);
+    expect(
+      find.text(
+        'The Question update result could not be confirmed. Review the '
+        'current Question before editing again.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('unchanged edit stays open and never sends PATCH', (
     tester,
   ) async {
@@ -533,6 +600,12 @@ Future<void> _pumpBuilder(
   await tester.pump();
   await tester.pump();
   await tester.pumpAndSettle();
+}
+
+Future<void> _pumpFrames(WidgetTester tester) async {
+  for (var frame = 0; frame < 5; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 Future<void> _openAddEditor(WidgetTester tester) async {

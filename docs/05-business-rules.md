@@ -445,7 +445,7 @@ Before a topic becomes active, it must have valid ownership, group assignment, s
 Only assigned students and authorized institution users may access an active topic.
 
 **BR-TOP-009 — Closing a topic**  
-Closing a topic must block new homework or blitz submissions when the connected task rules no longer permit them. Existing submissions may still be reviewed.
+Closing a topic must block new homework or blitz submissions when the connected task rules no longer permit them. Existing submissions may still be reviewed. A topic cannot be closed or archived while any of its Homework is draft or active, or any of its Blitz is draft, scheduled or active; the request returns `409 topic_has_open_assessments` and changes nothing.
 
 **BR-TOP-010 — Archiving a topic**  
 Archiving must preserve materials, tasks, submissions, results, and reports as read-only historical information for authorized users.
@@ -847,16 +847,21 @@ Resume requires a canonical UUID for the exact own Attempt; both Start intents f
 | `start_normal`: no #1, all preconditions pass | Create normal #1; `201`. |
 | `start_normal`: own editable `in_progress` #1 | Return same #1; `200`, without timer reset. |
 | `start_normal`: due `in_progress` #1 | Authoritative timeout reconciliation when the owning finalization contract is available, then `409 blitz_time_expired`. |
-| `start_normal`: terminal #1 | `409 attempts_exhausted`, even if replacement capacity exists. |
+| `start_normal`: terminal #1 with status `timed_out_finalized` and no approved exception | `409 blitz_time_expired`. No new Attempt. |
+| `start_normal`: otherwise terminal #1, or an approved exception exists | `409 attempts_exhausted`, even if replacement capacity exists. |
 | `resume`: exact own editable `in_progress` target | Return only that target; `200`. |
 | `resume`: exact own due `in_progress` target | Canonically reconcile timeout, then `409 blitz_time_expired`. |
-| `resume`: already-terminal exact own target, including valid later checking history | `409 attempt_not_editable`. |
+| `resume`: exact own target is terminal with status `timed_out_finalized` | `409 blitz_time_expired`. |
+| `resume`: otherwise terminal exact own target, including valid later checking history | `409 attempt_not_editable`. |
 | `resume`: another Student/Blitz/Institution or otherwise out-of-scope target | Privacy-safe `404 resource_not_found`. |
 | `start_replacement`: valid unused approved capacity and all preconditions pass | Create #2; `201`. |
 | `start_replacement`: own editable `in_progress` #2 | Return same #2; `200`, without timer reset. |
 | `start_replacement`: due `in_progress` #2 | Canonically reconcile timeout, then `409 blitz_time_expired`. |
-| `start_replacement`: consumed terminal #2 or otherwise structurally valid history with no approved exception/available capacity | `409 attempts_exhausted`. |
+| `start_replacement`: #2 is terminal with status `timed_out_finalized` | `409 blitz_time_expired`. |
+| `start_replacement`: consumed, otherwise terminal #2, or otherwise structurally valid history with no approved exception/available capacity | `409 attempts_exhausted`. |
 | `start_replacement`: existing invalid exception graph/capacity | `409 blitz_attempt_exception_not_allowed`, preserving the invariant/public-error split. |
+
+A selected terminal Attempt with status `timed_out_finalized` answers `409 blitz_time_expired`, whether the Scheduler or the request path finalized it; the only exception is `start_normal` when an approved exception exists. Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`).
 
 `start_normal` never creates #2. Resume never creates, switches, or selects a newer Attempt. Only `start_replacement` creates #2; #3 is forbidden. Existing `started_at`, `deadline_at`, and `attempt_number` never change on a returned Attempt.
 
