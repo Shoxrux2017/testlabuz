@@ -1138,6 +1138,10 @@ their historical completion handoffs.
   candidate.
 - Next permitted action: Stage 9 — Checking and Scoring planning/decomposition
   only. Stage 9 implementation is not authorized by this closure.
+- Post-closure platform fix `API-FIX-001` (owner decision `INT-D9`): an
+  unauthenticated `/api/v1` request that does not ask for JSON now returns
+  `401 authentication_required` instead of `500`; delivered with its contract
+  `tasks/backend/API-FIX-001-unauthenticated-non-json-returns-401.md`.
 
 ---
 
