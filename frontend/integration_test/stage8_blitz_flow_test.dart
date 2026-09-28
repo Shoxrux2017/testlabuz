@@ -279,7 +279,10 @@ Future<String> _studentFirstAttempt(
   await h.tap(h.byKey('studentBlitzStartButton'));
   await h.waitWidget(h.byKey('studentBlitzStartDialog'), 'Start confirmation');
   await h.tap(h.byKey('studentBlitzStartConfirmButton'));
-  await h.waitWidget(h.byKey('studentBlitzAttemptShell'), 'Attempt #1 shell');
+  await h.waitWidget(
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
+    'Attempt #1 shell',
+  );
   expect(h.text(h.byKey('studentBlitzAttemptNumber')), 'Attempt 1');
   keys['start1'] = h.keys.issued[1];
   await _expectDecreasingCountdown(h, 'Attempt #1 countdown');
@@ -306,7 +309,10 @@ Future<String> _studentFirstAttempt(
   await h.waitRoute(topicRoute);
   await h.go(AppRoutePaths.studentBlitzDetailLocation(topic, main));
   await h.tap(h.byKey('studentBlitzResumeButton'));
-  await h.waitWidget(h.byKey('studentBlitzAttemptShell'), 'resumed Attempt #1');
+  await h.waitWidget(
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
+    'resumed Attempt #1',
+  );
   keys['resume1'] = h.keys.issued[2];
   expect(
     _countdownSeconds(h),
@@ -672,7 +678,7 @@ Future<void> _studentReplacement(
   );
   await h.tap(h.byKey('studentBlitzStartAdditionalConfirmButton'));
   await h.waitWidget(
-    h.byKey('studentBlitzAttemptShell'),
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
     'replacement Attempt #2 shell',
   );
   expect(
@@ -726,7 +732,7 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
   await h.waitWidget(h.byKey('studentBlitzStartDialog'), 'Start confirmation');
   await h.tap(h.byKey('studentBlitzStartConfirmButton'));
   await h.waitWidget(
-    h.byKey('studentBlitzAttemptShell'),
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
     'timeout Attempt shell',
   );
   keys['timeout_start'] = h.keys.issued[7];
@@ -767,7 +773,10 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
 
 void _expectNoQuestionContent(Stage8Harness h) {
   expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
-  expect(h.byKey('studentBlitzAttemptShell'), findsNothing);
+  expect(
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
+    findsNothing,
+  );
   expect(
     find.textContaining(
       RegExp(

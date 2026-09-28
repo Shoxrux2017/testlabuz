@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:testlabuz_client/features/student/application/student_answer_autosave.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_countdown_clock.dart';
 import 'package:go_router/go_router.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
@@ -27,6 +28,7 @@ import 'package:testlabuz_client/features/student/presentation/student_file_answ
 import 'package:testlabuz_client/features/student/presentation/student_question_answer_editor.dart';
 import 'package:testlabuz_client/features/student/presentation/student_question_read_view.dart';
 
+import 'student_autosave_test_support.dart';
 import 'student_blitz_execution_test_support.dart';
 import 'student_blitz_test_support.dart';
 import 'student_test_support.dart';
@@ -117,19 +119,16 @@ void main() {
     });
   }
 
-  testWidgets('Save stores the answer and unsaved drafts block Submit', (
+  testWidgets('an answer saves automatically and Submit stays available', (
     tester,
   ) async {
     final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
     await _tap(tester, find.text('True'));
     await tester.pump();
-    expect(
-      find.text('Save or discard unsaved answer changes before submitting.'),
-      findsOneWidget,
-    );
-    expect(_submitEnabled(tester), isFalse);
-    await _tap(tester, find.byKey(ValueKey('studentSaveAnswer${_q(1)}')));
-    await tester.pump();
+    expect(find.text('Some answers are still being saved.'), findsNothing);
+    expect(_submitEnabled(tester), isTrue);
+    expect(find.text('Save answer'), findsNothing);
+    await _autosave(tester, h);
     expect(find.text('Saving…'), findsOneWidget);
     h.answers.saves.single.complete(
       blitzMutationResult(
@@ -159,8 +158,7 @@ void main() {
     );
     await _tap(tester, find.text('Clear answer'));
     await tester.pump();
-    await _tap(tester, find.byKey(ValueKey('studentSaveAnswer${_q(2)}')));
-    await tester.pump();
+    await _autosave(tester, h);
     expect(h.answers.saves.single.mutation.toJson(), {
       'type': 'open_written',
       'text': '',
@@ -169,7 +167,7 @@ void main() {
       blitzMutationResult(2, StudentQuestionType.openWritten, null),
     );
     await _settle(tester);
-    expect(_saveStatus(tester, 2), 'Saved');
+    expect(_saveStatus(tester, 2), 'Not answered');
   });
 
   testWidgets('a current file can be replaced', (tester) async {
@@ -191,12 +189,12 @@ void main() {
     await tester.pump();
     h.picker.pending.single.complete(blitzUploadFile(name: 'new.pdf'));
     await _settle(tester);
+    // The chosen file uploads at once.
     expect(
-      find.text('Upload or discard the selected file before submitting.'),
+      find.text('Wait for the current file operation to finish.'),
       findsOneWidget,
     );
-    await _tap(tester, find.text('Upload replacement'));
-    await tester.pump();
+    expect(find.text('Upload replacement'), findsNothing);
     h.answers.uploads.single.complete(
       blitzMutationResult(
         3,
@@ -215,14 +213,13 @@ void main() {
     final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
     await _tap(tester, find.text('True'));
     await tester.pump();
-    await _tap(tester, find.byKey(ValueKey('studentSaveAnswer${_q(1)}')));
-    await tester.pump();
+    await _autosave(tester, h);
     h.answers.saves.single.fail(studentLocalFailure(ApiFailureKind.timeout));
     await _settle(tester);
-    expect(_saveStatus(tester, 1), 'Save result unconfirmed');
+    expect(_saveStatus(tester, 1), 'Save not confirmed. Checking…');
     expect(find.text('Retry Save'), findsNothing);
     expect(
-      find.text('Check the unconfirmed answer save before submitting.'),
+      find.text('An answer save is not confirmed yet. It is being checked.'),
       findsOneWidget,
     );
     h.start = Completer<StudentBlitzAttemptStartResult>();
@@ -294,7 +291,6 @@ void main() {
       find.byType(StudentQuestionAnswerEditor).first,
     );
     expect(editor.canEdit, isFalse);
-    expect(editor.canSave, isFalse);
     final file = tester.widget<StudentFileAnswerEditor>(
       find.byType(StudentFileAnswerEditor),
     );
@@ -350,16 +346,65 @@ void main() {
   });
 
   group('leave guards', () {
-    testWidgets('unsaved drafts warn and Leave sends nothing', (tester) async {
+    testWidgets(
+      'leaving saves a pending answer first and keeps the timer warning',
+      (tester) async {
+        final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
+        await _tap(tester, find.text('True'));
+        await tester.pump();
+        await tester.tap(find.byTooltip('Back to Topic'));
+        await tester.pump();
+        expect(
+          find.byKey(const Key('studentBlitzSavingDialog')),
+          findsOneWidget,
+        );
+        expect(h.answers.saves, hasLength(1));
+        h.answers.saves.single.complete(
+          blitzMutationResult(
+            1,
+            StudentQuestionType.trueFalse,
+            const StudentBooleanAnswerValue(value: true),
+          ),
+        );
+        await _settle(tester);
+        expect(
+          find.byKey(const Key('studentBlitzLeaveDialog')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Your server timer will continue.'),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const Key('studentBlitzLeaveConfirmButton')),
+        );
+        await _settle(tester);
+        expect(
+          h.path,
+          AppRoutePaths.studentTopicDetailLocation(studentTopicId),
+        );
+        expect(h.answers.saves, hasLength(1));
+        expect(h.attempts.requests, hasLength(1));
+      },
+    );
+
+    testWidgets('an answer that could not be saved warns before leaving', (
+      tester,
+    ) async {
       final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
       await _tap(tester, find.text('True'));
       await tester.pump();
+      await _autosave(tester, h);
+      h.answers.saves.single.fail(
+        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+      );
+      await _settle(tester);
       await tester.tap(find.byTooltip('Back to Topic'));
       await _settle(tester);
       expect(
         find.text(
-          'You have unsaved answer changes.\n'
-          'Leaving discards only the unsaved local changes.\n'
+          'Some answers are not saved.\n'
+          'Leave and lose these changes?\n'
           'Your server timer continues.',
         ),
         findsOneWidget,
@@ -367,21 +412,24 @@ void main() {
       await tester.tap(find.byKey(const Key('studentBlitzLeaveConfirmButton')));
       await _settle(tester);
       expect(h.path, AppRoutePaths.studentTopicDetailLocation(studentTopicId));
-      expect(h.answers.saves, isEmpty);
-      expect(h.attempts.requests, hasLength(1));
+      expect(h.answers.saves, hasLength(1));
     });
 
-    testWidgets('a selected file warns it was not uploaded', (tester) async {
+    testWidgets('an unconfirmed upload warns before leaving', (tester) async {
       final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
       await _scrollTo(tester, find.text('Choose file'));
       await _tap(tester, find.text('Choose file'));
       await tester.pump();
       h.picker.pending.single.complete(blitzUploadFile());
       await _settle(tester);
+      h.answers.uploads.single.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
+      );
+      await _settle(tester);
       await tester.tap(find.byTooltip('Back to Topic'));
       await _settle(tester);
       expect(
-        find.textContaining('The selected local file has not been uploaded.'),
+        find.textContaining('A save result is still unconfirmed.'),
         findsOneWidget,
       );
     });
@@ -437,8 +485,7 @@ void main() {
       final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
       await _tap(tester, find.text('True'));
       await tester.pump();
-      await _tap(tester, find.byKey(ValueKey('studentSaveAnswer${_q(1)}')));
-      await tester.pump();
+      await _autosave(tester, h);
       h.answers.saves.single.fail(studentLocalFailure(ApiFailureKind.timeout));
       await _settle(tester);
       await tester.tap(find.byTooltip('Back to Topic'));
@@ -490,8 +537,7 @@ void main() {
       );
       await _tap(tester, find.text('True'));
       await tester.pump();
-      await _tap(tester, find.byKey(ValueKey('studentSaveAnswer${_q(1)}')));
-      await tester.pump();
+      await _autosave(tester, h);
       h.answers.saves.single.fail(studentLocalFailure(ApiFailureKind.timeout));
       await _settle(tester);
       await _tap(tester, find.text('Check current attempt'));
@@ -548,6 +594,12 @@ bool _submitEnabled(WidgetTester tester) =>
 String _saveStatus(WidgetTester tester, int position) => tester
     .widget<Text>(find.byKey(ValueKey('studentSaveStatus${_q(position)}')))
     .data!;
+
+/// Lets the one-second autosave of the last change run.
+Future<void> _autosave(WidgetTester tester, _Harness h) async {
+  h.timers.elapse(const Duration(seconds: 1));
+  await tester.pump();
+}
 
 Future<void> _settle(WidgetTester tester) async {
   for (var frame = 0; frame < 8; frame += 1) {
@@ -637,6 +689,9 @@ class _Harness {
   final answers = FakeStudentAttemptAnswerRepository();
   final picker = FakeBlitzFilePicker();
   final keys = SequentialBlitzKeys();
+
+  /// Autosave and recovery timers; they fire only when a test elapses them.
+  final timers = FakeAutosaveTimers();
   late final GoRouter router;
   late final ProviderContainer container;
 
@@ -682,6 +737,7 @@ class _Harness {
         studentAttemptAnswerRepositoryProvider.overrideWithValue(answers),
         studentSubmissionFilePickerProvider.overrideWithValue(picker),
         idempotencyKeyGeneratorProvider.overrideWithValue(keys),
+        studentAutosaveTimerFactoryProvider.overrideWithValue(timers.factory),
         studentBlitzStopwatchFactoryProvider.overrideWithValue(
           () => tester.binding.clock.stopwatch(),
         ),

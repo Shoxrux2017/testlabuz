@@ -67,7 +67,7 @@ final _fileQuestion = StudentQuestion(
 void main() {
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
     testWidgets(
-      '${surface.name} chooses explicitly, uploads progress, then shows confirmed file',
+      '${surface.name} a chosen file uploads at once with progress, then shows the confirmed file',
       (tester) async {
         final semantics = tester.ensureSemantics();
         try {
@@ -81,12 +81,16 @@ void main() {
             findsWidgets,
           );
           await _tap(tester, 'Choose file');
-          expect(find.text('Selected:'), findsOneWidget);
-          expect(find.text('answer.pdf'), findsOneWidget);
-          expect(find.text('Discard selected file'), findsOneWidget);
-          expect(harness.repository.uploads, isEmpty);
-          await _tap(tester, 'Upload answer', settle: false);
           final upload = harness.repository.uploads.single;
+          expect(find.text('Uploading:'), findsOneWidget);
+          expect(find.text('answer.pdf'), findsOneWidget);
+          for (final removed in [
+            'Upload answer',
+            'Upload replacement',
+            'Discard selected file',
+          ]) {
+            expect(find.text(removed), findsNothing);
+          }
           upload.onProgress!(5, 10);
           await tester.pump();
           expect(find.text('Uploading file…'), findsOneWidget);
@@ -95,14 +99,6 @@ void main() {
             tester
                 .widget<OutlinedButton>(
                   find.widgetWithText(OutlinedButton, 'Choose file'),
-                )
-                .onPressed,
-            isNull,
-          );
-          expect(
-            tester
-                .widget<FilledButton>(
-                  find.widgetWithText(FilledButton, 'Upload answer'),
                 )
                 .onPressed,
             isNull,
@@ -117,10 +113,11 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('Current file:'), findsOneWidget);
           expect(find.text('answer.pdf'), findsOneWidget);
-          expect(find.text('Selected:'), findsNothing);
+          expect(find.text('Uploading:'), findsNothing);
           expect(find.text('File answer uploaded.'), findsOneWidget);
           expect(harness.files.hasPendingSelection, isFalse);
-          expect(harness.repository.fetches, 2);
+          // The confirmed upload patches the Attempt; nothing is re-read.
+          expect(harness.repository.fetches, 1);
           expect(find.text('Score'), findsNothing);
           expect(find.text('Submit'), findsNothing);
           expect(tester.takeException(), isNull);
@@ -139,11 +136,9 @@ void main() {
       expect(find.text('saved.pdf'), findsOneWidget);
       _expectTransfer(tester, enabled: true);
       await _tap(tester, 'Choose replacement');
-      expect(find.text('Selected replacement:'), findsOneWidget);
+      expect(find.text('Uploading:'), findsOneWidget);
       expect(find.text('saved.pdf'), findsOneWidget);
       expect(find.text('answer.pdf'), findsOneWidget);
-      _expectTransfer(tester, enabled: true);
-      await _tap(tester, 'Upload replacement', settle: false);
       _expectTransfer(tester, enabled: false);
       final upload = harness.repository.uploads.single;
       harness.repository.current = _attempt(file: upload.savedFile);
@@ -154,7 +149,7 @@ void main() {
         studentFileId,
       );
       expect(find.text('answer.pdf'), findsOneWidget);
-      expect(find.text('Selected replacement:'), findsNothing);
+      expect(find.text('Uploading:'), findsNothing);
       for (final wording in [
         'Delete answer',
         'Clear file answer',
@@ -170,8 +165,12 @@ void main() {
     'picker cancellation restores selection and choose focus, picker failure is safe',
     (tester) async {
       final harness = await _pump(tester);
-      await _tap(tester, 'Choose file');
+      await _notUploaded(tester, harness);
       final selected = harness.files.questions[_questionId]!.selectedFile;
+      expect(selected, isNotNull);
+      expect(find.text('Not uploaded:'), findsOneWidget);
+      expect(find.text('Retry upload'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
       harness.picker.result = null;
       await _tap(tester, 'Choose file');
       expect(
@@ -191,7 +190,10 @@ void main() {
       await _tap(tester, 'Choose file');
       expect(find.text('The file picker could not be opened.'), findsOneWidget);
       expect(find.textContaining('private source path'), findsNothing);
-      expect(harness.repository.uploads, isEmpty);
+      expect(harness.repository.uploads, hasLength(1));
+      await _tap(tester, 'Cancel');
+      expect(harness.files.hasPendingSelection, isFalse);
+      expect(harness.repository.uploads, hasLength(1));
     },
   );
 
@@ -205,7 +207,7 @@ void main() {
       expect(find.text(message), findsOneWidget);
       expect(find.text('Retry upload'), findsNothing);
       expect(find.text('Choose replacement'), findsNothing);
-      expect(find.text('Discard selected file'), findsNothing);
+      expect(find.text('Cancel'), findsNothing);
       harness.parent.publish(
         StudentHomeworkAttemptState(
           status: StudentHomeworkAttemptLoadStatus.data,
@@ -217,7 +219,7 @@ void main() {
       expect(find.text('Reload attempt'), findsOneWidget);
       final reconciliation = Completer<StudentHomeworkAttempt>();
       harness.repository.nextFetches.add(reconciliation.future);
-      await _tap(tester, 'Reload attempt', settle: false);
+      await _tap(tester, 'Reload attempt');
       expect(
         tester
             .widget<FilledButton>(
@@ -257,33 +259,25 @@ void main() {
     ),
   ]) {
     testWidgets(
-      '${failure.code} safe feedback and only storage failure offers explicit retry',
+      '${failure.code} names the rejected file, drops it and keeps the saved one',
       (tester) async {
         final harness = await _pump(tester, file: _saved);
         await _tap(tester, 'Choose replacement');
-        await _tap(tester, 'Upload replacement', settle: false);
         harness.repository.uploads.single.completer.completeError(
           studentServerFailure(failure.code, statusCode: failure.status),
         );
         await tester.pumpAndSettle();
-        expect(find.text(failure.message), findsOneWidget);
+        expect(
+          find.text('“answer.pdf” was not accepted. ${failure.message}'),
+          findsOneWidget,
+        );
         expect(find.text('saved.pdf'), findsOneWidget);
         expect(find.text('Reload attempt'), findsNothing);
-        if (failure.code == ApiErrorCodes.fileUploadFailed) {
-          expect(find.text('Retry upload'), findsOneWidget);
-          await tester.ensureVisible(find.text('Retry upload'));
-          await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-          expect(FocusManager.instance.primaryFocus, isNotNull);
-          await _tap(tester, 'Retry upload', settle: false);
-          expect(harness.repository.uploads, hasLength(2));
-          harness.repository.uploads.last.completer.completeError(
-            studentServerFailure(failure.code, statusCode: failure.status),
-          );
-          await tester.pumpAndSettle();
-        } else {
-          expect(find.text('Retry upload'), findsNothing);
-          expect(harness.files.hasPendingSelection, isFalse);
-        }
+        expect(find.text('Retry upload'), findsNothing);
+        expect(harness.files.hasPendingSelection, isFalse);
+        expect(find.text('Choose replacement'), findsOneWidget);
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        expect(FocusManager.instance.primaryFocus, isNotNull);
       },
     );
   }
@@ -293,7 +287,6 @@ void main() {
     (tester) async {
       final harness = await _pump(tester, file: _saved);
       await _tap(tester, 'Choose replacement');
-      await _tap(tester, 'Upload replacement', settle: false);
       harness.repository.uploads.single.completer.completeError(
         const StudentSubmissionSourceUnavailable(),
       );
@@ -305,7 +298,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('saved.pdf'), findsOneWidget);
-      expect(find.text('Selected replacement:'), findsNothing);
+      expect(find.text('Not uploaded:'), findsNothing);
       expect(find.text('Choose replacement'), findsOneWidget);
       expect(find.text('Reload attempt'), findsNothing);
       expect(harness.repository.fetches, 2);
@@ -319,7 +312,7 @@ void main() {
       await _uncertain(tester, harness);
       final owned = Completer<StudentHomeworkAttempt>();
       harness.repository.nextFetches.add(owned.future);
-      await _tap(tester, 'Reload attempt', settle: false);
+      await _tap(tester, 'Reload attempt');
       final olderParent = Completer<StudentHomeworkAttempt>();
       harness.repository.nextFetches.add(olderParent.future);
       harness.parent.refresh();
@@ -378,7 +371,7 @@ void main() {
   );
 
   testWidgets(
-    'ordinary retained in-progress error grants no saved-file actions',
+    'a failed refresh keeps the Attempt with a banner and no saved-file actions',
     (tester) async {
       final harness = await _pump(tester, file: _saved);
       harness.parent.publish(
@@ -389,9 +382,20 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Unable to load Attempt'), findsOneWidget);
-      expect(find.text('Open'), findsNothing);
-      expect(find.text('Save As…'), findsNothing);
+      expect(
+        find.byKey(const Key('studentHomeworkAttemptRefreshFailure')),
+        findsOneWidget,
+      );
+      expect(find.text('saved.pdf'), findsOneWidget);
+      _expectTransfer(tester, enabled: false);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Choose replacement'),
+            )
+            .onPressed,
+        isNull,
+      );
     },
   );
 
@@ -400,7 +404,6 @@ void main() {
     (tester) async {
       final harness = await _pump(tester);
       await _tap(tester, 'Choose file');
-      await _tap(tester, 'Upload answer', settle: false);
       harness.parent.publish(
         StudentHomeworkAttemptState(
           status: StudentHomeworkAttemptLoadStatus.data,
@@ -431,12 +434,12 @@ void main() {
       harness.picker.result = _selection(
         '${List.filled(150, '😀').join()}.pdf',
       );
-      await _tap(tester, 'Choose replacement');
+      await _notUploaded(tester, harness);
       for (final text in [
         'Current file:',
-        'Selected replacement:',
-        'Upload replacement',
-        'Discard selected file',
+        'Not uploaded:',
+        'Retry upload',
+        'Cancel',
       ]) {
         await tester.ensureVisible(find.text(text));
         await tester.pumpAndSettle();
@@ -457,15 +460,13 @@ void main() {
   );
 }
 
-Future<void> _tap(
-  WidgetTester tester,
-  String text, {
-  bool settle = true,
-}) async {
+// A chosen file uploads at once, and its progress bar never settles while the
+// upload is pending, so time moves in explicit steps.
+Future<void> _tap(WidgetTester tester, String text) async {
   await tester.ensureVisible(find.text(text));
   await tester.tap(find.text(text));
   await tester.pump();
-  if (settle) await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 void _expectTransfer(WidgetTester tester, {required bool enabled}) {
@@ -478,11 +479,23 @@ void _expectTransfer(WidgetTester tester, {required bool enabled}) {
 }
 
 Future<void> _uncertain(WidgetTester tester, _Harness harness) async {
-  await _tap(tester, 'Choose replacement');
-  await _tap(tester, 'Upload replacement', settle: false);
+  await _tap(
+    tester,
+    find.text('Choose replacement').evaluate().isEmpty
+        ? 'Choose file'
+        : 'Choose replacement',
+  );
   harness.repository.uploads.single.completer.completeError(
     studentLocalFailure(ApiFailureKind.timeout),
   );
+  await tester.pumpAndSettle();
+}
+
+/// The only way a chosen file stays selected without an upload: the owned
+/// recovery of an unconfirmed upload found no stored file.
+Future<void> _notUploaded(WidgetTester tester, _Harness harness) async {
+  await _uncertain(tester, harness);
+  await _tap(tester, 'Reload attempt');
   await tester.pumpAndSettle();
 }
 
@@ -560,7 +573,10 @@ class _Picker implements StudentSubmissionFilePicker {
   Future<StudentSubmissionUploadFile?> pickFile({
     required List<String> allowedExtensions,
   }) async {
-    expect(allowedExtensions, ['pdf', 'docx', 'ppt', 'pptx']);
+    // Picks now also run inside pumps, where expect() is not allowed.
+    if (allowedExtensions.join(',') != 'pdf,docx,ppt,pptx') {
+      throw StateError('Unexpected file policy: $allowedExtensions');
+    }
     if (error != null) throw error!;
     return result;
   }
@@ -592,7 +608,7 @@ class _Repository implements StudentHomeworkAttemptRepository {
   var fetches = 0;
   @override
   Future<StudentHomeworkAttempt> fetchAttempt(String attemptId) {
-    expect(attemptId, _attemptId);
+    if (attemptId != _attemptId) throw StateError('Unexpected Attempt read.');
     fetches++;
     return nextFetches.isEmpty
         ? Future.value(current)
@@ -606,8 +622,9 @@ class _Repository implements StudentHomeworkAttemptRepository {
     StudentSubmissionUploadFile file, {
     StudentSubmissionUploadProgress? onProgress,
   }) {
-    expect(attemptId, _attemptId);
-    expect(question.id, _questionId);
+    if (attemptId != _attemptId || question.id != _questionId) {
+      throw StateError('Unexpected upload target.');
+    }
     final upload = _Upload(file, onProgress);
     uploads.add(upload);
     return upload.completer.future;

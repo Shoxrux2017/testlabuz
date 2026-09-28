@@ -46,6 +46,10 @@ class _StudentHomeworkAttemptScreenState
     extends ConsumerState<StudentHomeworkAttemptScreen> {
   bool _leaving = false;
   DialogRoute<bool>? _leaveDialog;
+
+  /// The route and session for which both reads were once confirmed; only
+  /// then may a refresh keep the Attempt on screen.
+  (StudentHomeworkAttemptRouteTarget, StudentSessionKey)? _confirmedHierarchy;
   late final AppLifecycleListener _lifecycle = AppLifecycleListener(
     onInactive: _saveAllNow,
     onHide: _saveAllNow,
@@ -273,14 +277,25 @@ class _StudentHomeworkAttemptScreenState
 
     final terminalAttempt = editorState.terminalAttempt;
     final retained = attemptState.attempt;
+    if (sessionKey != null &&
+        homeworkState.status == StudentHomeworkDetailStatus.data &&
+        homeworkState.homework?.id.toLowerCase() == target.homeworkId &&
+        attemptState.status == StudentHomeworkAttemptLoadStatus.data &&
+        retained?.id.toLowerCase() == target.attemptId) {
+      _confirmedHierarchy = (target, sessionKey);
+    }
     // A refresh of the same in-progress Attempt keeps the content mounted, so
     // typing, focus and scroll position survive it.
     final retainsCurrentAttempt =
+        sessionKey != null &&
+        _confirmedHierarchy == (target, sessionKey) &&
         retained != null &&
         retained.status == StudentHomeworkAttemptStatus.inProgress &&
         retained.id.toLowerCase() == target.attemptId &&
         retained.assessmentId.toLowerCase() == target.homeworkId &&
-        (attemptState.status == StudentHomeworkAttemptLoadStatus.refreshing ||
+        (attemptState.status == StudentHomeworkAttemptLoadStatus.data ||
+            attemptState.status ==
+                StudentHomeworkAttemptLoadStatus.refreshing ||
             attemptState.status == StudentHomeworkAttemptLoadStatus.error);
     Widget body;
     if (homeworkState.status == StudentHomeworkDetailStatus.notFound) {

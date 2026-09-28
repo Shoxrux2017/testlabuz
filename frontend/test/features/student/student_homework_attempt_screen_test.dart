@@ -83,7 +83,8 @@ void main() {
         expect(find.text('Current file:'), findsOneWidget);
         expect(find.text('Choose replacement'), findsOneWidget);
         _expectSavedFileActions(tester);
-        expect(find.text('Save answer'), findsNWidgets(9));
+        // Answers save automatically; there is no Save button.
+        expect(find.text('Save answer'), findsNothing);
         expect(tester.takeException(), isNull);
       },
     );
@@ -247,7 +248,7 @@ void main() {
     );
 
     testWidgets(
-      '${surface.name} refresh hides shell until both reads are current',
+      '${surface.name} refresh keeps the in-progress Attempt on screen',
       (tester) async {
         final parentRefresh = Completer<StudentHomeworkDetail>();
         final attemptRefresh = Completer<StudentHomeworkAttempt>();
@@ -270,17 +271,23 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Refresh Attempt'));
         await tester.pump();
+        // The same in-progress Attempt stays mounted, so typing, focus and
+        // scroll position survive the refresh.
         expect(
-          find.byKey(const Key('studentHomeworkAttemptRefreshing')),
+          find.byKey(const Key('studentHomeworkAttemptRefreshingBar')),
           findsOneWidget,
         );
-        expect(find.text('Attempt 2'), findsNothing);
+        expect(find.text('Attempt 2'), findsOneWidget);
         attemptRefresh.complete(_attempt());
         await tester.pump();
-        expect(find.text('Attempt 2'), findsNothing);
+        expect(find.text('Attempt 2'), findsOneWidget);
         parentRefresh.complete(_homework());
         await tester.pumpAndSettle();
         expect(find.text('Attempt 2'), findsOneWidget);
+        expect(
+          find.byKey(const Key('studentHomeworkAttemptRefreshingBar')),
+          findsNothing,
+        );
       },
     );
   }
@@ -322,7 +329,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final scroll = find.byKey(const Key('studentHomeworkAttemptScroll'));
+      final scroll = find.byKey(
+        const PageStorageKey<String>('studentHomeworkAttemptScroll'),
+      );
       expect(
         tester.widget<SingleChildScrollView>(scroll).scrollDirection,
         Axis.vertical,
