@@ -49,6 +49,26 @@ class ApiErrorContractTest extends TestCase
         $this->assertErrorContract($response, 401, 'authentication_required');
     }
 
+    public function test_unauthenticated_request_that_does_not_ask_for_json_still_returns_authentication_required(): void
+    {
+        $resourceId = '08000000-0000-4000-8000-000000000501';
+        $requests = [
+            ['GET', '/api/v1/auth/me', []],
+            ['GET', '/api/v1/teacher/blitz', []],
+            ['GET', "/api/v1/files/{$resourceId}/download", []],
+            ['GET', '/api/v1/auth/me', ['HTTP_ACCEPT' => 'text/html']],
+            ['POST', "/api/v1/teacher/blitz/{$resourceId}/activate", ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => '*/*']],
+        ];
+
+        foreach ($requests as [$method, $uri, $server]) {
+            $response = $this->call($method, $uri, [], [], [], $server, $method === 'POST' ? '{}' : null);
+
+            $decoded = $this->assertErrorContract($response, 401, 'authentication_required');
+            $this->assertSame('Authentication is required.', $decoded->message, "$method $uri");
+            $this->assertSame([], (array) $decoded->errors, "$method $uri");
+        }
+    }
+
     public function test_authorization_exception_returns_forbidden_contract(): void
     {
         Route::get('/api/v1/test-authorization', function () {

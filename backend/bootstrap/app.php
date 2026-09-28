@@ -68,6 +68,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // The API has no login page: an unauthenticated guest is never redirected, so a request
+        // that does not ask for JSON still gets the 401 authentication_required contract.
+        $middleware->redirectGuestsTo(fn (): ?string => null);
+
         $middleware->convertEmptyStringsToNull(except: [
             fn (Request $request): bool => ($request->isMethod('post') && $request->is('api/v1/teacher/topics/*/materials'))
                 || ($request->isMethod('patch') && $request->is('api/v1/teacher/materials/*')),
