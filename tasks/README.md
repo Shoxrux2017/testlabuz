@@ -973,7 +973,8 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 5 — Topics and Learning Materials | `Closed` | Stable dependency for Stage 6 |
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
-| Stage 8 — Blitz Task Workflow | `Closed` | `Stage 9 planning/decomposition only` |
+| Stage 8 — Blitz Task Workflow | `Closed` | Historical |
+| Stage 9 — Checking and Scoring | `Planning approved` | `FE-UX-001`, then `S09-DOC-001` |
 
 Current Stage 5 progress:
 
@@ -1142,6 +1143,20 @@ their historical completion handoffs.
   unauthenticated `/api/v1` request that does not ask for JSON now returns
   `401 authentication_required` instead of `500`; delivered with its contract
   `tasks/backend/API-FIX-001-unauthenticated-non-json-returns-401.md`.
+
+Current Stage 9 progress:
+
+This is the current project state; the Stage 5-8 progress sections above preserve
+their historical completion handoffs.
+
+- Stage 9 planning/decomposition: Approved by the Project Owner (2026-09-28), with
+  owner decisions `S09-D1`…`S09-D9` and technical decisions `S09-T1`…`S09-T8`;
+  orchestration map `tasks/STAGE_09_TASK_INDEX.md`.
+- Planning package: `docs/stage9-planning` (index, `FE-UX-001` and `S09-DOC-001`
+  contracts).
+- `FE-UX-001` (Student answer autosave, owner decision `S09-D8`) runs first, then
+  `S09-DOC-001`; Stage 9 code starts only after both are delivered.
+- Next permitted action: `FE-UX-001` readiness on the merged `main`.
 
 ---
 
