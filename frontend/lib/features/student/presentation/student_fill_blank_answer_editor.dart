@@ -10,6 +10,7 @@ class StudentFillBlankAnswerEditor extends StatelessWidget {
     required this.draft,
     required this.enabled,
     required this.onChanged,
+    this.onFocusLost,
     super.key,
   });
 
@@ -17,6 +18,7 @@ class StudentFillBlankAnswerEditor extends StatelessWidget {
   final StudentFillBlankDraft draft;
   final bool enabled;
   final ValueChanged<StudentFillBlankDraft> onChanged;
+  final VoidCallback? onFocusLost;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +40,7 @@ class StudentFillBlankAnswerEditor extends StatelessWidget {
               text: values[blank.id.toLowerCase()] ?? '',
               enabled: enabled,
               errorText: _error(values[blank.id.toLowerCase()] ?? ''),
+              onFocusLost: onFocusLost,
               onChanged: (text) => onChanged(
                 StudentFillBlankDraft(
                   blankTextById: {...values, blank.id.toLowerCase(): text},

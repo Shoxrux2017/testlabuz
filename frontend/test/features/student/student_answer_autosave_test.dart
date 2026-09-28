@@ -47,8 +47,8 @@ void main() {
     autosave.allDueNow();
     expect(autosave.next((id) => id == 'a'), 'a');
     expect(timers.pendingCount, 0);
-    autosave.dueNow('unknown');
-    expect(autosave.next((id) => id == 'unknown'), isNull);
+    autosave.dueNow('explicit');
+    expect(autosave.next((id) => id == 'explicit'), 'explicit');
   });
 
   test('a sending Question is due again only if it is still dirty afterwards', () {

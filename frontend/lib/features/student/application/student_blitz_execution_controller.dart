@@ -135,7 +135,7 @@ class StudentBlitzExecutionController
     required String attemptId,
     required String questionId,
     required StudentAttemptAnswerMutationResult result,
-    required StudentAttemptPublicationToken? expectedPublication,
+    required StudentAttemptPublicationToken? expectedReadToken,
   }) {
     final key = _activeSessionKey;
     final attempt = state.attempt;
@@ -146,8 +146,8 @@ class StudentBlitzExecutionController
         attempt == null ||
         attempt.status != StudentBlitzAttemptStatus.inProgress ||
         attempt.id.toLowerCase() != attemptId.toLowerCase() ||
-        expectedPublication == null ||
-        !identical(expectedPublication, state.publicationToken) ||
+        expectedReadToken == null ||
+        !identical(expectedReadToken, state.readToken) ||
         result.questionId.toLowerCase() != id ||
         (result.answer == null) != (result.updatedAt == null)) {
       return false;
@@ -174,6 +174,7 @@ class StudentBlitzExecutionController
       status: state.status,
       attempt: _withAnswers(attempt, answers),
       publicationToken: StudentAttemptPublicationToken(),
+      readToken: state.readToken,
       localTimeExpired: state.localTimeExpired,
       countdownAnchor: state.countdownAnchor,
       blitzTitle: state.blitzTitle,
@@ -440,6 +441,7 @@ class StudentBlitzExecutionController
           : StudentBlitzExecutionStatus.terminal,
       attempt: attempt,
       publicationToken: StudentAttemptPublicationToken(),
+      readToken: StudentAttemptPublicationToken(),
       // Only positive server-anchored time can re-open writes.
       localTimeExpired:
           inProgress && !positive && (fresh ? false : state.localTimeExpired),

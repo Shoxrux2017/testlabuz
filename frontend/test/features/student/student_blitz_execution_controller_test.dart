@@ -329,7 +329,7 @@ void main() {
         attemptId: studentBlitzAttemptId,
         questionId: blitzUuid(101),
         result: _mutation(),
-        expectedPublication: before.publicationToken,
+        expectedReadToken: before.readToken,
       );
       expect(accepted, isTrue);
       final after = h.execution;
@@ -372,25 +372,41 @@ void main() {
           answer: null,
           updatedAt: null,
         ),
-        expectedPublication: h.execution.publicationToken,
+        expectedReadToken: h.execution.readToken,
       );
       expect(accepted, isTrue);
       expect(h.execution.attempt!.answers, isEmpty);
     });
 
+    test('overlapping writes from one read are both adopted', () async {
+      final h = await _Harness.executing();
+      final read = h.execution.readToken;
+      for (final value in [false, true]) {
+        expect(
+          h.executionController.acceptAnswerMutation(
+            attemptId: studentBlitzAttemptId,
+            questionId: blitzUuid(101),
+            result: _mutation(value: value),
+            expectedReadToken: read,
+          ),
+          isTrue,
+        );
+      }
+      expect(h.execution.readToken, same(read));
+      final saved = h.execution.attempt!.answers.singleWhere(
+        (answer) => answer.questionId == blitzUuid(101),
+      );
+      expect((saved.value as StudentBooleanAnswerValue).value, isTrue);
+    });
+
     test('a stale or foreign mutation is never applied', () async {
       final h = await _Harness.executing();
-      final stale = h.execution.publicationToken;
-      expect(
-        h.executionController.acceptAnswerMutation(
-          attemptId: studentBlitzAttemptId,
-          questionId: blitzUuid(101),
-          result: _mutation(),
-          expectedPublication: stale,
-        ),
-        isTrue,
-      );
+      final stale = h.execution.readToken;
+      final replay = h.executionController.refreshCurrentAttempt();
+      h.pendingStarts.last.complete(studentBlitzStartResult());
+      await replay;
       final current = h.execution;
+      expect(current.readToken, isNot(same(stale)));
       for (final (attemptId, questionId, result, token) in [
         (studentBlitzAttemptId, blitzUuid(101), _mutation(), stale),
         (
@@ -428,7 +444,7 @@ void main() {
             attemptId: attemptId,
             questionId: questionId,
             result: result,
-            expectedPublication: token,
+            expectedReadToken: token,
           ),
           isFalse,
         );
@@ -448,7 +464,7 @@ void main() {
           attemptId: studentBlitzAttemptId,
           questionId: blitzUuid(101),
           result: _mutation(),
-          expectedPublication: h.execution.publicationToken,
+          expectedReadToken: h.execution.readToken,
         ),
         isFalse,
       );
@@ -596,7 +612,7 @@ void main() {
           attemptId: studentBlitzAttemptId,
           questionId: blitzUuid(101),
           result: _mutation(),
-          expectedPublication: h.execution.publicationToken,
+          expectedReadToken: h.execution.readToken,
         ),
         isTrue,
       );
@@ -831,13 +847,15 @@ StudentAttemptAnswerState _trueAnswer({int position = 1}) =>
       updatedAt: DateTime.utc(2026, 9, 17, 12, 1),
     );
 
-StudentAttemptAnswerMutationResult _mutation({String? questionId}) =>
-    StudentAttemptAnswerMutationResult(
-      questionId: questionId ?? blitzUuid(101),
-      type: StudentQuestionType.trueFalse,
-      answer: const StudentBooleanAnswerValue(value: false),
-      updatedAt: DateTime.utc(2026, 9, 17, 12, 2),
-    );
+StudentAttemptAnswerMutationResult _mutation({
+  String? questionId,
+  bool value = false,
+}) => StudentAttemptAnswerMutationResult(
+  questionId: questionId ?? blitzUuid(101),
+  type: StudentQuestionType.trueFalse,
+  answer: StudentBooleanAnswerValue(value: value),
+  updatedAt: DateTime.utc(2026, 9, 17, 12, 2),
+);
 
 class _Harness {
   _Harness() {

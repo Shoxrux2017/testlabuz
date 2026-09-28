@@ -21,6 +21,8 @@ enum StudentHomeworkSubmitBlocker {
   nonFileUnsavedChanges,
   nonFileSaveInProgress,
   nonFileSaveUncertain,
+  nonFileInvalidAnswer,
+  nonFileSaveFailed,
   fileSelectionPending,
   fileUploadInProgress,
   fileUploadUncertain,
@@ -98,6 +100,16 @@ class StudentHomeworkSubmitReadiness {
   final StudentHomeworkSubmitReadyToken? readyToken;
   bool get isReady => readyToken != null;
 
+  /// Blockers that pressing Submit clears by saving the pending answers first.
+  static const flushableBlockers = {
+    StudentHomeworkSubmitBlocker.nonFileUnsavedChanges,
+    StudentHomeworkSubmitBlocker.nonFileSaveInProgress,
+  };
+
+  /// Submit stays available: it saves the pending answers, then confirms.
+  bool get canSubmitAfterSaving =>
+      blockers.isNotEmpty && flushableBlockers.containsAll(blockers);
+
   static StudentHomeworkSubmitReadiness evaluate({
     required StudentSessionKey? sessionKey,
     required StudentHomeworkAttemptRouteTarget target,
@@ -150,6 +162,12 @@ class StudentHomeworkSubmitReadiness {
     }
     if (answerState.hasUncertainMutation) {
       blockers.add(StudentHomeworkSubmitBlocker.nonFileSaveUncertain);
+    }
+    if (answerState.hasInvalidDraft) {
+      blockers.add(StudentHomeworkSubmitBlocker.nonFileInvalidAnswer);
+    }
+    if (answerState.hasFailedSave) {
+      blockers.add(StudentHomeworkSubmitBlocker.nonFileSaveFailed);
     }
     if (fileState.hasPendingSelection) {
       blockers.add(StudentHomeworkSubmitBlocker.fileSelectionPending);

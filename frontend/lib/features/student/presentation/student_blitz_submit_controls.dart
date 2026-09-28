@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../application/student_blitz_answer_editor_controller.dart';
 import '../application/student_blitz_execution_operation_gate.dart';
 import '../application/student_blitz_submit_controller.dart';
 import '../application/student_blitz_submit_readiness.dart';
@@ -24,6 +25,42 @@ class StudentBlitzSubmitControls extends ConsumerStatefulWidget {
 class _StudentBlitzSubmitControlsState
     extends ConsumerState<StudentBlitzSubmitControls> {
   bool _confirming = false;
+  bool _saving = false;
+  bool _savingCancelled = false;
+  bool _notSaved = false;
+
+  /// Saves every pending answer first, then opens the confirmation.
+  Future<void> _saveThenConfirm() async {
+    if (_saving) return;
+    final editor = ref.read(
+      studentBlitzAnswerEditorControllerProvider(widget.target).notifier,
+    );
+    setState(() {
+      _saving = true;
+      _savingCancelled = false;
+      _notSaved = false;
+    });
+    final saved = await editor.flushAll();
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _notSaved = !saved && !_savingCancelled;
+    });
+    if (!saved) return;
+    final token = ref
+        .read(studentBlitzSubmitReadinessProvider(widget.target))
+        .readyToken;
+    if (token != null) await _confirm(token);
+  }
+
+  void _cancelSaving() {
+    _savingCancelled = true;
+    ref
+        .read(
+          studentBlitzAnswerEditorControllerProvider(widget.target).notifier,
+        )
+        .cancelFlush();
+  }
 
   Future<void> _confirm(StudentBlitzSubmitReadyToken token) async {
     if (_confirming) return;
@@ -173,18 +210,49 @@ class _StudentBlitzSubmitControlsState
               ),
               const SizedBox(height: 8),
               const Text('Checking the current attempt…'),
+            ] else if (_saving) ...[
+              const LinearProgressIndicator(semanticsLabel: 'Saving answers'),
+              const SizedBox(height: 8),
+              Semantics(
+                liveRegion: true,
+                child: const Text('Saving answers\u2026'),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const Key('studentBlitzSubmitCancelSaving'),
+                  onPressed: _cancelSaving,
+                  child: const Text('Cancel'),
+                ),
+              ),
             ] else ...[
-              for (final blocker in readiness.blockers) ...[
+              // Answers still waiting to save are saved by Submit itself.
+              for (final blocker in readiness.blockers.where(
+                (blocker) => !StudentBlitzSubmitReadiness.flushableBlockers
+                    .contains(blocker),
+              )) ...[
                 Text(studentBlitzSubmitBlockerMessage(blocker)),
+                const SizedBox(height: 8),
+              ],
+              if (_notSaved) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: const Text(
+                    'Some answers are not saved yet. Check the marked questions.',
+                  ),
+                ),
                 const SizedBox(height: 8),
               ],
               Align(
                 alignment: Alignment.centerLeft,
                 child: FilledButton(
                   key: const Key('studentBlitzSubmitButton'),
-                  onPressed: readiness.readyToken == null
-                      ? null
-                      : () => _confirm(readiness.readyToken!),
+                  onPressed: readiness.readyToken != null
+                      ? () => _confirm(readiness.readyToken!)
+                      : readiness.canSubmitAfterSaving
+                      ? _saveThenConfirm
+                      : null,
                   child: const Text('Submit Blitz'),
                 ),
               ),

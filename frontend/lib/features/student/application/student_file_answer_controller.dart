@@ -41,6 +41,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
   StudentHomeworkAttempt? _lastTerminal;
   _FileOperation? _operation;
   StudentAnswerAutosave? _recovery;
+  final _uploadWaiters = <Completer<bool>>[];
   var _generation = 0;
   var _cleared = false;
 
@@ -49,7 +50,10 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     final buildRef = ref;
     // Only a real disposal (not a rebuild) stops the recovery timer.
     buildRef.onDispose(() {
-      if (!buildRef.mounted) _recovery?.clear();
+      if (!buildRef.mounted) {
+        _recovery?.clear();
+        _resolveUploadWaiters(false);
+      }
     });
     final key = StudentSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
@@ -335,12 +339,14 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           ),
         );
         _recoveryTimer.scheduleRecovery(_recover);
+        _resolveUploadWaiters(false);
         return;
       }
       if (failure.serverCode == ApiErrorCodes.resourceNotFound) {
         _generation += 1;
         _operation = null;
         state = StudentFileAnswerState();
+        _resolveUploadWaiters(false);
         _refreshAttempt();
         return;
       }
@@ -455,8 +461,11 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     ApiErrorCodes.fileUploadFailed,
   };
 
-  StudentAnswerAutosave get _recoveryTimer => _recovery ??=
-      StudentAnswerAutosave(ref.read(studentAutosaveTimerFactoryProvider), () {});
+  StudentAnswerAutosave get _recoveryTimer =>
+      _recovery ??= StudentAnswerAutosave(
+        ref.read(studentAutosaveTimerFactoryProvider),
+        () {},
+      );
 
   void _recover() {
     if (!ref.mounted || !state.hasUncertainUpload || state.isTerminal) return;
@@ -465,6 +474,33 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       return;
     }
     unawaited(reloadAttempt());
+  }
+
+  /// Completes once no pick or upload of this Attempt runs: `true` when no
+  /// chosen file is left unsaved, `false` otherwise or after
+  /// [cancelUploadWait].
+  Future<bool> waitForUploads() {
+    if (_operation == null || state.hasUncertainUpload) {
+      return Future.value(_uploadsSettled);
+    }
+    final waiter = Completer<bool>();
+    _uploadWaiters.add(waiter);
+    return waiter.future;
+  }
+
+  void cancelUploadWait() => _resolveUploadWaiters(false);
+
+  bool get _uploadsSettled =>
+      !state.hasUncertainUpload && !state.hasPendingSelection;
+
+  void _resolveUploadWaiters([bool? saved]) {
+    if (_uploadWaiters.isEmpty) return;
+    final result = saved ?? _uploadsSettled;
+    final waiters = [..._uploadWaiters];
+    _uploadWaiters.clear();
+    for (final waiter in waiters) {
+      waiter.complete(result);
+    }
   }
 
   void clearLocalState() {
@@ -486,6 +522,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       _generation += 1;
       _operation = null;
       _recovery?.clear();
+      _resolveUploadWaiters(false);
     }
     final questions = <String, StudentFileQuestionAnswerState>{};
     var preservedUncertainty = false;
@@ -763,6 +800,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     _lastParent = null;
     _lastTerminal = null;
     _recovery?.clear();
+    _resolveUploadWaiters(false);
   }
 
   ApiRequestException _invalidResponse() => ApiRequestException(
@@ -806,6 +844,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           ? state.sourceAttemptPublication
           : null,
     );
+    _resolveUploadWaiters();
   }
 
   StudentFileAnswerState _copyState(

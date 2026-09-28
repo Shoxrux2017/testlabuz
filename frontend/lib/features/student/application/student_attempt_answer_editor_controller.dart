@@ -131,13 +131,13 @@ class StudentAttemptAnswerEditorController
   /// field loses focus.
   void saveNow(String questionId) {
     final id = questionId.toLowerCase();
-    if (!_canEdit(id)) return;
+    if (!_canEdit(id) || !state.questions[id]!.isDirty) return;
     _queue.dueNow(id);
   }
 
   /// Sends every changed Question without waiting, for example when the app
   /// goes to the background.
-  void saveAllNow() => _autosave?.allDueNow();
+  void saveAllNow() => _queueEveryDirtyQuestion();
 
   /// Sends every pending change and completes with `true` once all answers are
   /// saved, or `false` as soon as one cannot be saved or [cancelFlush] runs.
@@ -154,9 +154,17 @@ class StudentAttemptAnswerEditorController
     final completer = Completer<bool>();
     _flush = completer;
     state = _copyState(state, isFlushing: true);
-    _autosave?.allDueNow();
+    _queueEveryDirtyQuestion();
     _evaluateFlush();
     return completer.future;
+  }
+
+  void _queueEveryDirtyQuestion() {
+    for (final entry in state.questions.entries) {
+      if (entry.value.isDirty && entry.value.validation == null) {
+        _queue.dueNow(entry.key);
+      }
+    }
   }
 
   void cancelFlush() => _endFlush(false);

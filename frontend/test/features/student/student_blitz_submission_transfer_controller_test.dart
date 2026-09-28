@@ -132,16 +132,16 @@ void main() {
     final files = h.h.container.read(
       studentBlitzFileAnswerControllerProvider(blitzExecutionTarget).notifier,
     );
+    expect(h.controller.canTransfer(_question, _fileId), isTrue);
     final choose = files.chooseFile(_question);
     h.h.picker.pending.single.complete(blitzUploadFile(name: 'new.pdf'));
     await choose;
-    expect(h.controller.canTransfer(_question, _fileId), isTrue);
-    final upload = files.uploadAnswer(_question);
+    // The chosen file uploads at once.
     expect(h.controller.canTransfer(_question, _fileId), isFalse);
     h.h.answers.uploads.single.fail(
       studentServerFailure('server_error', statusCode: 503),
     );
-    await upload;
+    await flushStudentControllers();
     expect(h.controller.canTransfer(_question, _fileId), isFalse);
   });
 

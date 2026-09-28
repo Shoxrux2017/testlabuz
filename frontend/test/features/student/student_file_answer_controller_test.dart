@@ -1324,6 +1324,37 @@ void main() {
       expect(h.timers.pendingDelays, [const Duration(seconds: 4)]);
     });
 
+    test('waitForUploads completes once the running upload is stored', () async {
+      final h = _Harness();
+      expect(await h.controller.waitForUploads(), isTrue);
+      await h.pick();
+      var settled = false;
+      final wait = h.controller.waitForUploads().then((saved) {
+        settled = true;
+        return saved;
+      });
+      await h.flush();
+      expect(settled, isFalse);
+      h.repository.uploads.single.complete(_result());
+      expect(await wait, isTrue);
+    });
+
+    test('waitForUploads is false after an uncertain upload or a cancel', () async {
+      final h = _Harness();
+      await h.pick();
+      final uncertain = h.controller.waitForUploads();
+      h.repository.uploads.single.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
+      );
+      expect(await uncertain, isFalse);
+
+      final other = _Harness();
+      await other.pick();
+      final cancelled = other.controller.waitForUploads();
+      other.controller.cancelUploadWait();
+      expect(await cancelled, isFalse);
+    });
+
     test('recovery timers stop when the controller is disposed', () async {
       final h = _Harness();
       await h.pick();

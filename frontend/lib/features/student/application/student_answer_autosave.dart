@@ -49,8 +49,10 @@ class StudentAnswerAutosave {
     });
   }
 
+  /// Makes [id] due at once; an explicit request also starts tracking it.
   void dueNow(String id) {
     _debounces.remove(id)?.cancel();
+    _tracked.add(id);
     _markDue(id);
   }
 

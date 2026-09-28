@@ -46,7 +46,8 @@ void main() {
     expect(h.entry(_trueFalse).draft.canClear, isFalse);
     h.controller.clearAnswer(_trueFalse);
     expect(h.entry(_trueFalse).isDirty, isTrue);
-    h.controller.discardChanges(_trueFalse);
+    // Editing back to the saved value makes the draft clean again.
+    h.controller.updateDraft(_trueFalse, _savedDraft(h.state, _trueFalse));
     expect(h.entry(_trueFalse).isDirty, isFalse);
 
     h.controller.updateDraft(
@@ -67,7 +68,8 @@ void main() {
     );
     final save = h.controller.saveAnswer(_trueFalse);
     expect(h.entry(_trueFalse).saveStatus, StudentAnswerSaveStatus.saving);
-    expect(h.state.canEdit(_trueFalse), isFalse);
+    // The Question stays editable during its own save.
+    expect(h.state.canEdit(_trueFalse), isTrue);
     final sent = h.h.answers.saves.single;
     expect(sent.attemptId, studentBlitzAttemptId);
     expect(sent.mutation.toJson(), {'type': 'true_false', 'value': false});
@@ -379,7 +381,7 @@ void main() {
   });
 
   test(
-    'a response for an outdated publication is re-read, not applied',
+    'a save overlapping another write is adopted without a re-read',
     () async {
       final h = await _Harness.create();
       h.controller.updateDraft(
@@ -387,7 +389,7 @@ void main() {
         const StudentTrueFalseDraft(value: true),
       );
       final save = h.controller.saveAnswer(_trueFalse);
-      // Another write (for example a file upload) published a newer Attempt.
+      // Another write (for example a file upload) patched the same read.
       expect(
         h.h.executionController.acceptAnswerMutation(
           attemptId: studentBlitzAttemptId,
@@ -397,7 +399,7 @@ void main() {
             StudentQuestionType.openWritten,
             const StudentTextAnswerValue(text: 'other'),
           ),
-          expectedPublication: h.h.execution.publicationToken,
+          expectedReadToken: h.h.execution.readToken,
         ),
         isTrue,
       );
@@ -410,20 +412,8 @@ void main() {
       );
       await save;
       await flushStudentControllers();
-      expect(h.h.execution.attempt!.answers, hasLength(1));
-      expect(h.h.replays.single, same(h.h.completedRequest));
-      await h.h.completeReplay(
-        blitzExecutionAttempt(
-          answers: [
-            blitzSavedAnswer(
-              1,
-              StudentQuestionType.trueFalse,
-              const StudentBooleanAnswerValue(value: true),
-            ),
-          ],
-        ),
-      );
-      await flushStudentControllers();
+      expect(h.h.execution.attempt!.answers, hasLength(2));
+      expect(h.h.replays, isEmpty);
       expect(h.entry(_trueFalse).saveStatus, StudentAnswerSaveStatus.saved);
       expect(h.h.answers.saves, hasLength(1));
     },
@@ -484,6 +474,117 @@ void main() {
     expect(h.state.questions, isEmpty);
     expect(h.state.hasDirtyDrafts, isFalse);
   });
+  group('autosave', () {
+    const second = Duration(seconds: 1);
+
+    void write(_Harness h, String text) => h.controller.updateDraft(
+      _written,
+      StudentOpenWrittenDraft(text: text),
+    );
+
+    test('a typed change is saved one second after the last change', () async {
+      final h = await _Harness.create();
+      write(h, 'Draft');
+      h.h.timers.elapse(const Duration(milliseconds: 999));
+      expect(h.h.answers.saves, isEmpty);
+      h.h.timers.elapse(const Duration(milliseconds: 1));
+      expect(h.h.answers.saves, hasLength(1));
+      expect(h.h.answers.saves.single.mutation.toJson(), {
+        'type': 'open_written',
+        'text': 'Draft',
+      });
+    });
+
+    test('typing continues during the save and is saved afterwards', () async {
+      final h = await _Harness.create();
+      write(h, 'Draft');
+      h.h.timers.elapse(second);
+      write(h, 'Draft plus');
+      h.h.answers.saves.single.complete(
+        blitzMutationResult(
+          2,
+          StudentQuestionType.openWritten,
+          const StudentTextAnswerValue(text: 'Draft'),
+        ),
+      );
+      await flushStudentControllers();
+      expect(
+        (h.entry(_written).draft as StudentOpenWrittenDraft).text,
+        'Draft plus',
+      );
+      h.h.timers.elapse(second);
+      await flushStudentControllers();
+      expect(h.h.answers.saves, hasLength(2));
+    });
+
+    test('nothing is sent after local zero', () async {
+      final h = await _Harness.create();
+      write(h, 'Too late');
+      h.h.executionController.markLocalTimeExpired(
+        h.h.execution.countdownAnchor!,
+      );
+      await flushStudentControllers();
+      h.h.timers.elapse(const Duration(minutes: 1));
+      await flushStudentControllers();
+      expect(h.h.answers.saves, isEmpty);
+      expect(await h.controller.flushAll(), isFalse);
+      // Even a replay that re-opens writes sends nothing queued before zero.
+      await h.h.completeReplay(blitzExecutionAttempt());
+      h.h.timers.elapse(const Duration(minutes: 1));
+      await flushStudentControllers();
+      expect(h.h.answers.saves, isEmpty);
+    });
+
+    test('an unconfirmed save is checked automatically after two seconds', () async {
+      final h = await _Harness.create();
+      await h.uncertainSave(studentLocalFailure(ApiFailureKind.timeout));
+      expect(h.state.hasUncertainMutation, isTrue);
+      expect(h.state.canEdit(_written), isTrue);
+      h.h.timers.elapse(const Duration(milliseconds: 1999));
+      await flushStudentControllers();
+      expect(h.h.replays, isEmpty);
+      h.h.timers.elapse(const Duration(milliseconds: 1));
+      await flushStudentControllers();
+      expect(h.h.replays, hasLength(1));
+    });
+
+    test('flushAll saves pending changes and succeeds', () async {
+      final h = await _Harness.create();
+      write(h, 'Before Submit');
+      final flush = h.controller.flushAll();
+      expect(h.state.isFlushing, isTrue);
+      expect(h.state.canEdit(_written), isFalse);
+      expect(h.h.answers.saves, hasLength(1));
+      h.h.answers.saves.single.complete(
+        blitzMutationResult(
+          2,
+          StudentQuestionType.openWritten,
+          const StudentTextAnswerValue(text: 'Before Submit'),
+        ),
+      );
+      expect(await flush, isTrue);
+      expect(h.state.isFlushing, isFalse);
+    });
+
+    test('flushAll stops when the time runs out', () async {
+      final h = await _Harness.create();
+      write(h, 'Before Submit');
+      final flush = h.controller.flushAll();
+      h.h.executionController.markLocalTimeExpired(
+        h.h.execution.countdownAnchor!,
+      );
+      await flushStudentControllers();
+      expect(await flush, isFalse);
+    });
+
+    test('pending timers stop when the editor is disposed', () async {
+      final h = await _Harness.create();
+      write(h, 'Unsent');
+      expect(h.h.timers.pendingCount, 1);
+      h.h.dispose();
+      expect(h.h.timers.pendingCount, 0);
+    });
+  });
 }
 
 final _trueFalse = blitzQuestionId(1);
@@ -523,4 +624,9 @@ class _Harness {
     await save;
     await flushStudentControllers();
   }
+}
+
+StudentAnswerDraft _savedDraft(StudentBlitzAnswerEditorState state, String id) {
+  final entry = state.questions[id.toLowerCase()]!;
+  return StudentAnswerDraft.fromAnswer(entry.question, entry.serverAnswer);
 }

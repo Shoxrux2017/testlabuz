@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:testlabuz_client/features/student/application/student_answer_autosave.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/core/network/idempotency_key_generator.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
@@ -26,6 +27,7 @@ import 'package:testlabuz_client/features/student/domain/student_question.dart';
 import 'package:testlabuz_client/features/student/domain/student_submission_upload.dart';
 
 import 'student_blitz_test_support.dart';
+import 'student_autosave_test_support.dart';
 import 'student_test_support.dart';
 
 /// The eight non-file Question types, in wire position order 1..8.
@@ -290,6 +292,7 @@ class BlitzExecutionHarness {
         studentAttemptAnswerRepositoryProvider.overrideWithValue(answers),
         studentSubmissionFilePickerProvider.overrideWithValue(picker),
         idempotencyKeyGeneratorProvider.overrideWithValue(keys),
+        studentAutosaveTimerFactoryProvider.overrideWithValue(timers.factory),
         ...overrides,
       ],
     );
@@ -302,6 +305,9 @@ class BlitzExecutionHarness {
       container.listen(provider, (_, _) {});
     }
   }
+
+  /// Autosave and recovery timers; nothing fires until the test elapses them.
+  final timers = FakeAutosaveTimers();
 
   /// A [shape] Start of [attempt], handed off and confirmed by detail.
   static Future<BlitzExecutionHarness> executing({

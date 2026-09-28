@@ -283,7 +283,7 @@ void main() {
             draft: 'Unsaved text',
             status: StudentAnswerSaveStatus.failure,
           ),
-          StudentHomeworkSubmitBlocker.nonFileUnsavedChanges,
+          StudentHomeworkSubmitBlocker.nonFileSaveFailed,
         ),
         'saving': (
           _answer(status: StudentAnswerSaveStatus.saving),
@@ -304,6 +304,58 @@ void main() {
       _expectBlocked(fixture.evaluate(), entry.value.$2);
     });
   }
+
+  test('a failed dirty answer is its own non-flushable blocker', () {
+    final fixture = _Fixture();
+    fixture.answers = _answers(
+      fixture.publication,
+      questions: {
+        _textId: _answer(
+          draft: 'Rejected text',
+          status: StudentAnswerSaveStatus.failure,
+        ),
+      },
+    );
+    final readiness = fixture.evaluate();
+    _expectBlocked(readiness, StudentHomeworkSubmitBlocker.nonFileSaveFailed);
+    expect(readiness.canSubmitAfterSaving, isFalse);
+  });
+
+  test('an invalid dirty answer is its own non-flushable blocker', () {
+    final fixture = _Fixture();
+    fixture.answers = _answers(
+      fixture.publication,
+      questions: {_textId: _answer(draft: 'x' * 1001)},
+    );
+    final readiness = fixture.evaluate();
+    _expectBlocked(readiness, StudentHomeworkSubmitBlocker.nonFileInvalidAnswer);
+    expect(readiness.canSubmitAfterSaving, isFalse);
+  });
+
+  for (final entry in {
+    'dirty draft': _answer(draft: 'Pending text'),
+    'saving': _answer(status: StudentAnswerSaveStatus.saving),
+  }.entries) {
+    test('only ${entry.key} still lets Submit save first', () {
+      final fixture = _Fixture();
+      fixture.answers = _answers(
+        fixture.publication,
+        questions: {_textId: entry.value},
+      );
+      final readiness = fixture.evaluate();
+      expect(readiness.isReady, isFalse);
+      expect(readiness.canSubmitAfterSaving, isTrue);
+    });
+  }
+
+  test('an uncertain save does not let Submit save first', () {
+    final fixture = _Fixture();
+    fixture.answers = _answers(
+      fixture.publication,
+      questions: {_textId: _answer(status: StudentAnswerSaveStatus.uncertain)},
+    );
+    expect(fixture.evaluate().canSubmitAfterSaving, isFalse);
+  });
 
   test('non-file owned reconciliation blocks even without dirty draft', () {
     final fixture = _Fixture();

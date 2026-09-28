@@ -14,6 +14,7 @@ import '../domain/student_blitz_attempt.dart';
 import '../domain/student_blitz_execution_target.dart';
 import '../domain/student_question.dart';
 import '../domain/student_submission_upload.dart';
+import 'student_answer_autosave.dart';
 import 'student_attempt_publication_token.dart';
 import 'student_blitz_execution_controller.dart';
 import 'student_blitz_execution_operation_gate.dart';
@@ -43,11 +44,24 @@ class StudentBlitzFileAnswerController
   /// A strict upload `200` that could not be adopted because another write
   /// published first; the re-read decides whether it is still current.
   (_FileOperation, StudentAttemptAnswerMutationResult)? _confirmedUpload;
+  StudentAnswerAutosave? _recovery;
+  final _uploadWaiters = <Completer<bool>>[];
+
+  /// A chosen file whose upload waited for the write gate (a replay).
+  String? _deferredUpload;
   var _generation = 0;
   var _cleared = false;
 
   @override
   StudentFileAnswerState build() {
+    final buildRef = ref;
+    // Only a real disposal (not a rebuild) stops the recovery timer.
+    buildRef.onDispose(() {
+      if (!buildRef.mounted) {
+        _recovery?.clear();
+        _resolveUploadWaiters(false);
+      }
+    });
     final key = StudentSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -72,12 +86,26 @@ class StudentBlitzFileAnswerController
       return StudentFileAnswerState();
     }
     final previous = resetScope ? StudentFileAnswerState() : state;
+    if (parent.localTimeExpired) {
+      _recovery?.clear();
+      _deferredUpload = null;
+    }
     final publication = parent.publicationToken;
+    final StudentFileAnswerState next;
     if (publication != null && !identical(publication, _lastPublication)) {
       _lastPublication = publication;
-      return _synchronize(previous, parent);
+      next = _synchronize(previous, parent);
+    } else {
+      next = _copyState(previous, isAuthoritative: _hasAuthority(parent));
     }
-    return _copyState(previous, isAuthoritative: _hasAuthority(parent));
+    final deferred = _deferredUpload;
+    if (deferred != null && parent.acceptsWrites) {
+      _deferredUpload = null;
+      scheduleMicrotask(() {
+        if (ref.mounted) unawaited(uploadAnswer(deferred));
+      });
+    }
+    return next;
   }
 
   Future<void> chooseFile(String questionId) async {
@@ -120,6 +148,7 @@ class StudentBlitzFileAnswerController
             failure: previous.failure,
             selectionError: current.selectionError,
             localFailure: previous.localFailure,
+            rejectedFileName: previous.rejectedFileName,
           ),
         );
         return;
@@ -139,8 +168,11 @@ class StudentBlitzFileAnswerController
               : previous.status,
           failure: error == null ? null : previous.failure,
           selectionError: error,
+          rejectedFileName: error == null ? null : previous.rejectedFileName,
         ),
       );
+      // A chosen file is saved at once; there is no separate Upload step.
+      if (error == null) _uploadWhenWritable(id);
     } catch (_) {
       // Only the platform picker can fail here; no server state is involved.
       if (!_canPublish(operation, generation)) return;
@@ -156,6 +188,7 @@ class StudentBlitzFileAnswerController
               : previous.status,
           failure: previous.failure,
           localFailure: StudentFileAnswerLocalFailure.pickerUnavailable,
+          rejectedFileName: previous.rejectedFileName,
         ),
       );
     }
@@ -176,7 +209,8 @@ class StudentBlitzFileAnswerController
     );
   }
 
-  /// Uploads the selected file once; an unconfirmed upload is never resent.
+  /// Uploads the selected file once; an unconfirmed upload is checked, never
+  /// resent on its own.
   Future<void> uploadAnswer(String questionId) async {
     if (!_gateIsIdle) return;
     final id = questionId.toLowerCase();
@@ -209,7 +243,11 @@ class StudentBlitzFileAnswerController
       studentBlitzExecutionControllerProvider(target.routeTarget).notifier,
     );
     final write = execution.beginWrite();
-    if (write == null) return;
+    if (write == null) {
+      // A replay is pending; the upload starts once it republishes.
+      _deferredUpload = id;
+      return;
+    }
     final operation = _begin(id, selected, previous.serverFile?.id);
     final generation = _generation;
     _replace(
@@ -253,10 +291,11 @@ class StudentBlitzFileAnswerController
         attemptId: target.attemptId,
         questionId: id,
         result: result,
-        expectedPublication: operation.sourcePublication,
+        expectedReadToken: operation.readToken,
       );
       if (!accepted) {
-        // The parent moved on meanwhile; only the replay may show the result.
+        // A replay adopted the Attempt meanwhile; only a check may show the
+        // result.
         _confirmedUpload = (operation, result);
         _replace(
           id,
@@ -266,9 +305,11 @@ class StudentBlitzFileAnswerController
             failure: _invalidResponse().failure,
           ),
         );
+        _resolveUploadWaiters(false);
         unawaited(checkCurrentAttempt());
         return;
       }
+      _recovery?.resetRecovery();
       _adoptUploaded(id, (result.answer! as StudentFileAnswerValue).file);
     } on StudentSubmissionSourceUnavailable {
       // A local read failure says nothing about the server; nothing is retried.
@@ -299,19 +340,21 @@ class StudentBlitzFileAnswerController
             failure: failure,
           ),
         );
+        _recoveryTimer.scheduleRecovery(_recover);
+        _resolveUploadWaiters(false);
         return;
       }
-      final retainSelection =
-          failure.serverCode == ApiErrorCodes.fileUploadFailed ||
-          failure.serverCode == ApiErrorCodes.validationFailed;
+      // A rejected file is dropped so it never blocks Submit; the saved server
+      // file stays and the Student can choose another one.
+      final rejected = _rejectedFileCodes.contains(failure.serverCode);
       _finish(
         id,
         StudentFileQuestionAnswerState(
           question: current.question,
           serverFile: current.serverFile,
-          selectedFile: retainSelection ? selected : null,
           status: StudentFileAnswerStatus.failure,
           failure: failure,
+          rejectedFileName: rejected ? selected.name : null,
         ),
       );
       if (_reconciledCodes.contains(failure.serverCode)) {
@@ -331,6 +374,8 @@ class StudentBlitzFileAnswerController
             ),
           ),
         );
+        _recoveryTimer.scheduleRecovery(_recover);
+        _resolveUploadWaiters(false);
       }
     } finally {
       execution.endWrite(write);
@@ -370,8 +415,12 @@ class StudentBlitzFileAnswerController
         attempt.status != StudentBlitzAttemptStatus.inProgress ||
         question == null) {
       state = _copyState(state, isReconciling: false);
+      if (state.hasUncertainUpload && !state.isTerminal) {
+        _recoveryTimer.scheduleRecovery(_recover);
+      }
       return;
     }
+    _recovery?.resetRecovery();
     final selected = operation.selectedFile!;
     final error = validateStudentSubmissionSelection(
       selected,
@@ -437,6 +486,72 @@ class StudentBlitzFileAnswerController
     return false;
   }
 
+  /// Completes once no pick or upload of this Attempt runs: `true` when no
+  /// chosen file is left unsaved, `false` otherwise or after
+  /// [cancelUploadWait].
+  Future<bool> waitForUploads() {
+    if (_operation == null || state.hasUncertainUpload) {
+      return Future.value(_uploadsSettled);
+    }
+    final waiter = Completer<bool>();
+    _uploadWaiters.add(waiter);
+    return waiter.future;
+  }
+
+  void cancelUploadWait() => _resolveUploadWaiters(false);
+
+  /// Uploads a just-chosen file now, or once a pending replay republishes a
+  /// writable Attempt. Nothing is uploaded after local zero.
+  void _uploadWhenWritable(String id) {
+    final parent = ref.read(
+      studentBlitzExecutionControllerProvider(target.routeTarget),
+    );
+    if (parent.acceptsWrites) {
+      unawaited(uploadAnswer(id));
+    } else if (!parent.localTimeExpired && parent.isExecuting) {
+      _deferredUpload = id;
+    }
+  }
+
+  bool get _uploadsSettled =>
+      !state.hasUncertainUpload && !state.hasPendingSelection;
+
+  void _resolveUploadWaiters([bool? saved]) {
+    if (_uploadWaiters.isEmpty) return;
+    final result = saved ?? _uploadsSettled;
+    final waiters = [..._uploadWaiters];
+    _uploadWaiters.clear();
+    for (final waiter in waiters) {
+      waiter.complete(result);
+    }
+  }
+
+  static const _rejectedFileCodes = {
+    ApiErrorCodes.validationFailed,
+    ApiErrorCodes.unsupportedFileType,
+    ApiErrorCodes.fileTooLarge,
+    ApiErrorCodes.fileUploadFailed,
+  };
+
+  StudentAnswerAutosave get _recoveryTimer =>
+      _recovery ??= StudentAnswerAutosave(
+        ref.read(studentAutosaveTimerFactoryProvider),
+        () {},
+      );
+
+  void _recover() {
+    if (!ref.mounted || !state.hasUncertainUpload || state.isTerminal) return;
+    final parent = ref.read(
+      studentBlitzExecutionControllerProvider(target.routeTarget),
+    );
+    if (parent.localTimeExpired) return;
+    if (!_gateIsIdle || state.isReconciling) {
+      _recoveryTimer.scheduleRecovery(_recover);
+      return;
+    }
+    unawaited(checkCurrentAttempt());
+  }
+
   /// Leaving discards the selected local file; nothing is sent.
   void clearLocalState() {
     final session = _activeSessionKey;
@@ -453,6 +568,16 @@ class StudentBlitzFileAnswerController
     final current = state.questions[id]!;
     _operation = null;
     _lastPublication = parent.publicationToken;
+    _adoptUploadedState(id, current, file, parent);
+    _resolveUploadWaiters();
+  }
+
+  void _adoptUploadedState(
+    String id,
+    StudentFileQuestionAnswerState current,
+    StudentSubmissionFile file,
+    StudentBlitzExecutionState parent,
+  ) {
     state = _synchronize(
       StudentFileAnswerState(
         questions: {
@@ -478,6 +603,9 @@ class StudentBlitzFileAnswerController
     if (terminal) {
       _generation += 1;
       _operation = null;
+      _deferredUpload = null;
+      _recovery?.clear();
+      _resolveUploadWaiters(false);
     }
     final questions = <String, StudentFileQuestionAnswerState>{};
     var preservedUncertainty = false;
@@ -512,6 +640,7 @@ class StudentBlitzFileAnswerController
             : error,
         failure: terminal ? null : old?.failure,
         localFailure: terminal ? null : old?.localFailure,
+        rejectedFileName: terminal ? null : old?.rejectedFileName,
       );
     }
     return StudentFileAnswerState(
@@ -584,6 +713,9 @@ class StudentBlitzFileAnswerController
       selected,
       previousFileId,
       state.sourceAttemptPublication,
+      ref
+          .read(studentBlitzExecutionControllerProvider(target.routeTarget))
+          .readToken,
     );
     _operation = operation;
     _generation += 1;
@@ -688,6 +820,9 @@ class StudentBlitzFileAnswerController
     _operation = null;
     _confirmedUpload = null;
     _lastPublication = null;
+    _deferredUpload = null;
+    _recovery?.clear();
+    _resolveUploadWaiters(false);
   }
 
   ApiRequestException _invalidResponse() => ApiRequestException(
@@ -711,6 +846,7 @@ class StudentBlitzFileAnswerController
     sentBytes: sentBytes,
     totalBytes: totalBytes,
     failure: failure,
+    rejectedFileName: previous.rejectedFileName,
   );
 
   void _replace(String id, StudentFileQuestionAnswerState entry) =>
@@ -724,6 +860,7 @@ class StudentBlitzFileAnswerController
       isTerminal: state.isTerminal,
       sourceAttemptPublication: state.sourceAttemptPublication,
     );
+    _resolveUploadWaiters();
   }
 
   StudentFileAnswerState _copyState(
@@ -749,10 +886,15 @@ class _FileOperation {
     this.selectedFile,
     this.previousServerFileId,
     this.sourcePublication,
+    this.readToken,
   );
   final StudentSessionKey session;
   final String questionId;
   final StudentSubmissionUploadFile? selectedFile;
   final String? previousServerFileId;
   final StudentAttemptPublicationToken? sourcePublication;
+
+  /// The execution read this operation started from; a text save patching the
+  /// Attempt meanwhile does not reject this upload's own patch.
+  final StudentAttemptPublicationToken? readToken;
 }

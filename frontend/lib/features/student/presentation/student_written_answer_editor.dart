@@ -8,6 +8,7 @@ class StudentWrittenAnswerEditor extends StatefulWidget {
     required this.onChanged,
     this.multiline = false,
     this.errorText,
+    this.onFocusLost,
     super.key,
   });
 
@@ -17,6 +18,9 @@ class StudentWrittenAnswerEditor extends StatefulWidget {
   final bool multiline;
   final String? errorText;
   final ValueChanged<String> onChanged;
+
+  /// Called when the field loses focus, so the answer is saved at once.
+  final VoidCallback? onFocusLost;
 
   @override
   State<StudentWrittenAnswerEditor> createState() =>
@@ -28,6 +32,11 @@ class _StudentWrittenAnswerEditorState
   late final TextEditingController _controller = TextEditingController(
     text: widget.text,
   );
+  late final FocusNode _focus = FocusNode()..addListener(_onFocusChange);
+
+  void _onFocusChange() {
+    if (!_focus.hasFocus) widget.onFocusLost?.call();
+  }
 
   @override
   void didUpdateWidget(covariant StudentWrittenAnswerEditor oldWidget) {
@@ -42,6 +51,9 @@ class _StudentWrittenAnswerEditorState
 
   @override
   void dispose() {
+    _focus
+      ..removeListener(_onFocusChange)
+      ..dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -49,6 +61,7 @@ class _StudentWrittenAnswerEditorState
   @override
   Widget build(BuildContext context) => TextField(
     controller: _controller,
+    focusNode: _focus,
     enabled: widget.enabled,
     minLines: widget.multiline ? 5 : 1,
     maxLines: widget.multiline ? null : 4,

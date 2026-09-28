@@ -25,6 +25,8 @@ enum StudentBlitzSubmitBlocker {
   nonFileUnsavedChanges,
   nonFileSaveInProgress,
   nonFileSaveUncertain,
+  nonFileInvalidAnswer,
+  nonFileSaveFailed,
   fileSelectionPending,
   fileUploadInProgress,
   fileUploadUncertain,
@@ -112,6 +114,16 @@ class StudentBlitzSubmitReadiness {
   final StudentBlitzSubmitReadyToken? readyToken;
   bool get isReady => readyToken != null;
 
+  /// Blockers that pressing Submit clears by saving the pending answers first.
+  static const flushableBlockers = {
+    StudentBlitzSubmitBlocker.nonFileUnsavedChanges,
+    StudentBlitzSubmitBlocker.nonFileSaveInProgress,
+  };
+
+  /// Submit stays available: it saves the pending answers, then confirms.
+  bool get canSubmitAfterSaving =>
+      blockers.isNotEmpty && flushableBlockers.containsAll(blockers);
+
   static StudentBlitzSubmitReadiness evaluate({
     required StudentSessionKey? sessionKey,
     required StudentBlitzExecutionTarget target,
@@ -162,6 +174,12 @@ class StudentBlitzSubmitReadiness {
     }
     if (answerState.hasUncertainMutation) {
       blockers.add(StudentBlitzSubmitBlocker.nonFileSaveUncertain);
+    }
+    if (answerState.hasInvalidDraft) {
+      blockers.add(StudentBlitzSubmitBlocker.nonFileInvalidAnswer);
+    }
+    if (answerState.hasFailedSave) {
+      blockers.add(StudentBlitzSubmitBlocker.nonFileSaveFailed);
     }
     if (fileState.hasPendingSelection) {
       blockers.add(StudentBlitzSubmitBlocker.fileSelectionPending);

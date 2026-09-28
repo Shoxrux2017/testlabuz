@@ -14,6 +14,7 @@ class StudentBlitzAnswerEditorState {
     this.isReconciling = false,
     this.isTerminal = false,
     this.sourcePublication,
+    this.isFlushing = false,
   }) : questions = Map.unmodifiable(questions);
 
   final Map<String, StudentQuestionAnswerEditorState> questions;
@@ -30,6 +31,9 @@ class StudentBlitzAnswerEditorState {
   /// an uncertain save still waits for its own check.
   final StudentAttemptPublicationToken? sourcePublication;
 
+  /// Pending saves are being sent before Submit or leaving; editing waits.
+  final bool isFlushing;
+
   bool get hasDirtyDrafts =>
       !isTerminal && questions.values.any((entry) => entry.isDirty);
 
@@ -37,12 +41,23 @@ class StudentBlitzAnswerEditorState {
     (entry) => entry.saveStatus == StudentAnswerSaveStatus.uncertain,
   );
 
+  bool get hasInvalidDraft => questions.values.any(
+    (entry) => entry.isDirty && entry.validation != null,
+  );
+
+  bool get hasFailedSave => questions.values.any(
+    (entry) =>
+        entry.isDirty && entry.saveStatus == StudentAnswerSaveStatus.failure,
+  );
+
+  // A Question stays editable while its own save runs; the save sends a
+  // snapshot and a later change is saved afterwards.
   bool canEdit(String questionId) =>
       isEligible &&
       isAuthoritative &&
       !isTerminal &&
-      questions.containsKey(questionId.toLowerCase()) &&
-      activeQuestionId != questionId.toLowerCase();
+      !isFlushing &&
+      questions.containsKey(questionId.toLowerCase());
 
   bool canSave(String questionId) {
     final entry = questions[questionId.toLowerCase()];

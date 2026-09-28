@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/network/api_failure.dart';
 import '../application/student_attempt_answer_editor_state.dart';
 import '../domain/student_answer_draft.dart';
 import '../domain/student_question.dart';
@@ -15,28 +16,30 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
   const StudentQuestionAnswerEditor({
     required this.state,
     required this.canEdit,
-    required this.canSave,
     required this.isReconciling,
     required this.timezone,
     required this.onChanged,
-    required this.onSave,
-    required this.onDiscard,
+    required this.onCommit,
     required this.onClear,
     required this.onReload,
     this.recoveryLabel = 'Reload attempt',
+    this.failureMessage = studentAnswerSaveFailureMessage,
     super.key,
   });
 
   final StudentQuestionAnswerEditorState state;
   final bool canEdit;
-  final bool canSave;
   final bool isReconciling;
   final String timezone;
   final ValueChanged<StudentAnswerDraft> onChanged;
-  final VoidCallback onSave;
-  final VoidCallback onDiscard;
+
+  /// Saves this Question at once, for example when a text field loses focus.
+  final VoidCallback onCommit;
   final VoidCallback onClear;
   final VoidCallback onReload;
+
+  /// Text for a rejected save; Blitz adds its own timing codes.
+  final String Function(ApiFailure failure) failureMessage;
 
   /// Action that re-reads the Attempt after an unconfirmed save.
   final String recoveryLabel;
@@ -48,14 +51,23 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
     final busy =
         state.saveStatus == StudentAnswerSaveStatus.saving ||
         (uncertain && isReconciling);
-    final status = switch (state.saveStatus) {
-      StudentAnswerSaveStatus.saving => 'Saving…',
-      StudentAnswerSaveStatus.uncertain => 'Save result unconfirmed',
-      StudentAnswerSaveStatus.failure => 'Could not save answer',
-      StudentAnswerSaveStatus.saved => 'Saved',
-      StudentAnswerSaveStatus.idle =>
-        state.isDirty ? 'Unsaved changes' : 'No unsaved changes',
-    };
+    final failure = state.failure;
+    final status = uncertain
+        ? 'Save not confirmed. Checking…'
+        : state.saveStatus == StudentAnswerSaveStatus.failure && failure != null
+        ? failureMessage(failure)
+        : state.isDirty && state.validation != null
+        ? state.validation!
+        : state.isDirty || state.saveStatus == StudentAnswerSaveStatus.saving
+        ? 'Saving…'
+        : state.serverAnswer != null
+        ? 'Saved'
+        : 'Not answered';
+    final showsLastSaved =
+        !state.isDirty &&
+        state.saveStatus != StudentAnswerSaveStatus.saving &&
+        state.serverAnswer != null &&
+        state.updatedAt != null;
     return StudentQuestionAnswerCard(
       key: ValueKey('studentAnswerEditor${question.id}'),
       question: question,
@@ -63,12 +75,6 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _editorBody(),
-          if (state.validation case final validation?
-              when state.draft is! StudentShortWrittenDraft &&
-                  state.draft is! StudentOpenWrittenDraft) ...[
-            const SizedBox(height: 8),
-            Semantics(liveRegion: true, child: Text(validation)),
-          ],
           const SizedBox(height: 12),
           Semantics(
             liveRegion: true,
@@ -77,19 +83,10 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
               key: ValueKey('studentSaveStatus${question.id}'),
             ),
           ),
-          if (state.saveStatus == StudentAnswerSaveStatus.saved &&
-              state.updatedAt != null) ...[
+          if (showsLastSaved) ...[
             const SizedBox(height: 4),
             Text(
               'Last saved: ${formatStudentInstitutionInstant(state.updatedAt!, timezone) ?? 'Institution timezone unavailable'}',
-            ),
-          ],
-          if (state.saveStatus == StudentAnswerSaveStatus.failure &&
-              state.failure != null) ...[
-            const SizedBox(height: 8),
-            Semantics(
-              liveRegion: true,
-              child: Text(studentAnswerSaveFailureMessage(state.failure!)),
             ),
           ],
           if (busy) ...[
@@ -110,23 +107,11 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
                   onPressed: isReconciling ? null : onReload,
                   child: Text(recoveryLabel),
                 )
-              else ...[
-                FilledButton(
-                  key: ValueKey('studentSaveAnswer${question.id}'),
-                  onPressed: canSave ? onSave : null,
-                  child: const Text('Save answer'),
+              else if (state.draft.canClear)
+                TextButton(
+                  onPressed: canEdit ? onClear : null,
+                  child: const Text('Clear answer'),
                 ),
-                if (state.isDirty)
-                  TextButton(
-                    onPressed: canEdit ? onDiscard : null,
-                    child: const Text('Discard changes'),
-                  ),
-                if (state.draft.canClear)
-                  TextButton(
-                    onPressed: canEdit ? onClear : null,
-                    child: const Text('Clear answer'),
-                  ),
-              ],
             ],
           ),
         ],
@@ -149,6 +134,7 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
       enabled: canEdit,
       errorText: state.validation,
       onChanged: (text) => onChanged(StudentShortWrittenDraft(text: text)),
+      onFocusLost: onCommit,
     ),
     StudentOpenWrittenDraft(:final text) => StudentWrittenAnswerEditor(
       text: text,
@@ -157,6 +143,7 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
       enabled: canEdit,
       errorText: state.validation,
       onChanged: (text) => onChanged(StudentOpenWrittenDraft(text: text)),
+      onFocusLost: onCommit,
     ),
     StudentMatchingDraft() => StudentMatchingAnswerEditor(
       answerUi: state.question.answerUi as StudentMatchingAnswerUi,
@@ -175,6 +162,7 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
       draft: state.draft as StudentFillBlankDraft,
       enabled: canEdit,
       onChanged: onChanged,
+      onFocusLost: onCommit,
     ),
   };
 }

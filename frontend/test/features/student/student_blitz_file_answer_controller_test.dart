@@ -17,7 +17,7 @@ import 'student_test_support.dart';
 
 void main() {
   test(
-    'choosing uses the Question file policy and keeps a candidate',
+    'choosing uses the Question file policy and uploads the file at once',
     () async {
       final h = await _Harness.create();
       expect(h.state.questions.keys, [_file]);
@@ -30,10 +30,9 @@ void main() {
       expect(h.h.picker.requests.single, ['pdf', 'docx', 'ppt', 'pptx']);
       h.h.picker.pending.single.complete(blitzUploadFile());
       await choose;
-      expect(h.entry.status, StudentFileAnswerStatus.ready);
+      expect(h.entry.status, StudentFileAnswerStatus.uploading);
       expect(h.entry.selectedFile!.name, 'blitz.pdf');
-      expect(h.state.canUpload(_file), isTrue);
-      expect(h.h.answers.uploads, isEmpty);
+      expect(h.h.answers.uploads, hasLength(1));
     },
   );
 
@@ -103,12 +102,11 @@ void main() {
   });
 
   test(
-    'a confirmed upload outrun by another save is kept after the re-read',
+    'an upload overlapping a typed save is adopted without a re-read',
     () async {
       final h = await _Harness.create();
       await h.pick();
-      final upload = h.controller.uploadAnswer(_file);
-      // A typed answer saved meanwhile publishes a newer Attempt.
+      // A typed answer saved meanwhile patches the same Attempt read.
       expect(
         h.h.executionController.acceptAnswerMutation(
           attemptId: studentBlitzAttemptId,
@@ -118,53 +116,32 @@ void main() {
             StudentQuestionType.trueFalse,
             const StudentBooleanAnswerValue(value: true),
           ),
-          expectedPublication: h.h.execution.publicationToken,
+          expectedReadToken: h.h.execution.readToken,
         ),
         isTrue,
       );
       h.h.answers.uploads.single.complete(_result());
-      await upload;
       await flushStudentControllers();
-      expect(h.h.replays.single, same(h.h.completedRequest));
-      await h.h.completeReplay(
-        blitzExecutionAttempt(
-          answers: [
-            StudentAttemptAnswerState(
-              questionId: _file,
-              type: StudentQuestionType.fileBased,
-              value: StudentFileAnswerValue(file: blitzServerFile()),
-              updatedAt: DateTime.utc(2026, 9, 17, 12, 2),
-            ),
-          ],
-        ),
-      );
-      await flushStudentControllers();
+      expect(h.h.replays, isEmpty);
       expect(h.entry.status, StudentFileAnswerStatus.uploaded);
       expect(h.entry.selectedFile, isNull);
       expect(h.state.hasPendingSelection, isFalse);
       expect(h.state.hasUncertainUpload, isFalse);
+      expect(h.h.execution.attempt!.answers, hasLength(2));
       expect(h.h.answers.uploads, hasLength(1));
     },
   );
 
   test(
-    'a confirmed upload replaced elsewhere stays a local candidate',
+    'an unconfirmed upload replaced elsewhere stays a local candidate',
     () async {
       final h = await _Harness.create();
       await h.pick();
-      final upload = h.controller.uploadAnswer(_file);
-      h.h.executionController.acceptAnswerMutation(
-        attemptId: studentBlitzAttemptId,
-        questionId: blitzQuestionId(1),
-        result: blitzMutationResult(
-          1,
-          StudentQuestionType.trueFalse,
-          const StudentBooleanAnswerValue(value: true),
-        ),
-        expectedPublication: h.h.execution.publicationToken,
+      h.h.answers.uploads.single.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
       );
-      h.h.answers.uploads.single.complete(_result());
-      await upload;
+      await flushStudentControllers();
+      final check = h.controller.checkCurrentAttempt();
       await flushStudentControllers();
       await h.h.completeReplay(
         blitzExecutionAttempt(
@@ -180,6 +157,7 @@ void main() {
           ],
         ),
       );
+      await check;
       await flushStudentControllers();
       expect(h.entry.status, StudentFileAnswerStatus.ready);
       expect(h.entry.serverFile!.originalName, 'other.pdf');
@@ -244,23 +222,24 @@ void main() {
   });
 
   test(
-    'file_upload_failed keeps the candidate for an explicit retry',
+    'file_upload_failed drops the file and choosing it again uploads it',
     () async {
       final h = await _Harness.create();
       await h.pick();
-      final upload = h.controller.uploadAnswer(_file);
       h.h.answers.uploads.single.fail(
         studentServerFailure(ApiErrorCodes.fileUploadFailed, statusCode: 500),
       );
-      await upload;
+      await flushStudentControllers();
       expect(h.entry.status, StudentFileAnswerStatus.failure);
-      expect(h.entry.selectedFile, isNotNull);
-      expect(h.state.canUpload(_file), isTrue);
+      expect(h.entry.selectedFile, isNull);
+      expect(h.entry.rejectedFileName, 'blitz.pdf');
+      expect(h.state.canUpload(_file), isFalse);
       expect(h.h.answers.uploads, hasLength(1));
-      final retry = h.controller.uploadAnswer(_file);
+      await h.pick();
       expect(h.h.answers.uploads, hasLength(2));
       h.h.answers.uploads.last.complete(_result());
-      await retry;
+      await flushStudentControllers();
+      expect(h.entry.status, StudentFileAnswerStatus.uploaded);
     },
   );
 
@@ -404,7 +383,8 @@ void main() {
     expect(h.state.canUpload(_file), isFalse);
     await h.controller.uploadAnswer(_file);
     await h.controller.chooseFile(_file);
-    expect(h.h.answers.uploads, isEmpty);
+    // Only the upload started before local zero was sent.
+    expect(h.h.answers.uploads, hasLength(1));
     expect(h.h.picker.requests, hasLength(1));
   });
 
@@ -444,7 +424,8 @@ void main() {
     await h.controller.uploadAnswer(_file);
     await h.controller.chooseFile(_file);
     h.controller.discardSelectedFile(_file);
-    expect(h.h.answers.uploads, isEmpty);
+    // Only the upload started by the choice before the claim was sent.
+    expect(h.h.answers.uploads, hasLength(1));
     expect(h.h.picker.requests, hasLength(1));
     expect(h.entry.selectedFile, isNotNull);
   });
@@ -465,6 +446,64 @@ void main() {
     h.controller.clearLocalState();
     expect(h.state.hasPendingSelection, isFalse);
     expect(h.state.questions, isEmpty);
+  });
+  group('automatic upload', () {
+    test('choosing a valid file starts its upload at once', () async {
+      final h = await _Harness.create();
+      await h.pick();
+      expect(h.h.answers.uploads, hasLength(1));
+      expect(h.entry.status, StudentFileAnswerStatus.uploading);
+    });
+
+    test('a file chosen while a replay runs uploads once writes reopen', () async {
+      final h = await _Harness.create();
+      final choose = h.controller.chooseFile(_file);
+      final replay = h.h.executionController.refreshCurrentAttempt();
+      h.h.picker.pending.last.complete(blitzUploadFile());
+      await choose;
+      expect(h.h.answers.uploads, isEmpty);
+      await h.h.completeReplay(blitzExecutionAttempt());
+      await replay;
+      await flushStudentControllers();
+      expect(h.h.answers.uploads, hasLength(1));
+    });
+
+    test('a rejected file is dropped and named', () async {
+      final h = await _Harness.create();
+      await h.pick(blitzUploadFile(name: 'broken.pdf'));
+      h.h.answers.uploads.single.fail(
+        studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+      );
+      await flushStudentControllers();
+      expect(h.entry.selectedFile, isNull);
+      expect(h.entry.rejectedFileName, 'broken.pdf');
+      expect(h.state.hasPendingSelection, isFalse);
+    });
+
+    test('an uncertain upload is checked automatically after two seconds', () async {
+      final h = await _Harness.create();
+      await h.pick();
+      final starts = h.h.pendingStarts.length;
+      h.h.answers.uploads.single.fail(
+        studentLocalFailure(ApiFailureKind.timeout),
+      );
+      await flushStudentControllers();
+      expect(h.entry.status, StudentFileAnswerStatus.uncertain);
+      h.h.timers.elapse(const Duration(milliseconds: 1999));
+      expect(h.h.pendingStarts, hasLength(starts));
+      h.h.timers.elapse(const Duration(milliseconds: 1));
+      await flushStudentControllers();
+      expect(h.h.pendingStarts, hasLength(starts + 1));
+    });
+
+    test('waitForUploads completes once the running upload is stored', () async {
+      final h = await _Harness.create();
+      await h.pick();
+      final wait = h.controller.waitForUploads();
+      h.h.answers.uploads.single.complete(_result());
+      expect(await wait, isTrue);
+      expect(h.entry.status, StudentFileAnswerStatus.uploaded);
+    });
   });
 }
 

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
+import '../../../core/network/api_failure.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/student_attempt_answer_editor_controller.dart';
 import '../application/student_attempt_answer_editor_state.dart';
@@ -43,8 +46,67 @@ class _StudentHomeworkAttemptScreenState
     extends ConsumerState<StudentHomeworkAttemptScreen> {
   bool _leaving = false;
   DialogRoute<bool>? _leaveDialog;
+  late final AppLifecycleListener _lifecycle = AppLifecycleListener(
+    onInactive: _saveAllNow,
+    onHide: _saveAllNow,
+    onPause: _saveAllNow,
+  );
 
   StudentHomeworkAttemptRouteTarget get target => widget.target;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle;
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  void _saveAllNow() => ref
+      .read(studentAttemptAnswerEditorControllerProvider(target).notifier)
+      .saveAllNow();
+
+  /// Saves pending answers and running uploads before leaving. Returns `null`
+  /// when the Student cancels, otherwise whether everything is saved.
+  Future<bool?> _flushBeforeLeaving() async {
+    final editor = ref.read(
+      studentAttemptAnswerEditorControllerProvider(target).notifier,
+    );
+    final files = ref.read(
+      studentFileAnswerControllerProvider(target).notifier,
+    );
+    final navigator = Navigator.of(context);
+    var cancelled = false;
+    final route = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        key: const Key('studentHomeworkSavingDialog'),
+        title: const Text('Saving answers\u2026'),
+        content: const LinearProgressIndicator(
+          semanticsLabel: 'Saving answers',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              cancelled = true;
+              editor.cancelFlush();
+              files.cancelUploadWait();
+            },
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    unawaited(navigator.push(route));
+    final saved = await editor.flushAll() && await files.waitForUploads();
+    if (route.isActive) navigator.removeRoute(route);
+    return cancelled ? null : saved;
+  }
 
   StudentSessionKey? get _sessionKey => StudentSessionSnapshot.fromSession(
     ref.read(authSessionControllerProvider),
@@ -59,20 +121,34 @@ class _StudentHomeworkAttemptScreenState
     final router = GoRouter.of(context);
     final capturedLocation = router.routeInformationProvider.value.uri;
     final provider = studentAttemptAnswerEditorControllerProvider(target);
-    final editor = ref.read(provider);
     final fileProvider = studentFileAnswerControllerProvider(target);
-    final files = ref.read(fileProvider);
     final submitProvider = studentHomeworkSubmitControllerProvider(target);
     final gate = ref.read(studentAttemptRouteOperationGateProvider(target));
     final submitting = gate == StudentAttemptRouteOperation.submitting;
     final submitUncertain =
         gate == StudentAttemptRouteOperation.submitUncertain;
+    final pending = ref.read(provider);
+    if (!submitting &&
+        !submitUncertain &&
+        (pending.hasDirtyDrafts ||
+            pending.activeQuestionId != null ||
+            ref.read(fileProvider).activeQuestionId != null)) {
+      final saved = await _flushBeforeLeaving();
+      if (!mounted) return;
+      if (saved == null) {
+        _leaving = false;
+        return;
+      }
+    }
+    final editor = ref.read(provider);
+    final files = ref.read(fileProvider);
     var leave = true;
     if (submitting ||
         submitUncertain ||
         files.hasUncertainUpload ||
         editor.hasUncertainMutation ||
         files.hasPendingSelection ||
+        files.activeQuestionId != null ||
         editor.hasDirtyDrafts) {
       final route = DialogRoute<bool>(
         context: context,
@@ -95,16 +171,8 @@ class _StudentHomeworkAttemptScreenState
                 ? 'The submission result is still unconfirmed.\n\n'
                       'Leaving will discard this retry key.\n'
                       'When you open the Attempt again, the app will load the current server state.'
-                : files.hasUncertainUpload
-                ? 'A file upload result is still unconfirmed. '
-                      'Leaving will discard the local uncertainty/reconciliation state. '
-                      'Re-opening the attempt will reload server data.'
-                : editor.hasUncertainMutation
-                ? 'A save result is still unconfirmed. '
-                      'Leaving will discard the local uncertainty/reconciliation state. '
-                      'Re-opening the attempt will reload server data.'
-                : 'You have unsaved answer changes.\n'
-                      'Leave and discard these changes?',
+                : 'Some answers are not saved.\n'
+                      'Leave and lose these changes?',
           ),
           actions: [
             TextButton(
@@ -204,6 +272,16 @@ class _StudentHomeworkAttemptScreenState
     }
 
     final terminalAttempt = editorState.terminalAttempt;
+    final retained = attemptState.attempt;
+    // A refresh of the same in-progress Attempt keeps the content mounted, so
+    // typing, focus and scroll position survive it.
+    final retainsCurrentAttempt =
+        retained != null &&
+        retained.status == StudentHomeworkAttemptStatus.inProgress &&
+        retained.id.toLowerCase() == target.attemptId &&
+        retained.assessmentId.toLowerCase() == target.homeworkId &&
+        (attemptState.status == StudentHomeworkAttemptLoadStatus.refreshing ||
+            attemptState.status == StudentHomeworkAttemptLoadStatus.error);
     Widget body;
     if (homeworkState.status == StudentHomeworkDetailStatus.notFound) {
       body = _AttemptNotice(
@@ -239,6 +317,28 @@ class _StudentHomeworkAttemptScreenState
         timezone: timezone,
         editorState: editorState,
         editorController: editorController,
+      );
+    } else if (sessionKey != null &&
+        retainsCurrentAttempt &&
+        (homeworkState.status == StudentHomeworkDetailStatus.data ||
+            homeworkState.status == StudentHomeworkDetailStatus.refreshing) &&
+        homeworkState.homework != null &&
+        homeworkState.homework!.id.toLowerCase() == target.homeworkId &&
+        homeworkState.homework!.topic.id.toLowerCase() == target.topicId) {
+      body = _AttemptContent(
+        target: target,
+        homework: homeworkState.homework!,
+        attempt: retained,
+        timezone: timezone,
+        editorState: editorState,
+        editorController: editorController,
+        refreshing:
+            attemptState.status == StudentHomeworkAttemptLoadStatus.refreshing,
+        refreshFailure:
+            attemptState.status == StudentHomeworkAttemptLoadStatus.error
+            ? attemptState.failure
+            : null,
+        onRetryRefresh: refresh,
       );
     } else if (homeworkState.status == StudentHomeworkDetailStatus.error ||
         attemptState.status == StudentHomeworkAttemptLoadStatus.error) {
@@ -330,6 +430,9 @@ class _AttemptContent extends ConsumerWidget {
     required this.timezone,
     required this.editorState,
     required this.editorController,
+    this.refreshing = false,
+    this.refreshFailure,
+    this.onRetryRefresh,
   });
 
   final StudentHomeworkAttemptRouteTarget target;
@@ -338,6 +441,9 @@ class _AttemptContent extends ConsumerWidget {
   final String timezone;
   final StudentAttemptAnswerEditorState editorState;
   final StudentAttemptAnswerEditorController editorController;
+  final bool refreshing;
+  final ApiFailure? refreshFailure;
+  final VoidCallback? onRetryRefresh;
 
   String instant(DateTime value) =>
       formatStudentInstitutionInstant(value, timezone) ??
@@ -391,7 +497,8 @@ class _AttemptContent extends ConsumerWidget {
       if (attempt.deadlineAt case final value?) ('Deadline', instant(value)),
     ];
     return SingleChildScrollView(
-      key: const Key('studentHomeworkAttemptScroll'),
+      // PageStorageKey restores the offset if the view is ever rebuilt.
+      key: const PageStorageKey('studentHomeworkAttemptScroll'),
       padding: const EdgeInsets.all(16),
       child: Center(
         child: ConstrainedBox(
@@ -401,6 +508,35 @@ class _AttemptContent extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (refreshing)
+                  const LinearProgressIndicator(
+                    key: Key('studentHomeworkAttemptRefreshingBar'),
+                    semanticsLabel: 'Refreshing Attempt',
+                  ),
+                if (refreshFailure case final failure?)
+                  Card(
+                    key: const Key('studentHomeworkAttemptRefreshFailure'),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              'Could not refresh this Attempt. '
+                              '${studentHomeworkAttemptFailureMessage(failure)}',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: onRetryRefresh,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -507,14 +643,11 @@ class _AttemptContent extends ConsumerWidget {
                     StudentQuestionAnswerEditor(
                       state: editorState.questions[question.id.toLowerCase()]!,
                       canEdit: gateIdle && editorState.canEdit(question.id),
-                      canSave: gateIdle && editorState.canSave(question.id),
                       isReconciling: editorState.isReconciling || !gateIdle,
                       timezone: timezone,
                       onChanged: (draft) =>
                           editorController.updateDraft(question.id, draft),
-                      onSave: () => editorController.saveAnswer(question.id),
-                      onDiscard: () =>
-                          editorController.discardChanges(question.id),
+                      onCommit: () => editorController.saveNow(question.id),
                       onClear: () => editorController.clearAnswer(question.id),
                       onReload: editorController.reloadAttempt,
                     )

@@ -80,13 +80,17 @@ String studentHomeworkSubmitBlockerMessage(
   StudentHomeworkSubmitBlocker.attemptStateLoading =>
     'Wait for the Attempt refresh to finish.',
   StudentHomeworkSubmitBlocker.nonFileUnsavedChanges =>
-    'Save or discard unsaved answer changes before submitting.',
+    'Some answers are still being saved.',
   StudentHomeworkSubmitBlocker.nonFileSaveInProgress =>
-    'Wait for the current answer save to finish.',
+    'An answer is being saved.',
   StudentHomeworkSubmitBlocker.nonFileSaveUncertain =>
-    'Resolve the unconfirmed answer save before submitting.',
+    'An answer save is not confirmed yet. It is being checked.',
+  StudentHomeworkSubmitBlocker.nonFileInvalidAnswer =>
+    'Fix the marked answers before submitting.',
+  StudentHomeworkSubmitBlocker.nonFileSaveFailed =>
+    'Some answers were not saved. Check the marked questions.',
   StudentHomeworkSubmitBlocker.fileSelectionPending =>
-    'Upload or discard the selected file before submitting.',
+    'Retry or cancel the file that was not uploaded.',
   StudentHomeworkSubmitBlocker.fileUploadInProgress =>
     'Wait for the current file operation to finish.',
   StudentHomeworkSubmitBlocker.fileUploadUncertain =>
@@ -128,7 +132,7 @@ String studentAnswerSaveFailureMessage(ApiFailure failure) =>
     switch (failure.serverCode) {
       ApiErrorCodes.selectionLimitExceeded => 'Too many options are selected.',
       ApiErrorCodes.validationFailed =>
-        'Review your answer before saving again.',
+        'This answer was not accepted. Change it to save again.',
       ApiErrorCodes.deadlinePassed => 'The Homework deadline has passed.',
       ApiErrorCodes.attemptNotEditable => 'This attempt is no longer editable.',
       ApiErrorCodes.taskClosed ||
@@ -136,8 +140,8 @@ String studentAnswerSaveFailureMessage(ApiFailure failure) =>
       ApiErrorCodes.taskNotActive => 'This Homework is no longer editable.',
       ApiErrorCodes.resourceNotFound => 'This Attempt is no longer available.',
       ApiErrorCodes.businessConflict =>
-        'The Attempt changed. Review its reloaded state before saving again.',
-      _ => 'Your draft has been kept. Review it before saving again.',
+        'The Attempt changed. This answer was not saved.',
+      _ => 'This answer was not saved. Change it to save again.',
     };
 
 String formatStudentSubmissionBytes(int bytes) {
