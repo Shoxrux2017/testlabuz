@@ -743,6 +743,7 @@ parent_child_relationship_required
 
 ```text
 topic_not_editable
+topic_has_open_assessments
 task_not_active
 task_closed
 task_archived

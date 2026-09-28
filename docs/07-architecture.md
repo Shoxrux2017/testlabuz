@@ -2348,7 +2348,7 @@ Quick classroom/monitoring surface:
 - Homework status
 - Blitz activation
 - Blitz monitoring
-- Student-specific Blitz exception grant where authorized
+- Student-specific Blitz exception grant where authorized (desktop-only in Stage 8, `S08-FE-006` §4; not yet delivered on mobile)
 - Basic result review
 - Student/Parent release actions where institution policy requires Teacher action
 
