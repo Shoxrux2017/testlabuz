@@ -20,12 +20,19 @@ class StudentHomeworkAttemptState {
     this.attempt,
     this.failure,
     this.publicationToken,
+    this.readToken,
   });
 
   final StudentHomeworkAttemptLoadStatus status;
   final StudentHomeworkAttempt? attempt;
   final ApiFailure? failure;
+
+  /// Changes with every publication, including answer patches.
   final StudentHomeworkAttemptPublicationToken? publicationToken;
+
+  /// Changes only with a full Attempt read or terminal adoption, so a write
+  /// that started from this read can still patch its answer afterwards.
+  final StudentHomeworkAttemptPublicationToken? readToken;
 
   bool get isRequestInFlight =>
       status == StudentHomeworkAttemptLoadStatus.loading ||

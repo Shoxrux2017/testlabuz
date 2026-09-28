@@ -8,6 +8,8 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../data/student_homework_attempt_repository_impl.dart';
+import '../domain/student_answer_mutation.dart';
+import '../domain/student_attempt_answer.dart';
 import '../domain/student_homework.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_route_target.dart';
@@ -89,6 +91,67 @@ class StudentHomeworkAttemptController
       status: StudentHomeworkAttemptLoadStatus.data,
       attempt: attempt,
       publicationToken: StudentHomeworkAttemptPublicationToken(),
+      readToken: StudentHomeworkAttemptPublicationToken(),
+    );
+    return true;
+  }
+
+  /// Adopts one confirmed answer write without re-reading the Attempt.
+  bool acceptAnswerMutation({
+    required String questionId,
+    required StudentAttemptAnswerMutationResult result,
+    required StudentHomeworkAttemptPublicationToken? expectedReadToken,
+  }) {
+    final key = _activeSessionKey;
+    final attempt = state.attempt;
+    final id = questionId.toLowerCase();
+    if (key == null ||
+        !_matchesSession(key) ||
+        state.status != StudentHomeworkAttemptLoadStatus.data ||
+        attempt == null ||
+        attempt.status != StudentHomeworkAttemptStatus.inProgress ||
+        attempt.id.toLowerCase() != target.attemptId.toLowerCase() ||
+        expectedReadToken == null ||
+        !identical(expectedReadToken, state.readToken) ||
+        result.questionId.toLowerCase() != id ||
+        (result.answer == null) != (result.updatedAt == null)) {
+      return false;
+    }
+    final questions = attempt.questions.where(
+      (question) => question.id.toLowerCase() == id,
+    );
+    if (questions.length != 1 || questions.single.type != result.type) {
+      return false;
+    }
+    final answer = result.answer;
+    _generation += 1;
+    state = StudentHomeworkAttemptState(
+      status: StudentHomeworkAttemptLoadStatus.data,
+      attempt: StudentHomeworkAttempt(
+        id: attempt.id,
+        assessmentId: attempt.assessmentId,
+        attemptNumber: attempt.attemptNumber,
+        status: attempt.status,
+        startedAt: attempt.startedAt,
+        submittedAt: attempt.submittedAt,
+        finalizedAt: attempt.finalizedAt,
+        finalizationReason: attempt.finalizationReason,
+        deadlineAt: attempt.deadlineAt,
+        questions: attempt.questions,
+        answers: [
+          for (final existing in attempt.answers)
+            if (existing.questionId.toLowerCase() != id) existing,
+          if (answer != null)
+            StudentAttemptAnswerState(
+              questionId: questions.single.id,
+              type: result.type,
+              value: answer,
+              updatedAt: result.updatedAt!,
+            ),
+        ],
+      ),
+      publicationToken: StudentHomeworkAttemptPublicationToken(),
+      readToken: state.readToken,
     );
     return true;
   }
@@ -103,12 +166,14 @@ class StudentHomeworkAttemptController
     final retainedPublication = retainedAttempt == null
         ? null
         : state.publicationToken;
+    final retainedRead = retainedAttempt == null ? null : state.readToken;
     state = StudentHomeworkAttemptState(
       status: retainedAttempt == null
           ? StudentHomeworkAttemptLoadStatus.loading
           : StudentHomeworkAttemptLoadStatus.refreshing,
       attempt: retainedAttempt,
       publicationToken: retainedPublication,
+      readToken: retainedRead,
     );
     try {
       final attempt = await ref
@@ -128,6 +193,7 @@ class StudentHomeworkAttemptController
         status: StudentHomeworkAttemptLoadStatus.data,
         attempt: attempt,
         publicationToken: StudentHomeworkAttemptPublicationToken(),
+        readToken: StudentHomeworkAttemptPublicationToken(),
       );
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, key, requestTarget) ||
@@ -147,6 +213,7 @@ class StudentHomeworkAttemptController
         attempt: retainedAttempt,
         failure: exception.failure,
         publicationToken: retainedPublication,
+        readToken: retainedRead,
       );
     }
   }

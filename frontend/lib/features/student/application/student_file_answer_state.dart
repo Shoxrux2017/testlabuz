@@ -28,6 +28,7 @@ class StudentFileQuestionAnswerState {
     this.failure,
     this.selectionError,
     this.localFailure,
+    this.rejectedFileName,
   });
 
   final StudentQuestion question;
@@ -39,6 +40,9 @@ class StudentFileQuestionAnswerState {
   final ApiFailure? failure;
   final StudentSubmissionSelectionError? selectionError;
   final StudentFileAnswerLocalFailure? localFailure;
+
+  /// The chosen file the server rejected; it is no longer selected.
+  final String? rejectedFileName;
 }
 
 class StudentFileAnswerState {
