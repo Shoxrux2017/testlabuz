@@ -3537,6 +3537,10 @@ official_task_scores(assessment_id, student_id)
 ```
 
 ```text
+official_task_scores(official_attempt_id)
+```
+
+```text
 topic_result_pairs(topic_id)
 ```
 
