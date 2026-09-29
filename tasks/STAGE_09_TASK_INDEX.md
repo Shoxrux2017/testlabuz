@@ -238,7 +238,9 @@ Only a row whose readiness is `Approved` may be implemented.
   reads under a shared Attempt lock and, when Stage 9 already checked the Attempt, through a timeout re-read
   proof (a PostgreSQL trigger test reproduces the race); exception-first ordering, replacement timeout and
   pending-metadata tests added. Carried to `S09-BE-003B` and `S09-BE-006`: checking and review keep
-  `attempt_answers.updated_at` unchanged (the Student sees it as the answer's last save).
+  `attempt_answers.updated_at` unchanged (the Student sees it as the answer's last save). Re-verification:
+  P1 = 0, P2 = 0; its two new P3 (accept every finalization reason in the re-read proof; tie intent to the
+  Attempt number) are fixed. PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 

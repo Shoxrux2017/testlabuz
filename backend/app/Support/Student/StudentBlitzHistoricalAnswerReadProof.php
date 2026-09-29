@@ -76,7 +76,8 @@ final readonly class StudentBlitzHistoricalAnswerReadProof
 
     /**
      * A Start whose in-progress Attempt was due finalizes it after its commit and re-reads it;
-     * Stage 9 may have checked the frozen Attempt in between.
+     * Stage 9 may have checked the frozen Attempt in between. A lock-queued Submit or Teacher
+     * close may have frozen it first, so every valid finalization reason is accepted.
      */
     public static function forTimeoutReread(User $student, Assessment $assessment, AssessmentAttempt $attempt, int $responseStatus, string $intent, ?string $resumeAttemptId): self
     {
@@ -84,14 +85,22 @@ final readonly class StudentBlitzHistoricalAnswerReadProof
         if ($assessment->institution_id !== $student->institution_id
             || $attempt->institution_id !== $student->institution_id || $attempt->student_id !== $student->id
             || $attempt->assessment_id !== $assessment->id
-            || $attempt->finalization_reason !== AssessmentAttemptFinalizationReason::TimeoutAutoSubmit
+            || ! in_array($attempt->finalization_reason, [
+                AssessmentAttemptFinalizationReason::TimeoutAutoSubmit,
+                AssessmentAttemptFinalizationReason::StudentSubmit,
+                AssessmentAttemptFinalizationReason::TaskClosedAutoFinalize,
+            ], true)
             || ! in_array($responseStatus, [200, 201], true)
-            || ! in_array($intent, ['start_normal', 'resume', 'start_replacement'], true)
-            || ($intent === 'resume') !== ($resumeAttemptId === $attempt->id)
+            || ! match ($intent) {
+                'start_normal' => $attempt->attempt_number === 1 && $resumeAttemptId === null,
+                'start_replacement' => $attempt->attempt_number === 2 && $resumeAttemptId === null,
+                'resume' => $resumeAttemptId === $attempt->id,
+                default => false,
+            }
             || ! AssessmentStudent::query()->where('institution_id', $student->institution_id)
                 ->where('assessment_id', $assessment->id)->where('student_id', $student->id)
                 ->whereKey($attempt->assessment_student_id)->exists()) {
-            throw new LogicException('A timeout re-read requires the authorized Attempt this Start timed out.');
+            throw new LogicException('A timeout re-read requires the authorized Attempt this Start found due.');
         }
 
         self::assertHistoricalLineage($attempt);

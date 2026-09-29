@@ -98,9 +98,10 @@ An `in_progress` Attempt has a null reason, so none of these rules applies to it
 After finalizing a due Attempt post-commit, Start re-reads it in one transaction: it locks the Attempt row
 `FOR SHARE` (checking locks it `FOR UPDATE`, so status and answers are read consistently) and, when the
 locked status is `waiting_for_teacher_review` or `checked`, reads the answers with a new
-`StudentBlitzHistoricalAnswerReadProof::forTimeoutReread` (same Student, Assessment and recipient,
-`finalization_reason = timeout_auto_submit`, the Start's response status and intent, and the Stage 8
-historical lineage check). A still `timed_out_finalized` Attempt keeps the pending-only read. The response
+`StudentBlitzHistoricalAnswerReadProof::forTimeoutReread` (same Student, Assessment and recipient; any
+valid finalization reason, because a lock-queued Submit or Teacher close may freeze the Attempt first; the
+Start's response status; the intent tied to the Attempt — `start_normal` #1, `start_replacement` #2,
+`resume` the named Attempt; and the Stage 8 historical lineage check). A still `timed_out_finalized` Attempt keeps the pending-only read. The response
 shows the current status, as a replay does.
 
 ### 5.2 Homework reads of terminal Attempts
