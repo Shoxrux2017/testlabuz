@@ -109,7 +109,7 @@ The result engine must:
 - Resolve Homework from the highest valid completed score among the fixed 3 normal Homework attempts.
 - Resolve Blitz from the valid normal attempt or the approved replacement exception attempt.
 - Normalize both official scores to the same 0–100 scale.
-- Keep calculation values unrounded.
+- Keep calculation values unrounded beyond the stored Stage 9 score precision (§16.6).
 - Calculate the absolute difference.
 - Use the institution threshold.
 - Apply the approved average-or-blitz formula.
@@ -413,7 +413,7 @@ Responsible for use cases such as:
 
 Each action should have one clear business purpose.
 
-Stage 8 Blitz execution/finalization actions do not invoke Stage 9 checking strategies, Teacher review, points, Attempt scoring, or official-score selection. Stage 10 owns Homework–Blitz comparison, final Topic results, categories, and release. Shared `AssessmentAttempt` persistence does not merge Homework and Blitz lifecycle policies.
+Stage 8 Blitz execution/finalization actions do not invoke Stage 9 checking strategies, Teacher review, points, Attempt scoring, or official-score selection. This stays true in Stage 9: the freeze itself does no checking, and Stage 9 checks each frozen Attempt right after the freezing transaction commits (§16.5). Stage 10 owns Homework–Blitz comparison, final Topic results, categories, and release. Shared `AssessmentAttempt` persistence does not merge Homework and Blitz lifecycle policies.
 
 ### Domain Layer
 
@@ -688,6 +688,7 @@ Examples:
 - Save/replace a Homework answer or file reference under the Attempt editability lock
 - Finalize a Homework Attempt from already-committed Student work + lifecycle metadata
 - Protected Homework Start/Submit + durable idempotency claim/result
+- Automatic checking of one frozen Attempt + Attempt score + official-score resolution (one transaction per Attempt, never the freezing transaction; §16.5)
 - Manual review + score update + task score
 - Official score update + topic result recalculation
 - Final result calculation + rule snapshot
@@ -716,7 +717,7 @@ Examples:
 - BlitzAttemptExceptionNotAllowed
 - ResultBearingTaskLocked
 - SubmissionLocked
-- ManualReviewIncomplete
+- AutomaticCheckingPending
 - ResultAlreadyClosed
 
 `09-api-contracts.md` will map these to stable API responses.
@@ -1138,9 +1139,19 @@ OrderingChecker
 FillInBlankChecker
 ```
 
-Open written and file-based types return/manual-route rather than automatic judgment in the MVP.
+Open written, file-based, and `short_written` Questions with `checking_mode = manual` are routed to Teacher review rather than automatic judgment in the MVP. Only `short_written` can be switched to manual checking; every other automatic type is always checked automatically.
 
 For Homework, Stage 7 only persists and freezes Student work with answer checking fields still pending. These checking strategies, awarded points, Teacher review, Attempt scores, and official Homework score resolution are Stage 9 responsibilities.
+
+Stage 9 checks every Question of a frozen Attempt:
+
+- **Unanswered Question** (no `attempt_answers` row): contributes 0. No row is fabricated and no review is required, including for manual Questions. An empty answer cannot exist, because clearing an answer deletes its row.
+- **Automatic answer:** the checker stores `awarded_points` and `checking_status = auto_checked`.
+- **Manual answer with points > 0:** `checking_status = waiting_for_teacher_review` until Teacher review (§16.9).
+- **Zero-point Question:** an automatic answer is checked with 0 points; a manual answer is closed automatically as `auto_checked` with 0 points and never enters the review queue.
+- Every automatic result sets `checked_at` to the checking time and leaves `checked_by_user_id` null.
+
+Practice (non-official) tasks and an invalidated Blitz Attempt #1 are checked and reviewed the same way; neither ever produces an official score (§16.8).
 
 ---
 
@@ -1189,16 +1200,16 @@ An empty selection earns zero. Incorrect selections earn no credit and create no
 
 ### Matching
 
-Award partial credit per correctly matched pair:
+Award partial credit per correctly matched pair. A pair is correct when the chosen right item has the left item's `match_key`:
 
 ```text
-fraction = correct_pairs / total_pairs
+fraction = correct_pairs / total_left_items
 question_points_awarded = question_max_points * fraction
 ```
 
 ### Ordering
 
-Award partial credit per item placed in its correct position:
+Award partial credit per item placed in its correct position. An item counts only at its exact `correct_position`; both sides are 1-based:
 
 ```text
 fraction = correctly_positioned_items / total_items
@@ -1207,7 +1218,7 @@ question_points_awarded = question_max_points * fraction
 
 ### Fill-in-the-blank
 
-Award partial credit per correctly completed blank:
+Award partial credit per correctly completed blank. A blank is correct when its normalized value equals any normalized accepted answer of that blank, using the same normalization as short written answers (`S09-D9`):
 
 ```text
 fraction = correct_blanks / total_blanks
@@ -1216,10 +1227,12 @@ question_points_awarded = question_max_points * fraction
 
 ### Short written answer
 
-- Automatic all-or-nothing checking may be used when accepted-answer rules are defined.
-- Automatic mode uses deterministic normalized exact matching. Both Student text and accepted answers pass the same pipeline: Unicode NFC normalization, trim, collapse consecutive whitespace, Unicode case-fold comparison, and normalization of common Uzbek apostrophe variants. Other punctuation and technical symbols remain significant.
+- With `checking_mode = automatic`, checking is all-or-nothing: full points when the normalized answer equals any normalized accepted answer; otherwise 0.
+- Automatic mode uses deterministic normalized exact matching (`BR-Q-013A`). Both Student text and accepted answers pass the same pipeline, in this order: Unicode NFC → Unicode full case folding (locale-independent) → NFC again → map the apostrophe variants U+0027 `'`, U+0060 `` ` ``, U+00B4 `´`, U+02BB `ʻ`, U+02BC `ʼ`, U+2018 `‘`, U+2019 `’` to U+0027 → replace every run of the Student-answer whitespace set (U+0009–U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) with one U+0020 → trim. The results are then compared exactly. Punctuation and other symbols remain significant.
 - Fuzzy matching, spell correction, synonym inference, and AI interpretation are not part of the MVP.
-- Otherwise route to Teacher review.
+- With `checking_mode = manual`, the answer is routed to Teacher review.
+
+Every partial-credit formula above is evaluated in one step as `points × correct / total` with exact decimal arithmetic and stored as described in §16.6; `fraction` is not rounded separately.
 
 ### Open written and file-based
 
@@ -1238,6 +1251,8 @@ Every Student try must be its own immutable historical attempt after finalizatio
 Homework execution history and the Homework checking engine are separate boundaries. Stage 7 creates/resumes Attempts, persists typed/file answers, and freezes the already-committed Student work as `submitted`; Stage 9 later checks that frozen history, applies the approved missing-answer-as-zero policy without fabricating answer rows, performs required Teacher review, and computes/selects scores.
 
 Stage 8 likewise produces immutable Blitz execution history as `submitted` or `timed_out_finalized`. Its saved answers remain `checking_status = pending`, with `awarded_points`, `feedback`, `checked_by_user_id`, and `checked_at` null. Stage 8 creates no missing answer rows and does not populate Attempt scores or official scores. Stage 9 owns the later objective checking, manual-review transition, missing-answer/component zero interpretation, scoring and official Blitz score selection.
+
+After Stage 9 checking, answers of a terminal Attempt may be `auto_checked`, `waiting_for_teacher_review` or `teacher_checked`. Student reads and Submit replays of terminal Homework Attempts therefore use the historical answer canonicalization, as Blitz already does, rather than requiring `pending` answers. Replay of a completed Homework or Blitz Submit returns the Attempt in its current status, which may be `waiting_for_teacher_review` or `checked`; all finalization fields are unchanged.
 
 Conceptual structure:
 
@@ -1303,9 +1318,13 @@ Rules:
 - Start returns the existing `in_progress` Attempt without consuming capacity, or atomically allocates `max(attempt_number) + 1` when no current Attempt exists and capacity/lifecycle/deadline rules pass.
 - Each attempt is stored independently.
 - A Stage 7 finalized Attempt is stored as `submitted` and is immutable to the Student.
-- Stage 9 later chooses the official Homework score as the **highest valid completed score** among eligible Homework attempts. If several attempts tie exactly for that highest normalized score, the attempt with the lowest `attempt_number` is the official attempt reference.
-- In Stage 9, an attempt requiring Teacher review is not fully scored until review is complete.
-- In Stage 9, whenever a later eligible attempt produces a higher score before result closure, the official Homework score and any open dependent Topic result must be recalculated through the normal domain workflow.
+- Stage 9 chooses the official Homework score as the **highest valid completed score** among eligible Homework attempts and waits only for an Attempt that could still overtake it (`S09-D2`). `OfficialHomeworkScoreResolver` applies this rule to the Student's Attempts of this Homework with `official_score_eligible = true`; `in_progress` Attempts are not considered:
+  1. `best` is the `checked` eligible Attempt with the highest stored `normalized_score`; ties go to the lowest `attempt_number`. With no `checked` Attempt the official score is not ready.
+  2. Every eligible terminal Attempt that is not `checked` is **pending**. Its upper bound is `(awarded points of its checked answers + full points of its waiting answers) × 100 / possible_points`, rounded as in §16.6; an Attempt not yet automatically checked has upper bound 100.
+  3. The official score is not ready while any pending Attempt has an upper bound greater than `best`, or equal to `best` with a lower `attempt_number` than `best`.
+  4. Otherwise the official Attempt is `best`, with `selection_policy_code = highest_valid_completed`.
+- In Stage 9, an Attempt requiring Teacher review is not fully scored until review is complete: its `earned_points` and `normalized_score` stay null while it waits.
+- When a later Attempt becomes pending and could overtake, a ready official score becomes not ready until that Attempt is checked; this is intended. The resolver re-runs on every checking run, review save and correction (§16.8), so a higher checked score or a correction may move the official score to another Attempt. Stage 10 recalculates any open dependent Topic result through the normal domain workflow.
 - The Teacher does not manually select the official Homework attempt and does not override the fixed attempt count.
 
 ---
@@ -1325,14 +1344,14 @@ Rules:
 
 - The normal Blitz attempt is attempt #1.
 - Under normal conditions, no second attempt is available.
-- Stage 9 selects the eligible valid completed normal attempt as the official Blitz score source after required checking is complete.
+- Without an exception, `OfficialBlitzScoreResolver` makes the official Blitz score ready when Attempt #1 is `checked` (`selection_policy_code = valid_normal_blitz`). The exception case is in §14.5.
 - The client cannot request or create an extra attempt by itself.
 
 One Student Start route requires a strict mandatory body with exactly `intent = start_normal`, `intent = resume` plus canonical `attempt_id`, or `intent = start_replacement`. Both Start intents forbid `attempt_id`; missing/empty/malformed bodies, unknown keys/intents and malformed Resume UUIDs return `422 validation_failed`; no query parameters are accepted. The server never reinterprets an intent. Resume targets one exact own Attempt and never creates, switches, or selects a newer Attempt.
 
 Fresh execution requires authenticated active Student, same Institution, persisted `assessment_students` recipient, own Attempt, active Blitz and applicable timer/capacity rules. Tenant scope precedes authorization and resource exposure; a UUID never grants access. Same-Assessment Question/child validation and private-file authorization remain mandatory, and Student resources never expose correct-answer/checking configuration.
 
-Fresh `start_normal` creates unused #1 with `201`, returns the same editable #1 with `200`, reconciles due in-progress #1 then returns `409 blitz_time_expired`, rejects a `timed_out_finalized` #1 without an approved exception with `409 blitz_time_expired`, and rejects any other terminal #1 (or any terminal #1 once an exception is approved) with `409 attempts_exhausted`. Fresh `resume` returns its exact editable target with `200`, reconciles a due in-progress target then returns `409 blitz_time_expired`, rejects a `timed_out_finalized` target with `409 blitz_time_expired` and any other terminal target with `409 attempt_not_editable`, and returns privacy-safe `404 resource_not_found` for a foreign/out-of-scope target. Fresh `start_replacement` creates #2 only with valid unused exception capacity (`201`), returns existing editable #2 (`200`), reconciles due #2 then returns `409 blitz_time_expired`, returns `409 blitz_time_expired` for a `timed_out_finalized` #2, and returns `409 attempts_exhausted` for any other consumed terminal #2 or structurally valid history without approved capacity. An existing invalid exception graph/capacity returns `409 blitz_attempt_exception_not_allowed` under the invariant/public-error split. No return resets `started_at`/`deadline_at`; no intent creates #3, and normal Start never uses replacement capacity. Completed authorized idempotent replay takes precedence as specified in §23.4. Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`).
+Fresh `start_normal` creates unused #1 with `201`, returns the same editable #1 with `200`, reconciles due in-progress #1 then returns `409 blitz_time_expired`, rejects a terminal #1 with `finalization_reason = timeout_auto_submit` without an approved exception with `409 blitz_time_expired`, and rejects any other terminal #1 (or any terminal #1 once an exception is approved) with `409 attempts_exhausted`. Fresh `resume` returns its exact editable target with `200`, reconciles a due in-progress target then returns `409 blitz_time_expired`, rejects a terminal target with `finalization_reason = timeout_auto_submit` with `409 blitz_time_expired` and any other terminal target with `409 attempt_not_editable`, and returns privacy-safe `404 resource_not_found` for a foreign/out-of-scope target. Fresh `start_replacement` creates #2 only with valid unused exception capacity (`201`), returns existing editable #2 (`200`), reconciles due #2 then returns `409 blitz_time_expired`, returns `409 blitz_time_expired` for a terminal #2 with `finalization_reason = timeout_auto_submit`, and returns `409 attempts_exhausted` for any other consumed terminal #2 or structurally valid history without approved capacity. These timeout rules key on `finalization_reason = timeout_auto_submit`, whatever the Attempt's later Stage 9 checking status (`timed_out_finalized`, `waiting_for_teacher_review` or `checked`), so observable responses stay exactly as in Stage 8 (`S09-T2`). An existing invalid exception graph/capacity returns `409 blitz_attempt_exception_not_allowed` under the invariant/public-error split. No return resets `started_at`/`deadline_at`; no intent creates #3, and normal Start never uses replacement capacity. Completed authorized idempotent replay takes precedence as specified in §23.4. Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`).
 
 ---
 
@@ -1368,6 +1387,13 @@ A new grant requires exactly `BlitzTask.status = active`, same Institution, curr
 Under deterministic locks, a still-editable pre-deadline #1 rejects with `409 blitz_attempt_exception_not_allowed`, with no exception, eligibility change, replacement or synthetic finalization. A due in-progress #1 first uses the shared timeout finalizer at its exact deadline; if all grant preconditions pass, the atomic workflow excludes #1 (`official_score_eligible = false`) and inserts one exception with no replacement yet. An already-terminal #1 preserves its reason/timestamps and all answers/files. No new finalization reason is introduced. Missing #1 returns `409 blitz_normal_attempt_required`; an existing exception returns `409 blitz_attempt_exception_already_granted`.
 
 Granting never creates #2 or allows two simultaneous in-progress Attempts. Only confirmed Student `start_replacement` may create #2. In both timer modes it receives the same full `duration_seconds` from its own canonical server Start; it does not change configured duration, timer snapshot, class activation/common end, or another Student's deadline.
+
+Stage 9 official scoring with an exception (`S09-D4`, `S09-T7`):
+
+- #1 is excluded. The official Blitz score is ready only when replacement #2 exists and is `checked` (`selection_policy_code = approved_blitz_exception_replacement`).
+- The grant deletes an existing official Blitz row for that Student inside the grant transaction, under the scoring lock order (§16.7). A timeout performed during the grant is a freezing point, so that #1 is checked after the grant commits (§16.5).
+- A Blitz closed before the Student took #2 has no official Blitz score; Stage 10 treats the Student as Not completed. A #2 taken before the close becomes official once it is `checked`, even when its review ends after the close. The grant dialog states this consequence to the Teacher.
+- The invalidated #1 is checked like any Attempt and may wait for Teacher review, but it is never official and never blocks the official score. The Student-facing status "Invalidated by approved exception" is derived from `official_score_eligible = false`; the stored Attempt status follows normal checking.
 
 Exact database field names/status codes belong in `08-database.md`; the architecture requires preserved history, explicit eligibility/exclusion, actor, reason, and timestamp.
 
@@ -1425,6 +1451,8 @@ Teacher close before the Attempt deadline:
 Teacher close captures one authoritative `closedAt`, stops new Starts/writes, and atomically closes the Blitz with all required finalizations. After relevant locks, already-due Attempts use timeout reason/time first; only still-pre-deadline Attempts use close reason/time. Different individual deadlines and replacement #2 deadlines are evaluated independently. Existing terminal history is preserved. Repeated timeout/close or later Submit never rewrites a committed terminal reason/timestamp. No Attempt for never-started Students or unanswered answer row is fabricated; saved answers remain pending until Stage 9 applies zero/checking/review/scoring rules.
 
 Deterministic relevant Blitz/Attempt row locks serialize typed/file mutation against Submit, timeout and close. Re-read authorization, lifecycle, editability and authoritative time after locking. A mutation committed first is included in the frozen history; finalization committed first means zero later answer/file-domain mutation, including file identity/content replacement. Teacher review in Stage 9 cannot rewrite Student answers.
+
+For both Homework and Blitz, Stage 9 checks a frozen Attempt only after the freezing transaction commits (§16.5). Checking and review never change `finalization_reason`, `submitted_at`, `finalized_at` or `locked_at`.
 
 ---
 
@@ -1565,11 +1593,13 @@ It may display:
 
 Stage 8 monitoring distinguishes not-started, in-progress, explicit submitted, timeout-finalized and task-close-finalized work. It cannot answer for a Student, rewrite answers, award points, perform checking, create Attempts, extend deadlines, change mode, or expose another Institution. Any required timeout reconciliation reuses the same finalizer.
 
+Stage 9 keeps the monitoring wire format (`S09-T6`): a `checked` Attempt counts as `finalized`, a waiting Attempt as `waiting_for_teacher_review`, and every Student row keeps `score: null` through Stage 9. The Teacher reads scores from the review resources (§16.9).
+
 ---
 
 # 16. Scoring Architecture
 
-Stage 9 owns Question checking/review, awarded points, Attempt scoring and official Homework/Blitz score selection after Stage 7/8 freeze. Stage 10 owns the dependent Topic result. The full MVP scoring pipeline remains:
+Stage 9 owns, after the Stage 7/8 freeze: automatic checking; Attempt and Answer checking-state transitions; Teacher manual review and correction; awarded points; Attempt scoring and normalization; official task-score selection and persistence; the Teacher review queue and submission detail; Teacher download of submitted answer files (§27.2); the Homework review deadline; and Student visibility of own results (§18.6). Stage 10 owns Homework–Blitz comparison, Topic results, categories, result release actions, Parent visibility, result closure, and the `409 result_closed` guard on review corrections after closure. The full MVP scoring pipeline remains:
 
 ```text
 Question score
@@ -1585,21 +1615,26 @@ Topic result
 
 ## 16.1 Question Score
 
-Each scored question contributes points according to its question-type checking logic.
+Each scored question contributes points according to its question-type checking logic (§13.1, §13.2). An automatic answer receives its points in the automatic checking run; a manual answer receives Teacher-awarded points in review (§16.9). An unanswered Question contributes 0 without an answer row.
 
 ---
 
 ## 16.2 Task Score
 
-Task score combines all scored question points.
-
-If required manual review remains:
+Task score combines all scored question points. Stage 9 stores it on the Attempt:
 
 ```text
-Task score = pending
+Attempt checked:
+  earned_points        = exact sum of the stored awarded_points of the Attempt
+  normalized_score     = §16.3
+  scoring_completed_at = time of the latest scoring
+
+Attempt waiting_for_teacher_review:
+  earned_points = null
+  normalized_score = null
 ```
 
-Do not treat a partial auto-score as the final official task score.
+If required manual review remains, the Attempt is `waiting_for_teacher_review` and its task score is pending. Do not treat a partial auto-score as the final official task score. The automatic run sets the Attempt to `checked` when it leaves no waiting answer and otherwise to `waiting_for_teacher_review`; the review of the last waiting answer moves it to `checked`; a correction recalculates a `checked` Attempt (§18.4).
 
 ---
 
@@ -1611,17 +1646,17 @@ Before homework/blitz comparison:
 Normalized Score = 0–100
 ```
 
-The normalization algorithm should be deterministic.
-
-Example conceptual formula:
+The normalization algorithm is deterministic:
 
 ```text
-normalized = earned_points / total_possible_points * 100
+normalized_score = earned_points × 100 / possible_points
 ```
+
+`possible_points` is the Attempt snapshot taken at Start and is always positive. The result is stored rounded as defined in §16.6.
 
 Draft assessments may temporarily have `total_possible_points = 0` during authoring. Immediately before Homework or Blitz activation, the backend recalculates total points from current Questions and requires `total_possible_points > 0`; a zero-point assessment cannot become active. Normalization is executed only with a positive denominator.
 
-Do not round before threshold comparison or final-score calculation. Category assignment uses the separate integer category-score conversion defined below.
+Apart from the one storage rounding in §16.6, do not round before threshold comparison or final-score calculation. Category assignment uses the separate integer category-score conversion defined below.
 
 ---
 
@@ -1633,21 +1668,94 @@ Exactly one official 0–100 score is resolved for each designated result-bearin
 
 ```text
 official_homework_score =
-highest valid completed score among up to 3 normal Homework attempts
+highest valid completed score among up to 3 normal Homework attempts,
+waiting only for an Attempt that could still overtake it (§14.3)
 ```
 
 ### Blitz
 
 ```text
 official_blitz_score =
-valid completed normal Blitz attempt
+checked normal Blitz attempt #1 when no exception exists
 or
-valid completed Teacher-approved exception attempt when an exception replaces the interrupted/invalid normal attempt
+checked Teacher-approved replacement #2 when an exception replaces the interrupted/invalid normal attempt (§14.5)
 ```
 
 These official scores are the only task scores consumed by the `TopicResultEngine`.
 
 Official-score resolution must preserve the source attempt reference and scoring eligibility history.
+
+`official_task_scores` (`08-database.md` §19.1) is created in Stage 9 and holds rows only for the Homework and the Blitz referenced by the Topic result pair. A row exists exactly while the official score is ready. `selected_by_user_id` is always null; `selected_at` is set when the row is created or when its `official_attempt_id` or `normalized_score` changes. Practice tasks are checked and reviewed like official tasks but never have an official score.
+
+---
+
+## 16.5 Checking Trigger
+
+Stage 9 checking starts right after a freeze commits, outside the freezing transaction, so freeze responses do not change (`S09-T1`). The freeze itself does no checking.
+
+Freezing points: Homework Submit, Homework deadline reconciliation and Homework Teacher close; Blitz Submit, Blitz timeout reconciliation, Blitz Teacher close, and the timeout performed during a Blitz exception grant.
+
+- **HTTP request.** One request-scoped collector gathers the ids of the Attempts the request froze. It registers its `app()->terminating(...)` callback only once per collector instance (a flag) and drains its id list on each run, so nothing is checked twice on later requests: Laravel keeps terminating callbacks, and in tests also scoped instances, for the application's lifetime. The callback runs after the response is built. The trigger is not a queued job, because with `QUEUE_CONNECTION=sync` a job would run inline and leak into the freeze response.
+- **Console command.** Deadline and timeout reconciliation check each frozen Attempt after the reconciliation transaction commits.
+- **Isolation.** Each Attempt is checked in its own transaction. A failure is logged and never propagates; it never rolls back or alters the freeze and never changes the freeze response.
+- **Sweep.** A scheduled command runs every minute without overlap. It checks every Attempt still in `submitted` or `timed_out_finalized`, which also covers history frozen before Stage 9, isolating failures per Attempt. It also re-runs the official resolver (§16.8) for official-task Students that have a `checked` eligible Attempt and no pending eligible Attempt but whose official row is missing or differs from the live evaluation; such a state should not exist, and the sweep repairs it. The Laravel Scheduler is already required for Stage 7/8 deadline and timeout reconciliation (§36.1); the integration harness must run it.
+- **Idempotency.** Checking takes the §16.7 locks and acts only on Attempts in `submitted` or `timed_out_finalized`, so a repeated or concurrent run does nothing.
+
+---
+
+## 16.6 Arithmetic and Precision
+
+`S09-T3` fixes the scoring arithmetic:
+
+- No binary floating point is used in any scoring calculation. The backend uses `brick/math` (`BigDecimal`), declared as a direct dependency of `backend/composer.json` at the already locked version (`0.18.0`, today only transitive through `laravel/framework`). `bcmath` must not be used, because the Docker image does not install it.
+- Text normalization (§13.2) uses `Normalizer` from `symfony/polyfill-intl-normalizer` for NFC, also declared as a direct dependency at its locked version, and `mb_convert_case(..., MB_CASE_FOLD)` for case folding.
+- A partial-credit Question is computed in one step, `points × correct / total`, rounded half-up to 8 decimal places for `attempt_answers.awarded_points`. A fully correct answer always stores exactly `points`, so `earned_points ≤ possible_points` always holds.
+- `earned_points` is the exact sum of the stored `awarded_points` of the Attempt.
+- `normalized_score = earned_points × 100 / possible_points`, rounded half-up to 8 decimal places.
+- Official selection, ties and every later comparison use the stored `normalized_score` values; any bound compared with them (§14.3) is rounded the same way first.
+- API scores are JSON numbers converted from the stored decimal; clients never calculate with them. Display uses one decimal place with standard half-up rounding.
+- Teacher-awarded points (§16.9) follow the Question `points` number rule (`AssessmentPointMath::normalize`: shortest JSON representation, at most 6 fractional digits).
+
+---
+
+## 16.7 Scoring Serialization and Lock Order
+
+Every transaction that may change an official score (automatic checking, review save, correction, Blitz exception grant, and the sweep's re-resolve) locks in this order:
+
+```text
+Topic (shared) → Assessment (shared) → Homework/Blitz task row (shared)
+→ the Student's assessment_students recipient row (FOR UPDATE)
+→ the Student's Attempt rows of that Assessment (FOR UPDATE) → answer rows → official row
+```
+
+- The resolver reads the Student's Attempts of that Assessment only under the recipient lock, so two writers for one Student and Assessment never decide concurrently.
+- The parent chain comes first because the Teacher Homework update (`UpdateTeacherHomework`), the pair designation (`SetTeacherTopicResultPair`) and the Blitz exception grant lock Group, Teacher membership, Topic, Assessment and task rows `FOR UPDATE` first, and only then Attempts and recipients. Taking the same parents first makes scoring serialize with them instead of deadlocking. The Stage 7/8 Start, Submit, answer, deadline, timeout, close and grant paths already take the parents first.
+- `topic_result_pairs` is read without a row lock: the designation cannot change once Attempts exist, and Blitz Start locks the pair before the recipient, so locking it after the recipient would invert that order.
+
+---
+
+## 16.8 Official-Score Resolver and Live Evaluation
+
+`OfficialHomeworkScoreResolver` (§14.3) and `OfficialBlitzScoreResolver` (§14.4, §14.5) run inside every automatic checking run, review save, correction and exception grant for an official task, and in the sweep (§16.5). They create, replace or delete the `official_task_scores` row so that a row exists exactly while the official score is ready.
+
+Between a freeze and its checking run, the row can still show the previous result. Therefore no read trusts the row alone: the official-score read's `ready` status and the Student `score_visible` flag (§18.6) require the row **and** a live evaluation of the Homework rule (§14.3, steps 1-3) or the Blitz rules that yields the same Attempt. The Teacher official-score read (`09-api-contracts.md`) derives its status from the row and the same live evaluation. Stage 10 result closure must use the same live evaluation.
+
+---
+
+## 16.9 Teacher Review and Correction
+
+`ReviewSubmission` saves Teacher points and feedback for the manual answers of one submission (`S09-D6`, `S09-D7`, `S09-T4`):
+
+- **Access.** A submission is a terminal Attempt (`submitted`, `timed_out_finalized`, `waiting_for_teacher_review`, `checked`) of a Homework or Blitz whose Topic is visible to the Teacher (same Institution, `topics.teacher_id`, current Teacher–Group membership) and whose Student is a persisted recipient. Anything else, including an `in_progress` Attempt, is a privacy-safe `404 resource_not_found`. Topic, Homework and Blitz status (active, closed, archived) do not restrict review.
+- **State.** A submission still in `submitted` or `timed_out_finalized` returns `409 automatic_checking_pending`.
+- **Transaction.** After request validation, one transaction takes the §16.7 locks, evaluates access, state and items again under the locks, and only then writes `awarded_points`, `feedback`, `checking_status = teacher_checked`, `checked_by_user_id` and `checked_at` (server now) for each item, recalculates the Attempt (§16.2) and runs the resolver (§16.8).
+- **Partial and concurrent review.** A subset of the manual answers may be saved. Concurrent reviews of one submission serialize on the locks; each answer keeps the last committed value. Review uses no `Idempotency-Key`.
+- **Correction.** The same action on `teacher_checked` answers keeps the Attempt `checked`, recalculates it and re-resolves the official score, which may move to another Attempt. Stage 9 has no closure guard, so a correction is always allowed; Stage 10 adds `409 result_closed` after result closure.
+- **History.** Only the last reviewer and time are kept, in `checked_by_user_id` and `checked_at`; there is no review history table in the MVP.
+- **Homework review deadline.** `homework_assignments.review_due_at` is a reminder only: it never changes scores, statuses or official selection. Blitz has none.
+- **Device.** Review is desktop-only in the UI; the API does not check the device. Teacher mobile shows only read-only waiting-for-review and overdue counts (§22.4).
+
+Exact request, response and error shapes belong in `09-api-contracts.md`.
 
 ---
 
@@ -1683,7 +1791,7 @@ rule_snapshot
 
 ## 17.2 Comparison
 
-All values in the comparison use **unrounded internal precision**.
+All values in the comparison use **unrounded internal precision**: the stored Stage 9 official scores (§16.6) without further rounding.
 
 ```text
 H = official homework score
@@ -1795,8 +1903,8 @@ ScorePrecisionPolicy
 
 Approved behavior:
 
-- Preserve sufficient decimal precision for question, task, official-score, difference, and final-result calculations.
-- Do **not** round Homework or Blitz scores before `D = abs(H - B)`.
+- Preserve sufficient decimal precision for question, task, official-score, difference, and final-result calculations. Stage 9 stores awarded points and normalized scores rounded half-up to 8 decimal places (§16.6); calculations never round these stored values again.
+- Do **not** round the stored Homework or Blitz scores further before `D = abs(H - B)`.
 - Do **not** alter the authoritative final internal score for calculation history. Derive a separate integer `category_score` only for category resolution using `.0`–`.5` down and `>.5` up.
 - User-facing numeric scores are displayed with **one decimal place** using standard mathematical rounding.
 - API/database contracts must distinguish authoritative stored/calculation precision from presentation formatting.
@@ -1819,6 +1927,8 @@ A Student+Topic result may close only from a terminal educational state:
 2. definitive `not_completed`, after required work can no longer validly be completed.
 
 Waiting states cannot close. Closure is per Student+Topic and does not require class-wide Homework/Blitz closure. Result release is independent and may occur before or after closure according to institution policy. After closure, manual score correction, additional Blitz exception grant, official pair/cohort changes, official-score replacement, recalculation, final score, consistency, and category are immutable in the MVP.
+
+Closure must re-check the live Attempt state with the §16.8 live evaluation rather than trusting the official row alone. Stage 10 enforces the correction block with `409 result_closed` on review corrections after closure; until Stage 10 exists, a correction is always allowed (§16.9).
 
 ---
 
@@ -1891,6 +2001,25 @@ Stage 9 Blitz checking:     frozen execution -> waiting_for_teacher_review / che
 
 For Homework, `submitted` means frozen Student work awaiting later checking; it does not imply explicit Student Submit or completed scoring. Only explicit Student Submit sets `submitted_at`.
 
+Stage 9 checking-state transitions (`S09-T1`):
+
+```text
+Answer checking_status:
+  pending → auto_checked                          (automatic types; zero-point manual answers)
+  pending → waiting_for_teacher_review            (manual answer with a row and points > 0)
+  waiting_for_teacher_review → teacher_checked    (Teacher review)
+  teacher_checked → teacher_checked               (Teacher correction)
+
+Attempt status:
+  submitted | timed_out_finalized
+    → checked                     (automatic run leaves no waiting answer)
+    → waiting_for_teacher_review  (at least one waiting answer)
+  waiting_for_teacher_review → checked   (last waiting answer reviewed)
+  checked → checked                      (correction recalculates)
+```
+
+On `checked`, `earned_points`, `normalized_score` and `scoring_completed_at` (time of the latest scoring) are set; while the Attempt waits, `earned_points` and `normalized_score` stay null. `finalization_reason`, `submitted_at`, `finalized_at` and `locked_at` never change. After checking, a timed-out Blitz Attempt is no longer `timed_out_finalized`; rules that must still recognize the timeout key on `finalization_reason = timeout_auto_submit` (§14.4, §23.4).
+
 For an approved technical Blitz exception, the original affected attempt additionally needs explicit scoring-eligibility/exclusion metadata and a link/reason context sufficient for history.
 
 Exact persistence representation belongs in `08-database.md`.
@@ -1943,6 +2072,17 @@ or equivalent visibility state.
 A Parent result must never become visible before the Student result is visible.
 
 Exact schema belongs in `08-database.md`.
+
+Stage 9 Attempt result visibility (`S09-D3`, `S09-D5`) is derived at read time; Stage 9 stores no visibility state. An Attempt result is visible to its Student when all hold:
+
+```text
+attempt.status = checked
++ attempt.official_score_eligible = true
++ institution student_result_release_mode = automatic
++ (Homework) or (Blitz with status closed or archived)
+```
+
+With `manual_teacher` or an unconfigured mode nothing is visible in Stage 9; Stage 10 adds visibility through result release. An invalidated Blitz #1 never shows a score; the Student sees it as invalidated. Answer feedback is shown only when the result is visible. The Homework `score_visible` flag is true exactly when the Homework is the official one, its official score is ready by the §16.8 live evaluation, and the release mode is `automatic`. A Student never receives correct answers, answer keys, per-Question awarded points, per-answer checking status, reviewer identity or `review_due_at`. Parents see nothing new in Stage 9. Exact Student fields belong in `09-api-contracts.md`.
 
 ---
 
@@ -2333,7 +2473,7 @@ Primary authoring/review surface:
 - Materials
 - Homework builder
 - Blitz builder
-- Manual checking
+- Manual checking and correction (Stage 9 submission review is desktop-only, `S09-D7`)
 - Detailed results
 - Reports
 
@@ -2349,6 +2489,7 @@ Quick classroom/monitoring surface:
 - Blitz activation
 - Blitz monitoring
 - Student-specific Blitz exception grant where authorized (desktop-only in Stage 8, `S08-FE-006` §4; not yet delivered on mobile)
+- Read-only "waiting for review" and "overdue" counts on Homework/Blitz details; Stage 9 submission review and correction are not available on mobile (`S09-D7`)
 - Basic result review
 - Student/Parent release actions where institution policy requires Teacher action
 
@@ -2455,7 +2596,7 @@ High-risk client mutations use one normative idempotency contract. `Idempotency-
 - Blitz activation
 - Granting a Student-specific Blitz attempt exception
 
-A safe retry with the same key/request identity returns the same logical result. Other concurrent mutations such as manual review and result calculation use transactional state/version guards; they do not invent a second public idempotency contract unless `09-api-contracts.md` explicitly adds one.
+A safe retry with the same key/request identity returns the same logical result. Other concurrent mutations such as manual review and result calculation use transactional state/version guards (Stage 9 review saves serialize on the §16.7 lock order and take no `Idempotency-Key`); they do not invent a second public idempotency contract unless `09-api-contracts.md` explicitly adds one.
 
 Stage 8 reuses durable `idempotency_records` with exactly `student.blitz.attempt.start`, `student.blitz.attempt.submit`, `teacher.blitz.activate`, and `teacher.blitz.attempt_exception.grant`. Blitz Submit never substitutes a generic Assessment operation or merges with unchanged `student.homework.attempt.submit`. Answer PUT, file mutation, Teacher Close, schedule, archive and result-pair PUT gain no key requirement. Replay always requires current authorization.
 
@@ -2463,7 +2604,7 @@ All three Blitz Start intents use `student.blitz.attempt.start`; fingerprint ide
 
 For activation, authorized completed same-key replay with valid persisted activation evidence and valid result metadata returns `200` with the current resource for active/closed/archived; closed/archived confirms historical activation without reopening. A completed-success record pointing to draft/scheduled, or missing/invalid activation evidence/result metadata, fails closed as an internal integrity inconsistency. Fresh/new-key active activation returns naturally idempotent `200` and may complete the new claim to that Blitz. Both success paths perform zero activation-domain mutation: no rewrite of activation, snapshot, common end, recipients, cohort or pair identity/lock. Fresh closed/archived requests return respectively `409 task_closed`/`409 task_archived`, with no successful claim; first eligible draft/scheduled activation follows §15.1.
 
-Blitz Submit uses the shared submit route with `student.blitz.attempt.submit`. A new request finding due in-progress work commits timeout reconciliation, returns `409 blitz_time_expired`, and leaves neither a new successful Submit result nor an incomplete claim. New timeout-finalized requests also return `409 blitz_time_expired`; all other terminal execution/checking history returns `409 attempt_not_editable`. A completed successful same-key Submit replays `200` if the original `student_submit` reason, non-null `submitted_at` and matching finalized/locked times remain, including later Stage 9 review/checked states, without exposing checking/score metadata.
+Blitz Submit uses the shared submit route with `student.blitz.attempt.submit`. A new request finding due in-progress work commits timeout reconciliation, returns `409 blitz_time_expired`, and leaves neither a new successful Submit result nor an incomplete claim. New requests for a terminal Attempt with `finalization_reason = timeout_auto_submit`, whatever its later checking status, also return `409 blitz_time_expired`; all other terminal execution/checking history returns `409 attempt_not_editable`. A completed successful same-key Submit replays `200` if the original `student_submit` reason, non-null `submitted_at` and matching finalized/locked times remain, including later Stage 9 review/checked states, without exposing checking/score metadata.
 
 Homework Start and final Submit use durable PostgreSQL records, with operation codes `student.homework.attempt.start` and `student.homework.attempt.submit`; process/request/Flutter/cache-only timing state is insufficient. The lookup and unique scope is authenticated `institution_id + user_id + operation + idempotency_key`. A deterministic fingerprint covers the operation, authenticated Institution/User, route target UUIDs, and normalized semantic body fields, never secrets, Authorization tokens, or the key itself. Same scope/key/fingerprint replays the original logical resource and successful semantic HTTP status without a second mutation; different-fingerprint reuse returns `409 idempotency_key_reused` with no domain mutation. Authorization and tenant/assignment/ownership checks always remain mandatory. Completed records are not automatically expired or deleted in the MVP.
 
@@ -2500,9 +2641,9 @@ Codex, database design, and API design must implement these decisions as fixed M
 **Approved**
 
 - Homework: exactly 3 normal attempts.
-- Official Homework score: highest valid completed score.
+- Official Homework score: highest valid completed score, waiting only for an Attempt that could still overtake it (§14.3).
 - Blitz: exactly 1 normal attempt.
-- Official Blitz score: the valid completed Blitz attempt, except when an approved exception replaces an interrupted/invalid normal attempt.
+- Official Blitz score: the valid completed Blitz attempt, except when an approved exception replaces an interrupted/invalid normal attempt (§14.4, §14.5).
 
 Architecture:
 
@@ -2521,7 +2662,7 @@ Architecture:
 - Valid technical or other approved reason is required.
 - Original interrupted/invalid attempt remains in history.
 - Original affected attempt is excluded from official scoring under the exception.
-- Stage 9 later uses the eligible valid replacement as the potential official Blitz score source.
+- Stage 9 later uses the eligible valid replacement as the potential official Blitz score source; the grant withdraws an existing official Blitz score, and until the replacement is checked there is no official Blitz score (§14.5).
 - No task-wide attempt increase.
 
 New grants require active Blitz, existing terminal or canonically timeout-reconciled #1, no earlier exception/#2 and the §14.5 authorization/reason rules. Pre-deadline editable #1 and draft/scheduled/closed/archived reject; Teacher Close permanently blocks new grants. An elapsed synchronized end alone does not block a valid active grant. Granting preserves #1 and creates no #2.
@@ -2594,8 +2735,8 @@ Architecture:
 - Multiple-choice: selection cap equals correct-option count; fraction of correctly selected options / total correct options
 - Matching: fraction of correct pairs
 - Ordering: fraction of correctly positioned items
-- Fill-in-the-blank: fraction of correct blanks
-- Short written: auto all-or-nothing when accepted-answer rules permit, otherwise Teacher review
+- Fill-in-the-blank: fraction of correct blanks, compared with the short-answer normalization
+- Short written: automatic all-or-nothing normalized match with `checking_mode = automatic`, Teacher review with `checking_mode = manual`; only short written can be switched to manual checking
 - Open written/file-based: Teacher-assigned points
 
 Architecture:
@@ -2610,9 +2751,9 @@ Architecture:
 
 **Approved**
 
-- Store/calculate with unrounded precision.
-- Threshold comparison uses unrounded values.
-- Final calculation uses unrounded values.
+- Calculate with exact decimals; no binary floating point.
+- Store Question awarded points and Attempt normalized scores rounded half-up to 8 decimal places (§16.6); calculations never round these stored values again.
+- Official selection, threshold comparison and final calculation use the stored scores without further rounding.
 - Understanding category uses the derived integer `category_score`.
 - User-facing scores display one decimal place.
 
@@ -2881,6 +3022,8 @@ Return protected file response / signed access
 
 Exact delivery method belongs in deployment/API design.
 
+Stage 9 Teacher access to submitted files (`S09-T5`): the protected download also authorizes a Teacher for a `student_submission` File whose answer belongs to a submission the Teacher may review (§16.9 access). Files of `in_progress` Attempts stay Student-only. Everything else stays a privacy-safe `404 resource_not_found`.
+
 ---
 
 ## 27.3 File Naming
@@ -3039,7 +3182,7 @@ Examples:
 - Who activated Blitz
 - Which Student submitted or timed out on an Attempt
 - Which Teacher granted a Blitz attempt exception and the recorded reason
-- Which Teacher reviewed a manual answer
+- Which Teacher last reviewed a manual answer, and when (`checked_by_user_id`, `checked_at`; no review history table in the MVP)
 - Which designated Homework/Blitz pair produced the Result
 - Which timer-start mode/duration governed a Blitz
 - Which rules produced the Result
@@ -3175,6 +3318,8 @@ For Homework, transactions acquire deterministic relevant row locks, then re-rea
 
 Blitz uses its own lifecycle policy with the same transaction, deterministic-lock, locked re-read and authoritative-time re-check requirements. Only `in_progress` may transition; at/equal/after the effective Attempt deadline, timeout reason and exact deadline win over close/late Submit. Close and its required finalizations commit atomically. Start, official pair lock, exception grant and finalization cannot race into duplicate Attempts, two in-progress Attempts, redefined cohort or rewritten terminal history. File replacement rejected after freeze cannot change persisted file identity/content.
 
+Stage 9 scoring writers (automatic checking, the sweep, review save, correction and exception grant) all take the §16.7 lock order. Two writers for one Student and Assessment therefore never decide the official score concurrently, concurrent review saves keep the last committed value per answer, and checking acts only on `submitted`/`timed_out_finalized` Attempts, so a duplicate run is a no-op.
+
 ---
 
 # 34. Performance Architecture
@@ -3300,8 +3445,8 @@ Conceptually:
 - Relational database
 - Private file storage
 - Web server/runtime
-- Laravel Scheduler/cron for authoritative Homework-deadline and Blitz-timeout reconciliation
-- Optional queue worker only if a later approved feature needs asynchronous job processing
+- Laravel Scheduler/cron for authoritative Homework-deadline and Blitz-timeout reconciliation and the Stage 9 every-minute checking sweep (§16.5)
+- Optional queue worker only if a later approved feature needs asynchronous job processing; Stage 9 checking uses no queue
 
 MVP core workflows should not require a complex distributed platform.
 
@@ -3495,13 +3640,13 @@ Unused infrastructure is not.
 
 ## Approved Decision-Dependent Architecture
 
-- Homework: Stage 7 executes/finalizes exactly 3 normal attempts; Stage 9 later selects the highest valid completed score as official
+- Homework: Stage 7 executes/finalizes exactly 3 normal attempts; Stage 9 later selects the highest valid completed score as official, waiting only for an Attempt that could still overtake it
 - Blitz: 1 normal attempt; one Student-specific Teacher-approved exception attempt
 - Institution Blitz timer mode: synchronized or individual
 - Teacher-configured whole-Blitz duration
 - Server-authoritative timeout auto-finalization
 - Approved partial-credit rules with Multiple-choice selection cap
-- Unrounded internal calculations; one-decimal user display; integer category-score conversion
+- Exact decimal calculations with one half-up 8-decimal storage rounding of awarded points and normalized scores; one-decimal user display; integer category-score conversion
 - Institution-configured Student/Parent release modes
 - 25 MB learning-material and 15 MB Student-submission hard limits
 - UTC authoritative timestamps + institution IANA timezone
@@ -3509,7 +3654,7 @@ Unused infrastructure is not.
 
 The original ten architecture-affecting MVP business decisions and all post-audit clarifications are resolved. The final read-only cross-document consistency audit passed; this architecture is locked for MVP implementation.
 
-Post-audit architecture also fixes mandatory first-login password gating, incomplete institution-setting prerequisites, activation `total_possible_points > 0`, deterministic automatic Short Written normalization, earliest-attempt Homework tie-breaking, task-close auto-finalization, result-closure preconditions, idempotent institution lifecycle commands, and required idempotency headers for the five high-risk client mutations. Stage 7 locks the Homework execution/freeze boundary; Stage 8 locks the Blitz execution/finalization boundary. Stage 9 later owns checking/scoring for both.
+Post-audit architecture also fixes mandatory first-login password gating, incomplete institution-setting prerequisites, activation `total_possible_points > 0`, deterministic automatic Short Written normalization, earliest-attempt Homework tie-breaking, task-close auto-finalization, result-closure preconditions, idempotent institution lifecycle commands, and required idempotency headers for the five high-risk client mutations. Stage 7 locks the Homework execution/freeze boundary; Stage 8 locks the Blitz execution/finalization boundary. Stage 9 later owns checking/scoring for both, triggered right after each freeze commits (§16.5).
 
 ---
 
@@ -3517,7 +3662,7 @@ Post-audit architecture also fixes mandatory first-login password gating, incomp
 
 The `AttemptService` owns one authoritative reusable transition such as `FinalizeHomeworkAttemptsAtDeadline`. It is invoked for relevant Student Homework/Attempt reads, Attempt Start, typed/file answer mutation, final Submit, Teacher close when the deadline may have passed, and Laravel Scheduler. Every write independently enforces `server_now < deadline_at`; device time and Scheduler latency never extend eligibility.
 
-At `server_now >= deadline_at`, the action creates no Attempt for a never-started Student, makes unused capacity unavailable, and transitions only existing `in_progress` Homework Attempts from their already-committed saved state. It neither fabricates unanswered answer rows nor performs Stage 9 checking/scoring.
+At `server_now >= deadline_at`, the action creates no Attempt for a never-started Student, makes unused capacity unavailable, and transitions only existing `in_progress` Homework Attempts from their already-committed saved state. It neither fabricates unanswered answer rows nor performs Stage 9 checking/scoring; Stage 9 checks the frozen Attempts after the reconciliation transaction commits (§16.5).
 
 The finalization metadata is:
 

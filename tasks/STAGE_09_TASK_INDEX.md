@@ -5,14 +5,14 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 9 — Checking and Scoring` (`docs/06-roadmap.md` §14) |
-| Stage status | `Planning approved — implementation not started` |
+| Stage status | `Implementation in progress` |
 | Verification model | `Workflow v3 — Lean Verification + Backend/Frontend Phase 2 + Real-Stack Integration` |
 | Decomposition status | `Approved by the Project Owner (2026-09-28)` |
 | Planning baseline `origin/main` | `b07bdb14` (Stage 8 closed; `API-FIX-001` merged) |
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `FE-UX-001` readiness, then `S09-DOC-001` |
+| Next permitted gate | `S09-DOC-001` delivery, then `S09-BE-001` readiness |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -127,8 +127,8 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 
 | Order | Task ID | Area | Outcome | Depends on | Readiness | Delivery | Contract |
 |---|---|---|---|---|---|---|---|
-| `0` | `FE-UX-001` | Frontend (platform) | Student answer autosave; no Save button; no jump to Question 1 | Decomposition approved | `Approved` (revalidated on `main` `3ad88fb`) | Implemented — PR open, awaiting review and owner smoke | `tasks/frontend/FE-UX-001-student-answer-autosave.md` |
-| `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Draft — contract in this package` | Not started | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
+| `0` | `FE-UX-001` | Frontend (platform) | Student answer autosave; no Save button; no jump to Question 1 | Decomposition approved | `Approved` (revalidated on `main` `3ad88fb`) | Accepted — delivered (PR #288, `main` `4432f27`) | `tasks/frontend/FE-UX-001-student-answer-autosave.md` |
+| `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Approved` (revalidated on `main` `4432f27`) | Implemented — PR open, awaiting owner merge | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
 | `2` | `S09-BE-001` | Backend | Checking domain: nine type checkers, text normalizer, exact partial credit, normalization; `brick/math` and the NFC polyfill declared as direct dependencies | `DOC-001` | Not written | Not started | `tasks/backend/stage-09/` |
 | `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint), review-queue index | `BE-001` | Not written | Not started | `tasks/backend/stage-09/` |
 | `4` | `S09-BE-003` | Backend (+ FE parser if needed) | Automatic checking pipeline, post-freeze trigger, minute sweep, `S09-T2` rekey, historical Homework reads | `BE-002` | Not written | Not started | `tasks/backend/stage-09/` |
@@ -198,6 +198,7 @@ Only a row whose readiness is `Approved` may be implemented.
 | `CL-7` Homework activation lacks `official_cohort_mismatch` | Stage 8 closure (`CL-D1`) | `S09-FE-001` |
 | `INT-D2` autosave | Stage 8 integration | `FE-UX-001` (`S09-D8`) |
 | Topic-result feedback, Parent-visible feedback flag | Planning audit #6 | Stage 10 planning |
+| `topic_results.official_homework_score_id`/`official_blitz_score_id` default to `ON DELETE RESTRICT` (`docs/08` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; score no longer ready) | `S09-DOC-001` implementation | Stage 10 planning: decide the reference rule before `topic_results` exists |
 
 ## 11. Current Stage State
 
@@ -206,6 +207,13 @@ Only a row whose readiness is `Approved` may be implemented.
 - Planning package merged (PR #287, `main` `3ad88fb`).
 - `FE-UX-001` readiness revalidated on `3ad88fb` (no Student screen change since the contract); implemented on
   `feat/fe-ux-001-student-answer-autosave`; PR open. Next after merge: `S09-DOC-001`.
+- 2026-09-29: `FE-UX-001` accepted and delivered (PR #288, `main` `4432f27`) after two independent
+  fresh-context reviews (all findings fixed with failing-first tests); merged by the Project Owner.
+- `S09-DOC-001` readiness revalidated on `4432f27`: its dependency is delivered and the documents changed
+  since the planning baseline only in the `FE-UX-001` autosave lines. Implementation in progress on
+  `docs/s09-doc-001-checking-scoring-alignment`.
+- `S09-DOC-001` implemented; the independent fresh-context review found P1 = 0, P2 = 1, P3 = 8, all fixed and
+  re-verified (final P1 = 0, P2 = 0). PR open. Next after merge: `S09-BE-001` contract and readiness.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -247,3 +255,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 |---|---|
 | 2026-09-28 | Index created: owner decisions, technical decisions, planning audit, approved task order |
 | 2026-09-28 | Independent planning review applied (§12); owner decision `S09-D8a` |
+| 2026-09-29 | `FE-UX-001` accepted and delivered (PR #288); `S09-DOC-001` readiness approved on `4432f27` |
