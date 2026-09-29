@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-002`, then `S09-BE-003` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-003A`, then `S09-BE-003B` |
 
 Current Stage 5 progress:
 
@@ -1160,9 +1160,11 @@ their historical completion handoffs.
 - `FE-UX-001`: accepted and delivered (PR #288, `main` `4432f27`).
 - `S09-DOC-001`: accepted and delivered (PR #289, `main` `4cff8af`).
 - `S09-BE-001` (checking domain): accepted and delivered (PR #290, `main` `830b9b1`).
-- `S09-BE-002` (official-score storage, Homework review deadline): contract approved on `830b9b1`;
-  implemented; PR open.
-- Next permitted action: after `S09-BE-002` merges, `S09-BE-003` contract and readiness.
+- `S09-BE-002` (official-score storage, Homework review deadline): accepted and delivered (PR #291,
+  `main` `9b772b4`).
+- `S09-BE-003` split into `S09-BE-003A` (checking readiness of Stage 7/8 reads and timeout rules) and
+  `S09-BE-003B` (checking pipeline). `S09-BE-003A`: approved on `9b772b4`; implemented; PR open.
+- Next permitted action: after `S09-BE-003A` merges, `S09-BE-003B` contract and readiness.
 
 ---
 

@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-BE-002` delivery, then `S09-BE-003` contract and readiness |
+| Next permitted gate | `S09-BE-003A` delivery, then `S09-BE-003B` contract and readiness |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -130,9 +130,10 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `0` | `FE-UX-001` | Frontend (platform) | Student answer autosave; no Save button; no jump to Question 1 | Decomposition approved | `Approved` (revalidated on `main` `3ad88fb`) | Accepted — delivered (PR #288, `main` `4432f27`) | `tasks/frontend/FE-UX-001-student-answer-autosave.md` |
 | `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Approved` (revalidated on `main` `4432f27`) | Accepted — delivered (PR #289, `main` `4cff8af`) | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
 | `2` | `S09-BE-001` | Backend | Checking domain: the seven automatic checkers, checking route, text normalizer, exact decimal score arithmetic; `brick/math` and the NFC polyfill declared as direct dependencies | `DOC-001` | `Approved` (on `main` `4cff8af`) | Accepted — delivered (PR #290, `main` `830b9b1`) | `tasks/backend/stage-09/S09-BE-001-checking-domain.md` |
-| `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint) | `BE-001` | `Approved` (on `main` `830b9b1`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-002-scoring-persistence-review-deadline.md` |
-| `4` | `S09-BE-003` | Backend (+ FE parser if needed) | Automatic checking pipeline, post-freeze trigger, minute sweep, `S09-T2` rekey, historical Homework reads | `BE-002` | Not written | Not started | `tasks/backend/stage-09/` |
-| `5` | `S09-BE-004` | Backend | Official score resolver (Homework, Blitz, grant withdrawal) | `BE-003` | Not written | Not started | `tasks/backend/stage-09/` |
+| `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint) | `BE-001` | `Approved` (on `main` `830b9b1`) | Accepted — delivered (PR #291, `main` `9b772b4`) | `tasks/backend/stage-09/S09-BE-002-scoring-persistence-review-deadline.md` |
+| `4a` | `S09-BE-003A` | Backend | Checking readiness: `S09-T2` timeout rekey, historical Homework reads (no checking yet) | `BE-002` | `Approved` (on `main` `9b772b4`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-003A-checking-readiness.md` |
+| `4b` | `S09-BE-003B` | Backend (+ FE parser if needed) | Automatic checking pipeline, post-freeze trigger, minute sweep, deliberate Stage 7/8 test updates | `BE-003A` | Not written | Not started | `tasks/backend/stage-09/` |
+| `5` | `S09-BE-004` | Backend | Official score resolver (Homework, Blitz, grant withdrawal) | `BE-003B` | Not written | Not started | `tasks/backend/stage-09/` |
 | `6` | `S09-BE-005` | Backend + FE parser | Review queue (with its supporting index), submission detail, `review_summary`, Teacher file download | `BE-004` | Not written | Not started | `tasks/backend/stage-09/` |
 | `7` | `S09-BE-006` | Backend | Review save and correction, recalculation | `BE-005` | Not written | Not started | `tasks/backend/stage-09/` |
 | `8` | `S09-BE-007` | Backend + FE parser | Official-score read; Student `result`, `feedback`, `attempt_results`, `official_score`; `GET /student/blitz/finished` | `BE-006` | Not written | Not started | `tasks/backend/stage-09/` |
@@ -156,7 +157,8 @@ Only a row whose readiness is `Approved` may be implemented.
   or API.
 - **`S09-BE-002`** includes the Teacher Homework API field and the Teacher Homework parser change
   (`S09-T8`); no UI.
-- **`S09-BE-003`** changes the Stage 7/8 freeze paths only by adding the post-commit checking trigger
+- **`S09-BE-003`** (delivered as `S09-BE-003A` readiness + `S09-BE-003B` pipeline) changes the Stage 7/8
+  freeze paths only by adding the post-commit checking trigger
   (`app()->terminating`, not a queued job), rekeys the Stage 8 Start/Resume and Submit timeout rules
   (`S09-T2`), and switches Homework Student reads and Submit replays to the historical answer
   canonicalization (today they fail on non-`pending` answers). It uses the `S09-DOC-001` §8 lock order
@@ -221,6 +223,10 @@ Only a row whose readiness is `Approved` may be implemented.
 - `S09-BE-001` accepted and delivered (PR #290, `main` `830b9b1`).
 - `S09-BE-002` contract written and approved on `830b9b1`; the review-queue index moves to `S09-BE-005`,
   where the queue query shape is defined. Implemented on `feat/s09-be-002-scoring-persistence-review-deadline`.
+- `S09-BE-002` accepted and delivered (PR #291, `main` `9b772b4`).
+- `S09-BE-003` is split: `S09-BE-003A` makes Stage 7/8 reads and timeout rules ready for checked Attempts
+  (no status or answer changes); `S09-BE-003B` adds the checking pipeline, trigger, sweep and the deliberate
+  Stage 7/8 test updates. `S09-BE-003A` approved on `9b772b4` and implemented.
   Independent review: P1 = 0, P2 = 2 (a `review_due_at`-only PATCH re-synchronized recipients; update-path
   parsing untested), P3 = 6; fixed with tests, except the optional strict-request noise item (kept: it only
   adds messages to already-rejected requests).
@@ -268,3 +274,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-09-29 | `FE-UX-001` accepted and delivered (PR #288); `S09-DOC-001` readiness approved on `4432f27` |
 | 2026-09-29 | `S09-DOC-001` accepted and delivered (PR #289); `S09-BE-001` contract approved on `4cff8af` |
 | 2026-09-29 | `S09-BE-001` delivered (PR #290); `S09-BE-002` approved on `830b9b1`; review-queue index moved to `S09-BE-005` |
+| 2026-09-29 | `S09-BE-002` delivered (PR #291); `S09-BE-003` split into `003A` (readiness) and `003B` (pipeline) |

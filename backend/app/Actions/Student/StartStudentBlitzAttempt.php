@@ -5,6 +5,7 @@ namespace App\Actions\Student;
 use App\Actions\Blitz\FinalizeTimedOutBlitzAttempts;
 use App\Enums\AssessmentAssignmentMode;
 use App\Enums\AssessmentAssignmentSource;
+use App\Enums\AssessmentAttemptFinalizationReason;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\BlitzStatus;
 use App\Enums\BlitzTimerStartMode;
@@ -115,7 +116,8 @@ final class StartStudentBlitzAttempt
                     throw new NotFoundHttpException;
                 }
 
-                if ($current->status === AssessmentAttemptStatus::TimedOutFinalized) {
+                // S09-T2: a timeout stays a timeout after Stage 9 checking changes the status.
+                if ($current->finalization_reason === AssessmentAttemptFinalizationReason::TimeoutAutoSubmit) {
                     throw new StudentBlitzTimeExpiredException;
                 }
 
@@ -127,7 +129,7 @@ final class StartStudentBlitzAttempt
                     throw new StudentBlitzAttemptsExhaustedException;
                 }
 
-                if ($current->status === AssessmentAttemptStatus::TimedOutFinalized) {
+                if ($current->finalization_reason === AssessmentAttemptFinalizationReason::TimeoutAutoSubmit) {
                     throw new StudentBlitzTimeExpiredException;
                 }
 

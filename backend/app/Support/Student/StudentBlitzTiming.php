@@ -2,6 +2,7 @@
 
 namespace App\Support\Student;
 
+use App\Enums\AssessmentAttemptFinalizationReason;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\BlitzTimerStartMode;
 use App\Exceptions\Student\StudentBlitzTimeExpiredException;
@@ -65,7 +66,8 @@ final class StudentBlitzTiming
             return;
         }
 
-        if ($attempt?->status === AssessmentAttemptStatus::TimedOutFinalized) {
+        // S09-T2: keyed on the reason, so a checked timed-out Attempt still expires.
+        if ($attempt?->finalization_reason === AssessmentAttemptFinalizationReason::TimeoutAutoSubmit) {
             throw new StudentBlitzTimeExpiredException;
         }
 

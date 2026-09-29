@@ -62,9 +62,10 @@ class ShowStudentHomeworkAttempt
         }
 
         $attempt->setRelation('assessment', $homework);
-        $attempt->setAttribute('student_answer_states', ($this->answerStates)(
-            $student->institution_id, $attempt, $homework->getRelation('questions'),
-        ));
+        // Stage 9 checks frozen Attempts; a terminal Attempt is read in any checking state.
+        $attempt->setAttribute('student_answer_states', $attempt->status === AssessmentAttemptStatus::InProgress
+            ? ($this->answerStates)($student->institution_id, $attempt, $homework->getRelation('questions'))
+            : $this->answerStates->historicalRead($student->institution_id, $attempt, $homework->getRelation('questions')));
 
         return $attempt;
     }

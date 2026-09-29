@@ -130,8 +130,9 @@ class StudentBlitzAttemptSubmitLifecycleTest extends TestCase
                 $cases[] = [$status, $reason, 'attempt_not_editable'];
             }
         }
+        // S09-T2: a timeout stays a timeout after Stage 9 checking.
         foreach (['waiting_for_teacher_review', 'checked'] as $status) {
-            $cases[] = [$status, 'timeout_auto_submit', 'attempt_not_editable'];
+            $cases[] = [$status, 'timeout_auto_submit', 'blitz_time_expired'];
         }
 
         return $cases;
