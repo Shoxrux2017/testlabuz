@@ -39,6 +39,7 @@ class TeacherHomeworkCreateRequest extends TeacherHomeworkMutationRequest
      *     assignment_mode: string,
      *     student_ids: list<string>,
      *     deadline_at: ?string,
+     *     review_due_at: ?string,
      *     questions: list<array<string, mixed>>
      * }
      */
@@ -58,6 +59,7 @@ class TeacherHomeworkCreateRequest extends TeacherHomeworkMutationRequest
             'assignment_mode' => $validated['assignment_mode'],
             'student_ids' => array_map(strtolower(...), $validated['student_ids']),
             'deadline_at' => $validated['deadline_at'] ?? null,
+            'review_due_at' => $validated['review_due_at'] ?? null,
             'questions' => $questions,
         ];
     }

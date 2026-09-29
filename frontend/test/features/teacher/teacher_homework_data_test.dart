@@ -906,6 +906,7 @@ Map<String, Object?> _homeworkJson() {
     'student_ids': <Object?>[],
     'total_possible_points': 0,
     'deadline_at': null,
+    'review_due_at': null,
     'institution_timezone': 'Asia/Tashkent',
     'status': 'draft',
     'attempt_policy': {

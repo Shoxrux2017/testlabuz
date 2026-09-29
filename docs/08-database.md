@@ -2488,12 +2488,14 @@ Stage 9 creates this table. It holds rows only for the Homework and the Blitz re
 
 ```text
 unique(assessment_id, student_id)
+unique(official_attempt_id)
 ```
 
 ### Constraints
 
 ```text
 normalized_score between 0 and 100
+selected_by_user_id is null
 ```
 
 ```text
@@ -3388,7 +3390,13 @@ official_task_scores.student_id
 
 official_task_scores.official_attempt_id
 → assessment_attempts.id
+
+official_task_scores.selected_by_user_id
+→ users.id
 ```
+
+Every reference is tenant-safe: `(institution_id, x_id)` references the parent's `(institution_id, id)`,
+and `institution_id` references `institutions.id`, all `on delete restrict`.
 
 ---
 
@@ -3526,6 +3534,10 @@ attempt_answers(attempt_id, question_id)
 
 ```text
 official_task_scores(assessment_id, student_id)
+```
+
+```text
+official_task_scores(official_attempt_id)
 ```
 
 ```text

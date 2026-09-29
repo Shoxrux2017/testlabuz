@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'institution_id',
     'status',
     'deadline_at',
+    'review_due_at',
     'activated_at',
     'closed_at',
     'archived_at',
@@ -37,6 +38,7 @@ class HomeworkAssignment extends Model
         return [
             'status' => HomeworkStatus::class,
             'deadline_at' => 'datetime',
+            'review_due_at' => 'datetime',
             'activated_at' => 'datetime',
             'closed_at' => 'datetime',
             'archived_at' => 'datetime',

@@ -312,6 +312,7 @@ TeacherHomework teacherHomework({
     deadlineAt: hasDeadline
         ? deadlineAt ?? DateTime.utc(2026, 9, 10, 12)
         : null,
+    reviewDueAt: null,
     institutionTimezone: institutionTimezone,
     status: status,
     attemptPolicy: const TeacherHomeworkAttemptPolicy(

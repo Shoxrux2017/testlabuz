@@ -16,6 +16,7 @@ use App\Models\AssessmentAttempt;
 use App\Models\HomeworkAssignment;
 use App\Models\TopicResultPair;
 use App\Models\User;
+use App\Support\Teacher\InstitutionEducationalDateTime;
 use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
 use App\Support\Teacher\TeacherAssessmentRecipients;
 use App\Support\Teacher\TeacherHomeworkLifecycleAccess;
@@ -36,6 +37,7 @@ final class UpdateTeacherHomework
         private readonly TeacherHomeworkLifecycleAccess $access,
         private readonly TeacherAssessmentRecipients $recipients,
         private readonly InstitutionHomeworkDeadlineAt $deadlineAt,
+        private readonly InstitutionEducationalDateTime $dateTime,
         private readonly ShowTeacherHomework $showTeacherHomework,
     ) {}
 
@@ -73,6 +75,7 @@ final class UpdateTeacherHomework
                 'assignment_mode' => $assessment->assignment_mode->value,
                 'student_ids' => $currentStudentIds,
                 'deadline_at' => $homework->deadline_at,
+                'review_due_at' => $homework->review_due_at,
             ];
 
             foreach ($attributes as $field => $value) {
@@ -80,6 +83,9 @@ final class UpdateTeacherHomework
                     $value = $this->canonicalStudentIds($value);
                 } elseif ($field === 'deadline_at' && is_string($value)) {
                     $value = $this->deadlineAt->parse($teacher, $value);
+                } elseif ($field === 'review_due_at' && is_string($value)) {
+                    // A reminder only, not a fairness field: existing Attempts do not block it.
+                    $value = $this->dateTime->parse($teacher, $value, 'review_due_at');
                 }
 
                 $resulting[$field] = $value;
@@ -88,6 +94,15 @@ final class UpdateTeacherHomework
             $changes = $this->semanticChanges($assessment, $homework, $currentStudentIds, $resulting);
 
             if ($changes === []) {
+                return ($this->showTeacherHomework)($teacher, $assessment->id);
+            }
+
+            // The review deadline is a reminder only: changing just it touches no
+            // recipient or assignment state, exactly like the dedicated endpoint.
+            if (array_keys($changes) === ['review_due_at']) {
+                $homework->review_due_at = $resulting['review_due_at'];
+                $homework->save();
+
                 return ($this->showTeacherHomework)($teacher, $assessment->id);
             }
 
@@ -147,6 +162,13 @@ final class UpdateTeacherHomework
 
             if (isset($changes['deadline_at'])) {
                 $homework->deadline_at = $resulting['deadline_at'];
+            }
+
+            if (isset($changes['review_due_at'])) {
+                $homework->review_due_at = $resulting['review_due_at'];
+            }
+
+            if ($homework->isDirty()) {
                 $homework->save();
             }
 
@@ -220,6 +242,10 @@ final class UpdateTeacherHomework
 
         if (! $this->sameInstant($homework->deadline_at, $resulting['deadline_at'])) {
             $changes['deadline_at'] = true;
+        }
+
+        if (! $this->sameInstant($homework->review_due_at, $resulting['review_due_at'])) {
+            $changes['review_due_at'] = true;
         }
 
         return $changes;

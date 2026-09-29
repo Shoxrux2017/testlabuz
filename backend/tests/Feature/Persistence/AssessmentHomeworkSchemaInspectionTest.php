@@ -38,6 +38,8 @@ class AssessmentHomeworkSchemaInspectionTest extends TestCase
                 'archived_at',
                 'created_at',
                 'updated_at',
+                // Stage 9; PostgreSQL appends added columns.
+                'review_due_at',
             ],
             'assessment_students' => [
                 'id',
@@ -95,9 +97,8 @@ class AssessmentHomeworkSchemaInspectionTest extends TestCase
         $this->assertFalse(Schema::hasColumn('homework_assignments', 'attempt_limit'));
         $this->assertTrue(Schema::hasTable('questions'));
 
-        foreach (['official_task_scores', 'topic_results'] as $table) {
-            $this->assertFalse(Schema::hasTable($table), "Table {$table} is outside this persistence foundation.");
-        }
+        // official_task_scores arrives with Stage 9 (ScoringPersistenceSchemaTest); topic_results is Stage 10.
+        $this->assertFalse(Schema::hasTable('topic_results'), 'Table topic_results is outside this persistence foundation.');
     }
 
     public function test_columns_have_exact_types_nullability_lengths_precision_and_defaults(): void
@@ -300,6 +301,7 @@ class AssessmentHomeworkSchemaInspectionTest extends TestCase
             ['assessments', 'created_at', 'NO'],
             ['assessments', 'updated_at', 'NO'],
             ['homework_assignments', 'deadline_at', 'YES'],
+            ['homework_assignments', 'review_due_at', 'YES'],
             ['homework_assignments', 'activated_at', 'YES'],
             ['homework_assignments', 'closed_at', 'YES'],
             ['homework_assignments', 'archived_at', 'YES'],

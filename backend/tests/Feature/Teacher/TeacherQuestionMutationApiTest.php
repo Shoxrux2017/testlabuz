@@ -239,7 +239,7 @@ class TeacherQuestionMutationApiTest extends TestCase
             ->assertJsonPath('data.questions.0.configuration.correct_value', true);
         $this->assertSame([
             'id', 'topic_id', 'title', 'description', 'student_instructions', 'assignment_mode',
-            'student_ids', 'total_possible_points', 'deadline_at', 'institution_timezone', 'status',
+            'student_ids', 'total_possible_points', 'deadline_at', 'review_due_at', 'institution_timezone', 'status',
             'attempt_policy', 'activated_at', 'closed_at', 'archived_at', 'created_at', 'updated_at', 'questions',
         ], array_keys($response->json('data')));
         $this->assertSame([
@@ -295,7 +295,7 @@ class TeacherQuestionMutationApiTest extends TestCase
             ->assertJsonPath('data.questions.0.configuration', $expectedConfiguration);
         $this->assertSame([
             'id', 'topic_id', 'title', 'description', 'student_instructions', 'assignment_mode',
-            'student_ids', 'total_possible_points', 'deadline_at', 'institution_timezone', 'status',
+            'student_ids', 'total_possible_points', 'deadline_at', 'review_due_at', 'institution_timezone', 'status',
             'attempt_policy', 'activated_at', 'closed_at', 'archived_at', 'created_at', 'updated_at', 'questions',
         ], array_keys($response->json('data')));
         $this->assertSame([

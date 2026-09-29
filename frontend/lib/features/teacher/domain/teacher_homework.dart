@@ -100,6 +100,7 @@ class TeacherHomework {
     required List<String> studentIds,
     required this.totalPossiblePoints,
     required this.deadlineAt,
+    required this.reviewDueAt,
     required this.institutionTimezone,
     required this.status,
     required this.attemptPolicy,
@@ -121,6 +122,9 @@ class TeacherHomework {
   final List<String> studentIds;
   final double totalPossiblePoints;
   final DateTime? deadlineAt;
+
+  /// The Teacher's optional “check by” reminder for manual review (UTC).
+  final DateTime? reviewDueAt;
   final String institutionTimezone;
   final TeacherHomeworkStatus status;
   final TeacherHomeworkAttemptPolicy attemptPolicy;

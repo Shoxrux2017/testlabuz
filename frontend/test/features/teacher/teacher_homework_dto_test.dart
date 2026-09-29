@@ -17,6 +17,7 @@ void main() {
 
         expect(homework.status, status);
         expect(homework.deadlineAt, DateTime.utc(2026, 9, 10, 12));
+        expect(homework.reviewDueAt, DateTime.utc(2026, 9, 12, 13));
         expect(homework.attemptPolicy.normalAttempts, 3);
         expect(
           homework.attemptPolicy.officialScorePolicy,
@@ -30,8 +31,10 @@ void main() {
           '30000000-0000-0000-0000-000000000001',
           '30000000-0000-0000-0000-000000000002',
         ]
-        ..['deadline_at'] = null;
+        ..['deadline_at'] = null
+        ..['review_due_at'] = null;
       final homework = TeacherHomeworkDto.fromJson(selected).toDomain();
+      expect(homework.reviewDueAt, isNull);
 
       expect(
         homework.assignmentMode,
@@ -39,6 +42,21 @@ void main() {
       );
       expect(homework.studentIds, hasLength(2));
       expect(homework.deadlineAt, isNull);
+    });
+
+    test('requires review_due_at as a nullable UTC timestamp', () {
+      expect(
+        () => TeacherHomeworkDto.fromJson(
+          _homeworkJson()..remove('review_due_at'),
+        ),
+        throwsFormatException,
+      );
+      expect(
+        () => TeacherHomeworkDto.fromJson(
+          _homeworkJson()..['review_due_at'] = '2026-09-12T18:00:00+05:00',
+        ),
+        throwsFormatException,
+      );
     });
 
     test('parses every Question type into typed configuration', () {
@@ -378,6 +396,7 @@ Map<String, Object?> _homeworkJson({
     'student_ids': <Object?>[],
     'total_possible_points': 18.5,
     'deadline_at': '2026-09-10T12:00:00Z',
+    'review_due_at': '2026-09-12T13:00:00Z',
     'institution_timezone': 'Asia/Tashkent',
     'status': status.value,
     'attempt_policy': {

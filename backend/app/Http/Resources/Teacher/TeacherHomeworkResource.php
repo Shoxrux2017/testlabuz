@@ -44,6 +44,7 @@ class TeacherHomeworkResource extends JsonResource
             'student_ids' => $studentIds,
             'total_possible_points' => (float) $this->total_possible_points,
             'deadline_at' => $this->timestamp($homework->deadline_at),
+            'review_due_at' => $this->timestamp($homework->review_due_at),
             'institution_timezone' => $timezone,
             'status' => $homework->status->value,
             'attempt_policy' => [

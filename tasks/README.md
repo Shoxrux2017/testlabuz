@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-001`, then `S09-BE-002` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-002`, then `S09-BE-003` |
 
 Current Stage 5 progress:
 
@@ -1159,8 +1159,10 @@ their historical completion handoffs.
 - Planning package merged (PR #287, `main` `3ad88fb`).
 - `FE-UX-001`: accepted and delivered (PR #288, `main` `4432f27`).
 - `S09-DOC-001`: accepted and delivered (PR #289, `main` `4cff8af`).
-- `S09-BE-001` (checking domain): contract approved on `4cff8af`; implemented; PR open.
-- Next permitted action: after `S09-BE-001` merges, `S09-BE-002` contract and readiness.
+- `S09-BE-001` (checking domain): accepted and delivered (PR #290, `main` `830b9b1`).
+- `S09-BE-002` (official-score storage, Homework review deadline): contract approved on `830b9b1`;
+  implemented; PR open.
+- Next permitted action: after `S09-BE-002` merges, `S09-BE-003` contract and readiness.
 
 ---
 
