@@ -448,7 +448,7 @@ Only assigned students and authorized institution users may access an active top
 Closing a topic must block new homework or blitz submissions when the connected task rules no longer permit them. Existing submissions may still be reviewed. A topic cannot be closed or archived while any of its Homework is draft or active, or any of its Blitz is draft, scheduled or active; the request returns `409 topic_has_open_assessments` and changes nothing.
 
 **BR-TOP-010 — Archiving a topic**  
-Archiving must preserve materials, tasks, submissions, results, and reports as read-only historical information for authorized users.
+Archiving must preserve materials, tasks, submissions, results, and reports as read-only historical information for authorized users. Stage 9 automatic checking of frozen Attempts and Teacher review and correction of existing submissions remain allowed (BR-Q-037).
 
 **BR-TOP-011 — Status transition integrity**  
 A topic with student submissions must not be returned to an editable draft state in a way that changes the meaning of completed work.
@@ -625,7 +625,7 @@ Assigned students may start and submit active homework only while deadline, atte
 Closing Homework blocks new Starts and Student answer/file/Submit writes. Before the deadline, the backend captures one `closedAt = server_now` and atomically closes the Homework and freezes every still-`in_progress` Attempt as `status = submitted`, `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`; all changes commit or roll back together. Finalization preserves only already-committed Student answers/files as pending, performs no Stage 7 checking/scoring, and creates neither an Attempt for a never-started Student nor an answer row for an unanswered Question. At or after the deadline, close must reconcile the deadline first and preserve `homework_deadline_auto_submit` plus the exact deadline timestamp. Repeated close/finalization must not rewrite an already-frozen reason or timestamp. Stage 9 may later check the frozen work and apply the approved missing-answer-zero policy.
 
 **BR-HW-013 — Archived homework**  
-Archived homework must be retained for history and reports and must not accept new activity.
+Archived homework must be retained for history and reports and must not accept new activity. Stage 9 automatic checking of its frozen Attempts and Teacher review and correction of its existing submissions remain allowed (BR-Q-037); only its review deadline can no longer change (BR-HW-018A).
 
 ### Deadlines
 

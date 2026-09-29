@@ -2989,12 +2989,12 @@ Strict JSON body with exactly one key; no query parameters; no `Idempotency-Key`
 
 ### Access and Checks
 
-Access and locks are those of Section 15.4: the Homework must be visible to the authenticated Teacher, otherwise privacy-safe `404 resource_not_found`; the Topic, Assessment and Homework rows are locked in that order. Then, in this order:
+Access and locks are those of the Teacher Homework update (`UpdateTeacherHomework`): the Homework must be visible to the authenticated Teacher, otherwise privacy-safe `404 resource_not_found`; the Topic, Assessment and Homework rows are locked in that order. Then, in this order:
 
 1. Archived Homework → `409 task_archived`.
 2. Topic `closed` or `archived` → `409 topic_not_editable`.
 
-These are the existing codes and precedence of Section 15.4.
+These are the existing codes and precedence of the Teacher Homework update.
 
 ### Success — 200
 
@@ -3441,7 +3441,7 @@ GET /api/v1/student/homework/{homework}
 
 Must hide Teacher-only answer keys/correct-answer configuration.
 
-Stage 9 adds `score_visible` and `official_score` as in Section 17.1, and `attempt_results`: every terminal Attempt of this Student for this Homework, in `attempt_number` order:
+Stage 9 keeps `score_visible` and adds `official_score` as in Section 17.1, and adds `attempt_results`: every terminal Attempt of this Student for this Homework, in `attempt_number` order:
 
 ```json
 {
@@ -4911,8 +4911,6 @@ Submission scope:
 
 - Submitting Student where rules allow own file viewing.
 - Authorized Teacher reviewer (Stage 9), exactly as below.
-- Permitted Institution management/support context only when a separate business
-  rule explicitly grants that access.
 
 An authenticated Teacher may download a `student_submission` File when its
 answer belongs to a submission the Teacher may access (Section 21 Review

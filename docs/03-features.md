@@ -2278,7 +2278,7 @@ The MVP feature contract also includes:
 
 1. **Category score conversion:** result calculation remains unrounded, while category assignment uses an integer score with `.0`–`.5` down and `>.5` up. Institution category ranges are inclusive integer ranges covering 0–100.
 2. **Multiple-choice selection cap:** Student UI receives `max_selections`, cannot select more than the number of correct options, and earns only the fraction of correct options selected.
-3. **Automatic short-answer normalization:** normalized exact matching only; Unicode normalization, trim, whitespace collapse, case-insensitive comparison, Uzbek apostrophe normalization, punctuation preserved, no fuzzy/AI interpretation. Fill-in-the-blank blanks use the same normalization.
+3. **Automatic short-answer normalization:** normalized exact matching only, in the `BR-Q-013A` order: Unicode NFC, full case folding, NFC again, Uzbek apostrophe variants to one apostrophe, whitespace runs to one space, trim; punctuation preserved, no fuzzy/AI interpretation. Fill-in-the-blank blanks use the same normalization.
 4. **Activation validation:** Homework/Blitz drafts may contain zero points during authoring but cannot activate until server-recalculated total possible points is greater than zero.
 5. **Official grading scope:** official Homework/Blitz are whole-group only; selected-Student tasks are practice-only; one cohort snapshot is shared by both official tasks.
 6. **New-institution setup:** safe timezone/upload defaults are initialized, while threshold/category/timer/release policies remain unconfigured until the Institution Admin selects them.

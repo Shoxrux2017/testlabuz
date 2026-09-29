@@ -1019,7 +1019,7 @@ Rules:
 - Draft is not active learning content for Students.
 - Active is visible to eligible Students.
 - Closed stops new required learning submissions according to connected task rules.
-- Archived is historical/read-only.
+- Archived is historical/read-only. Stage 9 checking of frozen Attempts and Teacher review and correction of existing submissions stay allowed.
 
 ### Learning Materials
 
@@ -1736,8 +1736,8 @@ Scoring uses exact decimal arithmetic, never binary floating point. Awarded poin
 
 Support:
 
-- Answer: `pending` → `auto_checked` or `waiting_for_teacher_review` → `teacher_checked`
-- Attempt: `submitted` / `timed_out_finalized` → `waiting_for_teacher_review` or `checked`
+- Answer: `pending` → `auto_checked` (automatic types and zero-point manual answers); `pending` → `waiting_for_teacher_review` (answered manual Question worth more than 0 points) → `teacher_checked`; a correction keeps `teacher_checked` (`BR-Q-033`).
+- Attempt: `submitted` / `timed_out_finalized` → `checked` when no answer waits, otherwise → `waiting_for_teacher_review` → `checked` once the last waiting answer is reviewed; a correction keeps `checked` and recalculates.
 
 where applicable. Checking and review never change the finalization reason or timestamps.
 
@@ -1819,6 +1819,7 @@ Carried from Stage 9 into Stage 10 planning:
 - Stage 10 closure must re-check live Attempt state: an official score counts only when the live evaluation of the Attempts confirms the stored official row (`07-architecture.md` §16.8).
 - Stage 10 adds `409 result_closed` to review corrections after result closure; until then a correction is always allowed.
 - A Blitz closed after an exception before the Student took the replacement has no official Blitz score; Stage 10 treats the Student as Not completed.
+- `topic_results.official_homework_score_id` and `official_blitz_score_id` default to `ON DELETE RESTRICT` (`08-database.md` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; a score that stops being ready). Stage 10 planning decides the reference rule before `topic_results` exists.
 
 ## Included Scope
 

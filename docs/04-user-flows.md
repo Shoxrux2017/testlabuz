@@ -2601,7 +2601,7 @@ Flow:
 5. A pre-deadline Teacher close captures one server close instant and, in the same transaction as closing the Homework, freezes every still-`in_progress` Attempt as `submitted` with `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`.
 6. If the deadline is already reached, close first performs the common deadline reconciliation and preserves `homework_deadline_auto_submit` plus the exact deadline timestamp; repeated close/finalization does not rewrite the committed reason or timestamps.
 7. Closing blocks new Starts and Student answer/file/Submit writes. Existing frozen Attempts may be checked only later in Stage 9.
-8. Archived Homework remains historical and accepts no new activity.
+8. Archived Homework remains historical and accepts no new activity. Stage 9 checking of its frozen Attempts and Teacher review and correction of its existing submissions remain allowed; its review deadline can no longer change.
 
 For Stage 7 Homework, `submitted` means frozen Student work ready for later checking. `Waiting for Teacher review` and `Checked` are Stage 9 submission/checking states and must not be used as Homework lifecycle statuses.
 ### Assignment Type Flow
@@ -3620,7 +3620,7 @@ The manual review waiting flow is:
 1. The student's homework or blitz work is frozen (Submit, deadline or timeout, or Teacher close), and Stage 9 checks it right after the freeze commits.
 2. The system checks whether manual review is needed.
 3. If manual review is needed, the system marks the submission as waiting for teacher review.
-4. The final result is not calculated yet.
+4. If the official Homework or Blitz score waits for this submission, that score and the final result are not calculated yet.
 5. The teacher opens submissions waiting for review.
 6. The teacher checks the answer.
 7. The teacher assigns a score.

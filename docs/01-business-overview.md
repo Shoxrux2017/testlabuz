@@ -136,7 +136,7 @@ The core learning process in **TestLabUz** is built around one main goal: to che
 4. The Teacher creates Homework connected to the Topic.
 5. The Student studies the materials independently.
 6. The Student completes Homework using up to three normal attempts.
-7. The system keeps all Homework attempts and selects the highest valid completed score as the official Homework score after required checking is complete.
+7. The system keeps all Homework attempts and selects the highest checked valid score as the official Homework score, waiting only for an unchecked attempt that could still overtake it.
 8. During approximately the first 5–10 minutes of the next lesson, the Teacher activates the designated Blitz for the same Topic.
 9. The Blitz timer follows the institution's configured synchronized-start or individual-start mode and the duration chosen by the Teacher.
 10. The Student completes the Blitz in class. Normally there is one attempt; one additional Student-specific attempt may be granted by the Teacher only for an approved valid exception.
