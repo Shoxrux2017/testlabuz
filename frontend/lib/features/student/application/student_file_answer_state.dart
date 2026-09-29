@@ -1,4 +1,3 @@
-import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../domain/student_homework_attempt.dart';
 import '../domain/student_question.dart';
@@ -28,6 +27,7 @@ class StudentFileQuestionAnswerState {
     this.failure,
     this.selectionError,
     this.localFailure,
+    this.rejectedFileName,
   });
 
   final StudentQuestion question;
@@ -39,6 +39,9 @@ class StudentFileQuestionAnswerState {
   final ApiFailure? failure;
   final StudentSubmissionSelectionError? selectionError;
   final StudentFileAnswerLocalFailure? localFailure;
+
+  /// The chosen file the server rejected; it is no longer selected.
+  final String? rejectedFileName;
 }
 
 class StudentFileAnswerState {
@@ -79,7 +82,6 @@ class StudentFileAnswerState {
         entry != null &&
         selected != null &&
         entry.question.answerUi is StudentFileAnswerUi &&
-        entry.failure?.serverCode != ApiErrorCodes.validationFailed &&
         validateStudentSubmissionSelection(
               selected,
               entry.question.answerUi as StudentFileAnswerUi,

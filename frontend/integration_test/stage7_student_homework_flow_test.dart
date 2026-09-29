@@ -256,7 +256,7 @@ Future<String> _startAttempt(Stage7Harness h, int number) async {
     'In progress',
   );
   await h.waitWidget(
-    h.byKey('studentSaveAnswer${stage7Id(1001)}'),
+    h.byKey('studentAnswerEditor${stage7Id(1001)}'),
     'first answer editor',
   );
   expect(h.keys.consumed, number * 2 - 1);
@@ -327,8 +327,8 @@ Future<void> _saveNonFileAnswers(Stage7Harness h) async {
   _expectAnswerValues(h);
 }
 
+/// Answers save automatically; this waits for the server-confirmed save.
 Future<void> _save(Stage7Harness h, int question) async {
-  await h.tap(h.byKey('studentSaveAnswer${stage7Id(question)}'));
   await h.until(() {
     if (_editorFinder(question).evaluate().length != 1) return false;
     final state = _editor(h, question).state;
@@ -433,22 +433,19 @@ Future<void> _chooseAndUpload(
   await h.tap(
     _fileButton(h, replacement ? 'Choose replacement' : 'Choose file'),
   );
-  await h.until(
-    () =>
-        _fileEditorFinder().evaluate().length == 1 &&
-        _fileEditor(h).state.status == StudentFileAnswerStatus.ready,
-    'native picker selection accepted',
-  );
-  expect(_fileEditor(h).state.selectedFile?.name, h.fixtures[fixtureKey].name);
-  expect(_fileEditor(h).state.selectionError, isNull);
-  await h.tap(
-    _fileButton(h, replacement ? 'Upload replacement' : 'Upload answer'),
-  );
+  // A chosen file uploads at once; there is no Upload button.
   try {
     await h.until(
-      () => _fileEditor(h).state.status == StudentFileAnswerStatus.uploading,
+      () =>
+          _fileEditorFinder().evaluate().length == 1 &&
+          _fileEditor(h).state.status == StudentFileAnswerStatus.uploading,
       'production upload progress',
     );
+    expect(
+      _fileEditor(h).state.selectedFile?.name,
+      h.fixtures[fixtureKey].name,
+    );
+    expect(_fileEditor(h).state.selectionError, isNull);
     expect(h.textIn(_fileCard(h), 'Uploading file…'), findsOneWidget);
     expect(
       h.within(_fileCard(h), find.byType(LinearProgressIndicator)),
@@ -506,7 +503,6 @@ Future<void> _expectRestoredAnswers(Stage7Harness h, String fileId) async {
   for (final question in [1001, 1002, 1003, 1004, 1005, 1007, 1008, 1009]) {
     expect(_editor(h, question).state.isDirty, false);
     expect(_editor(h, question).state.updatedAt, isNotNull);
-    expect(_editor(h, question).canSave, false);
   }
   expect(_fileEditor(h).state.serverFile!.id, fileId);
   expect(_fileEditor(h).state.selectedFile, isNull);

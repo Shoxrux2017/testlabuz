@@ -15,6 +15,7 @@ import '../domain/student_homework_attempt.dart';
 import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
 import '../domain/student_question.dart';
+import 'student_answer_autosave.dart';
 import 'student_attempt_answer_editor_state.dart';
 import 'student_attempt_route_operation_gate.dart';
 import 'student_homework_attempt_controller.dart';
@@ -37,11 +38,19 @@ class StudentAttemptAnswerEditorController
   final StudentHomeworkAttemptRouteTarget target;
   StudentSessionKey? _activeSessionKey;
   StudentHomeworkAttemptState? _lastParent;
+  StudentAnswerAutosave? _autosave;
+  Completer<bool>? _flush;
   var _generation = 0;
   var _cleared = false;
 
   @override
   StudentAttemptAnswerEditorState build() {
+    final buildRef = ref;
+    // A rebuild keeps its Ref mounted while these callbacks run; only a real
+    // disposal stops the autosave timers.
+    buildRef.onDispose(() {
+      if (!buildRef.mounted) _stopAutosave();
+    });
     final key = StudentSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -61,42 +70,52 @@ class StudentAttemptAnswerEditorController
     final previous = resetScope ? StudentAttemptAnswerEditorState() : state;
     final changedParent = !identical(parent, _lastParent);
     _lastParent = parent;
+    final StudentAttemptAnswerEditorState next;
     if (changedParent &&
         parent.status == StudentHomeworkAttemptLoadStatus.data &&
         parent.attempt != null &&
         _matchesAttempt(parent.attempt!)) {
-      return _synchronize(
+      next = _synchronize(
         previous,
         parent.attempt!,
         sourcePublication: parent.publicationToken,
       );
+    } else {
+      next = _copyState(previous, isAuthoritative: _hasSaveAuthority(parent));
     }
-    return _copyState(previous, isAuthoritative: _hasSaveAuthority(parent));
+    // Saves that waited for authority, and a waiting flush, continue after
+    // this build publishes.
+    if (_autosave != null || _flush != null) {
+      scheduleMicrotask(() {
+        if (!ref.mounted) return;
+        _pump();
+        _evaluateFlush();
+      });
+    }
+    return next;
   }
 
   void updateDraft(String questionId, StudentAnswerDraft draft) {
     final id = questionId.toLowerCase();
     if (!_canEdit(id)) return;
     final entry = state.questions[id]!;
-    _replaceQuestion(
-      id,
-      StudentQuestionAnswerEditorState(
-        question: entry.question,
-        serverAnswer: entry.serverAnswer,
-        updatedAt: entry.updatedAt,
-        draft: draft,
-      ),
+    final keepsStatus =
+        entry.saveStatus == StudentAnswerSaveStatus.saving ||
+        entry.saveStatus == StudentAnswerSaveStatus.uncertain;
+    final next = StudentQuestionAnswerEditorState(
+      question: entry.question,
+      serverAnswer: entry.serverAnswer,
+      updatedAt: entry.updatedAt,
+      draft: draft,
+      saveStatus: keepsStatus ? entry.saveStatus : StudentAnswerSaveStatus.idle,
+      failure: keepsStatus ? entry.failure : null,
     );
-  }
-
-  void discardChanges(String questionId) {
-    final id = questionId.toLowerCase();
-    if (!_canEdit(id)) return;
-    final entry = state.questions[id]!;
-    updateDraft(
-      id,
-      StudentAnswerDraft.fromAnswer(entry.question, entry.serverAnswer),
-    );
+    _replaceQuestion(id, next);
+    if (next.isDirty) {
+      _queue.changed(id);
+    } else {
+      _queue.forget(id);
+    }
   }
 
   void clearAnswer(String questionId) {
@@ -107,6 +126,48 @@ class StudentAttemptAnswerEditorController
       updateDraft(id, entry.draft.clear(entry.question));
     }
   }
+
+  /// Sends one changed Question without waiting, for example when its text
+  /// field loses focus.
+  void saveNow(String questionId) {
+    final id = questionId.toLowerCase();
+    if (!_canEdit(id) || !state.questions[id]!.isDirty) return;
+    _queue.dueNow(id);
+  }
+
+  /// Sends every changed Question without waiting, for example when the app
+  /// goes to the background.
+  void saveAllNow() => _queueEveryDirtyQuestion();
+
+  /// Sends every pending change and completes with `true` once all answers are
+  /// saved, or `false` as soon as one cannot be saved or [cancelFlush] runs.
+  Future<bool> flushAll() {
+    final existing = _flush;
+    if (existing != null) return existing.future;
+    final key = _activeSessionKey;
+    if (key == null ||
+        !_matchesSession(key) ||
+        !state.isEligible ||
+        state.terminalAttempt != null) {
+      return Future.value(false);
+    }
+    final completer = Completer<bool>();
+    _flush = completer;
+    state = _copyState(state);
+    _queueEveryDirtyQuestion();
+    _evaluateFlush();
+    return completer.future;
+  }
+
+  void _queueEveryDirtyQuestion() {
+    for (final entry in state.questions.entries) {
+      if (entry.value.isDirty && entry.value.validation == null) {
+        _queue.dueNow(entry.key);
+      }
+    }
+  }
+
+  void cancelFlush() => _endFlush(false);
 
   void clearLocalState() {
     final clearedSession = _activeSessionKey;
@@ -131,8 +192,10 @@ class StudentAttemptAnswerEditorController
     final entry = state.questions[id]!;
     final snapshot = entry.draft.toMutation(entry.question);
     final mutationPublication = state.sourceAttemptPublication;
+    final readToken = parent.readToken;
     final generation = ++_generation;
     final requestTarget = target;
+    _queue.sending(id);
     state = _copyState(
       state,
       questions: {
@@ -159,21 +222,39 @@ class StudentAttemptAnswerEditorController
         throw _invalidResponse();
       }
       if (!_validResult(result, current.question)) throw _invalidResponse();
+      final dirty = current.draft.isDirty(current.question, result.answer);
+      // The local draft is never replaced: it may already hold newer typing.
       _finishQuestion(
         id,
         StudentQuestionAnswerEditorState(
           question: current.question,
           serverAnswer: result.answer,
           updatedAt: result.updatedAt,
-          draft: StudentAnswerDraft.fromAnswer(current.question, result.answer),
-          saveStatus: StudentAnswerSaveStatus.saved,
+          draft: current.draft,
+          saveStatus: dirty
+              ? StudentAnswerSaveStatus.idle
+              : StudentAnswerSaveStatus.saved,
         ),
         preservePublication: identical(
           mutationPublication,
           state.sourceAttemptPublication,
         ),
       );
-      _refreshAttempt();
+      _queue.finished(id, dirty: dirty);
+      final patched = ref
+          .read(studentHomeworkAttemptControllerProvider(target).notifier)
+          .acceptAnswerMutation(
+            questionId: id,
+            result: result,
+            expectedReadToken: readToken,
+          );
+      if (!patched) {
+        ref
+            .read(studentHomeworkAttemptControllerProvider(target).notifier)
+            .refreshAfterWrite();
+      }
+      _pump();
+      _evaluateFlush();
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, key, requestTarget, id, snapshot) ||
           _clearForSessionFailure(exception.failure)) {
@@ -186,13 +267,27 @@ class StudentAttemptAnswerEditorController
           id,
           _withStatus(current, StudentAnswerSaveStatus.uncertain, failure),
         );
+        _queue.scheduleRecovery(_recover);
       } else {
-        _finishQuestion(
-          id,
-          _withStatus(current, StudentAnswerSaveStatus.failure, failure),
-        );
+        // The refresh starts first, so no queued save competes with it.
         _reconcileFailure(failure);
+        if (current.holdsSentValue(snapshot)) {
+          _finishQuestion(
+            id,
+            _withStatus(current, StudentAnswerSaveStatus.failure, failure),
+          );
+          _queue.rejected(id);
+        } else {
+          // The rejection is for the sent value; typing made meanwhile is a
+          // new value and is saved as usual.
+          _finishQuestion(
+            id,
+            _withStatus(current, StudentAnswerSaveStatus.idle),
+          );
+          _queue.finished(id, dirty: current.isDirty);
+        }
       }
+      _evaluateFlush();
     }
   }
 
@@ -233,25 +328,29 @@ class StudentAttemptAnswerEditorController
       }
       final question = matchingQuestions.single;
       final answer = _answerFor(attempt, id);
-      final pendingDraft = StudentAnswerDraft.fromMutation(question, snapshot);
-      final differs = pendingDraft.isDirty(question, answer?.value);
       final refreshed = _synchronize(state, attempt);
       state = _copyState(refreshed, isAuthoritative: false);
+      // Typing continued during the uncertain save; keep it and save it again
+      // if the server does not already hold it.
+      final draft = state.questions[id]!.draft;
+      final dirty = draft.isDirty(question, answer?.value);
       _finishQuestion(
         id,
         StudentQuestionAnswerEditorState(
           question: question,
           serverAnswer: answer?.value,
           updatedAt: answer?.updatedAt,
-          draft: differs
-              ? pendingDraft
-              : StudentAnswerDraft.fromAnswer(question, answer?.value),
-          saveStatus: differs
+          draft: draft,
+          saveStatus: dirty
               ? StudentAnswerSaveStatus.idle
               : StudentAnswerSaveStatus.saved,
         ),
       );
+      _queue
+        ..resetRecovery()
+        ..finished(id, dirty: dirty);
       _refreshAttempt();
+      _evaluateFlush();
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, key, requestTarget, id, snapshot) ||
           _clearForSessionFailure(exception.failure)) {
@@ -269,7 +368,77 @@ class StudentAttemptAnswerEditorController
         },
         isReconciling: false,
       );
+      _queue.scheduleRecovery(_recover);
+      _evaluateFlush();
     }
+  }
+
+  StudentAnswerAutosave get _queue => _autosave ??= StudentAnswerAutosave(
+    ref.read(studentAutosaveTimerFactoryProvider),
+    _pump,
+  );
+
+  void _pump() {
+    final autosave = _autosave;
+    if (autosave == null ||
+        !ref.mounted ||
+        state.activeQuestionId != null ||
+        state.isReconciling) {
+      return;
+    }
+    final next = autosave.next(state.canSave);
+    if (next != null) unawaited(saveAnswer(next));
+  }
+
+  void _recover() {
+    if (!ref.mounted ||
+        !state.hasUncertainMutation ||
+        state.terminalAttempt != null) {
+      return;
+    }
+    if (!_gateIsIdle || state.isReconciling) {
+      _queue.scheduleRecovery(_recover);
+      return;
+    }
+    unawaited(reloadAttempt());
+  }
+
+  void _evaluateFlush() {
+    if (_flush == null || !ref.mounted) return;
+    final parent = ref.read(studentHomeworkAttemptControllerProvider(target));
+    if (!state.isEligible ||
+        state.terminalAttempt != null ||
+        state.hasUncertainMutation ||
+        state.hasInvalidDraft ||
+        state.hasFailedSave ||
+        parent.status == StudentHomeworkAttemptLoadStatus.error ||
+        parent.status == StudentHomeworkAttemptLoadStatus.notFound) {
+      _endFlush(false);
+      return;
+    }
+    final settled =
+        !state.hasDirtyDrafts &&
+        state.activeQuestionId == null &&
+        !state.isReconciling &&
+        state.questions.values.every(
+          (entry) => entry.saveStatus != StudentAnswerSaveStatus.saving,
+        );
+    if (settled) _endFlush(true);
+  }
+
+  void _endFlush(bool saved) {
+    final completer = _flush;
+    if (completer == null) return;
+    _flush = null;
+    if (ref.mounted && state.isFlushing) state = _copyState(state);
+    completer.complete(saved);
+  }
+
+  void _stopAutosave() {
+    _autosave?.clear();
+    final completer = _flush;
+    _flush = null;
+    completer?.complete(false);
   }
 
   StudentAttemptAnswerEditorState _synchronize(
@@ -279,7 +448,10 @@ class StudentAttemptAnswerEditorController
   }) {
     final terminal = attempt.status != StudentHomeworkAttemptStatus.inProgress;
     if (previous.terminalAttempt != null && !terminal) return previous;
-    if (terminal) _generation += 1;
+    if (terminal) {
+      _generation += 1;
+      _stopAutosave();
+    }
     var preservedUncertainty = false;
     final questions = <String, StudentQuestionAnswerEditorState>{};
     for (final question in attempt.questions) {
@@ -293,16 +465,20 @@ class StudentAttemptAnswerEditorController
         continue;
       }
       final answer = _answerFor(attempt, id);
-      final preserveDraft =
+      // A dirty or saving draft is the Student's newer intent. A clean draft
+      // keeps its own object while it still matches the server, so the text
+      // field is not rewritten; otherwise it shows the newer server value.
+      final keepDraft =
           !terminal &&
           previousQuestion != null &&
           (previousQuestion.isDirty ||
-              previousQuestion.saveStatus == StudentAnswerSaveStatus.saving);
+              previousQuestion.saveStatus == StudentAnswerSaveStatus.saving ||
+              !previousQuestion.draft.isDirty(question, answer?.value));
       questions[id] = StudentQuestionAnswerEditorState(
         question: question,
         serverAnswer: answer?.value,
         updatedAt: answer?.updatedAt,
-        draft: preserveDraft
+        draft: keepDraft
             ? previousQuestion.draft
             : StudentAnswerDraft.fromAnswer(question, answer?.value),
         saveStatus: terminal
@@ -331,6 +507,7 @@ class StudentAttemptAnswerEditorController
       isReconciling: !terminal && previous.isReconciling,
       terminalAttempt: terminal ? attempt : null,
       sourceAttemptPublication: preservedUncertainty ? null : sourcePublication,
+      isFlushing: _flush != null,
     );
   }
 
@@ -496,6 +673,7 @@ class StudentAttemptAnswerEditorController
     _generation += 1;
     _activeSessionKey = null;
     _lastParent = null;
+    _stopAutosave();
   }
 
   StudentQuestionAnswerEditorState _withStatus(
@@ -528,6 +706,7 @@ class StudentAttemptAnswerEditorController
       sourceAttemptPublication: preservePublication
           ? state.sourceAttemptPublication
           : null,
+      isFlushing: _flush != null,
     );
   }
 
@@ -548,5 +727,6 @@ class StudentAttemptAnswerEditorController
     isReconciling: isReconciling ?? previous.isReconciling,
     terminalAttempt: previous.terminalAttempt,
     sourceAttemptPublication: previous.sourceAttemptPublication,
+    isFlushing: _flush != null,
   );
 }

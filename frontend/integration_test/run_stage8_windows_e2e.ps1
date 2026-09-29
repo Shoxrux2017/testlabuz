@@ -172,7 +172,7 @@ function Test-Stage8UiCheckpoint {
             $attempt = Get-Stage8Row $facts assessment_attempts ([string] (Get-Stage8IdempotencyRecord $facts $Checkpoint.start_key student.blitz.attempt.start).result_resource_id)
             if ($attempt.assessment_id -cne $m.assessments.timeout_ui -or $attempt.student_id -cne $m.users.d_timeout_ui) { throw 'production defect: Timeout UI Attempt ownership mismatch.' }
             Assert-Stage8TerminalAttempt $attempt timeout_auto_submit ''
-            Assert-Stage8AnswerSet $facts $attempt.id @([string] $m.questions.timeout_ui.short_written) | Out-Null
+            Assert-Stage8AnswerSet $facts $attempt.id @([string] $m.questions.timeout_ui.short_written, [string] $m.questions.timeout_ui.open_written) | Out-Null
         }
         default { throw 'integration-harness defect: Unknown Stage 8 UI checkpoint.' }
     }

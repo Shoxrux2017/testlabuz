@@ -566,6 +566,195 @@ void main() {
     await Future<void>.value();
     expect(harness.repository.requests, isEmpty);
   });
+  group('acceptAnswerMutation', () {
+    Future<(_Harness, ProviderSubscription<StudentHomeworkAttemptState>)>
+    loaded() async {
+      final h = _Harness();
+      final view = h.listen();
+      await h.flush();
+      h.repository.requests.single.complete(
+        _attempt(questions: [_shortQuestion]),
+      );
+      await h.flush();
+      return (h, view);
+    }
+
+    test('patches one answer without a GET and keeps the read token', () async {
+      final (h, view) = await loaded();
+      final before = view.read();
+      expect(before.readToken, isNotNull);
+      final accepted = h.controller.acceptAnswerMutation(
+        questionId: _shortQuestionId.toUpperCase(),
+        result: _textResult('Saved text'),
+        expectedReadToken: before.readToken,
+      );
+      expect(accepted, isTrue);
+      final after = view.read();
+      expect(h.repository.requests, hasLength(1));
+      expect(after.status, StudentHomeworkAttemptLoadStatus.data);
+      expect(after.readToken, same(before.readToken));
+      expect(after.publicationToken, isNot(same(before.publicationToken)));
+      final answer = after.attempt!.answers.single;
+      expect((answer.value as StudentTextAnswerValue).text, 'Saved text');
+      expect(answer.updatedAt, _savedAt);
+    });
+
+    test('two overlapping writes are both adopted', () async {
+      final (h, view) = await loaded();
+      final readToken = view.read().readToken;
+      expect(
+        h.controller.acceptAnswerMutation(
+          questionId: _shortQuestionId,
+          result: _textResult('First'),
+          expectedReadToken: readToken,
+        ),
+        isTrue,
+      );
+      expect(
+        h.controller.acceptAnswerMutation(
+          questionId: _shortQuestionId,
+          result: _textResult('Second'),
+          expectedReadToken: readToken,
+        ),
+        isTrue,
+      );
+      final answer = view.read().attempt!.answers.single;
+      expect((answer.value as StudentTextAnswerValue).text, 'Second');
+    });
+
+    test('a cleared answer removes the answer state', () async {
+      final (h, view) = await loaded();
+      final readToken = view.read().readToken;
+      h.controller.acceptAnswerMutation(
+        questionId: _shortQuestionId,
+        result: _textResult('Kept'),
+        expectedReadToken: readToken,
+      );
+      expect(
+        h.controller.acceptAnswerMutation(
+          questionId: _shortQuestionId,
+          result: const StudentAttemptAnswerMutationResult(
+            questionId: _shortQuestionId,
+            type: StudentQuestionType.shortWritten,
+            answer: null,
+            updatedAt: null,
+          ),
+          expectedReadToken: readToken,
+        ),
+        isTrue,
+      );
+      expect(view.read().attempt!.answers, isEmpty);
+    });
+
+    test('rejects a write that started before a newer full read', () async {
+      final (h, view) = await loaded();
+      final oldReadToken = view.read().readToken;
+      h.controller.refresh();
+      h.repository.requests.last.complete(
+        _attempt(questions: [_shortQuestion]),
+      );
+      await h.flush();
+      final published = view.read();
+      expect(published.readToken, isNot(same(oldReadToken)));
+      expect(
+        h.controller.acceptAnswerMutation(
+          questionId: _shortQuestionId,
+          result: _textResult('Stale'),
+          expectedReadToken: oldReadToken,
+        ),
+        isFalse,
+      );
+      expect(view.read(), same(published));
+    });
+
+    test('rejects a mismatched Question, type or response shape', () async {
+      final (h, view) = await loaded();
+      final readToken = view.read().readToken;
+      final published = view.read();
+      for (final result in [
+        StudentAttemptAnswerMutationResult(
+          questionId: '70000000-0000-0000-0000-000000000099',
+          type: StudentQuestionType.shortWritten,
+          answer: const StudentTextAnswerValue(text: 'x'),
+          updatedAt: _savedAt,
+        ),
+        StudentAttemptAnswerMutationResult(
+          questionId: _shortQuestionId,
+          type: StudentQuestionType.openWritten,
+          answer: const StudentTextAnswerValue(text: 'x'),
+          updatedAt: _savedAt,
+        ),
+        const StudentAttemptAnswerMutationResult(
+          questionId: _shortQuestionId,
+          type: StudentQuestionType.shortWritten,
+          answer: StudentTextAnswerValue(text: 'x'),
+          updatedAt: null,
+        ),
+      ]) {
+        expect(
+          h.controller.acceptAnswerMutation(
+            questionId: result.questionId,
+            result: result,
+            expectedReadToken: readToken,
+          ),
+          isFalse,
+        );
+      }
+      expect(view.read(), same(published));
+    });
+
+    test(
+      'a write that meets an in-flight read replaces that read with a new one',
+      () async {
+        final (h, view) = await loaded();
+        h.controller.refresh();
+        expect(h.repository.requests, hasLength(2));
+        // The in-flight read may have been served before the write committed.
+        h.controller.refreshAfterWrite();
+        expect(h.repository.requests, hasLength(3));
+        h.repository.requests[1].complete(
+          _attempt(number: 2, questions: [_shortQuestion]),
+        );
+        await h.flush();
+        expect(view.read().status, StudentHomeworkAttemptLoadStatus.refreshing);
+        expect(view.read().attempt!.attemptNumber, 1);
+        h.repository.requests[2].complete(
+          _attempt(number: 3, questions: [_shortQuestion]),
+        );
+        await h.flush();
+        expect(view.read().status, StudentHomeworkAttemptLoadStatus.data);
+        expect(view.read().attempt!.attemptNumber, 3);
+      },
+    );
+
+    test('rejects while refreshing or after the Attempt is terminal', () async {
+      final (h, view) = await loaded();
+      final readToken = view.read().readToken;
+      h.controller.refresh();
+      expect(view.read().status, StudentHomeworkAttemptLoadStatus.refreshing);
+      expect(
+        h.controller.acceptAnswerMutation(
+          questionId: _shortQuestionId,
+          result: _textResult('During refresh'),
+          expectedReadToken: readToken,
+        ),
+        isFalse,
+      );
+      final terminal = _attempt(
+        status: StudentHomeworkAttemptStatus.submitted,
+        questions: [_shortQuestion],
+      );
+      expect(h.controller.acceptAuthoritativeTerminalAttempt(terminal), isTrue);
+      expect(
+        h.controller.acceptAnswerMutation(
+          questionId: _shortQuestionId,
+          result: _textResult('After Submit'),
+          expectedReadToken: view.read().readToken,
+        ),
+        isFalse,
+      );
+    });
+  });
 }
 
 class _Harness {
@@ -705,11 +894,30 @@ StudentHomeworkRouteTarget _homeworkTarget() => StudentHomeworkRouteTarget(
   topicId: studentTopicId,
   homeworkId: _homeworkId,
 );
+const _shortQuestionId = '70000000-0000-0000-0000-000000000001';
+const _shortQuestion = StudentQuestion(
+  id: _shortQuestionId,
+  type: StudentQuestionType.shortWritten,
+  prompt: 'Name the protocol.',
+  instructions: null,
+  points: 1,
+  position: 1,
+  answerUi: StudentEmptyAnswerUi(),
+);
+final _savedAt = DateTime.utc(2026, 9, 1, 0, 30);
+StudentAttemptAnswerMutationResult _textResult(String text) =>
+    StudentAttemptAnswerMutationResult(
+      questionId: _shortQuestionId,
+      type: StudentQuestionType.shortWritten,
+      answer: StudentTextAnswerValue(text: text),
+      updatedAt: _savedAt,
+    );
 StudentHomeworkAttempt _attempt({
   String id = _attemptId,
   String homeworkId = _homeworkId,
   int number = 1,
   StudentHomeworkAttemptStatus status = StudentHomeworkAttemptStatus.inProgress,
+  List<StudentQuestion> questions = const [],
 }) => StudentHomeworkAttempt(
   id: id,
   assessmentId: homeworkId,
@@ -726,7 +934,7 @@ StudentHomeworkAttempt _attempt({
       ? null
       : StudentHomeworkAttemptFinalizationReason.studentSubmit,
   deadlineAt: null,
-  questions: [],
+  questions: questions,
   answers: [],
 );
 StudentHomeworkDetail _detail() => StudentHomeworkDetail(

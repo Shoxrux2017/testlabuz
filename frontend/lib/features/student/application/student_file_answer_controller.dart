@@ -15,6 +15,7 @@ import '../domain/student_homework_attempt_route_target.dart';
 import '../domain/student_homework_route_target.dart';
 import '../domain/student_question.dart';
 import '../domain/student_submission_upload.dart';
+import 'student_answer_autosave.dart';
 import 'student_attempt_answer_editor_controller.dart';
 import 'student_attempt_route_operation_gate.dart';
 import 'student_file_answer_state.dart';
@@ -39,11 +40,21 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
   StudentHomeworkAttemptState? _lastParent;
   StudentHomeworkAttempt? _lastTerminal;
   _FileOperation? _operation;
+  StudentAnswerAutosave? _recovery;
+  final _uploadWaiters = <Completer<bool>>[];
   var _generation = 0;
   var _cleared = false;
 
   @override
   StudentFileAnswerState build() {
+    final buildRef = ref;
+    // Only a real disposal (not a rebuild) stops the recovery timer.
+    buildRef.onDispose(() {
+      if (!buildRef.mounted) {
+        _recovery?.clear();
+        _resolveUploadWaiters(false);
+      }
+    });
     final key = StudentSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -139,6 +150,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
             failure: previous.failure,
             selectionError: current.selectionError,
             localFailure: previous.localFailure,
+            rejectedFileName: previous.rejectedFileName,
           ),
         );
         return;
@@ -170,8 +182,11 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
               : previous.status,
           failure: error == null ? null : previous.failure,
           selectionError: error,
+          rejectedFileName: error == null ? null : previous.rejectedFileName,
         ),
       );
+      // A chosen file is saved at once; there is no separate Upload step.
+      if (error == null) unawaited(uploadAnswer(id));
     } catch (_) {
       if (!_canPublish(operation, generation)) return;
       _finish(
@@ -185,6 +200,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
               : previous.status,
           failure: previous.failure,
           localFailure: StudentFileAnswerLocalFailure.pickerUnavailable,
+          rejectedFileName: previous.rejectedFileName,
         ),
       );
     }
@@ -212,10 +228,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     if (question == null || !state.canChoose(id)) return;
     final previous = state.questions[id]!;
     final selected = previous.selectedFile;
-    if (selected == null ||
-        previous.failure?.serverCode == ApiErrorCodes.validationFailed) {
-      return;
-    }
+    if (selected == null) return;
     final error = validateStudentSubmissionSelection(
       selected,
       question.answerUi as StudentFileAnswerUi,
@@ -285,7 +298,19 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           state.sourceAttemptPublication,
         ),
       );
-      _refreshAttempt();
+      _recovery?.resetRecovery();
+      final patched = ref
+          .read(studentHomeworkAttemptControllerProvider(target).notifier)
+          .acceptAnswerMutation(
+            questionId: id,
+            result: result,
+            expectedReadToken: operation.readToken,
+          );
+      if (!patched) {
+        ref
+            .read(studentHomeworkAttemptControllerProvider(target).notifier)
+            .refreshAfterWrite();
+      }
     } on StudentSubmissionSourceUnavailable {
       if (!_canPublish(operation, generation)) return;
       _finish(
@@ -314,26 +339,29 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
             failure: failure,
           ),
         );
+        _recoveryTimer.scheduleRecovery(_recover);
+        _resolveUploadWaiters(false);
         return;
       }
       if (failure.serverCode == ApiErrorCodes.resourceNotFound) {
         _generation += 1;
         _operation = null;
         state = StudentFileAnswerState();
+        _resolveUploadWaiters(false);
         _refreshAttempt();
         return;
       }
-      final retainSelection =
-          failure.serverCode == ApiErrorCodes.fileUploadFailed ||
-          failure.serverCode == ApiErrorCodes.validationFailed;
+      // A rejected file is dropped so it never blocks Submit; the saved server
+      // file stays and the Student can choose another one.
+      final rejected = _rejectedFileCodes.contains(failure.serverCode);
       _finish(
         id,
         StudentFileQuestionAnswerState(
           question: entry.question,
           serverFile: entry.serverFile,
-          selectedFile: retainSelection ? selected : null,
           status: StudentFileAnswerStatus.failure,
           failure: failure,
+          rejectedFileName: rejected ? selected.name : null,
         ),
       );
       _reconcileFailure(failure);
@@ -386,6 +414,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
         question.answerUi as StudentFileAnswerUi,
       );
       final refreshed = _synchronize(state, attempt);
+      _recovery?.resetRecovery();
       state = _copyState(
         refreshed,
         isAuthoritative: _hasAuthority(
@@ -422,6 +451,56 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           ),
         },
       );
+      _recoveryTimer.scheduleRecovery(_recover);
+    }
+  }
+
+  static const _rejectedFileCodes = {
+    ApiErrorCodes.validationFailed,
+    ApiErrorCodes.unsupportedFileType,
+    ApiErrorCodes.fileTooLarge,
+    ApiErrorCodes.fileUploadFailed,
+  };
+
+  StudentAnswerAutosave get _recoveryTimer =>
+      _recovery ??= StudentAnswerAutosave(
+        ref.read(studentAutosaveTimerFactoryProvider),
+        () {},
+      );
+
+  void _recover() {
+    if (!ref.mounted || !state.hasUncertainUpload || state.isTerminal) return;
+    if (!_gateIsIdle || state.isReconciling) {
+      _recoveryTimer.scheduleRecovery(_recover);
+      return;
+    }
+    unawaited(reloadAttempt());
+  }
+
+  /// Completes once no pick or upload of this Attempt runs: `true` when no
+  /// chosen file is left unsaved, `false` otherwise or after
+  /// [cancelUploadWait].
+  Future<bool> waitForUploads() {
+    if (_operation == null || state.hasUncertainUpload) {
+      return Future.value(_uploadsSettled);
+    }
+    final waiter = Completer<bool>();
+    _uploadWaiters.add(waiter);
+    return waiter.future;
+  }
+
+  void cancelUploadWait() => _resolveUploadWaiters(false);
+
+  bool get _uploadsSettled =>
+      !state.hasUncertainUpload && !state.hasPendingSelection;
+
+  void _resolveUploadWaiters([bool? saved]) {
+    if (_uploadWaiters.isEmpty) return;
+    final result = saved ?? _uploadsSettled;
+    final waiters = [..._uploadWaiters];
+    _uploadWaiters.clear();
+    for (final waiter in waiters) {
+      waiter.complete(result);
     }
   }
 
@@ -443,6 +522,8 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     if (terminal) {
       _generation += 1;
       _operation = null;
+      _recovery?.clear();
+      _resolveUploadWaiters(false);
     }
     final questions = <String, StudentFileQuestionAnswerState>{};
     var preservedUncertainty = false;
@@ -477,6 +558,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
             : error,
         failure: terminal ? null : old?.failure,
         localFailure: terminal ? null : old?.localFailure,
+        rejectedFileName: terminal ? null : old?.rejectedFileName,
       );
     }
     final activeId = previous.activeQuestionId;
@@ -589,6 +671,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       selected,
       previousFileId,
       state.sourceAttemptPublication,
+      ref.read(studentHomeworkAttemptControllerProvider(target)).readToken,
     );
     _operation = operation;
     _generation += 1;
@@ -717,6 +800,8 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     _operation = null;
     _lastParent = null;
     _lastTerminal = null;
+    _recovery?.clear();
+    _resolveUploadWaiters(false);
   }
 
   ApiRequestException _invalidResponse() => ApiRequestException(
@@ -740,6 +825,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     sentBytes: sentBytes,
     totalBytes: totalBytes,
     failure: failure,
+    rejectedFileName: previous.rejectedFileName,
   );
 
   void _replace(String id, StudentFileQuestionAnswerState entry) =>
@@ -759,6 +845,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
           ? state.sourceAttemptPublication
           : null,
     );
+    _resolveUploadWaiters();
   }
 
   StudentFileAnswerState _copyState(
@@ -785,6 +872,7 @@ class _FileOperation {
     this.selectedFile,
     this.previousServerFileId,
     this.sourcePublication,
+    this.readToken,
   );
   final StudentSessionKey session;
   final StudentHomeworkAttemptRouteTarget target;
@@ -792,4 +880,8 @@ class _FileOperation {
   final StudentSubmissionUploadFile? selectedFile;
   final String? previousServerFileId;
   final StudentHomeworkAttemptPublicationToken? sourcePublication;
+
+  /// The parent read this operation started from; a text save patching the
+  /// parent meanwhile does not reject this upload's own patch.
+  final StudentHomeworkAttemptPublicationToken? readToken;
 }

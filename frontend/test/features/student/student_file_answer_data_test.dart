@@ -96,12 +96,21 @@ void main() {
       final controller = container.read(
         studentFileAnswerControllerProvider(target).notifier,
       );
+      // Choosing the file starts its upload at once.
       await controller.chooseFile(_questionId);
       expect(
         subscription.read().questions[_questionId]!.selectedFile,
         same(selected),
       );
-      await controller.uploadAnswer(_questionId);
+      for (
+        var i = 0;
+        i < 20 &&
+            subscription.read().questions[_questionId]!.status ==
+                StudentFileAnswerStatus.uploading;
+        i++
+      ) {
+        await flushStudentControllers();
+      }
       final uncertain = subscription.read().questions[_questionId]!;
       expect(uncertain.status, StudentFileAnswerStatus.uncertain);
       expect(uncertain.failure!.kind, ApiFailureKind.invalidResponse);

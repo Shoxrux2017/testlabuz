@@ -1,3 +1,4 @@
+import 'student_homework_formatters.dart';
 import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/student_blitz_attempt_start_state.dart';
@@ -186,13 +187,17 @@ String studentBlitzSubmitBlockerMessage(StudentBlitzSubmitBlocker blocker) =>
         'The time has run out on this device. '
             'Wait for the server to confirm the attempt.',
       StudentBlitzSubmitBlocker.nonFileUnsavedChanges =>
-        'Save or discard unsaved answer changes before submitting.',
+        'Some answers are still being saved.',
       StudentBlitzSubmitBlocker.nonFileSaveInProgress =>
-        'Wait for the current answer save to finish.',
+        'An answer is being saved.',
       StudentBlitzSubmitBlocker.nonFileSaveUncertain =>
-        'Check the unconfirmed answer save before submitting.',
+        'An answer save is not confirmed yet. It is being checked.',
+      StudentBlitzSubmitBlocker.nonFileInvalidAnswer =>
+        'Fix the marked answers before submitting.',
+      StudentBlitzSubmitBlocker.nonFileSaveFailed =>
+        'Some answers were not saved. Check the marked questions.',
       StudentBlitzSubmitBlocker.fileSelectionPending =>
-        'Upload or discard the selected file before submitting.',
+        'Retry or cancel the file that was not uploaded.',
       StudentBlitzSubmitBlocker.fileUploadInProgress =>
         'Wait for the current file operation to finish.',
       StudentBlitzSubmitBlocker.fileUploadUncertain =>
@@ -207,3 +212,13 @@ String studentBlitzSubmitBlockerMessage(StudentBlitzSubmitBlocker blocker) =>
 String _unit(int value, String unit) => '$value $unit${value == 1 ? '' : 's'}';
 
 String _two(int value) => value.toString().padLeft(2, '0');
+
+/// Save failure text on a Blitz Question; timing codes get their own words.
+String studentBlitzAnswerSaveFailureMessage(ApiFailure failure) =>
+    switch (failure.serverCode) {
+      ApiErrorCodes.blitzTimeExpired =>
+        'Time is over. This answer was not saved.',
+      ApiErrorCodes.blitzNotActive =>
+        'This Blitz is not active. This answer was not saved.',
+      _ => studentAnswerSaveFailureMessage(failure),
+    };

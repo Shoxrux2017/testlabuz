@@ -16,8 +16,9 @@ import 'student_question_answer_editor.dart';
 import 'student_topic_formatters.dart';
 
 /// Timed execution of the in-progress Attempt owned by the execution
-/// controller: the shared answer and file editors, then an explicit Submit.
-/// Every write is decided by the server; the countdown only gates the UI.
+/// controller: the shared answer and file editors, saved automatically, then an
+/// explicit Submit. Every write is decided by the server; the countdown only
+/// gates the UI.
 class StudentBlitzAttemptShell extends ConsumerWidget {
   const StudentBlitzAttemptShell({
     required this.target,
@@ -59,7 +60,8 @@ class StudentBlitzAttemptShell extends ConsumerWidget {
     const recoveryLabel = 'Check current attempt';
 
     return SingleChildScrollView(
-      key: const Key('studentBlitzAttemptShell'),
+      // PageStorageKey restores the offset if the view is ever rebuilt.
+      key: const PageStorageKey('studentBlitzAttemptShell'),
       padding: const EdgeInsets.all(16),
       child: Center(
         child: ConstrainedBox(
@@ -163,8 +165,16 @@ class StudentBlitzAttemptShell extends ConsumerWidget {
                       key: ValueKey(('blitzFile', target, question.id)),
                       state: file,
                       isTerminal: false,
-                      canChoose: gateIdle && fileState.canChoose(question.id),
-                      canUpload: gateIdle && fileState.canUpload(question.id),
+                      // Saving before Submit or leaving makes every editor
+                      // read-only, file choices included.
+                      canChoose:
+                          gateIdle &&
+                          !editorState.isFlushing &&
+                          fileState.canChoose(question.id),
+                      canUpload:
+                          gateIdle &&
+                          !editorState.isFlushing &&
+                          fileState.canUpload(question.id),
                       canDiscard:
                           gateIdle &&
                           fileState.isAuthoritative &&
@@ -199,15 +209,13 @@ class StudentBlitzAttemptShell extends ConsumerWidget {
                       key: ValueKey(('blitzAnswer', target, question.id)),
                       state: entry,
                       canEdit: gateIdle && editorState.canEdit(question.id),
-                      canSave: gateIdle && editorState.canSave(question.id),
                       isReconciling: editorState.isReconciling || !gateIdle,
                       timezone: institutionTimezone,
                       recoveryLabel: recoveryLabel,
+                      failureMessage: studentBlitzAnswerSaveFailureMessage,
                       onChanged: (draft) =>
                           editorController.updateDraft(question.id, draft),
-                      onSave: () => editorController.saveAnswer(question.id),
-                      onDiscard: () =>
-                          editorController.discardChanges(question.id),
+                      onCommit: () => editorController.saveNow(question.id),
                       onClear: () => editorController.clearAnswer(question.id),
                       onReload: editorController.checkCurrentAttempt,
                     ),

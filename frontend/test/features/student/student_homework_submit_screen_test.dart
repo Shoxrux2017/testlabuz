@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_route_paths.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
@@ -134,30 +135,154 @@ void main() {
     }
 
     testWidgets(
-      '${surface.name} dirty and pending file blockers require explicit resolution',
+      '${surface.name} Submit saves a pending answer first, then confirms',
       (tester) async {
         final harness = await _pump(tester, surface: surface);
         harness.editor.updateDraft(
           _questionId(1),
-          const StudentShortWrittenDraft(text: 'unsaved'),
+          const StudentShortWrittenDraft(text: 'pending'),
+        );
+        await tester.pump();
+        // A pending save does not block Submit; Submit saves it first.
+        expect(tester.widget<FilledButton>(_submitButton).onPressed, isNotNull);
+        expect(find.text('Some answers are still being saved.'), findsNothing);
+        bool anyFileChoosable() => tester
+            .widgetList<StudentFileAnswerEditor>(
+              find.byType(StudentFileAnswerEditor),
+            )
+            .any((editor) => editor.canChoose);
+        expect(anyFileChoosable(), isTrue);
+        await tester.ensureVisible(_submitButton);
+        await tester.tap(_submitButton);
+        await tester.pump();
+        expect(find.text('Saving answers…'), findsOneWidget);
+        expect(
+          find.byKey(const Key('studentHomeworkSubmitCancelSaving')),
+          findsOneWidget,
+        );
+        // Saving makes every editor read-only, file choices included.
+        expect(anyFileChoosable(), isFalse);
+        expect(harness.repository.saves, hasLength(1));
+        harness.repository.saves.single.complete(
+          StudentAttemptAnswerMutationResult(
+            questionId: _questionId(1),
+            type: StudentQuestionType.shortWritten,
+            answer: const StudentTextAnswerValue(text: 'pending'),
+            updatedAt: DateTime.utc(2026, 9, 10, 8),
+          ),
         );
         await tester.pumpAndSettle();
-        expect(tester.widget<FilledButton>(_submitButton).onPressed, isNull);
+        expect(_confirmDialog, findsOneWidget);
+        expect(find.text('1 of 9 answers are saved.'), findsOneWidget);
+        await _tap(tester, find.text('Cancel'));
+        expect(harness.repository.submits, isEmpty);
+      },
+    );
+
+    testWidgets(
+      '${surface.name} a save rejected while submitting keeps the Attempt open',
+      (tester) async {
+        final harness = await _pump(tester, surface: surface);
+        harness.editor.updateDraft(
+          _questionId(1),
+          const StudentShortWrittenDraft(text: 'rejected'),
+        );
+        await tester.pump();
+        await tester.ensureVisible(_submitButton);
+        await tester.tap(_submitButton);
+        await tester.pump();
+        harness.repository.saves.single.completeError(
+          studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+        );
+        await tester.pumpAndSettle();
+        expect(_confirmDialog, findsNothing);
         expect(
           find.text(
-            'Save or discard unsaved answer changes before submitting.',
+            'Some answers are not saved yet. Check the marked questions.',
           ),
           findsOneWidget,
         );
-        harness.editor.discardChanges(_questionId(1));
-        await harness.files.chooseFile(_questionId(9));
+        expect(tester.widget<FilledButton>(_submitButton).onPressed, isNull);
+        // Fixing the answer saves it and clears the message.
+        harness.editor.updateDraft(
+          _questionId(1),
+          const StudentShortWrittenDraft(text: 'fixed'),
+        );
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pump();
+        harness.repository.saves.last.complete(
+          StudentAttemptAnswerMutationResult(
+            questionId: _questionId(1),
+            type: StudentQuestionType.shortWritten,
+            answer: const StudentTextAnswerValue(text: 'fixed'),
+            updatedAt: DateTime.utc(2026, 9, 10, 8),
+          ),
+        );
         await tester.pumpAndSettle();
+        expect(
+          find.text(
+            'Some answers are not saved yet. Check the marked questions.',
+          ),
+          findsNothing,
+        );
+        expect(tester.widget<FilledButton>(_submitButton).onPressed, isNotNull);
+        expect(harness.repository.submits, isEmpty);
+      },
+    );
+
+    testWidgets('${surface.name} Cancel stops saving before Submit', (
+      tester,
+    ) async {
+      final harness = await _pump(tester, surface: surface);
+      harness.editor.updateDraft(
+        _questionId(1),
+        const StudentShortWrittenDraft(text: 'pending'),
+      );
+      await tester.pump();
+      await tester.ensureVisible(_submitButton);
+      await tester.tap(_submitButton);
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const Key('studentHomeworkSubmitCancelSaving')),
+      );
+      await tester.pump();
+      expect(find.text('Saving answers…'), findsNothing);
+      expect(
+        find.text(
+          'Some answers are not saved yet. Check the marked questions.',
+        ),
+        findsNothing,
+      );
+      harness.repository.saves.single.complete(
+        StudentAttemptAnswerMutationResult(
+          questionId: _questionId(1),
+          type: StudentQuestionType.shortWritten,
+          answer: const StudentTextAnswerValue(text: 'pending'),
+          updatedAt: DateTime.utc(2026, 9, 10, 8),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The cancelled Submit opens no confirmation once the save lands.
+      expect(_confirmDialog, findsNothing);
+      expect(tester.widget<FilledButton>(_submitButton).onPressed, isNotNull);
+      expect(harness.repository.submits, isEmpty);
+    });
+
+    testWidgets(
+      '${surface.name} a running file upload blocks Submit until it ends',
+      (tester) async {
+        final harness = await _pump(tester, surface: surface);
+        await harness.files.chooseFile(_questionId(9));
+        await tester.pump();
+        expect(harness.repository.uploads, hasLength(1));
         expect(tester.widget<FilledButton>(_submitButton).onPressed, isNull);
         expect(
-          find.text('Upload or discard the selected file before submitting.'),
+          find.text('Wait for the current file operation to finish.'),
           findsOneWidget,
         );
-        harness.files.discardSelectedFile(_questionId(9));
+        harness.repository.uploads.single.completeError(
+          studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+        );
         await tester.pumpAndSettle();
         expect(tester.widget<FilledButton>(_submitButton).onPressed, isNotNull);
         expect(harness.repository.submits, isEmpty);
@@ -231,7 +356,7 @@ void main() {
           find.text(
             file
                 ? 'Resolve the unconfirmed file upload before submitting.'
-                : 'Resolve the unconfirmed answer save before submitting.',
+                : 'An answer save is not confirmed yet. It is being checked.',
           ),
           findsOneWidget,
         );
@@ -312,7 +437,14 @@ void main() {
               const StudentShortWrittenDraft(text: 'changed'),
             );
           case 'file':
+            // A chosen file uploads at once; here the server rejects it.
             await harness.files.chooseFile(_questionId(9));
+            harness.repository.uploads.single.completeError(
+              studentServerFailure(
+                ApiErrorCodes.validationFailed,
+                statusCode: 422,
+              ),
+            );
           case 'publication':
             harness.parent.publishData(_attempt());
           case 'questions':
@@ -702,7 +834,6 @@ void _expectFrozen(WidgetTester tester) {
     find.byType(StudentQuestionAnswerEditor),
   )) {
     expect(editor.canEdit, isFalse);
-    expect(editor.canSave, isFalse);
   }
   final file = tester.widget<StudentFileAnswerEditor>(
     find.byType(StudentFileAnswerEditor),

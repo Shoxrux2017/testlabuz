@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/network/api_error_codes.dart';
 import '../application/student_file_answer_state.dart';
 import '../application/student_submission_transfer_state.dart';
 import '../domain/student_question.dart';
@@ -88,9 +87,6 @@ class _StudentFileAnswerEditorState extends State<StudentFileAnswerEditor> {
     final transfer = widget.transferState;
     final transferring = transfer.isBusyForQuestion(question.id);
     final allowTransfer = widget.canTransfer && !uploading && !uncertain;
-    final retry =
-        state.status == StudentFileAnswerStatus.failure &&
-        state.failure?.serverCode == ApiErrorCodes.fileUploadFailed;
     return StudentQuestionAnswerCard(
       key: ValueKey('studentFileAnswerCard${question.id}'),
       question: question,
@@ -144,7 +140,7 @@ class _StudentFileAnswerEditorState extends State<StudentFileAnswerEditor> {
           ],
           if (selected != null && !widget.isTerminal) ...[
             const SizedBox(height: 12),
-            Text(saved == null ? 'Selected:' : 'Selected replacement:'),
+            Text(uploading ? 'Uploading:' : 'Not uploaded:'),
             SelectableText(selected.name),
             Text(formatStudentSubmissionBytes(selected.length)),
           ],
@@ -170,7 +166,12 @@ class _StudentFileAnswerEditorState extends State<StudentFileAnswerEditor> {
             const SizedBox(height: 8),
             Semantics(
               liveRegion: true,
-              child: Text(studentFileAnswerFailureMessage(state.failure!)),
+              child: Text(
+                state.rejectedFileName == null
+                    ? studentFileAnswerFailureMessage(state.failure!)
+                    : '“${state.rejectedFileName}” was not accepted. '
+                          '${studentFileAnswerFailureMessage(state.failure!)}',
+              ),
             ),
           ],
           if (state.status == StudentFileAnswerStatus.selecting) ...[
@@ -260,22 +261,17 @@ class _StudentFileAnswerEditorState extends State<StudentFileAnswerEditor> {
                       ),
                     ),
                   ),
-                  if (selected != null) ...[
+                  // A chosen file uploads at once; these appear only when that
+                  // upload did not go through.
+                  if (selected != null && !uploading) ...[
                     FilledButton(
                       onPressed: widget.canUpload ? widget.onUpload : null,
-                      child: Text(
-                        retry
-                            ? 'Retry upload'
-                            : saved == null
-                            ? 'Upload answer'
-                            : 'Upload replacement',
-                      ),
+                      child: const Text('Retry upload'),
                     ),
-                    if (!uploading)
-                      TextButton(
-                        onPressed: widget.canDiscard ? widget.onDiscard : null,
-                        child: const Text('Discard selected file'),
-                      ),
+                    TextButton(
+                      onPressed: widget.canDiscard ? widget.onDiscard : null,
+                      child: const Text('Cancel'),
+                    ),
                   ],
                 ],
               ],

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_answer_editor_state.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_answer_editor_controller.dart';
@@ -58,7 +59,16 @@ void main() {
     final h = await _Harness.create();
     final captured = h.token;
     h.editor.updateDraft(_trueFalse, const StudentTrueFalseDraft(value: true));
-    h.editor.discardChanges(_trueFalse);
+    // Editing back to the saved value makes the draft clean again.
+    h.editor.updateDraft(
+      _trueFalse,
+      _savedDraft(
+        h.h.container.read(
+          studentBlitzAnswerEditorControllerProvider(blitzExecutionTarget),
+        ),
+        _trueFalse,
+      ),
+    );
     await h.controller.submitConfirmed(captured);
     expect(h.h.attempts.submits, isEmpty);
     expect(h.h.keys.calls, 1);
@@ -612,4 +622,9 @@ class _Harness {
     await submit;
     await flushStudentControllers();
   }
+}
+
+StudentAnswerDraft _savedDraft(StudentBlitzAnswerEditorState state, String id) {
+  final entry = state.questions[id.toLowerCase()]!;
+  return StudentAnswerDraft.fromAnswer(entry.question, entry.serverAnswer);
 }

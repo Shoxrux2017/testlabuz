@@ -41,6 +41,7 @@ class StudentBlitzExecutionState {
     this.status = StudentBlitzExecutionStatus.none,
     this.attempt,
     this.publicationToken,
+    this.readToken,
     this.failure,
     this.localTimeExpired = false,
     this.countdownAnchor,
@@ -53,6 +54,11 @@ class StudentBlitzExecutionState {
   /// The only frontend copy of the current execution Attempt.
   final StudentBlitzAttempt? attempt;
   final StudentAttemptPublicationToken? publicationToken;
+
+  /// Changes only when a full Attempt is adopted (Start, replay, Submit), so a
+  /// write that started from it can still patch its answer after other
+  /// patches.
+  final StudentAttemptPublicationToken? readToken;
 
   /// Why the last replay could not confirm the Attempt.
   final ApiFailure? failure;
@@ -97,6 +103,7 @@ class StudentBlitzExecutionState {
     status: status ?? this.status,
     attempt: attempt ?? this.attempt,
     publicationToken: publicationToken ?? this.publicationToken,
+    readToken: readToken,
     failure: identical(failure, _unchanged)
         ? this.failure
         : failure as ApiFailure?,

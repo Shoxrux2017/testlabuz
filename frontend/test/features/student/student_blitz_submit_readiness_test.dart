@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_answer_editor_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_answer_editor_state.dart';
@@ -65,13 +66,57 @@ void main() {
     }
   });
 
+  test('only pending saves still let Submit save first', () async {
+    final h = await _Harness.create();
+    h.editor.updateDraft(_trueFalse, const StudentTrueFalseDraft(value: true));
+    expect(h.readiness.isReady, isFalse);
+    expect(h.readiness.canSubmitAfterSaving, isTrue);
+  });
+
+  test('a rejected save blocks Submit until the answer changes', () async {
+    final h = await _Harness.create();
+    h.editor.updateDraft(_trueFalse, const StudentTrueFalseDraft(value: true));
+    final save = h.editor.saveAnswer(_trueFalse);
+    h.h.answers.saves.single.fail(
+      studentServerFailure(ApiErrorCodes.validationFailed, statusCode: 422),
+    );
+    await save;
+    expect(
+      h.readiness.blockers,
+      contains(StudentBlitzSubmitBlocker.nonFileSaveFailed),
+    );
+    expect(h.readiness.canSubmitAfterSaving, isFalse);
+  });
+
+  test('an invalid answer blocks Submit', () async {
+    final h = await _Harness.create();
+    h.editor.updateDraft(
+      blitzQuestionId(2),
+      StudentOpenWrittenDraft(text: 'x' * 20001),
+    );
+    expect(
+      h.readiness.blockers,
+      contains(StudentBlitzSubmitBlocker.nonFileInvalidAnswer),
+    );
+    expect(h.readiness.canSubmitAfterSaving, isFalse);
+  });
+
   test('a dirty non-file draft blocks until saved or discarded', () async {
     final h = await _Harness.create();
     h.editor.updateDraft(_trueFalse, const StudentTrueFalseDraft(value: true));
     expect(h.readiness.blockers, {
       StudentBlitzSubmitBlocker.nonFileUnsavedChanges,
     });
-    h.editor.discardChanges(_trueFalse);
+    // Editing back to the saved value makes the draft clean again.
+    h.editor.updateDraft(
+      _trueFalse,
+      _savedDraft(
+        h.h.container.read(
+          studentBlitzAnswerEditorControllerProvider(blitzExecutionTarget),
+        ),
+        _trueFalse,
+      ),
+    );
     expect(h.readiness.isReady, isTrue);
   });
 
@@ -92,7 +137,7 @@ void main() {
     expect(h.readiness.isReady, isFalse);
   });
 
-  test('a selected, uploading or unconfirmed file blocks', () async {
+  test('a choosing, uploading or unconfirmed file blocks', () async {
     final h = await _Harness.create();
     final choose = h.files.chooseFile(_file);
     expect(
@@ -101,10 +146,7 @@ void main() {
     );
     h.h.picker.pending.single.complete(blitzUploadFile());
     await choose;
-    expect(h.readiness.blockers, {
-      StudentBlitzSubmitBlocker.fileSelectionPending,
-    });
-    final upload = h.files.uploadAnswer(_file);
+    // The chosen file uploads at once.
     expect(
       h.readiness.blockers,
       contains(StudentBlitzSubmitBlocker.fileUploadInProgress),
@@ -112,7 +154,7 @@ void main() {
     h.h.answers.uploads.single.fail(
       studentLocalFailure(ApiFailureKind.timeout),
     );
-    await upload;
+    await flushStudentControllers();
     expect(
       h.readiness.blockers,
       contains(StudentBlitzSubmitBlocker.fileUploadUncertain),
@@ -193,7 +235,16 @@ void main() {
     final first = h.readiness.readyToken!;
     expect(first.matches(h.readiness.readyToken!), isTrue);
     h.editor.updateDraft(_trueFalse, const StudentTrueFalseDraft(value: true));
-    h.editor.discardChanges(_trueFalse);
+    // Editing back to the saved value makes the draft clean again.
+    h.editor.updateDraft(
+      _trueFalse,
+      _savedDraft(
+        h.h.container.read(
+          studentBlitzAnswerEditorControllerProvider(blitzExecutionTarget),
+        ),
+        _trueFalse,
+      ),
+    );
     expect(first.matches(h.readiness.readyToken!), isFalse);
   });
 }
@@ -235,4 +286,9 @@ class _Harness {
   StudentBlitzExecutionOperationGate get gate => h.container.read(
     studentBlitzExecutionOperationGateProvider(blitzExecutionTarget).notifier,
   );
+}
+
+StudentAnswerDraft _savedDraft(StudentBlitzAnswerEditorState state, String id) {
+  final entry = state.questions[id.toLowerCase()]!;
+  return StudentAnswerDraft.fromAnswer(entry.question, entry.serverAnswer);
 }

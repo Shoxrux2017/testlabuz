@@ -127,7 +127,7 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 
 | Order | Task ID | Area | Outcome | Depends on | Readiness | Delivery | Contract |
 |---|---|---|---|---|---|---|---|
-| `0` | `FE-UX-001` | Frontend (platform) | Student answer autosave; no Save button; no jump to Question 1 | Decomposition approved | `Draft — contract in this package` | Not started | `tasks/frontend/FE-UX-001-student-answer-autosave.md` |
+| `0` | `FE-UX-001` | Frontend (platform) | Student answer autosave; no Save button; no jump to Question 1 | Decomposition approved | `Approved` (revalidated on `main` `3ad88fb`) | Implemented — PR open, awaiting review and owner smoke | `tasks/frontend/FE-UX-001-student-answer-autosave.md` |
 | `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Draft — contract in this package` | Not started | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
 | `2` | `S09-BE-001` | Backend | Checking domain: nine type checkers, text normalizer, exact partial credit, normalization; `brick/math` and the NFC polyfill declared as direct dependencies | `DOC-001` | Not written | Not started | `tasks/backend/stage-09/` |
 | `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint), review-queue index | `BE-001` | Not written | Not started | `tasks/backend/stage-09/` |
@@ -203,7 +203,9 @@ Only a row whose readiness is `Approved` may be implemented.
 
 - 2026-09-28: planning audit done; owner decisions `S09-D1`…`D9` and the decomposition approved.
 - Planning package (this index, `FE-UX-001`, `S09-DOC-001`) delivered by the `docs/stage9-planning` PR.
-- Stage 9 implementation has not started. Next: `FE-UX-001` readiness on the merged `main`.
+- Planning package merged (PR #287, `main` `3ad88fb`).
+- `FE-UX-001` readiness revalidated on `3ad88fb` (no Student screen change since the contract); implemented on
+  `feat/fe-ux-001-student-answer-autosave`; PR open. Next after merge: `S09-DOC-001`.
 
 ## 12. Independent Planning Review (2026-09-28)
 

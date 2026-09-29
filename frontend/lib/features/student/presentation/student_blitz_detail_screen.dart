@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -70,7 +72,71 @@ class _StudentBlitzDetailScreenState
               .refresh();
         }
       },
+      // Pending answers are saved when the app goes to the background.
+      onInactive: _saveAllNow,
+      onHide: _saveAllNow,
+      onPause: _saveAllNow,
     );
+  }
+
+  StudentBlitzExecutionTarget? _executionTarget() {
+    final execution = ref.read(
+      studentBlitzExecutionControllerProvider(_target),
+    );
+    final attempt = execution.attempt;
+    return execution.isExecuting && attempt != null
+        ? StudentBlitzExecutionTarget(
+            routeTarget: _target,
+            attemptId: attempt.id,
+          )
+        : null;
+  }
+
+  void _saveAllNow() {
+    if (!mounted) return;
+    final target = _executionTarget();
+    if (target == null) return;
+    ref
+        .read(studentBlitzAnswerEditorControllerProvider(target).notifier)
+        .saveAllNow();
+  }
+
+  /// Saves pending answers and running uploads before leaving. Returns `null`
+  /// when the Student cancels, otherwise whether everything is saved.
+  Future<bool?> _flushBeforeLeaving(StudentBlitzExecutionTarget target) async {
+    final editor = ref.read(
+      studentBlitzAnswerEditorControllerProvider(target).notifier,
+    );
+    final files = ref.read(
+      studentBlitzFileAnswerControllerProvider(target).notifier,
+    );
+    final navigator = Navigator.of(context);
+    var cancelled = false;
+    final route = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        key: const Key('studentBlitzSavingDialog'),
+        title: const Text('Saving answers\u2026'),
+        content: const LinearProgressIndicator(
+          semanticsLabel: 'Saving answers',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              cancelled = true;
+              editor.cancelFlush();
+              files.cancelUploadWait();
+            },
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    unawaited(navigator.push(route));
+    final saved = await editor.flushAll() && await files.waitForUploads();
+    if (route.isActive) navigator.removeRoute(route);
+    return cancelled ? null : saved;
   }
 
   @override
@@ -368,7 +434,32 @@ class _StudentBlitzDetailScreenState
         : null;
     if (confirm && executionTarget != null) {
       _leaving = true;
-      final leave = await _confirmLeave(executionTarget, execution);
+      final editor = ref.read(
+        studentBlitzAnswerEditorControllerProvider(executionTarget),
+      );
+      final files = ref.read(
+        studentBlitzFileAnswerControllerProvider(executionTarget),
+      );
+      final gateIdle =
+          ref.read(
+            studentBlitzExecutionOperationGateProvider(executionTarget),
+          ) ==
+          StudentBlitzExecutionOperation.idle;
+      if (gateIdle &&
+          execution.acceptsWrites &&
+          (editor.hasDirtyDrafts ||
+              editor.activeQuestionId != null ||
+              files.activeQuestionId != null)) {
+        final saved = await _flushBeforeLeaving(executionTarget);
+        if (saved == null || !mounted) {
+          _leaving = false;
+          return;
+        }
+      }
+      final leave = await _confirmLeave(
+        executionTarget,
+        ref.read(studentBlitzExecutionControllerProvider(_target)),
+      );
       _leaving = false;
       // A Submit that began meanwhile can never be abandoned by Leave.
       if (!leave ||
@@ -466,13 +557,9 @@ class _StudentBlitzDetailScreenState
         ? (
             'studentBlitzUnsavedLeaveDialog',
             'Leave Blitz?',
-            [
-              if (editor.hasDirtyDrafts) 'You have unsaved answer changes.',
-              if (files.hasPendingSelection)
-                'The selected local file has not been uploaded.',
-              'Leaving discards only the unsaved local changes.',
-              'Your server timer continues.',
-            ].join('\n'),
+            'Some answers are not saved.\n'
+                'Leave and lose these changes?\n'
+                'Your server timer continues.',
           )
         : (
             'studentBlitzLeaveDialog',

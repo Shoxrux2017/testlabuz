@@ -1647,6 +1647,18 @@ class _ResumeRepository extends _StartRepository {
   _ResumeRepository(this.initialAttempt);
 
   final StudentHomeworkAttempt initialAttempt;
+
+  /// Leaving first saves pending answers; this regression needs the draft to
+  /// stay unsaved, so the server rejects it.
+  @override
+  Future<StudentAttemptAnswerMutationResult> saveAnswer(
+    String attemptId,
+    StudentQuestion question,
+    StudentAnswerMutation mutation,
+  ) async => throw studentServerFailure(
+    ApiErrorCodes.validationFailed,
+    statusCode: 422,
+  );
   final fetches = <String>[];
   Completer<StudentHomeworkAttempt>? nextFetch;
 

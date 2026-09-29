@@ -2510,7 +2510,6 @@ Possible future capabilities:
 
 - Offline material access
 - Homework drafts
-- Auto-save
 - Resume after connection loss
 - Background upload
 - Synchronization

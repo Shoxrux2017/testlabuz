@@ -43,8 +43,8 @@ class StudentBlitzSubmissionTransferController
   StudentSessionKey? _activeSessionKey;
   _TransferOwner? _owner;
 
-  /// A file the server reported missing for the given publication; only a
-  /// newer Attempt publication can make it transferable again.
+  /// A file the server reported missing for the given Attempt read; only a
+  /// newer full read (not an answer patch) can make it transferable again.
   (StudentAttemptPublicationToken?, String)? _revokedFile;
   var _generation = 0;
 
@@ -167,7 +167,7 @@ class StudentBlitzSubmissionTransferController
         _revokedFile = (
           ref
               .read(studentBlitzExecutionControllerProvider(target.routeTarget))
-              .publicationToken,
+              .readToken,
           owner.file.id.toLowerCase(),
         );
       }
@@ -233,7 +233,7 @@ class StudentBlitzSubmissionTransferController
           revoked.$1,
           ref
               .read(studentBlitzExecutionControllerProvider(target.routeTarget))
-              .publicationToken,
+              .readToken,
         )) {
       return null;
     }

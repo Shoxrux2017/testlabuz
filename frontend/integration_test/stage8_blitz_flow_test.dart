@@ -279,7 +279,10 @@ Future<String> _studentFirstAttempt(
   await h.tap(h.byKey('studentBlitzStartButton'));
   await h.waitWidget(h.byKey('studentBlitzStartDialog'), 'Start confirmation');
   await h.tap(h.byKey('studentBlitzStartConfirmButton'));
-  await h.waitWidget(h.byKey('studentBlitzAttemptShell'), 'Attempt #1 shell');
+  await h.waitWidget(
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
+    'Attempt #1 shell',
+  );
   expect(h.text(h.byKey('studentBlitzAttemptNumber')), 'Attempt 1');
   keys['start1'] = h.keys.issued[1];
   await _expectDecreasingCountdown(h, 'Attempt #1 countdown');
@@ -306,7 +309,10 @@ Future<String> _studentFirstAttempt(
   await h.waitRoute(topicRoute);
   await h.go(AppRoutePaths.studentBlitzDetailLocation(topic, main));
   await h.tap(h.byKey('studentBlitzResumeButton'));
-  await h.waitWidget(h.byKey('studentBlitzAttemptShell'), 'resumed Attempt #1');
+  await h.waitWidget(
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
+    'resumed Attempt #1',
+  );
   keys['resume1'] = h.keys.issued[2];
   expect(
     _countdownSeconds(h),
@@ -448,8 +454,8 @@ Finder _editorFinder(String questionId) => find.byWidgetPredicate(
 StudentQuestionAnswerEditor _editor(Stage8Harness h, String questionId) =>
     h.tester.widget<StudentQuestionAnswerEditor>(_editorFinder(questionId));
 
+/// Answers save automatically; this waits for the server-confirmed save.
 Future<void> _save(Stage8Harness h, String questionId) async {
-  await h.tap(h.byKey('studentSaveAnswer$questionId'));
   await h.until(() {
     if (_editorFinder(questionId).evaluate().length != 1) return false;
     final state = _editor(h, questionId).state;
@@ -496,14 +502,8 @@ Future<String> _uploadAndTransfer(Stage8Harness h) async {
   final question = h.manifest.question('main', 'file_based');
   StudentFileAnswerEditor editor() =>
       h.tester.widget<StudentFileAnswerEditor>(_fileEditorFinder(question));
+  // A chosen file uploads at once; there is no Upload button.
   await h.tap(_fileButton(h, question, 'Choose file'));
-  await h.until(
-    () =>
-        _fileEditorFinder(question).evaluate().length == 1 &&
-        editor().state.status == StudentFileAnswerStatus.ready,
-    'native picker selection accepted',
-  );
-  await h.tap(_fileButton(h, question, 'Upload answer'));
   await h.until(
     () =>
         _fileEditorFinder(question).evaluate().length == 1 &&
@@ -672,7 +672,7 @@ Future<void> _studentReplacement(
   );
   await h.tap(h.byKey('studentBlitzStartAdditionalConfirmButton'));
   await h.waitWidget(
-    h.byKey('studentBlitzAttemptShell'),
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
     'replacement Attempt #2 shell',
   );
   expect(
@@ -726,7 +726,7 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
   await h.waitWidget(h.byKey('studentBlitzStartDialog'), 'Start confirmation');
   await h.tap(h.byKey('studentBlitzStartConfirmButton'));
   await h.waitWidget(
-    h.byKey('studentBlitzAttemptShell'),
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
     'timeout Attempt shell',
   );
   keys['timeout_start'] = h.keys.issued[7];
@@ -740,8 +740,9 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
   final open = m.question('timeout_ui', 'open_written');
   await h.enter(
     h.within(h.byKey('studentAnswerEditor$open'), find.byType(TextField)),
-    'E2E S08 unsaved local draft',
+    'E2E S08 autosaved draft',
   );
+  await _save(h, open);
   // No user action from here: local zero replays the completed Start and the server finalizes.
   await h.until(
     () =>
@@ -751,9 +752,9 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
     timeout: const Duration(seconds: 120),
   );
   expect(
-    h.textIn(h.byKey('studentBlitzFinalizationSummary'), '1 of 2'),
+    h.textIn(h.byKey('studentBlitzFinalizationSummary'), '2 of 2'),
     findsOneWidget,
-    reason: 'Only the saved answer counts; the unsaved local draft does not.',
+    reason: 'Both answers were saved automatically before the deadline.',
   );
   expect(
     h.keys.issued.length,
@@ -767,7 +768,10 @@ Future<void> _studentTimeout(Stage8Harness h, Map<String, String> keys) async {
 
 void _expectNoQuestionContent(Stage8Harness h) {
   expect(find.byType(StudentQuestionAnswerEditor), findsNothing);
-  expect(h.byKey('studentBlitzAttemptShell'), findsNothing);
+  expect(
+    find.byKey(const PageStorageKey<String>('studentBlitzAttemptShell')),
+    findsNothing,
+  );
   expect(
     find.textContaining(
       RegExp(

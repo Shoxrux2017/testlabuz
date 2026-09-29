@@ -80,13 +80,17 @@ String studentHomeworkSubmitBlockerMessage(
   StudentHomeworkSubmitBlocker.attemptStateLoading =>
     'Wait for the Attempt refresh to finish.',
   StudentHomeworkSubmitBlocker.nonFileUnsavedChanges =>
-    'Save or discard unsaved answer changes before submitting.',
+    'Some answers are still being saved.',
   StudentHomeworkSubmitBlocker.nonFileSaveInProgress =>
-    'Wait for the current answer save to finish.',
+    'An answer is being saved.',
   StudentHomeworkSubmitBlocker.nonFileSaveUncertain =>
-    'Resolve the unconfirmed answer save before submitting.',
+    'An answer save is not confirmed yet. It is being checked.',
+  StudentHomeworkSubmitBlocker.nonFileInvalidAnswer =>
+    'Fix the marked answers before submitting.',
+  StudentHomeworkSubmitBlocker.nonFileSaveFailed =>
+    'Some answers were not saved. Check the marked questions.',
   StudentHomeworkSubmitBlocker.fileSelectionPending =>
-    'Upload or discard the selected file before submitting.',
+    'Retry or cancel the file that was not uploaded.',
   StudentHomeworkSubmitBlocker.fileUploadInProgress =>
     'Wait for the current file operation to finish.',
   StudentHomeworkSubmitBlocker.fileUploadUncertain =>
