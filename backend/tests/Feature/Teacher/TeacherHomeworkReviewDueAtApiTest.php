@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Teacher;
 
+use App\Enums\AssessmentAssignmentMode;
+use App\Enums\AssessmentAssignmentSource;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
 use App\Models\Assessment;
@@ -122,6 +124,61 @@ class TeacherHomeworkReviewDueAtApiTest extends TestCase
         return ['draft' => [HomeworkStatus::Draft], 'active' => [HomeworkStatus::Active]];
     }
 
+    /** @return array<string, array{mixed}> */
+    public static function invalidUpdateReviewDeadlines(): array
+    {
+        return [
+            'another offset than the institution' => ['2026-10-02T18:00:00+04:00'],
+            'not a date' => ['tomorrow'],
+        ];
+    }
+
+    #[DataProvider('invalidUpdateReviewDeadlines')]
+    public function test_update_rejects_an_invalid_review_deadline_on_its_own_field(mixed $value): void
+    {
+        [$institution, $teacher, , , $topic] = $this->homeworkContext();
+        $assessment = $this->persistedHomework($institution, $teacher, $topic);
+
+        $this->homeworkJson($teacher, 'PATCH', "/api/v1/teacher/homework/{$assessment->id}", ['review_due_at' => $value])
+            ->assertUnprocessable()->assertJsonValidationErrors(['review_due_at'])->assertJsonMissingValidationErrors(['deadline_at']);
+        $this->assertReviewDueAt($assessment, null);
+    }
+
+    public function test_a_review_deadline_only_update_leaves_group_recipients_alone(): void
+    {
+        [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
+        $assessment = $this->persistedHomework($institution, $teacher, $topic, status: HomeworkStatus::Active);
+        $this->recipient($assessment, $this->eligibleStudent($institution, $admin, $group), AssessmentAssignmentSource::Group);
+        // A Student who joins the Group later is not added by a reminder change.
+        $this->eligibleStudent($institution, $admin, $group);
+
+        $this->homeworkJson($teacher, 'PATCH', "/api/v1/teacher/homework/{$assessment->id}", ['review_due_at' => self::LOCAL])
+            ->assertOk()->assertJsonPath('data.review_due_at', self::UTC);
+        $this->assertSame(1, AssessmentStudent::query()->where('assessment_id', $assessment->id)->count());
+    }
+
+    public function test_a_review_deadline_only_update_does_not_revalidate_selected_students(): void
+    {
+        [$institution, $teacher, $admin, $group, $topic] = $this->homeworkContext(TopicStatus::Active);
+        $assessment = $this->persistedHomework(
+            $institution,
+            $teacher,
+            $topic,
+            AssessmentAssignmentMode::SelectedStudents,
+            HomeworkStatus::Active,
+        );
+        $student = $this->eligibleStudent($institution, $admin, $group);
+        $this->recipient($assessment, $student, AssessmentAssignmentSource::Direct);
+        $student->forceFill(['is_active' => false])->save();
+
+        $this->homeworkJson($teacher, 'PATCH', "/api/v1/teacher/homework/{$assessment->id}", ['review_due_at' => self::LOCAL])
+            ->assertOk()->assertJsonPath('data.student_ids', [$student->id]);
+        $this->assertReviewDueAt($assessment, self::UTC);
+        // Any other edit still revalidates the selection.
+        $this->homeworkJson($teacher, 'PATCH', "/api/v1/teacher/homework/{$assessment->id}", ['title' => 'Renamed'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['student_ids']);
+    }
+
     public function test_update_with_the_same_instant_writes_nothing(): void
     {
         [$institution, $teacher, , , $topic] = $this->homeworkContext();
@@ -181,6 +238,7 @@ class TeacherHomeworkReviewDueAtApiTest extends TestCase
         $response = $this->putReviewDueAt($teacher, $assessment, ['review_due_at' => self::LOCAL]);
 
         $response->assertOk()
+            ->assertJsonPath('message', 'Homework review deadline updated successfully.')
             ->assertJsonPath('data.id', $assessment->id)
             ->assertJsonPath('data.status', $status->value)
             ->assertJsonPath('data.review_due_at', self::UTC);
@@ -193,6 +251,33 @@ class TeacherHomeworkReviewDueAtApiTest extends TestCase
 
         $this->putReviewDueAt($teacher, $assessment, ['review_due_at' => null])
             ->assertOk()->assertJsonPath('data.review_due_at', null);
+        $this->assertReviewDueAt($assessment, null);
+    }
+
+    public function test_the_endpoint_with_the_same_instant_writes_nothing(): void
+    {
+        [$institution, $teacher, , , $topic] = $this->homeworkContext();
+        $original = CarbonImmutable::parse('2026-09-01 08:00:00', 'UTC');
+        $assessment = $this->persistedHomework($institution, $teacher, $topic, homeworkAttributes: [
+            'review_due_at' => CarbonImmutable::parse(self::UTC),
+            'updated_at' => $original,
+        ]);
+
+        $this->putReviewDueAt($teacher, $assessment, ['review_due_at' => self::LOCAL])
+            ->assertOk()->assertJsonPath('data.review_due_at', self::UTC);
+        $this->assertSame(
+            $original->toIso8601String(),
+            HomeworkAssignment::query()->whereKey($assessment->id)->firstOrFail()->updated_at?->toIso8601String(),
+        );
+    }
+
+    public function test_the_endpoint_reports_a_wrong_offset_on_its_field(): void
+    {
+        [$institution, $teacher, , , $topic] = $this->homeworkContext();
+        $assessment = $this->persistedHomework($institution, $teacher, $topic, status: HomeworkStatus::Closed);
+
+        $this->putReviewDueAt($teacher, $assessment, ['review_due_at' => '2026-10-02T18:00:00+04:00'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['review_due_at']);
         $this->assertReviewDueAt($assessment, null);
     }
 
@@ -301,6 +386,17 @@ class TeacherHomeworkReviewDueAtApiTest extends TestCase
                 'institution_id' => $assessment->institution_id,
                 'assigned_by_user_id' => $assessment->teacher_id,
             ])->id,
+        ]);
+    }
+
+    private function recipient(Assessment $assessment, User $student, AssessmentAssignmentSource $source): void
+    {
+        AssessmentStudent::factory()->create([
+            'assessment_id' => $assessment->id,
+            'institution_id' => $assessment->institution_id,
+            'student_id' => $student->id,
+            'assignment_source' => $source,
+            'assigned_by_user_id' => $assessment->teacher_id,
         ]);
     }
 

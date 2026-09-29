@@ -198,7 +198,7 @@ Only a row whose readiness is `Approved` may be implemented.
 | `CL-7` Homework activation lacks `official_cohort_mismatch` | Stage 8 closure (`CL-D1`) | `S09-FE-001` |
 | `INT-D2` autosave | Stage 8 integration | `FE-UX-001` (`S09-D8`) |
 | Topic-result feedback, Parent-visible feedback flag | Planning audit #6 | Stage 10 planning |
-| `topic_results.official_homework_score_id`/`official_blitz_score_id` default to `ON DELETE RESTRICT` (`docs/08` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; score no longer ready) | `S09-DOC-001` implementation | Stage 10 planning: decide the reference rule before `topic_results` exists |
+| `topic_results.official_homework_score_id`/`official_blitz_score_id` default to `ON DELETE RESTRICT` (`docs/08` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; score no longer ready); a tenant-safe composite reference also needs `unique(institution_id, id)` on `official_task_scores`, which Stage 9 does not add | `S09-DOC-001`, `S09-BE-002` | Stage 10 planning: decide the reference rule before `topic_results` exists |
 
 ## 11. Current Stage State
 
@@ -221,6 +221,9 @@ Only a row whose readiness is `Approved` may be implemented.
 - `S09-BE-001` accepted and delivered (PR #290, `main` `830b9b1`).
 - `S09-BE-002` contract written and approved on `830b9b1`; the review-queue index moves to `S09-BE-005`,
   where the queue query shape is defined. Implemented on `feat/s09-be-002-scoring-persistence-review-deadline`.
+  Independent review: P1 = 0, P2 = 2 (a `review_due_at`-only PATCH re-synchronized recipients; update-path
+  parsing untested), P3 = 6; fixed with tests, except the optional strict-request noise item (kept: it only
+  adds messages to already-rejected requests).
 
 ## 12. Independent Planning Review (2026-09-28)
 

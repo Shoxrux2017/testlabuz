@@ -84,6 +84,7 @@ class ScoringPersistenceSchemaTest extends TestCase
         $this->assertPostgresRejects(
             fn () => DB::table('official_task_scores')->where('id', $other->id)->update(['official_attempt_id' => $score->official_attempt_id]),
             '23505',
+            'official_task_scores_official_attempt_unique',
         );
     }
 
@@ -130,6 +131,26 @@ class ScoringPersistenceSchemaTest extends TestCase
                 '23503',
             );
         }
+    }
+
+    public function test_every_foreign_key_is_tenant_safe_and_restrictive(): void
+    {
+        $foreignKeys = [];
+
+        foreach (DB::select(
+            "select conname, pg_get_constraintdef(oid) as definition from pg_constraint
+             where conrelid = 'official_task_scores'::regclass and contype = 'f' order by conname",
+        ) as $constraint) {
+            $foreignKeys[$constraint->conname] = $constraint->definition;
+        }
+
+        $this->assertSame([
+            'official_task_scores_assessment_tenant_foreign' => 'FOREIGN KEY (institution_id, assessment_id) REFERENCES assessments(institution_id, id) ON DELETE RESTRICT',
+            'official_task_scores_attempt_tenant_foreign' => 'FOREIGN KEY (institution_id, official_attempt_id) REFERENCES assessment_attempts(institution_id, id) ON DELETE RESTRICT',
+            'official_task_scores_institution_id_foreign' => 'FOREIGN KEY (institution_id) REFERENCES institutions(id) ON DELETE RESTRICT',
+            'official_task_scores_selector_tenant_foreign' => 'FOREIGN KEY (institution_id, selected_by_user_id) REFERENCES users(institution_id, id) ON DELETE RESTRICT',
+            'official_task_scores_student_tenant_foreign' => 'FOREIGN KEY (institution_id, student_id) REFERENCES users(institution_id, id) ON DELETE RESTRICT',
+        ], $foreignKeys);
     }
 
     public function test_parent_deletion_is_restricted(): void

@@ -37,6 +37,8 @@ Teacher Homework parser accepts it in the same PR.
   `review_due_at`.
 - Frontend: `TeacherHomeworkDto` reads `review_due_at`; `TeacherHomework.reviewDueAt`. No UI (that is
   `S09-FE-001`).
+- `docs/08` §19.1/§25.12 record the constraints this migration adds beyond the documented table
+  (`unique(official_attempt_id)`, the institution and selector foreign keys, `selected_by_user_id is null`).
 
 ### Non-goals
 
@@ -67,8 +69,10 @@ Teacher Homework parser accepts it in the same PR.
 - Tests that assert the current shape and change deliberately:
   `tests/Feature/Persistence/AssessmentHomeworkSchemaInspectionTest.php` (Homework columns; the
   "`official_task_scores` does not exist" assertion), `BlitzPersistenceSchemaInspectionTest.php` (same
-  absence assertion), `tests/Feature/Teacher/TeacherHomeworkAuthoringApiTest.php` (exact resource keys),
-  and the frontend Teacher Homework JSON fixtures and `TeacherHomework` test builders.
+  absence assertion), `tests/Feature/Teacher/TeacherHomeworkAuthoringApiTest.php` and
+  `tests/Feature/Teacher/TeacherQuestionMutationApiTest.php` (exact Teacher Homework resource keys; Question
+  mutations return that resource), and the frontend Teacher Homework JSON fixtures and `TeacherHomework`
+  test builders.
 
 ## 5. Exact Contract
 
@@ -129,6 +133,10 @@ Teacher Homework parser accepts it in the same PR.
   existing editability: closed → `409 task_closed`, archived → `409 task_archived`, Topic closed/archived →
   `409 topic_not_editable`, in the existing order. A value equal to the stored instant is no change; a
   request whose only field is unchanged writes nothing (existing no-change behavior).
+- An update whose only change is `review_due_at` saves just the Homework row, exactly like §5.4: it runs
+  no assignment validation and no recipient synchronization (other edits keep the Stage 6 behavior).
+- Fractional seconds are accepted by the syntax rule and dropped on storage (second precision), as for
+  `deadline_at`.
 
 ### 5.4 `PUT /api/v1/teacher/homework/{homework}/review-due-at`
 
@@ -179,16 +187,19 @@ Backend (feature tests, the testing database):
 - `tests/Feature/Teacher/TeacherHomeworkReviewDueAtApiTest.php`:
   - create with an institution-offset value (stored UTC, returned), with `null`, without the key; a wrong
     offset and bad syntax → `422` on `review_due_at`;
-  - update sets and clears it on `draft` and `active` Homework, also with existing Attempts; the same
-    instant writes nothing; closed → `409 task_closed`; archived → `409 task_archived`; closed Topic →
-    `409 topic_not_editable`;
+  - update sets and clears it on `draft` and `active` Homework, also with existing Attempts; a wrong offset
+    and bad syntax → `422` on `review_due_at`; the same instant writes nothing; a `review_due_at`-only update
+    neither adds a Student who joined the Group later nor revalidates a deactivated selected Student;
+    closed → `409 task_closed`; archived → `409 task_archived`; closed Topic → `409 topic_not_editable`;
   - `PUT …/review-due-at` sets and clears it on `draft`, `active` and `closed` Homework, also with
     Attempts; archived → `409 task_archived` (also when the Topic is archived); closed or archived Topic →
     `409 topic_not_editable`; strict body (missing key, extra key, number, array, non-JSON, query parameter
-    → `422`); another Teacher's Homework, another Institution's Homework and an unknown id → `404`; a
-    Student → the existing role rejection; the response is the full Teacher Homework resource.
-- Deliberate updates: the two schema inspection tests and the exact-key assertion in
-  `TeacherHomeworkAuthoringApiTest` (listed in §4).
+    → `422`); a wrong offset is reported on `review_due_at`; the same instant writes nothing; another
+    Teacher's Homework, another Institution's Homework and an unknown id → `404`; a Student → the existing
+    role rejection; the response is the full Teacher Homework resource with its message.
+- `ScoringPersistenceSchemaTest` also asserts the exact definition of every foreign key.
+- Deliberate updates: the two schema inspection tests and the exact-key assertions in
+  `TeacherHomeworkAuthoringApiTest` and `TeacherQuestionMutationApiTest` (listed in §4).
 
 Frontend: `teacher_homework_dto_test.dart` parses `review_due_at` present and `null` and rejects a
 missing key and a non-UTC value; the Teacher Homework JSON fixtures and `TeacherHomework` builders gain
@@ -216,6 +227,8 @@ backend/tests/Feature/Persistence/AssessmentHomeworkSchemaInspectionTest.php
 backend/tests/Feature/Persistence/BlitzPersistenceSchemaInspectionTest.php
 backend/tests/Feature/Teacher/TeacherHomeworkReviewDueAtApiTest.php
 backend/tests/Feature/Teacher/TeacherHomeworkAuthoringApiTest.php
+backend/tests/Feature/Teacher/TeacherQuestionMutationApiTest.php
+docs/08-database.md
 frontend/lib/features/teacher/data/dto/teacher_homework_dto.dart
 frontend/lib/features/teacher/domain/teacher_homework.dart
 frontend/test/features/teacher/ (Teacher Homework fixtures, builders and DTO test)
@@ -237,7 +250,7 @@ Backend (app container):
 
 ```text
 php artisan migrate:fresh --env=testing   (through the test suite's RefreshDatabase)
-vendor/bin/phpunit tests/Feature/Persistence tests/Feature/Teacher/TeacherHomeworkReviewDueAtApiTest.php tests/Feature/Teacher/TeacherHomeworkAuthoringApiTest.php tests/Feature/Teacher/TeacherHomeworkLifecycleApiTest.php
+vendor/bin/phpunit tests/Feature/Persistence tests/Feature/Teacher/TeacherHomeworkReviewDueAtApiTest.php tests/Feature/Teacher/TeacherHomeworkAuthoringApiTest.php tests/Feature/Teacher/TeacherHomeworkLifecycleApiTest.php tests/Feature/Teacher/TeacherQuestionMutationApiTest.php tests/Feature/Teacher/TeacherHomeworkRecipientApiTest.php
 vendor/bin/pint --test <changed PHP files>
 ```
 

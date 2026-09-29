@@ -97,6 +97,15 @@ final class UpdateTeacherHomework
                 return ($this->showTeacherHomework)($teacher, $assessment->id);
             }
 
+            // The review deadline is a reminder only: changing just it touches no
+            // recipient or assignment state, exactly like the dedicated endpoint.
+            if (array_keys($changes) === ['review_due_at']) {
+                $homework->review_due_at = $resulting['review_due_at'];
+                $homework->save();
+
+                return ($this->showTeacherHomework)($teacher, $assessment->id);
+            }
+
             $hasFairnessChange = array_intersect(array_keys($changes), self::FAIRNESS_FIELDS) !== [];
 
             if ($hasAttempts && $hasFairnessChange) {
