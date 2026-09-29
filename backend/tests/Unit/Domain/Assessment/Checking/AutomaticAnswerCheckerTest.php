@@ -147,6 +147,7 @@ class AutomaticAnswerCheckerTest extends TestCase
             'single choice with an unknown option' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', $options, ['z'])],
             'single choice without options' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', [], ['a'])],
             'single choice without a correct option' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', ['a' => false, 'b' => false], ['a'])],
+            'choice option without a boolean correctness flag' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a' => true, 'b' => null], ['a'])],
             'single choice with two correct options' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', ['a' => true, 'b' => true], ['a'])],
             'multiple choice without a correct option' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a' => false], ['a'])],
             'multiple choice with a repeated option id' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a' => true, 'A' => true], ['a'])],

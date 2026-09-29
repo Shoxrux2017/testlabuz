@@ -21,8 +21,9 @@ final class AutomaticAnswerChecker
      */
     public function singleChoice(string $points, array $options, array $selectedOptionIds): string
     {
-        $correct = $this->correctOptionIds($options);
-        $selected = $this->selectedOptionIds($options, $selectedOptionIds);
+        $known = $this->optionsByLowerId($options);
+        $correct = $this->correctOptionIds($known);
+        $selected = $this->selectedOptionIds($known, $selectedOptionIds);
 
         if (count($correct) !== 1 || count($selected) !== 1) {
             throw new LogicException('A single-choice Question has one correct option and one selected option.');
@@ -39,8 +40,9 @@ final class AutomaticAnswerChecker
      */
     public function multipleChoice(string $points, array $options, array $selectedOptionIds): string
     {
-        $correct = $this->correctOptionIds($options);
-        $selected = $this->selectedOptionIds($options, $selectedOptionIds);
+        $known = $this->optionsByLowerId($options);
+        $correct = $this->correctOptionIds($known);
+        $selected = $this->selectedOptionIds($known, $selectedOptionIds);
 
         if ($correct === []) {
             throw new LogicException('A multiple-choice Question needs at least one correct option.');
@@ -197,25 +199,39 @@ final class AutomaticAnswerChecker
     }
 
     /**
-     * @param  array<string, bool>  $options
-     * @return list<string>
+     * @param  array<string, mixed>  $options
+     * @return array<string, bool>
      */
-    private function correctOptionIds(array $options): array
+    private function optionsByLowerId(array $options): array
     {
-        $correct = array_filter($this->byLowerId($options, 'option'), fn (bool $isCorrect): bool => $isCorrect);
+        $known = $this->byLowerId($options, 'option');
 
-        // Array keys that look numeric come back as integers.
-        return array_map(strval(...), array_keys($correct));
+        foreach ($known as $isCorrect) {
+            if (! is_bool($isCorrect)) {
+                throw new LogicException('Every option needs a boolean correctness flag.');
+            }
+        }
+
+        return $known;
     }
 
     /**
-     * @param  array<string, bool>  $options
+     * @param  array<string, bool>  $known
+     * @return list<string>
+     */
+    private function correctOptionIds(array $known): array
+    {
+        // Array keys that look numeric come back as integers.
+        return array_map(strval(...), array_keys(array_filter($known)));
+    }
+
+    /**
+     * @param  array<string, bool>  $known
      * @param  list<string>  $selectedOptionIds
      * @return list<string>
      */
-    private function selectedOptionIds(array $options, array $selectedOptionIds): array
+    private function selectedOptionIds(array $known, array $selectedOptionIds): array
     {
-        $known = $this->byLowerId($options, 'option');
         $selected = array_map(strtolower(...), array_values($selectedOptionIds));
 
         if ($selected === [] || count(array_unique($selected)) !== count($selected)

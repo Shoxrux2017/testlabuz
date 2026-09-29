@@ -100,7 +100,9 @@ class CheckingScoreMathTest extends TestCase
     {
         $this->assertSame(-1, $this->math->compare('83.33333333', '83.33333334'));
         $this->assertSame(0, $this->math->compare('100', '100.00000000'));
-        $this->assertSame(1, $this->math->compare('9.5', '10.00000000') * -1);
+        $this->assertSame(-1, $this->math->compare('9.5', '10.00000000'));
+        // Beyond double precision: a float comparison would call these equal.
+        $this->assertSame(-1, $this->math->compare('99999999.99999998', '99999999.99999999'));
         $this->assertSame(1, $this->math->compare('0.1', '0.09999999'));
     }
 

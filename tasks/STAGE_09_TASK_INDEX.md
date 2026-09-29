@@ -216,6 +216,8 @@ Only a row whose readiness is `Approved` may be implemented.
   re-verified (final P1 = 0, P2 = 0). PR open. Next after merge: `S09-BE-001` contract and readiness.
 - `S09-DOC-001` accepted and delivered (PR #289, `main` `4cff8af`).
 - `S09-BE-001` contract written and approved on `4cff8af`; implemented on `feat/s09-be-001-checking-domain`.
+  Independent fresh-context review: P1 = 1, P2 = 4, P3 = 6, all fixed with tests and mutation checks;
+  re-verification P1 = 0, P2 = 0 (three new P3 also fixed). PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
