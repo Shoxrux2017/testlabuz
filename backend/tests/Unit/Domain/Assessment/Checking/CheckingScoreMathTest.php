@@ -46,6 +46,7 @@ class CheckingScoreMathTest extends TestCase
             'padded points' => [' 1', 1, 1],
             'empty points' => ['', 1, 1],
             'trailing dot' => ['1.', 1, 1],
+            'nine fractional digits' => ['0.123456789', 1, 1],
         ];
     }
 
@@ -64,11 +65,23 @@ class CheckingScoreMathTest extends TestCase
         $this->assertSame('0.00000000', $this->math->sum([]));
     }
 
-    public function test_an_invalid_summand_throws(): void
+    /** @return array<string, array{list<string>}> */
+    public static function invalidSummands(): array
+    {
+        return [
+            'not a number' => [['1', 'x']],
+            'nine fractional digits' => [['0.000000001']],
+            'halves that would sum exactly' => [['0.000000005', '0.000000005']],
+        ];
+    }
+
+    /** @param list<string> $summands */
+    #[DataProvider('invalidSummands')]
+    public function test_an_invalid_summand_throws(array $summands): void
     {
         $this->expectException(LogicException::class);
 
-        $this->math->sum(['1', 'x']);
+        $this->math->sum($summands);
     }
 
     public function test_normalized_scores_are_rounded_half_up_once(): void
@@ -78,6 +91,24 @@ class CheckingScoreMathTest extends TestCase
         $this->assertSame('100.00000000', $this->math->normalizedScore('3', '3'));
         $this->assertSame('0.00000000', $this->math->normalizedScore('0', '3'));
         $this->assertSame('33.33333300', $this->math->normalizedScore('0.33333333', '1'));
+        // Exact ties at the ninth digit round up, not to even.
+        $this->assertSame('0.00000001', $this->math->normalizedScore('0.00000001', '200'));
+        $this->assertSame('0.00000013', $this->math->normalizedScore('0.00000001', '8'));
+    }
+
+    public function test_scores_compare_as_exact_decimals(): void
+    {
+        $this->assertSame(-1, $this->math->compare('83.33333333', '83.33333334'));
+        $this->assertSame(0, $this->math->compare('100', '100.00000000'));
+        $this->assertSame(1, $this->math->compare('9.5', '10.00000000') * -1);
+        $this->assertSame(1, $this->math->compare('0.1', '0.09999999'));
+    }
+
+    public function test_an_invalid_comparison_operand_throws(): void
+    {
+        $this->expectException(LogicException::class);
+
+        $this->math->compare('1', '1e2');
     }
 
     /** @return array<string, array{string, string}> */

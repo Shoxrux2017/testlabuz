@@ -48,7 +48,7 @@ arithmetic.
 - `composer.lock` already contains `brick/math` `0.18.0` and `symfony/polyfill-intl-normalizer`
   `v1.38.0`, only as transitive dependencies of `laravel/framework`.
 - Question points are `numeric(14,6)`; `AssessmentPointMath::normalize()` returns them as decimal strings
-  with six fractional digits (`"2.500000"`). `attempt_answers.awarded_points` is `numeric(?,8)` cast as
+  with six fractional digits (`"2.500000"`). `attempt_answers.awarded_points` is `numeric(16,8)` cast as
   `decimal:8`; `assessment_attempts.earned_points` is `numeric(16,8)`, `normalized_score` is
   `numeric(12,8)`, `possible_points` is `numeric(14,6)`.
 - `QuestionConfigurationValidator` allows `checking_mode = manual` only for `short_written`,
@@ -95,12 +95,13 @@ All results are decimal strings with exactly 8 fractional digits (`"2.50000000"`
 - `normalizedScore(string $earnedPoints, string $possiblePoints): string` — `earned × 100 / possible`,
   rounded half-up to 8 decimal places. `possible ≤ 0`, a negative `earned`, or `earned > possible` throws
   `LogicException`.
+- `compare(string $left, string $right): int` — `-1`, `0` or `1`, comparing the exact decimal values
+  (later tasks compare scores and bounds with it, never as strings or floats).
 - `isZero(string $points): bool` — whether the value equals zero (used by the route in §5.3).
-- `sum` throws `LogicException` when a summand has more than 8 fractional digits (the sum would not be
-  exact at 8 places).
 
-`points` and every decimal argument must be a plain non-negative decimal string (`^\d+(\.\d+)?$`);
-anything else throws `LogicException`.
+`points` and every decimal argument must be a plain non-negative decimal string with at most 8 fractional
+digits (`^\d+(\.\d{1,8})?$`); anything else throws `LogicException`. Question points have 6 and stored
+scores 8, so every sum is exact at 8 places and full credit returns exactly `points`.
 
 ### 5.3 `AnswerCheckingRoute`
 
@@ -127,16 +128,18 @@ never scored silently.
 
 | Method | Rule | Integrity errors |
 |---|---|---|
-| `singleChoice(string $points, string $correctOptionId, list<string> $selectedOptionIds)` | `points` when the one selected id is the correct id, else 0 | not exactly one selected id |
-| `multipleChoice(string $points, list<string> $correctOptionIds, list<string> $selectedOptionIds)` | `partialPoints(points, count(selected ∩ correct), count(correct))`; a wrong selection earns and deducts nothing; the selection cap is not re-checked | no correct id; a duplicate correct id; empty selection; a duplicate selected id |
+| `singleChoice(string $points, array<string,bool> $options, list<string> $selectedOptionIds)` | `points` when the one selected option is the correct one, else 0 | no option; an option id repeated; not exactly one correct option; not exactly one selected id; a selected id that is not an option |
+| `multipleChoice(string $points, array<string,bool> $options, list<string> $selectedOptionIds)` | `partialPoints(points, count(selected ∩ correct), count(correct))`; a wrong selection earns and deducts nothing; the selection cap is not re-checked | no option; an option id repeated; no correct option; empty selection; a duplicate selected id; a selected id that is not an option |
 | `trueFalse(string $points, bool $correctValue, bool $answer)` | `points` when equal, else 0 | — |
 | `shortWritten(string $points, list<string> $acceptedAnswers, string $text)` | `points` when `normalize(text)` equals `normalize(a)` for any accepted answer `a`, else 0 | no accepted answer |
 | `matching(string $points, array<string,string> $leftMatchKeys, array<string,string> $rightMatchKeys, list<array{left_item_id:string,right_item_id:string}> $pairs)` | a pair is correct when the right item's match key equals the left item's match key; `partialPoints(points, correct pairs, count(leftMatchKeys))` | no left item; a pair naming an unknown left or right item; a left or right item used twice; an empty pair list |
-| `ordering(string $points, array<string,int> $correctPositions, list<array{item_id:string,position:int}> $items)` | an item is correct only when its placed position equals its `correct_position` (both 1-based); `partialPoints(points, correct items, count(correctPositions))` | fewer than one item in the key; an unknown item; an item or a position used twice; a position outside `1…count(correctPositions)`; an empty item list |
-| `fillInBlank(string $points, array<string,list<string>> $acceptedAnswersByBlank, list<array{blank_id:string,text:string}> $values)` | a blank is correct when `normalize(text)` equals the normalized form of any of that blank's accepted answers; unfilled blanks are wrong; `partialPoints(points, correct blanks, count(acceptedAnswersByBlank))` | no blank; a blank without accepted answers; an unknown blank; a blank filled twice; an empty value list |
+| `ordering(string $points, array<string,int> $correctPositions, list<array{item_id:string,position:int}> $items)` | an item is correct only when its placed position equals its `correct_position` (both 1-based); `partialPoints(points, correct items, count(correctPositions))` | fewer than one item in the key; a correct or placed position that is not an integer; an unknown item; an item or a position used twice; a position outside `1…count(correctPositions)`; an empty item list |
+| `fillInBlank(string $points, array<string,list<string>> $acceptedAnswersByBlank, list<array{blank_id:string,text:string}> $values)` | a blank is correct when `normalize(text)` equals the normalized form of any of that blank's accepted answers; unfilled blanks are wrong; `partialPoints(points, correct blanks, count(acceptedAnswersByBlank))` | no blank; any blank (filled or not) without accepted answers; an unknown blank; a blank filled twice; an empty value list |
 
+`singleChoice`/`multipleChoice`: keys of `$options` are the Question's option ids, values are `is_correct`.
 `matching`: keys of `$leftMatchKeys`/`$rightMatchKeys` are item ids, values are match keys. `ordering`:
-keys are item ids, values are correct positions. `fillInBlank`: keys are blank ids.
+keys are item ids, values are correct positions. `fillInBlank`: keys are blank ids. Match keys also compare
+case-insensitively.
 
 ### 5.5 Dependencies
 
@@ -161,11 +164,15 @@ Unit tests (`PHPUnit\Framework\TestCase`, no database) in
   apostrophe variants becomes U+0027; each whitespace code point (every one of the set, including U+0085,
   U+00A0, U+FEFF, U+3000) collapses; runs collapse to one space; leading and trailing spaces are trimmed;
   punctuation, hyphens and quotes other than the seven apostrophes stay significant; the order matters (an
-  apostrophe produced by NFC/case folding is still mapped); invalid UTF-8 throws.
+  apostrophe produced by NFC/case folding is still mapped; the first NFC runs before folding; non-ASCII
+  whitespace at the ends is collapsed and then trimmed, and only U+0020 is trimmed); every whitespace code
+  point is also empty for `StudentAnswerText::isEmpty()` (the two rules must not drift); invalid UTF-8
+  throws.
 - `CheckingScoreMathTest`: one-step rounding (`1 × 1 / 3` → `0.33333333`, `2 × 2 / 3` → `1.33333333`,
   a half-up case at the 9th digit); `correct = total` returns exactly `points`; `0.1 + 0.2` sums exactly;
-  normalized score `2.5 / 3` → `83.33333333`, `earned = possible` → `100.00000000`, `0` → `0.00000000`;
-  every invalid argument throws.
+  normalized score `2.5 / 3` → `83.33333333`, `earned = possible` → `100.00000000`, `0` → `0.00000000`,
+  and an exact 9th-digit tie rounds up (`0.00000001 × 100 / 200` → `0.00000001`); `compare` on exact
+  values; every invalid argument (including 9 fractional digits) throws.
 - `AnswerCheckingRouteTest`: every row of §5.3, including zero points, and every invalid combination.
 - `AutomaticAnswerCheckerTest`: for every method, full credit, zero credit and partial credit where the
   type has it; multiple choice with a wrong selection earning nothing and with more selections than

@@ -19,27 +19,31 @@ class AutomaticAnswerCheckerTest extends TestCase
 
     public function test_single_choice_is_all_or_nothing(): void
     {
-        $this->assertSame('2.00000000', $this->checker->singleChoice('2.000000', 'opt-b', ['OPT-B']));
-        $this->assertSame('0.00000000', $this->checker->singleChoice('2.000000', 'opt-b', ['opt-a']));
-        $this->assertSame('0.00000000', $this->checker->singleChoice('0.000000', 'opt-b', ['opt-b']));
+        $options = ['opt-a' => false, 'OPT-B' => true, 'opt-c' => false];
+
+        $this->assertSame('2.00000000', $this->checker->singleChoice('2.000000', $options, ['opt-B']));
+        $this->assertSame('0.00000000', $this->checker->singleChoice('2.000000', $options, ['opt-a']));
+        $this->assertSame('0.00000000', $this->checker->singleChoice('0.000000', $options, ['opt-b']));
     }
 
     public function test_multiple_choice_awards_the_share_of_correct_options_selected(): void
     {
-        $correct = ['a', 'b', 'c'];
+        $options = ['a' => true, 'b' => true, 'C' => true, 'x' => false];
 
-        $this->assertSame('3.00000000', $this->checker->multipleChoice('3', $correct, ['C', 'a', 'b']));
-        $this->assertSame('2.00000000', $this->checker->multipleChoice('3', $correct, ['a', 'b']));
-        $this->assertSame('1.00000000', $this->checker->multipleChoice('3', $correct, ['a']));
-        $this->assertSame('0.66666667', $this->checker->multipleChoice('1', $correct, ['a', 'b']));
+        $this->assertSame('3.00000000', $this->checker->multipleChoice('3', $options, ['c', 'a', 'b']));
+        $this->assertSame('2.00000000', $this->checker->multipleChoice('3', $options, ['a', 'b']));
+        $this->assertSame('1.00000000', $this->checker->multipleChoice('3', $options, ['A']));
+        $this->assertSame('0.66666667', $this->checker->multipleChoice('1', $options, ['a', 'b']));
     }
 
     public function test_a_wrong_multiple_choice_selection_earns_and_deducts_nothing(): void
     {
-        $this->assertSame('1.00000000', $this->checker->multipleChoice('2', ['a', 'b'], ['a', 'x']));
-        $this->assertSame('0.00000000', $this->checker->multipleChoice('2', ['a', 'b'], ['x']));
+        $options = ['a' => true, 'b' => true, 'x' => false, 'y' => false];
+
+        $this->assertSame('1.00000000', $this->checker->multipleChoice('2', $options, ['a', 'x']));
+        $this->assertSame('0.00000000', $this->checker->multipleChoice('2', $options, ['x']));
         // More selections than correct options is a save-time rule; checking still counts only correct ones.
-        $this->assertSame('2.00000000', $this->checker->multipleChoice('2', ['a', 'b'], ['a', 'b', 'x']));
+        $this->assertSame('2.00000000', $this->checker->multipleChoice('2', $options, ['a', 'b', 'x']));
     }
 
     public function test_true_false_is_all_or_nothing(): void
@@ -62,7 +66,7 @@ class AutomaticAnswerCheckerTest extends TestCase
     public function test_matching_awards_the_share_of_correct_pairs_over_all_left_items(): void
     {
         $left = ['L1' => 'k1', 'l2' => 'k2', 'l3' => 'k3', 'l4' => 'k4'];
-        $right = ['r1' => 'K1', 'r2' => 'k2', 'r3' => 'k3', 'r4' => 'k4'];
+        $right = ['r1' => 'K1', 'R2' => 'k2', 'r3' => 'k3', 'r4' => 'k4'];
 
         $this->assertSame('4.00000000', $this->checker->matching('4', $left, $right, [
             ['left_item_id' => 'l1', 'right_item_id' => 'R1'],
@@ -128,6 +132,7 @@ class AutomaticAnswerCheckerTest extends TestCase
     /** @return array<string, array{Closure(AutomaticAnswerChecker): mixed}> */
     public static function integrityErrors(): array
     {
+        $options = ['a' => true, 'b' => false];
         $pair = fn (string $left, string $right): array => ['left_item_id' => $left, 'right_item_id' => $right];
         $left = ['l1' => 'k1', 'l2' => 'k2'];
         $right = ['r1' => 'k1', 'r2' => 'k2'];
@@ -137,12 +142,17 @@ class AutomaticAnswerCheckerTest extends TestCase
         $blanks = ['b1' => ['a'], 'b2' => ['b']];
 
         return [
-            'single choice without a selection' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', 'a', [])],
-            'single choice with two selections' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', 'a', ['a', 'b'])],
-            'multiple choice without a correct option' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', [], ['a'])],
-            'multiple choice with a duplicate correct option' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a', 'A'], ['a'])],
-            'multiple choice without a selection' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a'], [])],
-            'multiple choice with a duplicate selection' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a', 'b'], ['a', 'A'])],
+            'single choice without a selection' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', $options, [])],
+            'single choice with two selections' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', $options, ['a', 'b'])],
+            'single choice with an unknown option' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', $options, ['z'])],
+            'single choice without options' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', [], ['a'])],
+            'single choice without a correct option' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', ['a' => false, 'b' => false], ['a'])],
+            'single choice with two correct options' => [fn (AutomaticAnswerChecker $c) => $c->singleChoice('1', ['a' => true, 'b' => true], ['a'])],
+            'multiple choice without a correct option' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a' => false], ['a'])],
+            'multiple choice with a repeated option id' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', ['a' => true, 'A' => true], ['a'])],
+            'multiple choice without a selection' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', $options, [])],
+            'multiple choice with a duplicate selection' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', $options, ['a', 'A'])],
+            'multiple choice with an unknown option' => [fn (AutomaticAnswerChecker $c) => $c->multipleChoice('1', $options, ['a', 'z'])],
             'short written without accepted answers' => [fn (AutomaticAnswerChecker $c) => $c->shortWritten('1', [], 'x')],
             'matching without left items' => [fn (AutomaticAnswerChecker $c) => $c->matching('1', [], $right, [$pair('l1', 'r1')])],
             'matching without pairs' => [fn (AutomaticAnswerChecker $c) => $c->matching('1', $left, $right, [])],
@@ -157,8 +167,11 @@ class AutomaticAnswerCheckerTest extends TestCase
             'ordering with a position used twice' => [fn (AutomaticAnswerChecker $c) => $c->ordering('1', $positions, [$placed('i1', 1), $placed('i2', 1)])],
             'ordering with position zero' => [fn (AutomaticAnswerChecker $c) => $c->ordering('1', $positions, [$placed('i1', 0)])],
             'ordering with a position after the last item' => [fn (AutomaticAnswerChecker $c) => $c->ordering('1', $positions, [$placed('i1', 3)])],
+            'ordering with a non-integer placed position' => [fn (AutomaticAnswerChecker $c) => $c->ordering('1', $positions, [['item_id' => 'i1', 'position' => '1']])],
+            'ordering with a non-integer correct position' => [fn (AutomaticAnswerChecker $c) => $c->ordering('1', ['i1' => '1', 'i2' => 2], [$placed('i1', 1)])],
             'fill in blank without blanks' => [fn (AutomaticAnswerChecker $c) => $c->fillInBlank('1', [], [$filled('b1', 'a')])],
-            'fill in blank without accepted answers for a blank' => [fn (AutomaticAnswerChecker $c) => $c->fillInBlank('1', ['b1' => []], [$filled('b1', 'a')])],
+            'fill in blank without accepted answers for a filled blank' => [fn (AutomaticAnswerChecker $c) => $c->fillInBlank('1', ['b1' => []], [$filled('b1', 'a')])],
+            'fill in blank without accepted answers for an unfilled blank' => [fn (AutomaticAnswerChecker $c) => $c->fillInBlank('1', ['b1' => ['a'], 'b2' => []], [$filled('b1', 'a')])],
             'fill in blank without values' => [fn (AutomaticAnswerChecker $c) => $c->fillInBlank('1', $blanks, [])],
             'fill in blank with an unknown blank' => [fn (AutomaticAnswerChecker $c) => $c->fillInBlank('1', $blanks, [$filled('bx', 'a')])],
             'fill in blank with a blank filled twice' => [fn (AutomaticAnswerChecker $c) => $c->fillInBlank('1', $blanks, [$filled('b1', 'a'), $filled('B1', 'a')])],

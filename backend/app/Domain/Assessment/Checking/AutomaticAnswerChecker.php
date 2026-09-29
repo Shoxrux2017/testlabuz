@@ -15,28 +15,36 @@ final class AutomaticAnswerChecker
         private readonly CheckingScoreMath $math = new CheckingScoreMath,
     ) {}
 
-    /** @param list<string> $selectedOptionIds */
-    public function singleChoice(string $points, string $correctOptionId, array $selectedOptionIds): string
+    /**
+     * @param  array<string, bool>  $options  option id => is correct
+     * @param  list<string>  $selectedOptionIds
+     */
+    public function singleChoice(string $points, array $options, array $selectedOptionIds): string
     {
-        $selected = $this->uniqueIds($selectedOptionIds, 'selected option');
+        $correct = $this->correctOptionIds($options);
+        $selected = $this->selectedOptionIds($options, $selectedOptionIds);
 
-        if (count($selected) !== 1) {
-            throw new LogicException('A single-choice answer must select exactly one option.');
+        if (count($correct) !== 1 || count($selected) !== 1) {
+            throw new LogicException('A single-choice Question has one correct option and one selected option.');
         }
 
-        return $this->allOrNothing($points, $selected[0] === strtolower($correctOptionId));
+        return $this->allOrNothing($points, $selected[0] === $correct[0]);
     }
 
     /**
      * BR-Q-009: a wrong selection earns and deducts nothing.
      *
-     * @param  list<string>  $correctOptionIds
+     * @param  array<string, bool>  $options  option id => is correct
      * @param  list<string>  $selectedOptionIds
      */
-    public function multipleChoice(string $points, array $correctOptionIds, array $selectedOptionIds): string
+    public function multipleChoice(string $points, array $options, array $selectedOptionIds): string
     {
-        $correct = $this->uniqueIds($correctOptionIds, 'correct option');
-        $selected = $this->uniqueIds($selectedOptionIds, 'selected option');
+        $correct = $this->correctOptionIds($options);
+        $selected = $this->selectedOptionIds($options, $selectedOptionIds);
+
+        if ($correct === []) {
+            throw new LogicException('A multiple-choice Question needs at least one correct option.');
+        }
 
         return $this->math->partialPoints(
             $points,
@@ -102,11 +110,17 @@ final class AutomaticAnswerChecker
         $usedPositions = [];
         $correct = 0;
 
+        foreach ($positions as $correctPosition) {
+            if (! is_int($correctPosition)) {
+                throw new LogicException('An ordering item needs an integer correct position.');
+            }
+        }
+
         foreach ($items as $item) {
             $itemId = strtolower($item['item_id']);
             $position = $item['position'];
 
-            if (! array_key_exists($itemId, $positions) || isset($usedItems[$itemId])
+            if (! is_int($position) || ! array_key_exists($itemId, $positions) || isset($usedItems[$itemId])
                 || isset($usedPositions[$position]) || $position < 1 || $position > count($positions)) {
                 throw new LogicException('An ordering answer names an unknown or repeated item or position.');
             }
@@ -131,6 +145,13 @@ final class AutomaticAnswerChecker
     public function fillInBlank(string $points, array $acceptedAnswersByBlank, array $values): string
     {
         $blanks = $this->byLowerId($acceptedAnswersByBlank, 'blank');
+
+        foreach ($blanks as $acceptedAnswers) {
+            if ($acceptedAnswers === []) {
+                throw new LogicException('Every blank needs at least one accepted answer.');
+            }
+        }
+
         $this->requireAnswered($values);
         $filled = [];
         $correct = 0;
@@ -176,18 +197,33 @@ final class AutomaticAnswerChecker
     }
 
     /**
-     * @param  list<string>  $ids
+     * @param  array<string, bool>  $options
      * @return list<string>
      */
-    private function uniqueIds(array $ids, string $name): array
+    private function correctOptionIds(array $options): array
     {
-        $lower = array_map(strtolower(...), array_values($ids));
+        $correct = array_filter($this->byLowerId($options, 'option'), fn (bool $isCorrect): bool => $isCorrect);
 
-        if ($lower === [] || count(array_unique($lower)) !== count($lower)) {
-            throw new LogicException("The {$name} ids are empty or repeated.");
+        // Array keys that look numeric come back as integers.
+        return array_map(strval(...), array_keys($correct));
+    }
+
+    /**
+     * @param  array<string, bool>  $options
+     * @param  list<string>  $selectedOptionIds
+     * @return list<string>
+     */
+    private function selectedOptionIds(array $options, array $selectedOptionIds): array
+    {
+        $known = $this->byLowerId($options, 'option');
+        $selected = array_map(strtolower(...), array_values($selectedOptionIds));
+
+        if ($selected === [] || count(array_unique($selected)) !== count($selected)
+            || array_diff($selected, array_keys($known)) !== []) {
+            throw new LogicException('The selected options are empty, repeated or not options of the Question.');
         }
 
-        return $lower;
+        return $selected;
     }
 
     /**

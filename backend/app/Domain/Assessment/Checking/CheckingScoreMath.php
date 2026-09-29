@@ -3,7 +3,6 @@
 namespace App\Domain\Assessment\Checking;
 
 use Brick\Math\BigDecimal;
-use Brick\Math\Exception\RoundingNecessaryException;
 use Brick\Math\RoundingMode;
 use LogicException;
 
@@ -36,11 +35,7 @@ final class CheckingScoreMath
             $total = $total->plus(self::decimal($points));
         }
 
-        try {
-            return (string) $total->toScale(self::SCALE);
-        } catch (RoundingNecessaryException) {
-            throw new LogicException('Awarded points may have at most eight decimal places.');
-        }
+        return (string) $total->toScale(self::SCALE);
     }
 
     /** earned × 100 / possible, rounded half-up to eight decimal places. */
@@ -58,6 +53,12 @@ final class CheckingScoreMath
             ->dividedBy($possible, self::SCALE, RoundingMode::HalfUp);
     }
 
+    /** -1, 0 or 1 as the left value is less than, equal to or greater than the right value. */
+    public function compare(string $left, string $right): int
+    {
+        return self::decimal($left)->compareTo(self::decimal($right));
+    }
+
     public function isZero(string $points): bool
     {
         return self::decimal($points)->isZero();
@@ -65,8 +66,8 @@ final class CheckingScoreMath
 
     private static function decimal(string $value): BigDecimal
     {
-        if (preg_match('/\A\d+(?:\.\d+)?\z/D', $value) !== 1) {
-            throw new LogicException('A score value must be a plain non-negative decimal string.');
+        if (preg_match('/\A\d+(?:\.\d{1,8})?\z/D', $value) !== 1) {
+            throw new LogicException('A score value must be a non-negative decimal with at most eight fractional digits.');
         }
 
         return BigDecimal::of($value);

@@ -3,6 +3,7 @@
 namespace Tests\Unit\Domain\Assessment\Checking;
 
 use App\Domain\Assessment\Checking\AnswerTextNormalizer;
+use App\Support\Student\StudentAnswerText;
 use LogicException;
 use PHPUnit\Framework\TestCase;
 
@@ -31,6 +32,12 @@ class AnswerTextNormalizerTest extends TestCase
         $this->assertSame("i\u{0307}", $this->normalizer->normalize("\u{0130}"));
         $this->assertSame('привет', $this->normalizer->normalize('ПРИВЕТ'));
         $this->assertSame('sherzod', $this->normalizer->normalize('SHERZOD'));
+    }
+
+    public function test_the_first_nfc_runs_before_case_folding(): void
+    {
+        // Folding the decomposed sequence first would give alpha + iota with tonos instead.
+        $this->assertSame("\u{03AC}\u{03B9}", $this->normalizer->normalize("\u{03B1}\u{0345}\u{0301}"));
     }
 
     public function test_the_second_nfc_recomposes_case_folded_output(): void
@@ -65,12 +72,19 @@ class AnswerTextNormalizerTest extends TestCase
         foreach ($codePoints as $codePoint) {
             $space = mb_chr($codePoint, 'UTF-8');
             $this->assertSame('a b', $this->normalizer->normalize("a{$space}b"), sprintf('U+%04X', $codePoint));
+            // The same set makes a saved answer empty; the two rules must not drift apart.
+            $this->assertTrue(StudentAnswerText::isEmpty($space), sprintf('U+%04X', $codePoint));
         }
     }
 
     public function test_whitespace_runs_collapse_and_the_ends_are_trimmed(): void
     {
         $this->assertSame('a b c', $this->normalizer->normalize(" \t a \u{00A0}\n b\u{3000}\u{FEFF}c \r\n"));
+        // Non-ASCII whitespace at the ends is collapsed first and then trimmed.
+        $this->assertSame('abc', $this->normalizer->normalize("\u{FEFF}abc\u{00A0}"));
+        $this->assertSame('abc', $this->normalizer->normalize("\u{3000}\u{2003}abc"));
+        // Only the space is trimmed: NUL is not in the whitespace set.
+        $this->assertSame("abc\0", $this->normalizer->normalize("abc\0"));
     }
 
     public function test_punctuation_and_other_symbols_stay_significant(): void
