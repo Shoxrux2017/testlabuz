@@ -128,7 +128,7 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | Order | Task ID | Area | Outcome | Depends on | Readiness | Delivery | Contract |
 |---|---|---|---|---|---|---|---|
 | `0` | `FE-UX-001` | Frontend (platform) | Student answer autosave; no Save button; no jump to Question 1 | Decomposition approved | `Approved` (revalidated on `main` `3ad88fb`) | Accepted — delivered (PR #288, `main` `4432f27`) | `tasks/frontend/FE-UX-001-student-answer-autosave.md` |
-| `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Approved` (revalidated on `main` `4432f27`) | In progress — `docs/s09-doc-001-checking-scoring-alignment` | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
+| `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Approved` (revalidated on `main` `4432f27`) | Implemented — PR open, awaiting owner merge | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
 | `2` | `S09-BE-001` | Backend | Checking domain: nine type checkers, text normalizer, exact partial credit, normalization; `brick/math` and the NFC polyfill declared as direct dependencies | `DOC-001` | Not written | Not started | `tasks/backend/stage-09/` |
 | `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint), review-queue index | `BE-001` | Not written | Not started | `tasks/backend/stage-09/` |
 | `4` | `S09-BE-003` | Backend (+ FE parser if needed) | Automatic checking pipeline, post-freeze trigger, minute sweep, `S09-T2` rekey, historical Homework reads | `BE-002` | Not written | Not started | `tasks/backend/stage-09/` |
@@ -212,6 +212,8 @@ Only a row whose readiness is `Approved` may be implemented.
 - `S09-DOC-001` readiness revalidated on `4432f27`: its dependency is delivered and the documents changed
   since the planning baseline only in the `FE-UX-001` autosave lines. Implementation in progress on
   `docs/s09-doc-001-checking-scoring-alignment`.
+- `S09-DOC-001` implemented; the independent fresh-context review found P1 = 0, P2 = 1, P3 = 8, all fixed and
+  re-verified (final P1 = 0, P2 = 0). PR open. Next after merge: `S09-BE-001` contract and readiness.
 
 ## 12. Independent Planning Review (2026-09-28)
 

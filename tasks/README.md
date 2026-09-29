@@ -1158,7 +1158,7 @@ their historical completion handoffs.
   `S09-DOC-001`; Stage 9 code starts only after both are delivered.
 - Planning package merged (PR #287, `main` `3ad88fb`).
 - `FE-UX-001`: accepted and delivered (PR #288, `main` `4432f27`).
-- `S09-DOC-001`: readiness approved on `4432f27`; implementation in progress.
+- `S09-DOC-001`: implemented and independently reviewed (P1 = 0, P2 = 0); PR open.
 - Next permitted action: after `S09-DOC-001` merges, `S09-BE-001` readiness.
 
 ---
