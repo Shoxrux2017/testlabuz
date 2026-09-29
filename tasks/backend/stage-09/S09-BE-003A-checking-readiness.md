@@ -62,6 +62,10 @@ out of this PR: nothing here changes a status or an answer.
   a status-keyed rule. Monitoring already maps every terminal status except waiting to `finalized`.
 - Blitz answer reads happen only in `ShowStudentBlitzAttempt`; replays of `waiting`/`checked` Attempts
   already use the Stage 8 historical-read proof; fresh responses are built inside the freeze transaction.
+  One path is not covered: when a Start finds its in-progress Attempt due after its own commit
+  (`StartStudentBlitzAttempt.php:205-214`), it finalizes the Attempt and re-reads it without a lock and
+  with the pending-only projection. Once `S09-BE-003B` exists, a sweep or console check committed in
+  between would make that read fail (`500` instead of the Stage 8 `200/201`).
 - `ShowStudentHomeworkAttempt.php:65-67` projects answers with `StudentHomeworkAttemptAnswerStates::__invoke`
   → `StudentHomeworkAnswerIntegrity::canonical`, which requires `checking_status = pending` and null
   `awarded_points`, `feedback`, `checked_by_user_id`, `checked_at`. It serves `GET /student/attempts/{attempt}`,
@@ -89,6 +93,16 @@ Replace each condition `status === timed_out_finalized` (and the status half of 
 
 An `in_progress` Attempt has a null reason, so none of these rules applies to it.
 
+### 5.1A Blitz Start timeout re-read
+
+After finalizing a due Attempt post-commit, Start re-reads it in one transaction: it locks the Attempt row
+`FOR SHARE` (checking locks it `FOR UPDATE`, so status and answers are read consistently) and, when the
+locked status is `waiting_for_teacher_review` or `checked`, reads the answers with a new
+`StudentBlitzHistoricalAnswerReadProof::forTimeoutReread` (same Student, Assessment and recipient,
+`finalization_reason = timeout_auto_submit`, the Start's response status and intent, and the Stage 8
+historical lineage check). A still `timed_out_finalized` Attempt keeps the pending-only read. The response
+shows the current status, as a replay does.
+
 ### 5.2 Homework reads of terminal Attempts
 
 `ShowStudentHomeworkAttempt` projects answer states with `StudentHomeworkAttemptAnswerStates::historicalRead`
@@ -111,14 +125,23 @@ timeout, still `timed_out_finalized` (baseline) and then moved to `waiting_for_t
 → `409 blitz_time_expired`; nothing is written. For an Attempt finalized by Student Submit and then
 `waiting_for_teacher_review`/`checked`: `resume` → `409 attempt_not_editable`, `start_normal` →
 `409 attempts_exhausted`, the detail read → `200`. The new-key Submit rule is covered by the updated
-`StudentBlitzAttemptSubmitLifecycleTest::terminalAttempts` rows.
+`StudentBlitzAttemptSubmitLifecycleTest::terminalAttempts` rows. With an approved exception over a
+timed-out #1 in each status, `start_normal` still returns `attempts_exhausted` (exception first); a
+timed-out replacement #2 in each status returns `blitz_time_expired` for `start_replacement` and `resume`.
+
+New `tests/Feature/Student/StudentBlitzTimeoutRereadAfterCheckingTest.php` — a PostgreSQL trigger created
+inside the test transaction checks every Attempt at its timeout freeze, reproducing a check committed
+between Start's finalization and its re-read: the same-key `start_normal` (201) and `resume` (200) replays
+after the deadline return the `checked` Attempt with its answers. Without §5.1A both fail with `500`.
 
 New `tests/Feature/Student/StudentHomeworkCheckedAttemptReadTest.php` — a submitted Homework Attempt whose
 answers are moved to `auto_checked`/`waiting_for_teacher_review`/`teacher_checked` with awarded points,
 feedback, reviewer and time, and the Attempt to `waiting_for_teacher_review` and `checked`:
 `GET /student/attempts/{attempt}` returns `200` with the same answer values as before checking and no
 checking field; the completed Submit replay returns the current status and the original finalization fields;
-an `in_progress` Attempt with a non-pending answer still fails its read (`500`, integrity).
+an `in_progress` Attempt with a non-pending answer still fails its read (`500`, integrity); a terminal
+Attempt with a `pending` answer carrying `awarded_points`, `feedback`, `checked_by_user_id` or `checked_at`
+fails its read (`500`).
 
 Deliberate update: `StudentBlitzAttemptSubmitLifecycleTest::terminalAttempts` — the
 `waiting_for_teacher_review`/`checked` + `timeout_auto_submit` rows expect `blitz_time_expired`.
@@ -127,12 +150,14 @@ Deliberate update: `StudentBlitzAttemptSubmitLifecycleTest::terminalAttempts` �
 
 ```text
 backend/app/Actions/Student/StartStudentBlitzAttempt.php
+backend/app/Support/Student/StudentBlitzHistoricalAnswerReadProof.php
 backend/app/Actions/Student/SubmitStudentBlitzAttempt.php
 backend/app/Support/Student/StudentBlitzTiming.php
 backend/app/Actions/Student/ShowStudentHomeworkAttempt.php
 backend/app/Support/Student/StudentHomeworkAnswerIntegrity.php
 backend/tests/Feature/Student/StudentBlitzCheckedTimeoutRulesTest.php
 backend/tests/Feature/Student/StudentHomeworkCheckedAttemptReadTest.php
+backend/tests/Feature/Student/StudentBlitzTimeoutRereadAfterCheckingTest.php
 backend/tests/Feature/Student/StudentBlitzAttemptSubmitLifecycleTest.php
 tasks/backend/stage-09/S09-BE-003A-checking-readiness.md
 tasks/STAGE_09_TASK_INDEX.md
@@ -144,6 +169,8 @@ tasks/README.md
 - [ ] §5 is implemented exactly; no status, answer or response shape changes.
 - [ ] The §6 tests pass; the only existing-test change is the one listed.
 - [ ] An independent fresh-context review finds P1 = 0, P2 = 0.
+- [ ] Carried to `S09-BE-003B` and `S09-BE-006` (recorded in the Stage 9 index): checking and review writes
+      keep `attempt_answers.updated_at`, which Student reads return as the answer's last save.
 
 ## 9. Verification
 

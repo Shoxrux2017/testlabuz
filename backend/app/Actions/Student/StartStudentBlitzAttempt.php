@@ -205,13 +205,22 @@ final class StartStudentBlitzAttempt
         if ($result->attempt->status === AssessmentAttemptStatus::InProgress
             && $this->timing->now()->gte($result->attempt->deadline_at)) {
             ($this->finalizeTimeouts)($student->institution_id, $authorized->id);
-            $attempt = $this->attemptAccess->resolveAttempt($student, $result->attemptId);
-            $assessment = $this->access->readQuery($student)->whereKey($authorized->id)->firstOrFail();
 
-            return new StudentBlitzAttemptStartResult(
-                ($this->showAttempt)($student, $assessment, $assessment->getRelation('blitzTask'), $attempt, $this->timing->now()),
-                $result->httpStatus,
-            );
+            // Stage 9 may check the frozen Attempt before this re-read. Checking locks the Attempt
+            // FOR UPDATE, so a shared lock keeps its status and answers consistent.
+            return DB::transaction(function () use ($student, $authorized, $result, $intent, $attemptId): StudentBlitzAttemptStartResult {
+                $authorizedAttempt = $this->attemptAccess->resolveAttempt($student, $result->attemptId);
+                $attempt = AssessmentAttempt::query()->whereKey($authorizedAttempt->id)->sharedLock()->firstOrFail();
+                $assessment = $this->access->readQuery($student)->whereKey($authorized->id)->firstOrFail();
+                $historicalReadProof = in_array($attempt->status, [AssessmentAttemptStatus::WaitingForTeacherReview, AssessmentAttemptStatus::Checked], true)
+                    ? StudentBlitzHistoricalAnswerReadProof::forTimeoutReread($student, $assessment, $attempt, $result->httpStatus, $intent, $attemptId)
+                    : null;
+
+                return new StudentBlitzAttemptStartResult(
+                    ($this->showAttempt)($student, $assessment, $assessment->getRelation('blitzTask'), $attempt, $this->timing->now(), $historicalReadProof),
+                    $result->httpStatus,
+                );
+            });
         }
 
         return $result;

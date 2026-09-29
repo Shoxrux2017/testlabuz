@@ -74,6 +74,32 @@ final readonly class StudentBlitzHistoricalAnswerReadProof
         return self::fromVerifiedReplay($student, $attempt, $record, $intent, $resumeAttemptId);
     }
 
+    /**
+     * A Start whose in-progress Attempt was due finalizes it after its commit and re-reads it;
+     * Stage 9 may have checked the frozen Attempt in between.
+     */
+    public static function forTimeoutReread(User $student, Assessment $assessment, AssessmentAttempt $attempt, int $responseStatus, string $intent, ?string $resumeAttemptId): self
+    {
+        // The caller's Blitz read query already restricts the Assessment to Blitz tasks.
+        if ($assessment->institution_id !== $student->institution_id
+            || $attempt->institution_id !== $student->institution_id || $attempt->student_id !== $student->id
+            || $attempt->assessment_id !== $assessment->id
+            || $attempt->finalization_reason !== AssessmentAttemptFinalizationReason::TimeoutAutoSubmit
+            || ! in_array($responseStatus, [200, 201], true)
+            || ! in_array($intent, ['start_normal', 'resume', 'start_replacement'], true)
+            || ($intent === 'resume') !== ($resumeAttemptId === $attempt->id)
+            || ! AssessmentStudent::query()->where('institution_id', $student->institution_id)
+                ->where('assessment_id', $assessment->id)->where('student_id', $student->id)
+                ->whereKey($attempt->assessment_student_id)->exists()) {
+            throw new LogicException('A timeout re-read requires the authorized Attempt this Start timed out.');
+        }
+
+        self::assertHistoricalLineage($attempt);
+
+        return new self(IdempotencyOperation::StudentBlitzAttemptStart, $attempt->id, $responseStatus, $attempt->finalization_reason,
+            $intent, $resumeAttemptId, $student->institution_id, $student->id, $assessment->id, $attempt->assessment_student_id);
+    }
+
     public function assertMatches(User $student, Assessment $assessment, AssessmentAttempt $attempt): void
     {
         if ($this->institutionId !== $student->institution_id || $this->studentId !== $student->id

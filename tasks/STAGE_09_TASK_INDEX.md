@@ -174,6 +174,10 @@ Only a row whose readiness is `Approved` may be implemented.
   checking queries appear. No test switch disables the trigger. It must verify that Submit replay and
   Student reads of `waiting_for_teacher_review`/`checked` Attempts are accepted by the current frontend; any
   needed parser change ships with it.
+- Checking (`S09-BE-003B`) and review (`S09-BE-006`) never change `attempt_answers.updated_at`: Student
+  reads return it as the time of the Student's last save, so a checking or review write that bumped it
+  would change a Stage 7/8 response and reveal when checking happened. Write with the query builder or
+  `withoutTimestamps`, and test with time moved forward.
 - **`S09-BE-004`** also changes the Stage 8 exception grant (withdrawal in the same transaction).
 - **`S09-BE-005`** adds `review_summary` to Teacher Homework/Blitz details with the parser change.
 - **`S09-BE-007`** adds Student `result`, answer `feedback`, `score_visible`/`official_score` with the
@@ -223,13 +227,18 @@ Only a row whose readiness is `Approved` may be implemented.
 - `S09-BE-001` accepted and delivered (PR #290, `main` `830b9b1`).
 - `S09-BE-002` contract written and approved on `830b9b1`; the review-queue index moves to `S09-BE-005`,
   where the queue query shape is defined. Implemented on `feat/s09-be-002-scoring-persistence-review-deadline`.
+  Independent review: P1 = 0, P2 = 2 (a `review_due_at`-only PATCH re-synchronized recipients; update-path
+  parsing untested), P3 = 6; fixed with tests, except the optional strict-request noise item (kept: it only
+  adds messages to already-rejected requests).
 - `S09-BE-002` accepted and delivered (PR #291, `main` `9b772b4`).
 - `S09-BE-003` is split: `S09-BE-003A` makes Stage 7/8 reads and timeout rules ready for checked Attempts
   (no status or answer changes); `S09-BE-003B` adds the checking pipeline, trigger, sweep and the deliberate
   Stage 7/8 test updates. `S09-BE-003A` approved on `9b772b4` and implemented.
-  Independent review: P1 = 0, P2 = 2 (a `review_due_at`-only PATCH re-synchronized recipients; update-path
-  parsing untested), P3 = 6; fixed with tests, except the optional strict-request noise item (kept: it only
-  adds messages to already-rejected requests).
+  Independent review: P1 = 0, P2 = 3, P3 = 4. Fixed: the Blitz Start timeout re-read after its commit now
+  reads under a shared Attempt lock and, when Stage 9 already checked the Attempt, through a timeout re-read
+  proof (a PostgreSQL trigger test reproduces the race); exception-first ordering, replacement timeout and
+  pending-metadata tests added. Carried to `S09-BE-003B` and `S09-BE-006`: checking and review keep
+  `attempt_answers.updated_at` unchanged (the Student sees it as the answer's last save).
 
 ## 12. Independent Planning Review (2026-09-28)
 

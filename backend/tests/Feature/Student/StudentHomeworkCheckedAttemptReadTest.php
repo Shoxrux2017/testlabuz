@@ -55,6 +55,34 @@ class StudentHomeworkCheckedAttemptReadTest extends TestCase
             ->assertJsonPath('data.answers', $before['answers']);
     }
 
+    /** @return array<string, array{string, string}> */
+    public static function pendingMetadata(): array
+    {
+        return [
+            'awarded points on a submitted Attempt' => ['submitted', 'awarded_points'],
+            'feedback on a submitted Attempt' => ['submitted', 'feedback'],
+            'a reviewer on a checked Attempt' => ['checked', 'checked_by_user_id'],
+            'a checking time on a checked Attempt' => ['checked', 'checked_at'],
+        ];
+    }
+
+    #[DataProvider('pendingMetadata')]
+    public function test_a_pending_answer_with_checking_metadata_fails_a_terminal_read(string $status, string $field): void
+    {
+        [$student, $attempt] = $this->submittedAttempt();
+        $value = match ($field) {
+            'awarded_points' => '1.00000000',
+            'feedback' => 'Leaked feedback.',
+            'checked_by_user_id' => $attempt->assessment->teacher_id,
+            'checked_at' => now(),
+        };
+        DB::table('attempt_answers')->where('attempt_id', $attempt->id)->limit(1)
+            ->update([$field => $value]);
+        DB::table('assessment_attempts')->where('id', $attempt->id)->update(['status' => $status]);
+
+        $this->read($student, $attempt)->assertStatus(500);
+    }
+
     public function test_an_in_progress_attempt_with_a_checked_answer_still_fails_its_integrity(): void
     {
         [$student, $homework, $attempt] = $this->answerContext();
