@@ -7,12 +7,14 @@ use App\Actions\Teacher\ArchiveTeacherHomework;
 use App\Actions\Teacher\CloseTeacherHomework;
 use App\Actions\Teacher\CreateTeacherHomework;
 use App\Actions\Teacher\ListTeacherHomework;
+use App\Actions\Teacher\SetTeacherHomeworkReviewDueAt;
 use App\Actions\Teacher\ShowTeacherHomework;
 use App\Actions\Teacher\UpdateTeacherHomework;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teacher\TeacherHomeworkCreateRequest;
 use App\Http\Requests\Teacher\TeacherHomeworkIndexRequest;
 use App\Http\Requests\Teacher\TeacherHomeworkLifecycleRequest;
+use App\Http\Requests\Teacher\TeacherHomeworkReviewDueAtRequest;
 use App\Http\Requests\Teacher\TeacherHomeworkShowRequest;
 use App\Http\Requests\Teacher\TeacherHomeworkUpdateRequest;
 use App\Http\Resources\Teacher\TeacherHomeworkCollection;
@@ -126,6 +128,21 @@ class TeacherHomeworkController extends Controller
 
         return (new TeacherHomeworkResource($archivedHomework))
             ->additional(['message' => 'Homework archived successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
+    }
+
+    public function updateReviewDueAt(
+        TeacherHomeworkReviewDueAtRequest $request,
+        string $homework,
+        SetTeacherHomeworkReviewDueAt $setTeacherHomeworkReviewDueAt,
+    ): JsonResponse {
+        /** @var User $teacher */
+        $teacher = $request->user();
+        $updatedHomework = $setTeacherHomeworkReviewDueAt($teacher, $homework, $request->reviewDueAt());
+
+        return (new TeacherHomeworkResource($updatedHomework))
+            ->additional(['message' => 'Homework review deadline updated successfully.'])
             ->response()
             ->setStatusCode(Response::HTTP_OK);
     }

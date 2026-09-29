@@ -21,6 +21,7 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
         'assignment_mode',
         'student_ids',
         'deadline_at',
+        'review_due_at',
     ];
 
     private bool $rawBodyDecoded = false;
@@ -110,7 +111,8 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
             'assignment_mode' => [$presence, 'string', Rule::in(AssessmentAssignmentMode::values())],
             'student_ids' => [$required ? 'present' : 'sometimes', 'array'],
             'student_ids.*' => ['string', 'uuid'],
-            'deadline_at' => ['sometimes', 'nullable', 'string', $this->deadlineSyntaxRule()],
+            'deadline_at' => ['sometimes', 'nullable', 'string', $this->dateTimeSyntaxRule('deadline_at')],
+            'review_due_at' => ['sometimes', 'nullable', 'string', $this->dateTimeSyntaxRule('review_due_at')],
         ];
     }
 
@@ -144,11 +146,11 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
         return $attributes;
     }
 
-    private function deadlineSyntaxRule(): Closure
+    protected function dateTimeSyntaxRule(string $field): Closure
     {
-        return static function (string $attribute, mixed $value, Closure $fail): void {
+        return static function (string $attribute, mixed $value, Closure $fail) use ($field): void {
             if (is_string($value) && ! InstitutionHomeworkDeadlineAt::hasValidSyntax($value)) {
-                $fail('The deadline_at must be an RFC 3339 date-time with an explicit numeric offset.');
+                $fail("The {$field} must be an RFC 3339 date-time with an explicit numeric offset.");
             }
         };
     }

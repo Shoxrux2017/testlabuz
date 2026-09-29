@@ -14,6 +14,7 @@ use App\Models\AssessmentStudent;
 use App\Models\HomeworkAssignment;
 use App\Models\User;
 use App\Support\Assessment\QuestionConfigurationWriter;
+use App\Support\Teacher\InstitutionEducationalDateTime;
 use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
 use App\Support\Teacher\TeacherAssessmentRecipients;
 use App\Support\Teacher\TeacherHomeworkAccess;
@@ -26,6 +27,7 @@ final class CreateTeacherHomework
         private readonly TeacherHomeworkAccess $access,
         private readonly TeacherAssessmentRecipients $recipients,
         private readonly InstitutionHomeworkDeadlineAt $deadlineAt,
+        private readonly InstitutionEducationalDateTime $dateTime,
         private readonly AssessmentPointMath $pointMath,
         private readonly QuestionConfigurationWriter $questionWriter,
         private readonly ShowTeacherHomework $showTeacherHomework,
@@ -39,6 +41,7 @@ final class CreateTeacherHomework
      *     assignment_mode: string,
      *     student_ids: list<string>,
      *     deadline_at: ?string,
+     *     review_due_at: ?string,
      *     questions: list<array<string, mixed>>
      * } $attributes
      */
@@ -59,6 +62,9 @@ final class CreateTeacherHomework
                 : [];
             $deadlineAt = is_string($attributes['deadline_at'])
                 ? $this->deadlineAt->parse($teacher, $attributes['deadline_at'])
+                : null;
+            $reviewDueAt = is_string($attributes['review_due_at'])
+                ? $this->dateTime->parse($teacher, $attributes['review_due_at'], 'review_due_at')
                 : null;
             $totalPoints = $this->pointMath->sum(array_map(
                 static fn (array $question): int|float|string => $question['points'],
@@ -82,6 +88,7 @@ final class CreateTeacherHomework
                 'institution_id' => $teacher->institution_id,
                 'status' => HomeworkStatus::Draft,
                 'deadline_at' => $deadlineAt,
+                'review_due_at' => $reviewDueAt,
                 'activated_at' => null,
                 'closed_at' => null,
                 'archived_at' => null,

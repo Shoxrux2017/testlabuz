@@ -529,6 +529,7 @@ TeacherHomework _homework({
     studentIds: const [],
     totalPossiblePoints: 0,
     deadlineAt: null,
+    reviewDueAt: null,
     institutionTimezone: 'Asia/Tashkent',
     status: TeacherHomeworkStatus.draft,
     attemptPolicy: const TeacherHomeworkAttemptPolicy(

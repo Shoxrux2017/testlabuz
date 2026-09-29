@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-BE-001` delivery, then `S09-BE-002` contract and readiness |
+| Next permitted gate | `S09-BE-002` delivery, then `S09-BE-003` contract and readiness |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -129,11 +129,11 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 |---|---|---|---|---|---|---|---|
 | `0` | `FE-UX-001` | Frontend (platform) | Student answer autosave; no Save button; no jump to Question 1 | Decomposition approved | `Approved` (revalidated on `main` `3ad88fb`) | Accepted — delivered (PR #288, `main` `4432f27`) | `tasks/frontend/FE-UX-001-student-answer-autosave.md` |
 | `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Approved` (revalidated on `main` `4432f27`) | Accepted — delivered (PR #289, `main` `4cff8af`) | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
-| `2` | `S09-BE-001` | Backend | Checking domain: the seven automatic checkers, checking route, text normalizer, exact decimal score arithmetic; `brick/math` and the NFC polyfill declared as direct dependencies | `DOC-001` | `Approved` (on `main` `4cff8af`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-001-checking-domain.md` |
-| `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint), review-queue index | `BE-001` | Not written | Not started | `tasks/backend/stage-09/` |
+| `2` | `S09-BE-001` | Backend | Checking domain: the seven automatic checkers, checking route, text normalizer, exact decimal score arithmetic; `brick/math` and the NFC polyfill declared as direct dependencies | `DOC-001` | `Approved` (on `main` `4cff8af`) | Accepted — delivered (PR #290, `main` `830b9b1`) | `tasks/backend/stage-09/S09-BE-001-checking-domain.md` |
+| `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint) | `BE-001` | `Approved` (on `main` `830b9b1`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-002-scoring-persistence-review-deadline.md` |
 | `4` | `S09-BE-003` | Backend (+ FE parser if needed) | Automatic checking pipeline, post-freeze trigger, minute sweep, `S09-T2` rekey, historical Homework reads | `BE-002` | Not written | Not started | `tasks/backend/stage-09/` |
 | `5` | `S09-BE-004` | Backend | Official score resolver (Homework, Blitz, grant withdrawal) | `BE-003` | Not written | Not started | `tasks/backend/stage-09/` |
-| `6` | `S09-BE-005` | Backend + FE parser | Review queue, submission detail, `review_summary`, Teacher file download | `BE-004` | Not written | Not started | `tasks/backend/stage-09/` |
+| `6` | `S09-BE-005` | Backend + FE parser | Review queue (with its supporting index), submission detail, `review_summary`, Teacher file download | `BE-004` | Not written | Not started | `tasks/backend/stage-09/` |
 | `7` | `S09-BE-006` | Backend | Review save and correction, recalculation | `BE-005` | Not written | Not started | `tasks/backend/stage-09/` |
 | `8` | `S09-BE-007` | Backend + FE parser | Official-score read; Student `result`, `feedback`, `attempt_results`, `official_score`; `GET /student/blitz/finished` | `BE-006` | Not written | Not started | `tasks/backend/stage-09/` |
 | `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007` | Not written | Not started | `tasks/backend/stage-09/` |
@@ -218,6 +218,9 @@ Only a row whose readiness is `Approved` may be implemented.
 - `S09-BE-001` contract written and approved on `4cff8af`; implemented on `feat/s09-be-001-checking-domain`.
   Independent fresh-context review: P1 = 1, P2 = 4, P3 = 6, all fixed with tests and mutation checks;
   re-verification P1 = 0, P2 = 0 (three new P3 also fixed). PR open.
+- `S09-BE-001` accepted and delivered (PR #290, `main` `830b9b1`).
+- `S09-BE-002` contract written and approved on `830b9b1`; the review-queue index moves to `S09-BE-005`,
+  where the queue query shape is defined. Implemented on `feat/s09-be-002-scoring-persistence-review-deadline`.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -261,3 +264,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-09-28 | Independent planning review applied (§12); owner decision `S09-D8a` |
 | 2026-09-29 | `FE-UX-001` accepted and delivered (PR #288); `S09-DOC-001` readiness approved on `4432f27` |
 | 2026-09-29 | `S09-DOC-001` accepted and delivered (PR #289); `S09-BE-001` contract approved on `4cff8af` |
+| 2026-09-29 | `S09-BE-001` delivered (PR #290); `S09-BE-002` approved on `830b9b1`; review-queue index moved to `S09-BE-005` |
