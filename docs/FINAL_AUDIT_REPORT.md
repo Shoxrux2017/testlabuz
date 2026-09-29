@@ -53,15 +53,12 @@ When an authoritative Homework deadline arrives while an Attempt is `in_progress
 
 1. New attempts and further Student writes are blocked.
 2. The saved Attempt is automatically finalized.
-3. Unanswered Questions/components receive zero.
-4. Saved answers are evaluated normally.
-5. Manual-review answers remain pending Teacher review.
-6. `finalization_reason = homework_deadline_auto_submit`.
-7. `submitted_at` remains null and `finalized_at` records server finalization.
-8. Never-started Students receive no fabricated Attempt.
-9. Unused remaining Homework attempts become unavailable.
-10. Once fully checked, the auto-finalized Attempt remains eligible for normal highest-valid-completed Homework official-score selection.
-11. Laravel Scheduler and request-time reconciliation use the same idempotent server action; scheduler latency never extends write eligibility beyond the authoritative deadline.
+3. `finalization_reason = homework_deadline_auto_submit`.
+4. `submitted_at` remains null and `finalized_at` records server finalization.
+5. Never-started Students receive no fabricated Attempt.
+6. Unused remaining Homework attempts become unavailable.
+7. Once fully checked, the auto-finalized Attempt remains eligible for normal highest-valid-completed Homework official-score selection.
+8. Laravel Scheduler and request-time reconciliation use the same idempotent server action; scheduler latency never extends write eligibility beyond the authoritative deadline.
 
 ## Lock rule
 

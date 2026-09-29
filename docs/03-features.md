@@ -235,7 +235,7 @@ The MVP version should support the following assignment types for teachers:
 
 The teacher should be able to create questions, answer options, correct answers, instructions, points, and task rules depending on the assignment type.
 
-Homework attempts are fixed in the MVP. Every assigned Student receives exactly **3 normal Homework attempts**. The Teacher does not configure a different attempt count. The system stores each attempt separately and uses the **highest valid completed score** as the official Homework score after any required manual checking is complete.
+Homework attempts are fixed in the MVP. Every assigned Student receives exactly **3 normal Homework attempts**. The Teacher does not configure a different attempt count. The system stores each attempt separately and uses the **highest valid completed score** as the official Homework score. The official score waits only for an unchecked attempt that could still overtake the best checked attempt.
 
 The teacher should be able to manually create blitz tasks connected to the same topic as the homework assignment. Blitz tasks are short in-class tasks used during the first 5–10 minutes of the next lesson.
 
@@ -250,9 +250,9 @@ The server is authoritative for all Blitz timing.
 
 The teacher should be able to monitor Blitz execution during class: assigned/not-started Students, in-progress Attempts, explicit Submit, timeout/close finalization, Attempt number, remaining time, and approved technical exceptions. Stage 8 may project that work awaits later review, but does not perform checking, award points, or persist a review-state transition.
 
-The teacher should be able to review student submissions. Some assignment types can be checked automatically by the system, such as tests, true / false questions, matching tasks, ordering tasks, and fill-in-the-blank tasks.
+The teacher should be able to review student submissions. Some assignment types are checked automatically by the system: tests, true / false questions, matching tasks, ordering tasks, fill-in-the-blank tasks, and short written answers checked against accepted answers.
 
-Other assignment types may require manual checking by the teacher. These include open written answers and file-based assignments. The teacher should be able to review the submitted answer, assign a score, and add feedback if needed.
+Other answers require manual checking by the teacher: open written answers, file-based assignments, and short written answers the teacher sets to manual checking. On desktop, the teacher works from a review queue that can be filtered by task, Topic, group, Student, state, official or practice work, and overdue work, with official work listed first. The teacher opens a submission with every question, the Student's answer, and the correct-answer configuration, downloads submitted answer files, awards 0 up to the question's points, and adds feedback of at most 2000 characters if needed. The teacher may save only some manual answers of a submission (partial review) and may correct a reviewed score later; the system then recalculates the attempt and re-selects the official task score. On mobile, the teacher sees only read-only counts of submissions waiting for review and overdue review. The teacher may set an optional Homework review deadline as a reminder; it never changes scores, statuses, or official selection.
 
 After students complete homework and blitz tasks, the teacher should be able to view both results together. The system should show the homework score, blitz score, final calculated result, and understanding category.
 
@@ -274,7 +274,7 @@ The teacher should be able to see Students who did not complete Homework, did no
 
 The teacher should be able to use both desktop and mobile versions of the platform. The desktop version should be used for larger tasks such as creating topics, uploading files, creating assignments, checking written answers, and reviewing detailed results.
 
-The mobile version should support quick teacher actions, such as viewing groups, checking task status, starting blitz tasks, monitoring class progress, and reviewing basic student results.
+The mobile version should support quick teacher actions, such as viewing groups, checking task status, starting blitz tasks, monitoring class progress, reviewing basic student results, and seeing read-only counts of submissions waiting for review. Answer review itself is desktop-only.
 
 Teachers should not manage institution-wide settings unless the institution gives them permission in a future version. Teachers should not create or manage institution accounts, access unrelated groups, change another teacher’s content, view another institution’s data, or change student submissions after system rules no longer allow it.
 
@@ -295,9 +295,9 @@ In the MVP version, the Teacher should have the following main features:
 13. Start or activate Blitz tasks during class
 14. Monitor Blitz task progress
 15. Grant one Student-specific additional Blitz attempt for a valid reason
-16. Review Student submissions
-17. Manually check open written answers
-18. Manually check file-based assignments
+16. Review Student submissions from the desktop review queue and set an optional Homework review deadline
+17. Manually check open written answers and correct reviewed scores
+18. Manually check file-based assignments and download submitted files
 19. View official Homework scores
 20. View official Blitz scores
 21. View final calculated results
@@ -369,6 +369,8 @@ The student should be able to see the completion status of homework assignments 
 
 After Homework and Blitz are complete and all required checking is finished, the system may calculate the Student's Topic result. Calculation and visibility are separate. The Student sees the result only after it is released according to the institution's Student result-release mode: **automatic** after full calculation or **manual Teacher release**.
 
+Before Topic results exist (Stage 9), the Student sees own attempt results only under the **automatic** Student release mode: the score and Teacher feedback of each checked Homework attempt (and, for the official Homework, the official Homework score once it is ready), and, only after the Teacher closes the Blitz, the score and Teacher feedback of the Blitz attempt that counts, shown in the Student's list of finished Blitz tasks. An attempt invalidated by an approved exception shows no score. Under manual Teacher release or an unconfigured mode, no attempt result is shown in Stage 9. Students never see correct answers, answer keys, per-question points, per-answer checking status, the reviewer's identity, or the Homework review deadline.
+
 Student results may include:
 
 - Homework score
@@ -390,7 +392,7 @@ The student should be able to understand which topics they completed successfull
 
 The student should only access their own learning information. Students must not be able to view other students’ answers, scores, private progress, personal information, or parent information.
 
-Students should not be able to create official topics, upload official learning materials, create homework assignments, create blitz tasks, check answers, change scores, manage users, or change institution settings.
+Students should not be able to create official topics, upload official learning materials, create homework assignments, create blitz tasks, check answers, view correct answers or per-question points, change scores, manage users, or change institution settings.
 
 Students should use both desktop and mobile versions of the platform.
 
@@ -417,7 +419,7 @@ In the MVP version, the Student should have the following main features:
 15. Use the normal Blitz attempt
 16. Use one additional Blitz attempt when validly granted by the Teacher
 17. Have saved Blitz work auto-finalized at timeout
-18. View task completion and review status
+18. View task completion and review status, and own attempt results when the Stage 9 visibility rule allows
 19. View released official Homework score
 20. View released official Blitz score
 21. View released final calculated result
@@ -470,7 +472,7 @@ The parent should be able to identify topics where the child needs more revision
 
 The parent should be able to view task completion status. For example, the system may show whether homework or blitz tasks are completed, not completed, checked, or waiting for teacher review.
 
-The parent may be able to view teacher feedback if the teacher provides feedback for a homework assignment, open written answer, file-based assignment, or final result.
+Stage 9 shows Parents nothing new: Parent result visibility arrives with Stage 10 result release. In Stage 9, Teacher feedback exists only on individual answers and is not shown to Parents. Whether Parents may see any Teacher feedback (a Parent-visible feedback flag) and whether feedback on the final Topic result exists are undecided Stage 10 planning items.
 
 The parent should not be able to complete homework assignments for the student. They should not be able to answer blitz tasks, upload assignment files, change student answers, change scores, or edit understanding categories.
 
@@ -491,7 +493,7 @@ In the MVP version, the Parent should have the following main features:
 9. View blitz score
 10. View final calculated result
 11. View understanding category
-12. View teacher feedback if available
+12. View teacher feedback if available (undecided; Stage 10 planning)
 13. View topics that need revision
 14. View topics that need teacher support
 15. View general learning progress
@@ -675,14 +677,16 @@ Some assignment types can be checked automatically by the system. The approved M
 
 - **Single-choice:** all-or-nothing
 - **True / false:** all-or-nothing
-- **Multiple-choice:** maximum Student selections equal the number of correct options; partial credit is based only on correctly selected options divided by total correct options
+- **Multiple-choice:** maximum Student selections equal the number of correct options; partial credit is based only on correctly selected options divided by total correct options; a wrong selection deducts nothing
 - **Matching:** partial credit per correctly matched pair
 - **Ordering:** partial credit per correctly positioned item
-- **Fill-in-the-blank:** partial credit per correctly completed blank
+- **Fill-in-the-blank:** partial credit per correctly completed blank, using the same normalization as short written answers
 
-Short written answers may be checked automatically if the teacher defines exact accepted answers. However, if the answer requires explanation or judgment, the teacher may need to check it manually.
+Short written answers are checked automatically by normalized exact match against the teacher's accepted answers, unless the teacher sets the question to manual checking because the answer requires explanation or judgment. Short written is the only type that can be switched to manual checking.
 
-Open written answers and file-based assignments require Teacher judgment in the MVP. The Teacher should be able to open the submitted answer, review it, assign points within the allowed question maximum, and add feedback if needed. A Student answer must not be rewritten by the Teacher.
+Open written answers and file-based assignments require Teacher judgment in the MVP. The Teacher should be able to open the submitted answer, review it, assign points from 0 up to the question maximum, and add feedback if needed. A Student answer must not be rewritten by the Teacher.
+
+An unanswered question scores zero and needs no review. A manual question worth zero points is closed automatically with zero points and never waits for review.
 
 Each assignment should support points or score rules. The teacher should be able to define how many points each question is worth, or use a simple total score for the full assignment.
 
@@ -690,7 +694,7 @@ Submitting or otherwise finalizing Homework in Stage 7 does not calculate a scor
 
 Each Homework gives every assigned Student exactly **3 normal attempts**. This limit is fixed in the MVP and is not configured by the Institution Admin or Teacher.
 
-Students should clearly see the current Homework attempt number and remaining attempts. The system stores all attempts separately and uses the **highest valid completed score** as the official Homework score after required checking is complete.
+Students should clearly see the current Homework attempt number and remaining attempts. The system stores all attempts separately and uses the **highest valid completed score** as the official Homework score. The official score waits only for an unchecked attempt that could still overtake the best checked attempt.
 
 At the authoritative Homework deadline, the backend must freeze every existing `in_progress` Attempt's already-committed answer/file set as immutable `submitted` history and block all later Starts and Student answer/file/Submit writes. It creates no Attempt for a Student who never started and no answer row for an unanswered Question. Closing an active Homework before its deadline likewise freezes existing `in_progress` Attempts from committed saved work and blocks later Student mutation; neither Stage 7 finalization path performs checking or scoring.
 
@@ -730,9 +734,9 @@ The teacher should be able to view assignment progress for a group. For example,
 
 The teacher should be able to review submissions by student, by group, by topic, and by assignment. This helps the teacher quickly identify who completed the homework and who needs additional support.
 
-The student may be able to view their assignment result after automatic checking or teacher review, depending on teacher or institution settings. The result may include score, completion status, teacher feedback, and whether the assignment will be used in the final topic result.
+The student sees an assignment result only when the attempt is checked and the institution's Student release mode is **automatic**. The result shows the attempt score and the Teacher's feedback on answers; for the official Homework it also shows the official Homework score once it is ready. Under manual Teacher release or an unconfigured mode, no attempt result is visible in Stage 9; Stage 10 adds result release. Correct answers, answer keys, per-question points, per-answer checking status, the reviewer's identity, and the Homework review deadline are never shown to the student.
 
-Parents may be able to view whether their child completed the assignment, the homework score, checking status, and teacher feedback if available. Parents should not be able to submit or edit assignments for the student.
+From Stage 10 result release, Parents may be able to view whether their child completed the assignment, the homework score, and checking status. Stage 9 shows Parents nothing new, and whether Parents see any teacher feedback is undecided (Stage 10 planning). Parents should not be able to submit or edit assignments for the student.
 
 Institution Admins may be able to view assignment activity and completion statistics inside their own institution, but they should not normally complete assignments, change student answers, or replace the teacher’s checking role.
 
@@ -770,7 +774,7 @@ In the MVP version, Assignment features should include the following full-MVP ca
 26. Allow Students to upload files up to the effective 15 MB limit
 27. Automatically check supported assignment types
 28. Apply approved partial-credit rules
-29. Allow Teachers to manually check written and file-based answers
+29. Allow Teachers to manually check written and file-based answers, with partial review, later correction, and an optional Homework review deadline
 30. Calculate each Homework attempt score
 31. Select the highest valid completed Homework attempt as official
 32. Show submission/review status
@@ -779,7 +783,7 @@ In the MVP version, Assignment features should include the following full-MVP ca
 35. Allow Teacher feedback
 36. Show Homework progress to Teachers
 37. Show released Homework results to Students
-38. Show permitted Homework progress/results to Parents
+38. Show permitted Homework progress/results to Parents (from Stage 10 result release)
 39. Protect Homework access by institution, role, group, and user permissions
 
 Advanced assignment features should be added later. These may include reusable question banks, random question selection, AI-generated assignments, AI answer checking, audio assignments, video assignments, coding tasks, group assignments, peer review, plagiarism checking, advanced rubrics, question difficulty levels, and integration with external learning systems.
@@ -912,7 +916,7 @@ After the student submits the blitz task, Stage 8 records frozen execution infor
 - Submission time
 - Time spent
 - Score only after Stage 9 scoring
-- Checking status (`pending` throughout Stage 8)
+- Checking status (`pending` when Stage 8 freezes the Attempt)
 - Teacher feedback only after Stage 9 review
 
 In Stage 9, some blitz questions can be checked automatically by the system. These may include:
@@ -924,11 +928,13 @@ In Stage 9, some blitz questions can be checked automatically by the system. The
 - Ordering tasks
 - Fill-in-the-blank tasks
 
-Short written answers may be checked automatically if the teacher defines exact accepted answers. If the answer requires teacher judgment, it may need manual checking.
+Short written answers are checked automatically by normalized exact match against the accepted answers, unless the teacher sets the question to manual checking.
 
-Open written answers and file-based blitz submissions may require manual checking by the teacher. The teacher should be able to review the answer, assign a score, and add feedback if needed.
+Open written answers and file-based blitz submissions require manual checking by the teacher. The teacher reviews them with the same review features as Homework: assign a score, and add feedback if needed.
 
 After the blitz task is checked, the system should calculate the blitz score. This score will later be compared with the homework score for the same topic.
+
+The official Blitz score comes from Attempt #1 once it is checked. After an approved exception, #1 is excluded and still checked for history, and the official Blitz score comes only from the checked replacement attempt; the grant withdraws any official score already based on #1. A Blitz closed without a replacement attempt leaves that Student without an official Blitz score, which Stage 10 treats as Not completed.
 
 The system should show the teacher both results:
 
@@ -943,9 +949,9 @@ This comparison is the main reason blitz tasks exist in **TestLabUz**. The blitz
 
 The teacher should be able to view blitz results by topic, group, and student. The teacher should also be able to identify students who performed well on homework but poorly on the blitz task. These students may need additional revision or teacher support.
 
-The student may be able to view their own blitz result after the task is checked, depending on teacher or institution settings.
+The student sees their own blitz result only after the teacher closes the Blitz and only under the **automatic** Student release mode: the score and Teacher feedback of the attempt that counts, in the student's list of finished Blitz tasks. An attempt invalidated by an approved exception shows no score. Under manual Teacher release or an unconfigured mode, no Blitz result is visible in Stage 9.
 
-Parents may be able to view the child’s blitz result, completion status, final result, and understanding category if allowed by the institution.
+From Stage 10 result release, Parents may be able to view the child’s blitz result, completion status, final result, and understanding category if allowed by the institution. Stage 9 shows Parents nothing new.
 
 Institution Admins may be able to view blitz activity and progress inside their own institution, but they should not normally answer blitz tasks, change student submissions, or replace the teacher’s checking role.
 
@@ -1103,7 +1109,7 @@ The Platform Owner / Super Admin may view platform-level statistics, but should 
 
 The system should handle incomplete results clearly. If the homework is completed but the blitz task is not completed, the result should show that the learning-check process is incomplete. If the blitz task is completed but homework is missing, the system should also show an incomplete status according to institution rules.
 
-Manual checking should also be handled correctly. If an assignment or blitz task includes open written answers or file-based submissions, the final result should not be fully calculated until the teacher finishes checking the required answers.
+Manual checking should also be handled correctly. The final result is not calculated until both official task scores are ready. The official Homework score waits for Teacher review only of an attempt that could still overtake the best checked attempt (or, while no attempt is checked, of every completed attempt); the official Blitz score waits for the attempt that counts.
 
 The system should support clear result calculation statuses separately from visibility. In the MVP version, result calculation statuses include:
 
@@ -1339,7 +1345,7 @@ Parent progress tracking should help parents understand:
 - Understanding category
 - Topics where the child needs revision
 - Topics where the child needs teacher support
-- Teacher feedback if available
+- Teacher feedback if available (Parent visibility undecided; Stage 10 planning)
 
 If a parent has more than one child connected to their account, the parent should be able to switch between children and view each child’s progress separately.
 
@@ -1541,7 +1547,7 @@ For example:
 - Teachers can manage materials for their own topics.
 - Students can open materials assigned to them.
 - Students can upload files only for their own file-based assignments.
-- Teachers can review submitted files for their assigned students.
+- Teachers can download a submitted answer file only for a completed submission they may review: their own Topic, while still assigned to the Topic's group, for a Student who is a recipient of the task. Files of attempts still in progress stay Student-only.
 - Parents may view file-related progress if allowed, but should not edit or replace files.
 - Users from another institution must not access uploaded files.
 
@@ -1549,7 +1555,7 @@ The system should protect submissions and scores. Student answers, submitted fil
 
 The system should prevent unauthorized changes to submissions after the task is closed, after the time limit ends, or after allowed attempts are used.
 
-The system should also protect blitz tasks carefully. A student should only access a blitz task when the teacher starts or activates it. Students should not access inactive, closed, archived, or unrelated blitz tasks.
+The system should also protect blitz tasks carefully. A student should only access a blitz task when the teacher starts or activates it. Students should not open or answer inactive, closed, archived, or unrelated blitz tasks; a Blitz the student received that was activated and is now closed or archived appears only in the student's list of finished Blitz tasks, with its result under the Stage 9 visibility rule.
 
 If a user tries to access information outside their allowed scope, the system should block the action and show a clear message.
 
@@ -1703,6 +1709,7 @@ The Teacher mobile interface may include:
 - View students who submitted
 - View students who did not submit
 - View basic student results
+- View read-only counts of submissions waiting for review and overdue review (answer review is desktop-only)
 - View students who need revision or teacher support
 
 The **Student** should have both desktop and mobile access.
@@ -1752,7 +1759,7 @@ The Parent mobile interface may include:
 - Blitz score
 - Final result
 - Understanding category
-- Teacher feedback if available
+- Teacher feedback if available (Parent visibility undecided; Stage 10 planning)
 - Topics that need revision
 - Topics that need teacher support
 
@@ -1825,7 +1832,7 @@ The **Teacher** should be able to manage the core learning process. This include
 
 The **Student** should be able to study assigned materials, complete homework assignments, answer active blitz tasks, upload files for file-based assignments, view completion status, view scores if allowed, and understand their own learning progress.
 
-The **Parent** should be able to monitor their child’s progress from the mobile version. This includes viewing assigned topics, homework completion status, blitz results, scores, final results, understanding categories, teacher feedback if available, and topics where the child needs support.
+The **Parent** should be able to monitor their child’s progress from the mobile version. This includes viewing assigned topics, homework completion status, blitz results, scores, final results, understanding categories, teacher feedback if available (Parent visibility undecided; Stage 10 planning), and topics where the child needs support.
 
 The MVP should support topic management. Teachers should be able to create topics, edit their own topics, assign topics to groups or classes, add student instructions, manage topic status, and connect topics with learning materials, homework assignments, and blitz tasks.
 
@@ -1852,9 +1859,9 @@ The MVP should support the following assignment types:
 
 Teachers should be able to create homework assignments using these assignment types. Students should be able to submit answers according to the assignment rules.
 
-The MVP should support automatic checking for assignment types where automatic checking is possible, such as tests, true / false questions, matching tasks, ordering tasks, and fill-in-the-blank tasks.
+The MVP should support automatic checking for assignment types where automatic checking is possible, such as tests, true / false questions, matching tasks, ordering tasks, fill-in-the-blank tasks, and short written answers checked against accepted answers.
 
-The MVP should also support manual checking for assignment types that require teacher review, such as open written answers and file-based assignments. Teachers should be able to assign scores and add feedback if needed.
+The MVP should also support manual checking for answers that require teacher review: open written answers, file-based assignments, and short written answers set to manual checking. Teachers should be able to assign scores and add feedback if needed.
 
 The MVP should use the fixed attempt rules: **3 normal Homework attempts** with the highest valid completed score official, and **1 normal Blitz attempt** with at most **1 additional Student-specific Teacher-approved Blitz attempt** for a valid reason.
 
@@ -2271,7 +2278,7 @@ The MVP feature contract also includes:
 
 1. **Category score conversion:** result calculation remains unrounded, while category assignment uses an integer score with `.0`–`.5` down and `>.5` up. Institution category ranges are inclusive integer ranges covering 0–100.
 2. **Multiple-choice selection cap:** Student UI receives `max_selections`, cannot select more than the number of correct options, and earns only the fraction of correct options selected.
-3. **Automatic short-answer normalization:** normalized exact matching only; Unicode normalization, trim, whitespace collapse, case-insensitive comparison, Uzbek apostrophe normalization, punctuation preserved, no fuzzy/AI interpretation.
+3. **Automatic short-answer normalization:** normalized exact matching only; Unicode normalization, trim, whitespace collapse, case-insensitive comparison, Uzbek apostrophe normalization, punctuation preserved, no fuzzy/AI interpretation. Fill-in-the-blank blanks use the same normalization.
 4. **Activation validation:** Homework/Blitz drafts may contain zero points during authoring but cannot activate until server-recalculated total possible points is greater than zero.
 5. **Official grading scope:** official Homework/Blitz are whole-group only; selected-Student tasks are practice-only; one cohort snapshot is shared by both official tasks.
 6. **New-institution setup:** safe timezone/upload defaults are initialized, while threshold/category/timer/release policies remain unconfigured until the Institution Admin selects them.

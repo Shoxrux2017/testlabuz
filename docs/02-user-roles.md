@@ -219,7 +219,7 @@ Attempt 3: 75
 Official Homework score: 82
 ```
 
-If required manual checking is still unfinished for a potentially official attempt, the Homework score is not yet final.
+The official Homework score waits only for an attempt that could still overtake. It is not ready while a completed attempt that is not yet fully checked could still reach a higher score than the best checked attempt, or the same score with a lower attempt number. An unchecked attempt that cannot overtake does not delay it. If a later attempt could overtake, a ready score becomes not ready again until that attempt is checked. Equal best scores go to the lowest attempt number.
 
 ### Blitz
 
@@ -260,6 +260,8 @@ A new grant requires `BlitzTask.status = active`; draft, scheduled, closed, and 
 
 The original interrupted or invalid attempt remains in history and is excluded from official scoring according to the approved exception.
 
+The grant withdraws any official Blitz score already based on the original attempt. Only the checked replacement attempt can then give an official Blitz score. If the Blitz is closed without a replacement attempt, the Student has no official Blitz score and Stage 10 treats the Student as Not completed. The grant dialog states this consequence.
+
 A Student can therefore have at most:
 
 - 1 normal Blitz attempt, plus
@@ -275,17 +277,32 @@ The approved scoring behavior includes:
 
 - Single-choice: all-or-nothing
 - True / false: all-or-nothing
-- Multiple-choice: Student selections are capped at the number of correct options; partial credit is based only on correctly selected options / total correct options
+- Multiple-choice: Student selections are capped at the number of correct options; partial credit is based only on correctly selected options / total correct options; a wrong selection deducts nothing
 - Matching: partial credit per correctly matched pair
 - Ordering: partial credit per correctly positioned item
-- Fill-in-the-blank: partial credit per correctly completed blank
-- Short written answer: automatic when accepted-answer rules allow; otherwise Teacher review
+- Fill-in-the-blank: partial credit per correctly completed blank, compared with the same normalization as short written answers
+- Short written answer: automatic normalized exact match against the accepted answers, unless the Teacher sets the question to manual checking; it is the only type that can be switched to manual checking
 - Open written answer: Teacher assigns points
 - File-based assignment: Teacher assigns points
 
+An unanswered question scores zero and never needs review. A manual question worth zero points is closed automatically with zero points and never waits for review.
+
+The Teacher reviews submissions: completed Homework and Blitz attempts, official and practice, of Students who are recipients of the task, in the Teacher's own Topics while the Teacher is still assigned to the Topic's group. An attempt that is still in progress is not a submission. The status of the Topic or task (active, closed, archived) does not restrict review. The Teacher:
+
+- works from a review queue that can be filtered by task, Topic, group, Student, state, official or practice work, and overdue work, with official work listed first;
+- sees every question with the Student's answer and the question's correct-answer configuration;
+- may download a submitted answer file of an accessible submission;
+- awards 0 up to the question's points for each manual answer and may add feedback of at most 2000 characters;
+- may save only some of the manual answers of a submission (partial review);
+- reviews on desktop only; on mobile the Teacher sees only read-only counts of submissions waiting for review and overdue review.
+
 The Teacher may score and comment on answers requiring judgment, but must not rewrite the Student's submitted answer.
 
-The Teacher may correct an underlying manual score before the final result is closed. The system must then recalculate the Topic result.
+The Teacher may correct a reviewed score. The system recalculates the attempt and re-selects the official task score, which may move to another attempt. Stage 9 allows every correction; Stage 10 blocks corrections after the Student Topic Result is closed and recalculates the Topic result after an allowed correction.
+
+The Teacher may set an optional review deadline ("check by") on a Homework, also after the Homework is closed, but not once the Homework is archived or its Topic is closed or archived. It is a reminder only and never changes scores, statuses, or official selection. Blitz has no review deadline, and Students never see it.
+
+The Teacher cannot choose which attempt is official; the system selects it.
 
 The Teacher must not directly override the final Topic score outside the approved Homework–Blitz formula.
 
@@ -422,6 +439,13 @@ The Student sees that result only according to the institution's release policy.
 
 A result can be fully calculated while still hidden from the Student.
 
+Before Topic results exist (Stage 9), the Student sees own attempt results only when the institution's Student release mode is automatic:
+
+- Homework: the score and Teacher feedback of each checked attempt and, for the official Homework, the official Homework score once it is ready;
+- Blitz: only after the Teacher closes the Blitz, the score and Teacher feedback of the attempt that counts. An attempt invalidated by an approved exception never shows a score; the Student sees it as invalidated.
+
+With manual Teacher release or an unconfigured release mode, no attempt result is shown in Stage 9; Stage 10 adds result release. The Student never sees correct answers, answer keys, per-question points, per-answer checking status, the reviewer's identity, or the Homework review deadline.
+
 When released, the Student may see:
 
 - Official Homework score
@@ -438,6 +462,7 @@ Students must not be able to:
 
 - Change submitted answers after submission or timeout
 - View another Student's answers, scores, files, or private progress
+- View correct answers, answer keys, or per-question points
 - Create official Topics or learning materials
 - Create Homework or Blitz tasks
 - Activate Blitz tasks
@@ -479,6 +504,8 @@ Parent result visibility follows the Institution Admin's configured mode:
 A Parent must never receive the result before it has been released to the Student.
 
 A calculated result that is not visible to a Parent is not incomplete; it is simply not released to that Parent.
+
+Stage 9 shows Parents nothing new: attempt scores and Teacher feedback are not visible to Parents, and Parent result visibility arrives with Stage 10 result release. Whether any Teacher feedback becomes Parent-visible is undecided and belongs to Stage 10 planning.
 
 Parents should not be able to:
 
@@ -585,11 +612,12 @@ The Teacher can:
 - Set Blitz duration
 - Activate Blitz tasks
 - Grant one Student-specific additional Blitz attempt for a valid reason
-- Check manual answers
-- Correct underlying manual scoring before result closure
+- Review and correct manual answers of submissions in their own Topics; Stage 10 blocks corrections after result closure
+- Download submitted answer files of those submissions
+- Set an optional Homework review deadline
 - Release Student or Parent results when institution policy requires Teacher release
 
-The Teacher cannot directly override the final Topic calculation formula.
+The Teacher cannot directly override the final Topic calculation formula or choose which attempt is official.
 
 ### Student
 
@@ -601,6 +629,7 @@ The Student cannot:
 - Grant themselves an additional Blitz attempt
 - Change authoritative timers
 - View another Student's private data
+- View correct answers, answer keys, or per-question points
 - Change scoring or results
 
 ### Parent
@@ -628,6 +657,8 @@ Important actions must be protected by server-side permissions and scope checks,
 - Granting a Blitz attempt exception
 - Checking manual answers
 - Assigning manual scores and feedback
+- Downloading submitted answer files
+- Setting the Homework review deadline
 - Recalculating a result after an allowed underlying correction
 - Releasing Student results
 - Releasing Parent results
@@ -682,6 +713,7 @@ Mobile is suitable for quick classroom actions such as:
 - Activating a Blitz
 - Monitoring Blitz participation
 - Reviewing basic Student progress
+- Viewing read-only counts of submissions waiting for review and overdue review (answer review itself is desktop-only)
 - Granting a Student-specific Blitz exception when necessary
 - Releasing results when appropriate
 

@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Planning approved` | `FE-UX-001`, then `S09-DOC-001` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-DOC-001`, then `S09-BE-001` |
 
 Current Stage 5 progress:
 
@@ -1157,8 +1157,9 @@ their historical completion handoffs.
 - `FE-UX-001` (Student answer autosave, owner decision `S09-D8`) runs first, then
   `S09-DOC-001`; Stage 9 code starts only after both are delivered.
 - Planning package merged (PR #287, `main` `3ad88fb`).
-- `FE-UX-001`: implemented; PR open, awaiting review and the Project Owner smoke.
-- Next permitted action: after `FE-UX-001` merges, `S09-DOC-001` readiness.
+- `FE-UX-001`: accepted and delivered (PR #288, `main` `4432f27`).
+- `S09-DOC-001`: readiness approved on `4432f27`; implementation in progress.
+- Next permitted action: after `S09-DOC-001` merges, `S09-BE-001` readiness.
 
 ---
 

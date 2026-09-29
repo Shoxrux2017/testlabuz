@@ -182,7 +182,7 @@ In **TestLabUz**, Homework and Blitz tasks may use the same nine MVP assignment 
    The Student chooses one answer from several options. Automatic scoring is all-or-nothing.
 
 2. **Multiple-choice test**  
-   The Student may select multiple options. Partial credit is based on correctly classifying each option as selected or not selected, so incorrect selections reduce the earned proportion and selecting every option does not guarantee full credit.
+   The Student may select several options, at most as many as there are correct options. Partial credit is the question's points × correctly selected options / total correct options; a wrong selection earns nothing and deducts nothing.
 
 3. **True / false question**  
    The Student decides whether a statement is true or false. Automatic scoring is all-or-nothing.
@@ -205,7 +205,7 @@ In **TestLabUz**, Homework and Blitz tasks may use the same nine MVP assignment 
 9. **Fill-in-the-blank task**  
    The Student completes one or more blanks. Partial credit is awarded per correctly completed blank.
 
-Automatically checkable questions are scored by the system. Questions requiring educational judgment remain **Waiting for teacher review** until the Teacher checks them. A task's official score is not complete until all required manual review is finished.
+Automatically checkable questions are scored by the system. Questions requiring educational judgment (open written answers, file-based answers, and short written answers the Teacher sets to manual checking) remain **Waiting for teacher review** until the Teacher checks them; an unanswered or zero-point question never waits for review. An attempt's score is complete only when all of its manual answers are reviewed. The official Homework score waits only for an unchecked attempt that could still overtake the best checked attempt; the official Blitz score waits for the attempt that counts. The Teacher may set an optional Homework review deadline ("check by") as a reminder; it never changes scores, statuses, or official selection.
 
 The attempt rule is determined by whether the task is Homework or Blitz, not by assignment type:
 
@@ -231,7 +231,7 @@ Server time is authoritative. A Student cannot gain additional time by changing 
 
 Activation snapshots the configured Institution mode as `timer_start_mode_snapshot`; later setting changes do not alter it. An unconfigured mode blocks activation only. Normal synchronized Attempt #1 uses the shared end; normal individual #1 uses its own Start plus the configured duration. Execution timing uses UTC whole seconds and persisted Attempt deadlines.
 
-A Student normally receives **one Blitz attempt**. If a valid technical or other exceptional problem prevents proper completion, the Teacher may grant that Student **one additional attempt** and must record a reason. The affected original attempt remains in history and, once the exception is approved, is excluded from the official Blitz score.
+A Student normally receives **one Blitz attempt**. If a valid technical or other exceptional problem prevents proper completion, the Teacher may grant that Student **one additional attempt** and must record a reason. The affected original attempt remains in history and, once the exception is approved, is excluded from the official Blitz score. Approving the exception withdraws any official Blitz score already based on the original attempt; only a checked replacement attempt can then give an official Blitz score. If the Blitz is closed without a replacement attempt, the Student has no official Blitz score, and Stage 10 treats the Student as **Not completed**.
 
 A new exception requires an active Blitz and an existing normal Attempt #1 that is already terminal or is first timeout-finalized at its reached deadline; a still-editable pre-deadline #1 cannot be invalidated. Teacher Close permanently prevents new grants. An elapsed synchronized common end alone does not block an otherwise valid active grant. The grant authorizes but does not create replacement #2, which receives a fresh full configured duration from its own Start in both timer modes without changing the class timer. There is no Attempt #3.
 
@@ -375,6 +375,8 @@ Parent result-visibility mode:
 - hidden.
 
 Parent visibility cannot precede Student visibility.
+
+Before Topic results exist (Stage 9), the Student release mode also governs a Student's own attempt results. With automatic release, the Student sees the score and Teacher feedback of each checked Homework attempt, and of the Blitz attempt that counts only after the Teacher closes the Blitz. With manual Teacher release or an unconfigured mode, nothing is shown until Stage 10 adds result release. Students never see correct answers or per-question points, and Parents see no attempt results.
 
 ### Timezone
 
@@ -582,7 +584,7 @@ The MVP additionally fixes these behaviors:
 - Administrator-created Institution Admin, Teacher, Student, and Parent accounts use an initial password and require a mandatory first-login password change before normal application access.
 - New institutions start with `Asia/Tashkent`, 25 MB learning-material limit, and 15 MB Student-submission limit; educational-policy settings and numeric category ranges start unconfigured and block only dependent operations until the Institution Admin selects them.
 - Multiple-choice exposes only a maximum selection count equal to the number of correct answers; scoring is `correctly_selected / total_correct`, with no extra penalty and zero for an empty answer.
-- Automatic Short Written checking uses deterministic normalized exact matching; it does not use fuzzy matching, spelling correction, synonym inference, or AI.
+- Automatic Short Written checking and Fill-in-the-blank checking use the same deterministic normalized exact matching; they do not use fuzzy matching, spelling correction, synonym inference, or AI.
 - Draft Homework/Blitz may temporarily total zero points, but activation requires backend-recalculated total points greater than zero.
 - If top Homework attempts tie exactly, the earliest tied attempt is the official attempt reference.
 - For Homework, the authoritative deadline or Teacher close freezes each existing in-progress Attempt from already-committed saved work as immutable `submitted` history. Stage 7 creates neither an Attempt for a Student who never started nor an answer row for an unanswered Question, and performs no checking or scoring; Stage 9 later checks and scores the frozen work and treats missing answers as zero under the approved policy.

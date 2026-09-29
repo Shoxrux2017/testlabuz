@@ -213,8 +213,9 @@ all state this one rule.
 - With an exception: #1 is excluded; ready when replacement #2 exists and is `checked`; policy
   `approved_blitz_exception_replacement`.
 - The exception grant deletes an existing official row for that Student in the grant transaction.
-- A Blitz closed without a checked #2 has no official Blitz score; Stage 10 treats the Student as
-  Not completed. The grant dialog states this consequence (`S09-FE-001`).
+- A Blitz closed before the Student took replacement #2 has no official Blitz score; Stage 10 treats the
+  Student as Not completed. A #2 taken before the close becomes official once it is checked, even when
+  its review ends after the close (§14 rows 4-5). The grant dialog states this consequence (`S09-FE-001`).
 
 ### When the resolver runs, and reads
 
@@ -263,6 +264,10 @@ matches nothing, so the list is empty, never `404`);
 `type` = `homework | blitz`; `official` = `true | false`; `overdue` = `true`;
 `sort` = `default | finalized_at | student_name | review_due_at`; `direction` = `asc | desc`
 (`review_due_at` nulls last in both directions); `page`; `per_page` (default 25, max 100).
+
+Defaults: `page` 1, `sort=default`, `direction=asc`. `sort=default` has the fixed order below and ignores
+`direction`; the other sorts follow `direction` with the Attempt id as the tie-break in the same direction
+(`student_name` case-insensitive).
 
 `official` is true for an Attempt of the pair's Homework or Blitz with `official_score_eligible = true`.
 An invalidated Blitz #1 is not official: it appears under `official=false` together with practice work,
@@ -422,7 +427,7 @@ Blitz (the Student cannot read a closed Blitz today: `GET /student/blitz/{blitz}
 
 - New `GET /api/v1/student/blitz/finished`: the Student's Blitz tasks (persisted recipient) that were
   activated (`activated_at` not null) and are now closed or archived, ordered by
-  `coalesce(closed_at, archived_at)` descending, then id; paged (`page`, `per_page` default 25, max 100).
+  `coalesce(closed_at, archived_at)` descending, then id descending; paged (`page`, `per_page` default 25, max 100).
   Item:
   `{ "id", "topic": { "id", "title" }, "title", "status", "closed_at", "attempt_exception": bool,
   "result": { "attempt_number", "visible", "normalized_score", "feedback": [ { "question_id", "position",
