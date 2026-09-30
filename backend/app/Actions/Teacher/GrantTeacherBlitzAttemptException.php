@@ -15,6 +15,7 @@ use App\Models\AssessmentStudent;
 use App\Models\BlitzAttemptException;
 use App\Models\User;
 use App\Support\Assessment\BlitzAttemptFinalizer;
+use App\Support\Checking\OfficialTaskScoreResolver;
 use App\Support\Idempotency\IdempotencyGuard;
 use App\Support\Idempotency\IdempotencyRequestFingerprint;
 use App\Support\Student\StudentBlitzAttemptSummary;
@@ -34,6 +35,7 @@ final class GrantTeacherBlitzAttemptException
         private readonly StudentBlitzAttemptSummary $history,
         private readonly StudentBlitzTiming $timing,
         private readonly BlitzAttemptFinalizer $finalizer,
+        private readonly OfficialTaskScoreResolver $officialScores,
     ) {}
 
     public function __invoke(User $teacher, string $blitzId, string $studentId, string $key, array $reason): BlitzAttemptException
@@ -106,6 +108,8 @@ final class GrantTeacherBlitzAttemptException
                 $exception->created_at = $grantedAt;
                 $exception->updated_at = $grantedAt;
                 $exception->save();
+                // The invalidated #1 is never official: its score is withdrawn in this transaction (S09-D4).
+                $this->officialScores->resolve($assessment, $recipient, $attempts, $grantedAt);
                 $this->idempotency->complete($claim, 'blitz_attempt_exception', $exception->id, 201);
             }
 
