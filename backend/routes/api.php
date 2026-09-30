@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherHomeworkController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherQuestionController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherSubmissionController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicResultPairController;
 use App\Support\Auth\LoginRateLimitKey;
@@ -129,6 +130,8 @@ Route::prefix('teacher')
         Route::post('homework/{homework}/close', [TeacherHomeworkController::class, 'close']);
         Route::post('homework/{homework}/archive', [TeacherHomeworkController::class, 'archive']);
         Route::put('homework/{homework}/review-due-at', [TeacherHomeworkController::class, 'updateReviewDueAt']);
+        Route::get('submissions', [TeacherSubmissionController::class, 'index']);
+        Route::get('submissions/{submission}', [TeacherSubmissionController::class, 'show']);
         Route::get('blitz', [TeacherBlitzController::class, 'index']);
         Route::get('blitz/{blitz}', [TeacherBlitzController::class, 'show']);
         Route::get('blitz/{blitz}/monitoring', [TeacherBlitzController::class, 'monitoring']);

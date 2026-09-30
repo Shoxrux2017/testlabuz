@@ -4765,7 +4765,7 @@ Returns every field of the Section 21.1 item, plus `submitted_at` and `questions
 }
 ```
 
-- `question.configuration` is the Teacher Question configuration of the Teacher Question resource (Section 16), including correct answers.
+- `question.configuration` is the Teacher Question configuration of the Teacher Question resource (Section 16), including correct answers, plus the ids that `answer.value` refers to: `options[].id` (choice), `pairs[].left_item_id` and `pairs[].right_item_id` (matching), `items[].id` (ordering) and `blanks[].id` (fill-in-the-blank).
 - `answer.value` has the shape of the Student Attempt answer state for that Question type; a file answer carries `file { id, original_name, extension, size_bytes }`, downloadable under Section 22.2.
 - `answer` is `null` for an unanswered Question.
 - `checked_by` is `{ id, full_name }` of the last Teacher reviewer, or `null`, also for automatic results. `checked_at` is the time of the latest check or review.
