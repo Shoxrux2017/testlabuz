@@ -81,8 +81,8 @@ final class SubmitStudentBlitzAttempt
                 return $this->replay($student, $assessment, $blitz, $attempt, $claim->record, $idempotencyKey, $fingerprint);
             }
 
-            if ($attempt->status === AssessmentAttemptStatus::TimedOutFinalized
-                && $attempt->finalization_reason === AssessmentAttemptFinalizationReason::TimeoutAutoSubmit) {
+            // S09-T2: whatever checking status the timed-out Attempt has reached.
+            if ($attempt->finalization_reason === AssessmentAttemptFinalizationReason::TimeoutAutoSubmit) {
                 throw new StudentBlitzTimeExpiredException;
             }
 

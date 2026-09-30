@@ -50,8 +50,7 @@ final class StudentHomeworkAnswerIntegrity
     public function canonical(AttemptAnswer $answer, AssessmentAttempt $attempt, Question $question): array
     {
         $this->requireValid($answer->getRawOriginal('checking_status') === AttemptAnswerCheckingStatus::Pending->value
-            && $answer->awarded_points === null && $answer->feedback === null
-            && $answer->checked_by_user_id === null && $answer->checked_at === null);
+            && $this->hasNoCheckingMetadata($answer));
 
         return $this->canonicalStructure($answer, $attempt, $question);
     }
@@ -59,9 +58,18 @@ final class StudentHomeworkAnswerIntegrity
     /** @return array<string, mixed> */
     public function canonicalForHistoricalRead(AttemptAnswer $answer, AssessmentAttempt $attempt, Question $question): array
     {
-        $this->requireValid(in_array($answer->getRawOriginal('checking_status'), AttemptAnswerCheckingStatus::values(), true));
+        $status = $answer->getRawOriginal('checking_status');
+        // Any checking state is readable, but an unchecked answer never carries checking metadata.
+        $this->requireValid(in_array($status, AttemptAnswerCheckingStatus::values(), true)
+            && ($status !== AttemptAnswerCheckingStatus::Pending->value || $this->hasNoCheckingMetadata($answer)));
 
         return $this->canonicalStructure($answer, $attempt, $question);
+    }
+
+    private function hasNoCheckingMetadata(AttemptAnswer $answer): bool
+    {
+        return $answer->awarded_points === null && $answer->feedback === null
+            && $answer->checked_by_user_id === null && $answer->checked_at === null;
     }
 
     /** @return array<string, mixed> */

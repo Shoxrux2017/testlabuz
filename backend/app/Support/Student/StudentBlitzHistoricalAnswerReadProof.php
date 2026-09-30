@@ -74,6 +74,41 @@ final readonly class StudentBlitzHistoricalAnswerReadProof
         return self::fromVerifiedReplay($student, $attempt, $record, $intent, $resumeAttemptId);
     }
 
+    /**
+     * A Start whose in-progress Attempt was due finalizes it after its commit and re-reads it;
+     * Stage 9 may have checked the frozen Attempt in between. A lock-queued Submit or Teacher
+     * close may have frozen it first, so every valid finalization reason is accepted.
+     */
+    public static function forTimeoutReread(User $student, Assessment $assessment, AssessmentAttempt $attempt, int $responseStatus, string $intent, ?string $resumeAttemptId): self
+    {
+        // The caller's Blitz read query already restricts the Assessment to Blitz tasks.
+        if ($assessment->institution_id !== $student->institution_id
+            || $attempt->institution_id !== $student->institution_id || $attempt->student_id !== $student->id
+            || $attempt->assessment_id !== $assessment->id
+            || ! in_array($attempt->finalization_reason, [
+                AssessmentAttemptFinalizationReason::TimeoutAutoSubmit,
+                AssessmentAttemptFinalizationReason::StudentSubmit,
+                AssessmentAttemptFinalizationReason::TaskClosedAutoFinalize,
+            ], true)
+            || ! in_array($responseStatus, [200, 201], true)
+            || ! match ($intent) {
+                'start_normal' => $attempt->attempt_number === 1 && $resumeAttemptId === null,
+                'start_replacement' => $attempt->attempt_number === 2 && $resumeAttemptId === null,
+                'resume' => $resumeAttemptId === $attempt->id,
+                default => false,
+            }
+            || ! AssessmentStudent::query()->where('institution_id', $student->institution_id)
+                ->where('assessment_id', $assessment->id)->where('student_id', $student->id)
+                ->whereKey($attempt->assessment_student_id)->exists()) {
+            throw new LogicException('A timeout re-read requires the authorized Attempt this Start found due.');
+        }
+
+        self::assertHistoricalLineage($attempt);
+
+        return new self(IdempotencyOperation::StudentBlitzAttemptStart, $attempt->id, $responseStatus, $attempt->finalization_reason,
+            $intent, $resumeAttemptId, $student->institution_id, $student->id, $assessment->id, $attempt->assessment_student_id);
+    }
+
     public function assertMatches(User $student, Assessment $assessment, AssessmentAttempt $attempt): void
     {
         if ($this->institutionId !== $student->institution_id || $this->studentId !== $student->id
