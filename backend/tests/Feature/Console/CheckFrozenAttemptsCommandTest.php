@@ -7,6 +7,8 @@ use App\Enums\AssessmentAttemptStatus;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
 use App\Models\HomeworkAssignment;
+use App\Models\OfficialTaskScore;
+use App\Models\TopicResultPair;
 use Illuminate\Console\Command;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -84,6 +86,88 @@ class CheckFrozenAttemptsCommandTest extends TestCase
         Exceptions::assertReported(LogicException::class);
         $this->assertSame($brokenBefore, $broken->fresh()->getAttributes());
         $this->assertSame('checked', $healthy->fresh()->getRawOriginal('status'));
+    }
+
+    public function test_the_sweep_repairs_missing_and_stale_official_rows_only(): void
+    {
+        $missing = $this->officialRecipient();
+        $missingBest = $this->scoredAttempt($missing, 1, 'checked', '80.00000000');
+        $stale = $this->officialRecipient();
+        $staleFirst = $this->scoredAttempt($stale, 1, 'checked', '80.00000000');
+        $staleBest = $this->scoredAttempt($stale, 2, 'checked', '90.00000000');
+        $this->officialRow($stale, $staleFirst);
+        $waiting = $this->officialRecipient();
+        $this->scoredAttempt($waiting, 1, 'checked', '80.00000000');
+        $this->scoredAttempt($waiting, 2, 'waiting_for_teacher_review');
+        $practice = AssessmentStudent::factory()->create(['assessment_id' => HomeworkAssignment::factory()->closed()->create()->assessment_id]);
+        $this->scoredAttempt($practice, 1, 'checked', '80.00000000');
+        $current = $this->officialRecipient();
+        $currentRow = $this->officialRow($current, $this->scoredAttempt($current, 1, 'checked', '70.00000000'))->getAttributes();
+        $this->travel(1)->hours();
+
+        $this->artisan('attempts:check-frozen')
+            ->expectsOutput('Candidates: 0; checked attempts: 0; failures: 0.')
+            ->expectsOutput('Official scores repaired: 2; failures: 0.')
+            ->assertExitCode(Command::SUCCESS);
+
+        $this->assertSame([$missingBest->id, $staleBest->id], [
+            OfficialTaskScore::query()->where('student_id', $missing->student_id)->sole()->official_attempt_id,
+            OfficialTaskScore::query()->where('student_id', $stale->student_id)->sole()->official_attempt_id,
+        ]);
+        $this->assertTrue(OfficialTaskScore::query()->where('student_id', $missing->student_id)->sole()->selected_at->equalTo(now()));
+        // A pending eligible Attempt leaves the decision to the writer that checks or reviews it.
+        $this->assertDatabaseMissing('official_task_scores', ['student_id' => $waiting->student_id]);
+        $this->assertDatabaseMissing('official_task_scores', ['student_id' => $practice->student_id]);
+        $this->assertSame($currentRow, OfficialTaskScore::query()->where('student_id', $current->student_id)->sole()->getAttributes());
+    }
+
+    public function test_one_failing_repair_is_reported_and_the_others_are_repaired(): void
+    {
+        Exceptions::fake();
+        $broken = $this->officialRecipient();
+        $this->scoredAttempt($broken, 1, 'checked', '80.00000000');
+        // A Homework Attempt is never ineligible, so evaluating this history fails.
+        DB::table('assessment_attempts')->where('id', $this->scoredAttempt($broken, 2, 'checked', '50.00000000')->id)
+            ->update(['official_score_eligible' => false]);
+        $healthy = $this->officialRecipient();
+        $this->scoredAttempt($healthy, 1, 'checked', '80.00000000');
+
+        $this->artisan('attempts:check-frozen')
+            ->expectsOutput('Official scores repaired: 1; failures: 1.')
+            ->assertExitCode(Command::FAILURE);
+
+        Exceptions::assertReported(LogicException::class);
+        $this->assertDatabaseMissing('official_task_scores', ['student_id' => $broken->student_id]);
+        $this->assertDatabaseHas('official_task_scores', ['student_id' => $healthy->student_id]);
+    }
+
+    private function officialRecipient(): AssessmentStudent
+    {
+        $homework = HomeworkAssignment::factory()->closed()->create();
+        TopicResultPair::factory()->create(['homework_assessment_id' => $homework->assessment_id]);
+
+        return AssessmentStudent::factory()->create(['assessment_id' => $homework->assessment_id]);
+    }
+
+    private function scoredAttempt(AssessmentStudent $recipient, int $number, string $status, ?string $normalized = null): AssessmentAttempt
+    {
+        return AssessmentAttempt::factory()->create([
+            'assessment_student_id' => $recipient->id, 'attempt_number' => $number, 'status' => $status,
+            'started_at' => now()->subHour(), 'submitted_at' => now()->subMinutes(30), 'finalized_at' => now()->subMinutes(30),
+            'locked_at' => now()->subMinutes(30), 'finalization_reason' => 'student_submit', 'possible_points' => '4.000000',
+            'normalized_score' => $normalized, 'earned_points' => $normalized === null ? null : '1.00000000',
+            'scoring_completed_at' => $normalized === null ? null : now()->subMinutes(20),
+        ])->fresh();
+    }
+
+    private function officialRow(AssessmentStudent $recipient, AssessmentAttempt $attempt): OfficialTaskScore
+    {
+        return OfficialTaskScore::factory()->create([
+            'institution_id' => $recipient->institution_id, 'assessment_id' => $recipient->assessment_id,
+            'student_id' => $recipient->student_id, 'official_attempt_id' => $attempt->id,
+            'normalized_score' => $attempt->normalized_score, 'selection_policy_code' => 'highest_valid_completed',
+            'selected_at' => now()->subMinutes(20),
+        ])->fresh();
     }
 
     private function frozenAttempt(AssessmentAttemptStatus $status): AssessmentAttempt
