@@ -6,7 +6,6 @@ use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
 use App\Models\OfficialTaskScore;
-use App\Models\TopicResultPair;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -16,7 +15,10 @@ use Illuminate\Database\Eloquent\Collection;
  */
 final class OfficialTaskScoreResolver
 {
-    public function __construct(private readonly OfficialScoreEvaluator $evaluator) {}
+    public function __construct(
+        private readonly OfficialScoreEvaluator $evaluator,
+        private readonly OfficialTaskDesignation $designation,
+    ) {}
 
     /**
      * The caller holds the Student's scoring locks (S09-DOC-001 §8) and passes all of the
@@ -26,7 +28,7 @@ final class OfficialTaskScoreResolver
      */
     public function resolve(Assessment $assessment, AssessmentStudent $recipient, Collection $attempts, CarbonInterface $resolvedAt): bool
     {
-        if (! $this->isOfficial($assessment)) {
+        if (! $this->designation->isOfficial($assessment)) {
             return false;
         }
 
@@ -71,15 +73,5 @@ final class OfficialTaskScoreResolver
         $row->updated_at = $resolvedAt;
 
         return $row->save();
-    }
-
-    private function isOfficial(Assessment $assessment): bool
-    {
-        return TopicResultPair::query()
-            ->where('institution_id', $assessment->institution_id)
-            ->where('topic_id', $assessment->topic_id)
-            ->where(fn ($query) => $query->where('homework_assessment_id', $assessment->id)
-                ->orWhere('blitz_assessment_id', $assessment->id))
-            ->exists();
     }
 }
