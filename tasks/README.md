@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-007A`, then `S09-BE-007B` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-007B`, then `S09-BE-007C` |
 
 Current Stage 5 progress:
 
@@ -1174,8 +1174,9 @@ their historical completion handoffs.
 - `S09-BE-006` (review save and correction): accepted and delivered (PR #297, `main` `60e62cc`).
 - `S09-BE-007` split into `S09-BE-007A` (Teacher official-score read), `S09-BE-007B` (Student Homework
   results with the Student parser change) and `S09-BE-007C` (Student finished Blitz list).
-  `S09-BE-007A`: approved on `60e62cc`; implemented; PR open.
-- Next permitted action: after `S09-BE-007A` merges, `S09-BE-007B` contract and readiness.
+  `S09-BE-007A`: accepted and delivered (PR #298, `main` `1171e24`). `S09-BE-007B`: approved on
+  `1171e24`; implemented; PR open.
+- Next permitted action: after `S09-BE-007B` merges, `S09-BE-007C` contract and readiness.
 
 ---
 

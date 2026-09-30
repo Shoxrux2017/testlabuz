@@ -392,6 +392,7 @@ Map<String, Object?> _summaryJson() => {
   },
   'my_status': 'not_started',
   'score_visible': false,
+  'official_score': null,
 };
 
 Map<String, Object?> _listJson({
@@ -419,6 +420,7 @@ Map<String, Object?> _detailJson({Map<String, Object?>? question}) {
     'description': null,
     'student_instructions': 'Read each question.',
     'total_possible_points': 2,
+    'attempt_results': <Object?>[],
     'questions': [question ?? _questionJson()],
   });
 }

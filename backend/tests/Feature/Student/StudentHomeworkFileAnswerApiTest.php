@@ -83,11 +83,12 @@ class StudentHomeworkFileAnswerApiTest extends TestCase
         foreach ([$answer->created_at, $answer->updated_at, $answerFile->created_at, $file->created_at, $file->updated_at] as $timestamp) {
             $this->assertTrue($timestamp->equalTo(now()));
         }
+        // Stage 9: an Attempt answer is the saved answer plus the Teacher's feedback, hidden here.
         $get = $this->answerHttp($student, 'GET', '/api/v1/student/attempts/'.$attempt->id)
-            ->assertOk()->assertJsonPath('data.answers', [$response->json('data')]);
+            ->assertOk()->assertJsonPath('data.answers', [$response->json('data') + ['feedback' => null]]);
         $start = $this->answerHttp($student, 'POST', '/api/v1/student/homework/'.$homework->assessment_id.'/attempts',
             headers: ['HTTP_IDEMPOTENCY_KEY' => (string) Str::uuid()])->assertOk()
-            ->assertJsonPath('data.answers', [$response->json('data')]);
+            ->assertJsonPath('data.answers', [$response->json('data') + ['feedback' => null]]);
         foreach ([$response->json(), $get->json('data.answers'), $start->json('data.answers')] as $payload) {
             $this->assertNoFileAnswerSecrets($payload);
         }

@@ -141,6 +141,11 @@ class StudentHomeworkCheckedAttemptReadTest extends TestCase
     /** @param array<string, mixed> $data */
     private function assertNoCheckingFields(array $data): void
     {
+        // Stage 9: results are not released here, so the result is hidden and every feedback is null.
+        $this->assertSame(['visible' => false, 'normalized_score' => null], $data['result']);
+        $this->assertSame(array_fill(0, count($data['answers']), null), array_column($data['answers'], 'feedback'));
+        unset($data['result']);
+        $data['answers'] = array_map(fn (array $answer): array => array_diff_key($answer, ['feedback' => true]), $data['answers']);
         $json = json_encode($data, JSON_THROW_ON_ERROR);
 
         foreach (['checking_status', 'awarded_points', 'feedback', 'checked_by', 'checked_at', 'Clear reasoning.', 'earned_points', 'normalized_score'] as $secret) {

@@ -7,12 +7,16 @@ class StudentAttemptAnswerState {
     required this.type,
     required this.value,
     required this.updatedAt,
+    this.feedback,
   });
 
   final String questionId;
   final StudentQuestionType type;
   final StudentAttemptAnswerValue value;
   final DateTime updatedAt;
+
+  /// The Teacher's feedback on a Homework answer, only while its result is visible.
+  final String? feedback;
 }
 
 sealed class StudentAttemptAnswerValue {

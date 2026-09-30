@@ -5,6 +5,7 @@ namespace App\Http\Resources\Student;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\HomeworkAssignment;
+use App\Support\Student\StudentAttemptAnswerMutationResult;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -29,8 +30,11 @@ class StudentHomeworkAttemptResource extends JsonResource
         $questions = $assessment->getRelation('questions');
         $answerStates = $this->getAttribute('student_answer_states');
 
-        if (! $homework instanceof HomeworkAssignment || ! $questions instanceof Collection || ! $answerStates instanceof SupportCollection) {
-            throw new LogicException('Student Attempt resources require preloaded Homework, Questions and Answer states.');
+        $result = $this->getAttribute('student_result');
+
+        if (! $homework instanceof HomeworkAssignment || ! $questions instanceof Collection || ! $answerStates instanceof SupportCollection
+            || ! is_array($result)) {
+            throw new LogicException('Student Attempt resources require preloaded Homework, Questions, Answer states and a result.');
         }
 
         return [
@@ -43,8 +47,13 @@ class StudentHomeworkAttemptResource extends JsonResource
             'finalized_at' => $this->finalized_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
             'finalization_reason' => $this->finalization_reason?->value,
             'deadline_at' => $homework->deadline_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
+            'result' => $result,
             'questions' => StudentQuestionResource::collection($questions),
-            'answers' => StudentAttemptAnswerStateResource::collection($answerStates),
+            // The shared answer shape plus the Teacher's feedback, shown only with a visible result.
+            'answers' => $answerStates->map(fn (StudentAttemptAnswerMutationResult $state): array => [
+                ...(new StudentAttemptAnswerStateResource($state))->toArray($request),
+                'feedback' => $result['visible'] ? $state->attemptAnswer?->feedback : null,
+            ])->values()->all(),
         ];
     }
 }

@@ -7,6 +7,7 @@ use App\Models\InstitutionSetting;
 use App\Models\User;
 use App\Support\Student\StudentHomeworkAccess;
 use App\Support\Student\StudentHomeworkAttemptSummary;
+use App\Support\Student\StudentHomeworkResults;
 use App\Support\Student\StudentQuestionAnswerUi;
 use LogicException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -18,6 +19,7 @@ class ShowStudentHomework
         private readonly ReconcileStudentHomeworkDeadlines $reconcileDeadlines,
         private readonly StudentHomeworkAttemptSummary $attemptSummary,
         private readonly StudentQuestionAnswerUi $answerUi,
+        private readonly StudentHomeworkResults $results,
     ) {}
 
     public function __invoke(User $student, string $homeworkId): Assessment
@@ -46,7 +48,7 @@ class ShowStudentHomework
         }
 
         $setting = InstitutionSetting::query()
-            ->select(['institution_id', 'student_submission_max_mb'])
+            ->select(['institution_id', 'student_submission_max_mb', 'student_result_release_mode'])
             ->where('institution_id', $student->institution_id)
             ->first();
 
@@ -56,6 +58,7 @@ class ShowStudentHomework
 
         $maxFileSizeBytes = min(15, $setting->student_submission_max_mb) * 1_048_576;
         $homework->setAttribute('student_attempt_summary', ($this->attemptSummary)($student, $homework, $readAt));
+        $this->results->apply($student, [$homework], $setting->student_result_release_mode);
 
         foreach ($homework->getRelation('questions') as $question) {
             $question->setAttribute('student_answer_ui', $this->answerUi->project($question, $maxFileSizeBytes));

@@ -19,9 +19,12 @@ class StudentHomeworkSummaryResource extends JsonResource
         $homework = $this->relationLoaded('homeworkAssignment') ? $this->getRelation('homeworkAssignment') : null;
         $summary = $this->getAttribute('student_attempt_summary');
 
-        if (! $topic instanceof Topic || ! $homework instanceof HomeworkAssignment || ! is_array($summary)) {
+        if (! $topic instanceof Topic || ! $homework instanceof HomeworkAssignment || ! is_array($summary)
+            || ! array_key_exists('student_official_score', $this->getAttributes())) {
             throw new LogicException('Student Homework resources require preloaded read projections.');
         }
+
+        $officialScore = $this->getAttribute('student_official_score');
 
         return [
             'id' => $this->id,
@@ -31,7 +34,8 @@ class StudentHomeworkSummaryResource extends JsonResource
             'deadline_at' => $homework->deadline_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
             'attempts' => $summary['attempts'],
             'my_status' => $summary['my_status'],
-            'score_visible' => false,
+            'score_visible' => $officialScore !== null,
+            'official_score' => $officialScore,
         ];
     }
 }

@@ -128,10 +128,12 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
 
         $this->assertSame(['data', 'message'], array_keys($response->json()));
         $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'submitted_at', 'finalized_at',
-            'finalization_reason', 'deadline_at', 'questions', 'answers'], array_keys($response->json('data')));
-        $this->assertSame($expectedAnswers, array_slice($response->json('data.answers'), 0, 8));
+            'finalization_reason', 'deadline_at', 'result', 'questions', 'answers'], array_keys($response->json('data')));
+        // Stage 9: an Attempt answer is the saved answer plus the Teacher's feedback, hidden here.
+        $this->assertSame(array_map(fn (array $answer): array => $answer + ['feedback' => null], $expectedAnswers),
+            array_slice($response->json('data.answers'), 0, 8));
         $response->assertJsonPath('data.answers.8.answer.file.id', $file->id);
-        $this->assertNoAnswerSecrets($response->json());
+        $this->assertNoHiddenHomeworkAttemptSecrets($response->json('data'));
         $this->assertNoFileAnswerSecrets($response->json());
         foreach (['checking', 'requires_teacher_review', 'score', 'normalized_score', 'official_attempt'] as $field) {
             $this->assertArrayNotHasKey($field, $response->json('data'));

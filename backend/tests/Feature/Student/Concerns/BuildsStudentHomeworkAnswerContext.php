@@ -219,6 +219,21 @@ trait BuildsStudentHomeworkAnswerContext
         return $rows;
     }
 
+    /**
+     * Since Stage 9 a Homework Attempt answer carries the Teacher's feedback, null while the
+     * result is hidden; every other answer secret stays absent.
+     */
+    protected function assertNoHiddenHomeworkAttemptSecrets(array $attempt): void
+    {
+        foreach ($attempt['answers'] as $index => $answer) {
+            $this->assertArrayHasKey('feedback', $answer);
+            $this->assertNull($answer['feedback']);
+            unset($attempt['answers'][$index]['feedback']);
+        }
+        $this->assertSame(['visible' => false, 'normalized_score' => null], $attempt['result']);
+        $this->assertNoAnswerSecrets($attempt);
+    }
+
     protected function assertNoAnswerSecrets(array $value): void
     {
         foreach ($value as $key => $child) {

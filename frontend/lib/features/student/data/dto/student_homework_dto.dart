@@ -1,6 +1,8 @@
 import '../../domain/student_homework.dart';
+import '../../domain/student_homework_attempt.dart';
 import 'student_dto_parse.dart';
 import 'student_question_dto.dart';
+import 'student_result_dto.dart';
 
 class StudentHomeworkSummaryDto {
   const StudentHomeworkSummaryDto({
@@ -11,7 +13,7 @@ class StudentHomeworkSummaryDto {
     required this.deadlineAt,
     required this.attempts,
     required this.myStatus,
-    required this.scoreVisible,
+    required this.officialScore,
   });
 
   factory StudentHomeworkSummaryDto.fromJson(Object? json) {
@@ -36,7 +38,7 @@ class StudentHomeworkSummaryDto {
         detail: false,
       ),
       myStatus: myStatus,
-      scoreVisible: _readScoreVisible(map),
+      officialScore: readStudentOfficialScore(map),
     );
   }
 
@@ -47,7 +49,9 @@ class StudentHomeworkSummaryDto {
   final DateTime? deadlineAt;
   final StudentHomeworkAttemptSummary attempts;
   final StudentHomeworkMyStatus myStatus;
-  final bool scoreVisible;
+  final StudentOfficialScore? officialScore;
+
+  bool get scoreVisible => officialScore != null;
 
   StudentHomeworkSummary toDomain() => StudentHomeworkSummary(
     id: id,
@@ -58,6 +62,7 @@ class StudentHomeworkSummaryDto {
     attempts: attempts,
     myStatus: myStatus,
     scoreVisible: scoreVisible,
+    officialScore: officialScore,
   );
 }
 
@@ -73,9 +78,13 @@ class StudentHomeworkDetailDto {
     required this.totalPossiblePoints,
     required this.attempts,
     required this.myStatus,
-    required this.scoreVisible,
+    required this.officialScore,
+    required List<StudentHomeworkAttemptResultItem> attemptResults,
     required List<StudentQuestionDto> questions,
-  }) : questions = List<StudentQuestionDto>.unmodifiable(questions);
+  }) : attemptResults = List<StudentHomeworkAttemptResultItem>.unmodifiable(
+         attemptResults,
+       ),
+       questions = List<StudentQuestionDto>.unmodifiable(questions);
 
   factory StudentHomeworkDetailDto.fromJson(Object? json) {
     final map = readExactStudentMap(
@@ -86,10 +95,17 @@ class StudentHomeworkDetailDto {
         'description',
         'student_instructions',
         'total_possible_points',
+        'attempt_results',
         'questions',
       },
     );
     final myStatus = _readMyStatus(map);
+    final attempts = _readAttempts(
+      map['attempts'],
+      myStatus: myStatus,
+      detail: true,
+    );
+    final officialScore = readStudentOfficialScore(map);
     final questions = readStudentList(
       map,
       'questions',
@@ -122,13 +138,15 @@ class StudentHomeworkDetailDto {
         map,
         'total_possible_points',
       ),
-      attempts: _readAttempts(
-        map['attempts'],
-        myStatus: myStatus,
-        detail: true,
-      ),
+      attempts: attempts,
       myStatus: myStatus,
-      scoreVisible: _readScoreVisible(map),
+      officialScore: officialScore,
+      attemptResults: _readAttemptResults(
+        map,
+        attempts: attempts,
+        myStatus: myStatus,
+        officialScore: officialScore,
+      ),
       questions: questions,
     );
   }
@@ -143,8 +161,11 @@ class StudentHomeworkDetailDto {
   final double totalPossiblePoints;
   final StudentHomeworkAttemptSummary attempts;
   final StudentHomeworkMyStatus myStatus;
-  final bool scoreVisible;
+  final StudentOfficialScore? officialScore;
+  final List<StudentHomeworkAttemptResultItem> attemptResults;
   final List<StudentQuestionDto> questions;
+
+  bool get scoreVisible => officialScore != null;
 
   StudentHomeworkDetail toDomain() => StudentHomeworkDetail(
     id: id,
@@ -158,7 +179,80 @@ class StudentHomeworkDetailDto {
     attempts: attempts,
     myStatus: myStatus,
     scoreVisible: scoreVisible,
+    officialScore: officialScore,
+    attemptResults: attemptResults,
     questions: questions.map((question) => question.toDomain()).toList(),
+  );
+}
+
+/// Every terminal Attempt in attempt-number order: numbers 1..N below any
+/// in-progress Attempt, the latest one carrying `my_status`, and a visible
+/// official score confirmed by its Attempt's visible result.
+List<StudentHomeworkAttemptResultItem> _readAttemptResults(
+  Map<String, Object?> map, {
+  required StudentHomeworkAttemptSummary attempts,
+  required StudentHomeworkMyStatus myStatus,
+  required StudentOfficialScore? officialScore,
+}) {
+  final items = readStudentList(
+    map,
+    'attempt_results',
+  ).map(_readAttemptResult).toList();
+  final ids = <String>{};
+  for (var index = 0; index < items.length; index += 1) {
+    if (items[index].attemptNumber != index + 1 ||
+        !ids.add(items[index].attemptId.toLowerCase())) {
+      throw const FormatException(
+        'Homework attempt results need unique IDs and numbers 1..N.',
+      );
+    }
+  }
+  final inProgress = attempts.inProgressAttempt;
+  if (items.length != attempts.used - (inProgress == null ? 0 : 1) ||
+      (inProgress != null && ids.contains(inProgress.id.toLowerCase())) ||
+      (inProgress == null &&
+          items.isNotEmpty &&
+          items.last.status.apiValue != myStatus.apiValue)) {
+    throw const FormatException(
+      'Homework attempt results do not match the Attempt history.',
+    );
+  }
+  if (officialScore != null) {
+    final official = items.where(
+      (item) => item.attemptNumber == officialScore.attemptNumber,
+    );
+    if (official.length != 1 ||
+        official.single.result.normalizedScore !=
+            officialScore.normalizedScore) {
+      throw const FormatException(
+        'The official Homework score needs its visible Attempt result.',
+      );
+    }
+  }
+  return items;
+}
+
+StudentHomeworkAttemptResultItem _readAttemptResult(Object? json) {
+  final map = readExactStudentMap(
+    json,
+    context: 'Student Homework attempt result',
+    keys: const {'attempt_id', 'attempt_number', 'status', 'result'},
+  );
+  final status = StudentHomeworkAttemptStatus.parse(
+    readStudentNonBlankString(map, 'status'),
+  );
+  final result = readStudentAttemptResult(map['result']);
+  if (status == StudentHomeworkAttemptStatus.inProgress ||
+      (result.visible && status != StudentHomeworkAttemptStatus.checked)) {
+    throw const FormatException(
+      'Only a checked terminal Attempt can show its result.',
+    );
+  }
+  return StudentHomeworkAttemptResultItem(
+    attemptId: readStudentCanonicalUuid(map, 'attempt_id'),
+    attemptNumber: readStudentInt(map, 'attempt_number'),
+    status: status,
+    result: result,
   );
 }
 
@@ -261,15 +355,6 @@ StudentHomeworkStatus _readStatus(Map<String, Object?> map) =>
 StudentHomeworkMyStatus _readMyStatus(Map<String, Object?> map) =>
     StudentHomeworkMyStatus.parse(readStudentNonBlankString(map, 'my_status'));
 
-bool _readScoreVisible(Map<String, Object?> map) {
-  if (map['score_visible'] != false) {
-    throw const FormatException(
-      'Student Homework score_visible must be false.',
-    );
-  }
-  return false;
-}
-
 const _summaryKeys = {
   'id',
   'topic',
@@ -279,4 +364,5 @@ const _summaryKeys = {
   'attempts',
   'my_status',
   'score_visible',
+  'official_score',
 };

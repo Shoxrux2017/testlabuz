@@ -788,6 +788,7 @@ Map<String, Object?> _summary({
   },
   'my_status': myStatus,
   'score_visible': false,
+  'official_score': null,
 };
 
 Map<String, Object?> _detail({String myStatus = 'submitted'}) {
@@ -799,6 +800,19 @@ Map<String, Object?> _detail({String myStatus = 'submitted'}) {
     'description': null,
     'student_instructions': 'Complete the task.',
     'total_possible_points': 10,
+    // The one used Attempt is listed once it is terminal.
+    'attempt_results': <Object?>[
+      if (myStatus != 'not_started' && myStatus != 'in_progress')
+        <String, Object?>{
+          'attempt_id': _terminalAttemptId,
+          'attempt_number': 1,
+          'status': myStatus,
+          'result': <String, Object?>{
+            'visible': false,
+            'normalized_score': null,
+          },
+        },
+    ],
     'questions': <Object?>[],
   };
 }
@@ -874,6 +888,7 @@ String _uuid(int number) =>
 const _topicId = 'a1000000-0000-0000-0000-000000000001';
 const _homeworkId = 'a2000000-0000-0000-0000-000000000001';
 const _attemptId = 'a3000000-0000-0000-0000-000000000001';
+const _terminalAttemptId = 'a3000000-0000-0000-0000-000000000002';
 const _protectedKeys = [
   'is_correct',
   'correct_value',

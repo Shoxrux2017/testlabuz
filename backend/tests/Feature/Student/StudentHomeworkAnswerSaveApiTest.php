@@ -97,7 +97,8 @@ class StudentHomeworkAnswerSaveApiTest extends TestCase
         $this->assertDatabaseCount('attempt_answers', 8);
         $this->assertDatabaseCount('idempotency_records', 0);
         ksort($expected);
-        $expected = array_values($expected);
+        // Stage 9: an Attempt answer is the saved answer plus the Teacher's feedback, hidden here.
+        $expected = array_map(fn (array $answer): array => $answer + ['feedback' => null], array_values($expected));
         DB::flushQueryLog();
         DB::enableQueryLog();
         try {
@@ -109,8 +110,8 @@ class StudentHomeworkAnswerSaveApiTest extends TestCase
         }
         $resume = $this->answerHttp($student, 'POST', '/api/v1/student/homework/'.$homework->assessment_id.'/attempts',
             headers: ['HTTP_IDEMPOTENCY_KEY' => (string) Str::uuid()])->assertOk()->assertJsonPath('data.answers', $expected);
-        $this->assertNoAnswerSecrets($read->json('data.answers'));
-        $this->assertNoAnswerSecrets($resume->json('data.answers'));
+        $this->assertNoHiddenHomeworkAttemptSecrets($read->json('data'));
+        $this->assertNoHiddenHomeworkAttemptSecrets($resume->json('data'));
         $this->assertSame($attemptBefore, $attempt->fresh()->getAttributes());
     }
 
