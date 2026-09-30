@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-BE-007C` delivery, then `S09-BE-PHASE-2` |
+| Next permitted gate | `S09-BE-PHASE-2-FIX-001` delivery (Backend Phase 2 `PASS`), then `S09-FE-001` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -139,8 +139,9 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `7` | `S09-BE-006` | Backend | Review save and correction, recalculation | `BE-005A` | `Approved` (on `main` `06fe754`) | Delivered (PR #297, `main` `60e62cc`) | `tasks/backend/stage-09/S09-BE-006-review-save-and-correction.md` |
 | `8a` | `S09-BE-007A` | Backend | Teacher official-score read; shared official-score reader | `BE-006` | `Approved` (on `main` `60e62cc`) | Delivered (PR #298, `main` `1171e24`) | `tasks/backend/stage-09/S09-BE-007A-teacher-official-score-read.md` |
 | `8b` | `S09-BE-007B` | Backend + FE parser | Student Homework `result`, answer `feedback`, `attempt_results`, `score_visible`/`official_score` | `BE-007A` | `Approved` (on `main` `1171e24`) | Delivered (PR #299, `main` `bb6da8b`) | `tasks/backend/stage-09/S09-BE-007B-student-homework-results.md` |
-| `8c` | `S09-BE-007C` | Backend | `GET /student/blitz/finished` with the counting Attempt's result and feedback | `BE-007A` | `Approved` (on `main` `bb6da8b`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-007C-student-finished-blitz.md` |
-| `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007C` | Not written | Not started | `tasks/backend/stage-09/` |
+| `8c` | `S09-BE-007C` | Backend | `GET /student/blitz/finished` with the counting Attempt's result and feedback | `BE-007A` | `Approved` (on `main` `bb6da8b`) | Delivered (PR #300, `main` `98747ef`) | `tasks/backend/stage-09/S09-BE-007C-student-finished-blitz.md` |
+| `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007C` | Executed record | Run #1 `NOT ACCEPTED` (`98747ef`); run #2 `PASS` (`5db50d0`) — PR open | `tasks/backend/stage-09/S09-BE-PHASE-2-backend-block-review.md` |
+| `9a` | `S09-BE-PHASE-2-FIX-001` | Backend fix | Stage 8 seeder test re-baseline, Phase 2 test gaps, repair pair filter | Phase 2 run #1 | `Approved` (on `main` `98747ef`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-PHASE-2-FIX-001-seeder-rebaseline-and-test-gaps.md` |
 | `10` | `S09-FE-001` | Frontend | Review deadline field, exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | Not written | Not started | `tasks/frontend/stage-09/` |
 | `11` | `S09-FE-002` | Frontend | Desktop review queue; mobile counts | `FE-001` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `12` | `S09-FE-003` | Frontend | Desktop submission review, file download, correction, official score | `FE-002` | Not written | Not started | `tasks/frontend/stage-09/` |
@@ -208,6 +209,11 @@ Only a row whose readiness is `Approved` may be implemented.
 | `INT-D2` autosave | Stage 8 integration | `FE-UX-001` (`S09-D8`) |
 | Topic-result feedback, Parent-visible feedback flag | Planning audit #6 | Stage 10 planning |
 | `topic_results.official_homework_score_id`/`official_blitz_score_id` default to `ON DELETE RESTRICT` (`docs/08` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; score no longer ready); a tenant-safe composite reference also needs `unique(institution_id, id)` on `official_task_scores`, which Stage 9 does not add | `S09-DOC-001`, `S09-BE-002` | Stage 10 planning: decide the reference rule before `topic_results` exists |
+| `PH2-1` bound the repair sweep's full-history per-minute scan | `S09-BE-PHASE-2` | Before post-pilot scale (Stage 13 release readiness) |
+| `PH2-2` first sweeps over unchecked Stage 7/8 history may overlap after 5 minutes | `S09-BE-PHASE-2` | Stage 9 deployment notes |
+| `PH2-3` `S09-DOC-001` §14 / `docs/09` §24.1 rows 2 and 6 wording | `S09-BE-PHASE-2` | Stage 9 closure |
+| `PH2-4` Blitz condition inside `StudentResultVisibility`; consolidate duplicated official rules | `S09-BE-PHASE-2` | Stage 10 planning |
+| `PH2-5` pre-`BE-004` backlog (databases that ran `d324716` without `da53031`): one-off resolve | `S09-BE-PHASE-2` | Stage 9 deployment notes |
 
 ## 11. Current Stage State
 
@@ -307,6 +313,19 @@ Only a row whose readiness is `Approved` may be implemented.
   per page. Independent review: P1 = 0, P2 = 1 (no test of a classmate's data on the same Blitz), P3 = 5;
   all fixed and mutation-checked. Review correction: the Attempt visibility rule is one shared class
   (`StudentResultVisibility`) for `007B` and `007C`. Re-verification: P1 = 0, P2 = 0. PR open.
+- `S09-BE-007C` accepted and delivered (PR #300, `main` `98747ef`). All backend tasks are delivered.
+- 2026-09-30: `S09-BE-PHASE-2` on `98747ef`: five independent fresh-context reviewers (checking, official
+  score, Teacher review, Student visibility, cross-cutting) found P1 = 0, P2 = 0 and 15 P3 findings.
+  Pint (815 files) and `git diff --check` passed. Full suite run #1: 1 failed, 2776 passed. The failure was
+  a stale Stage 8 seeder assertion that expected an unchecked timeout after `S09-BE-003B`. Run #1
+  verdict: `NOT ACCEPTED`.
+- `S09-BE-PHASE-2-FIX-001`:
+  - re-baselines the seeder test;
+  - adds the seven missing tests the review asked for, each seen failing against its mutation;
+  - makes the repair sweep's pair filter an uncorrelated row-value set.
+  Independent review: P1 = 0, P2 = 0, P3 = 1 (fixed). Full suite run #2 on `5db50d0`: 2787 passed
+  (62398 assertions), exit 0. Backend Phase 2: `PASS` once the fix PR merges. The remaining P3 items are
+  recorded as `PH2-1`…`PH2-5` (§10). PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 

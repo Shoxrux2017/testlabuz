@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-007C`, then `S09-BE-PHASE-2` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-PHASE-2-FIX-001` delivery, then `S09-FE-001` |
 
 Current Stage 5 progress:
 
@@ -1176,8 +1176,13 @@ their historical completion handoffs.
   results with the Student parser change) and `S09-BE-007C` (Student finished Blitz list).
   `S09-BE-007A`: accepted and delivered (PR #298, `main` `1171e24`). `S09-BE-007B`: approved on
   `1171e24`; accepted and delivered (PR #299, `main` `bb6da8b`). `S09-BE-007C`: approved on `bb6da8b`;
-  implemented; PR open.
-- Next permitted action: after `S09-BE-007C` merges, `S09-BE-PHASE-2` (Backend Phase 2 review and full suite).
+  accepted and delivered (PR #300, `main` `98747ef`).
+- `S09-BE-PHASE-2` (`tasks/backend/stage-09/S09-BE-PHASE-2-backend-block-review.md`):
+  - run #1 on `98747ef` was `NOT ACCEPTED`: one stale Stage 8 seeder assertion; review P1 = 0, P2 = 0;
+  - `S09-BE-PHASE-2-FIX-001` re-baselines that assertion and closes the review's test gaps;
+  - run #2 on `5db50d0` passed: 2787 tests, exit 0.
+  Backend Phase 2 `PASS` applies once the fix PR merges.
+- Next permitted action: after `S09-BE-PHASE-2-FIX-001` merges, `S09-FE-001` (Frontend).
 
 ---
 
