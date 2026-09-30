@@ -1,4 +1,5 @@
 import '../domain/teacher_question_mutation.dart';
+import 'teacher_question_authority_state.dart';
 import 'teacher_question_mutation_activity.dart';
 import 'teacher_question_order.dart';
 
@@ -26,7 +27,7 @@ class TeacherQuestionBuilderPendingOperation {
   final TeacherQuestionMutationLease lease;
 
   /// Detail state seen at start; compared by identity to detect newer authority.
-  final Object authorityStateAtStart;
+  final TeacherQuestionAuthorityState authorityStateAtStart;
   final String? questionId;
   final List<String>? requestedOrderIds;
   final String? conflictCode;

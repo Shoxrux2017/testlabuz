@@ -251,7 +251,8 @@ class TeacherHomeworkLifecycleController
     TeacherHomeworkLifecycleAction action,
     String? conflictCode,
   ) async {
-    if (conflictCode == ApiErrorCodes.resultPairLocked) {
+    if (conflictCode == ApiErrorCodes.resultPairLocked ||
+        conflictCode == ApiErrorCodes.officialCohortMismatch) {
       _refreshResultPairIfMounted(lease.sessionKey);
     }
     state = TeacherHomeworkLifecycleState(
@@ -561,6 +562,8 @@ String _conflictMessage(
       'The Topic is not in a state that allows this Homework action.\nReview the current Topic.',
     ApiErrorCodes.resultPairLocked =>
       'Official Homework activation is locked by the current server state.\nReview the current official Homework status before taking another action.',
+    ApiErrorCodes.officialCohortMismatch =>
+      "The official Homework cohort does not match the Topic's established official cohort.\nRefresh the official pair and Homework before continuing.",
     ApiErrorCodes.taskNotActive =>
       'This Homework is not active.\nReview its current state.',
     ApiErrorCodes.taskClosed => 'This Homework is closed.',

@@ -305,6 +305,29 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.byKey(
+            const Key('teacherBlitzAttemptExceptionOfficialScoreWarning'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.text(
+            "If this is the Topic's official Blitz:\nthe original attempt "
+            'stops counting, and any current official Blitz score is '
+            'withdrawn;\nthe replacement attempt becomes official once it is '
+            'fully checked, including any Teacher review;\nif the Blitz is '
+            'closed before the Student starts the replacement, the Student has '
+            'no official Blitz score.',
+          ),
+        ),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const Key('teacherBlitzAttemptExceptionSubmit')),

@@ -1,5 +1,6 @@
 import '../../../core/network/api_failure.dart';
 import '../domain/teacher_blitz.dart';
+import 'teacher_question_authority_state.dart';
 
 enum TeacherBlitzDetailStatus {
   initial,
@@ -10,7 +11,7 @@ enum TeacherBlitzDetailStatus {
   error,
 }
 
-class TeacherBlitzDetailState {
+class TeacherBlitzDetailState implements TeacherQuestionAuthorityState {
   const TeacherBlitzDetailState({
     this.status = TeacherBlitzDetailStatus.initial,
     this.blitz,

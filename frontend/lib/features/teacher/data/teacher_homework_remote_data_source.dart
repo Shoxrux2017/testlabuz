@@ -319,6 +319,7 @@ Set<String> _homeworkConflictCodes(
         ApiErrorCodes.assessmentHasNoScoreablePoints,
         ApiErrorCodes.assessmentNotAssigned,
         ApiErrorCodes.deadlinePassed,
+        ApiErrorCodes.officialCohortMismatch,
       },
       TeacherHomeworkLifecycleAction.close => const {
         ApiErrorCodes.taskNotActive,

@@ -122,6 +122,10 @@ void main() {
             TeacherHomeworkLifecycleAction.activate,
             ApiErrorCodes.deadlinePassed,
           ),
+          (
+            TeacherHomeworkLifecycleAction.activate,
+            ApiErrorCodes.officialCohortMismatch,
+          ),
           (TeacherHomeworkLifecycleAction.close, ApiErrorCodes.taskNotActive),
           (TeacherHomeworkLifecycleAction.close, ApiErrorCodes.taskArchived),
           (
@@ -172,6 +176,14 @@ void main() {
           (
             TeacherHomeworkLifecycleAction.close,
             ApiErrorCodes.resultPairLocked,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.close,
+            ApiErrorCodes.officialCohortMismatch,
+          ),
+          (
+            TeacherHomeworkLifecycleAction.archive,
+            ApiErrorCodes.officialCohortMismatch,
           ),
           (TeacherHomeworkLifecycleAction.archive, ApiErrorCodes.taskClosed),
           (
