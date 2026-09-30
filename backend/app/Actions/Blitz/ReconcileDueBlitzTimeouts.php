@@ -5,12 +5,16 @@ namespace App\Actions\Blitz;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\BlitzStatus;
 use App\Models\BlitzTask;
+use App\Support\Checking\FrozenAttemptCheckQueue;
 use Illuminate\Database\Query\Builder;
 use Throwable;
 
 final class ReconcileDueBlitzTimeouts
 {
-    public function __construct(private readonly FinalizeTimedOutBlitzAttempts $finalizeTimeouts) {}
+    public function __construct(
+        private readonly FinalizeTimedOutBlitzAttempts $finalizeTimeouts,
+        private readonly FrozenAttemptCheckQueue $checks,
+    ) {}
 
     /** @return array{candidates: int, finalized_attempts: int, failures: int} */
     public function __invoke(): array
@@ -41,6 +45,9 @@ final class ReconcileDueBlitzTimeouts
                 report($exception);
                 $counts['failures']++;
             }
+
+            // The candidate's freeze committed; checking failures are reported, not counted.
+            $this->checks->drain();
         }
 
         return $counts;

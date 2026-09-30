@@ -221,15 +221,17 @@ class StudentHomeworkFileAnswerLifecycleTest extends TestCase
         [, , $file] = $this->savedFileAnswer($attempt, $question);
         $deadline = now()->addSeconds($offset);
         $homework->update(['deadline_at' => $deadline]);
-        $before = $this->fileAnswerSnapshot();
+        $before = $this->fileAnswerContentSnapshot();
         $storage = $this->trackedStorage();
 
         $this->fileAnswerRequest($student, $attempt, $question, $this->fileAnswerUpload())
             ->assertConflict()->assertJsonPath('code', 'deadline_passed');
 
-        $this->assertRejectedUpload($storage, $before, $file->storage_key);
+        $this->assertRejectedUpload($storage, $before, $file->storage_key, checkedAfterResponse: true);
+        // The reconciled deadline is checked after the response; the manual file answer waits for review (S09-T1).
+        $this->assertSame('waiting_for_teacher_review', AttemptAnswer::query()->sole()->getRawOriginal('checking_status'));
         $attempt->refresh();
-        $this->assertSame(AssessmentAttemptStatus::Submitted, $attempt->status);
+        $this->assertSame(AssessmentAttemptStatus::WaitingForTeacherReview, $attempt->status);
         $this->assertSame(AssessmentAttemptFinalizationReason::HomeworkDeadlineAutoSubmit, $attempt->finalization_reason);
         $this->assertTrue($deadline->equalTo($attempt->finalized_at));
         $this->assertTrue($deadline->equalTo($attempt->locked_at));
@@ -532,12 +534,12 @@ class StudentHomeworkFileAnswerLifecycleTest extends TestCase
         return $storage;
     }
 
-    private function assertRejectedUpload(PrivateFileStorage $storage, array $before, ?string $originalStorageKey = null): void
+    private function assertRejectedUpload(PrivateFileStorage $storage, array $before, ?string $originalStorageKey = null, bool $checkedAfterResponse = false): void
     {
         $this->assertCount(1, $storage->stored);
         $this->assertSame($storage->stored, $storage->deleted, 'Every rejected new blob must receive exactly one cleanup attempt.');
         Storage::disk($storage->stored[0][0])->assertMissing($storage->stored[0][1]);
-        $this->assertSame($before, $this->fileAnswerSnapshot());
+        $this->assertSame($before, $checkedAfterResponse ? $this->fileAnswerContentSnapshot() : $this->fileAnswerSnapshot());
         if ($originalStorageKey !== null) {
             Storage::disk('local')->assertExists($originalStorageKey);
         }

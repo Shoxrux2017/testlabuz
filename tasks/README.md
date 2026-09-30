@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-003A`, then `S09-BE-003B` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-BE-003B`, then `S09-BE-004` |
 
 Current Stage 5 progress:
 
@@ -1163,8 +1163,10 @@ their historical completion handoffs.
 - `S09-BE-002` (official-score storage, Homework review deadline): accepted and delivered (PR #291,
   `main` `9b772b4`).
 - `S09-BE-003` split into `S09-BE-003A` (checking readiness of Stage 7/8 reads and timeout rules) and
-  `S09-BE-003B` (checking pipeline). `S09-BE-003A`: approved on `9b772b4`; implemented; PR open.
-- Next permitted action: after `S09-BE-003A` merges, `S09-BE-003B` contract and readiness.
+  `S09-BE-003B` (checking pipeline). `S09-BE-003A`: accepted and delivered (PR #292, `main` `f8bf790`).
+- `S09-BE-003B` (automatic checking pipeline, post-freeze trigger, minute sweep): approved on `f8bf790`;
+  implemented; PR open.
+- Next permitted action: after `S09-BE-003B` merges, `S09-BE-004` contract and readiness.
 
 ---
 

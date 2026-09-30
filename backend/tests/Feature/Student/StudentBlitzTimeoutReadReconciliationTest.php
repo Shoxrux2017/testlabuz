@@ -62,13 +62,13 @@ class StudentBlitzTimeoutReadReconciliationTest extends TestCase
     }
 
     #[DataProvider('expiredDetails')]
-    public function test_detail_finalizes_exact_deadline_and_preserves_saved_answers_without_scoring(string $mode, int $delay): void
+    public function test_detail_finalizes_exact_deadline_and_preserves_saved_answers_then_checks_them(string $mode, int $delay): void
     {
         [$student, $blitz, $attempt] = $this->answerContext($mode);
         $question = $this->answerQuestion($blitz, 'short_written');
         $this->answerQuestion($blitz, 'open_written', 2);
         $this->answerRequest($student, $attempt, $question, ['type' => 'short_written', 'text' => "  Frozen answer\n"])->assertOk();
-        $answerBefore = $this->answerSnapshot();
+        $answerBefore = $this->answerContentSnapshot();
         $attemptBefore = $attempt->getAttributes();
         $this->travelTo($attempt->deadline_at->copy()->addSeconds($delay));
 
@@ -76,14 +76,16 @@ class StudentBlitzTimeoutReadReconciliationTest extends TestCase
             ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
 
         $this->assertTimeoutAtPersistedDeadline($attempt);
-        $this->assertSame($answerBefore, $this->answerSnapshot());
+        $this->assertSame($answerBefore, $this->answerContentSnapshot());
         foreach (['started_at', 'deadline_at', 'attempt_number', 'assessment_student_id', 'student_id',
-            'official_score_eligible', 'possible_points', 'earned_points', 'normalized_score', 'scoring_completed_at'] as $field) {
+            'official_score_eligible', 'possible_points'] as $field) {
             $this->assertSame($attemptBefore[$field], $attempt->fresh()->getAttributes()[$field], $field);
         }
+        // The wrong short answer checks at zero and the unanswered written Question adds nothing.
         $answer = AttemptAnswer::query()->sole();
-        $this->assertSame('pending', $answer->checking_status->value);
-        foreach (['awarded_points', 'feedback', 'checked_by_user_id', 'checked_at'] as $field) {
+        $this->assertSame(['auto_checked', '0.00000000'], [$answer->checking_status->value, $answer->awarded_points]);
+        $this->assertTrue($answer->checked_at->equalTo(now()));
+        foreach (['feedback', 'checked_by_user_id'] as $field) {
             $this->assertNull($answer->{$field});
         }
         $this->assertDatabaseCount('assessment_attempts', 1);
@@ -95,10 +97,13 @@ class StudentBlitzTimeoutReadReconciliationTest extends TestCase
         return [['individual', 0], ['individual', 180], ['synchronized', 0], ['synchronized', 180]];
     }
 
+    // The reconciled timeout is checked right after the read's response; nothing it holds scores (S09-T1).
     private function assertTimeoutAtPersistedDeadline(AssessmentAttempt $attempt): void
     {
         $current = $attempt->fresh();
-        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $current->status);
+        $this->assertSame(AssessmentAttemptStatus::Checked, $current->status);
+        $this->assertSame(['0.00000000', '0.00000000'], [$current->earned_points, $current->normalized_score]);
+        $this->assertTrue($current->scoring_completed_at->equalTo(now()));
         $this->assertSame(AssessmentAttemptFinalizationReason::TimeoutAutoSubmit, $current->finalization_reason);
         $this->assertNull($current->submitted_at);
         $this->assertTrue($current->deadline_at->equalTo($current->finalized_at));

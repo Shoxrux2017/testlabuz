@@ -117,7 +117,7 @@ class StudentBlitzAttemptSubmitApiTest extends TestCase
         }
         [, , $file] = $this->savedFileAnswer($attempt, $this->answerQuestion($blitz, 'file_based', 9));
         $unanswered = [$this->answerQuestion($blitz, 'short_written', 10), $this->answerQuestion($blitz, 'file_based', 11)];
-        $answersBefore = $this->fileAnswerSnapshot();
+        $answersBefore = $this->fileAnswerContentSnapshot();
         $bytesBefore = Storage::disk('local')->get($file->storage_key);
         $attemptBefore = $attempt->getAttributes();
         $parentsBefore = [$assessment->fresh()->getAttributes(), $assessment->topic->fresh()->getAttributes(), $blitz->fresh()->getAttributes(),
@@ -143,7 +143,8 @@ class StudentBlitzAttemptSubmitApiTest extends TestCase
             $this->assertStringNotContainsString($hidden, $response->getContent());
         }
         $fresh = $attempt->fresh();
-        $this->assertSame(AssessmentAttemptStatus::Submitted, $fresh->status);
+        // Checking runs right after the Submit commits (S09-T1); the manual answers wait for review.
+        $this->assertSame(AssessmentAttemptStatus::WaitingForTeacherReview, $fresh->status);
         $this->assertSame(AssessmentAttemptFinalizationReason::StudentSubmit, $fresh->finalization_reason);
         foreach (['submitted_at', 'finalized_at', 'locked_at', 'updated_at'] as $field) {
             $this->assertTrue($fresh->getAttribute($field)->equalTo(now()));
@@ -153,16 +154,18 @@ class StudentBlitzAttemptSubmitApiTest extends TestCase
         foreach (['earned_points', 'normalized_score', 'scoring_completed_at'] as $field) {
             $this->assertNull($fresh->getAttribute($field));
         }
-        foreach (AttemptAnswer::query()->get() as $answer) {
-            $this->assertSame('pending', $answer->getRawOriginal('checking_status'));
-            foreach (['awarded_points', 'feedback', 'checked_by_user_id', 'checked_at'] as $field) {
-                $this->assertNull($answer->getAttribute($field));
-            }
+        foreach (AttemptAnswer::query()->with('question')->get() as $answer) {
+            $manual = in_array($answer->question->type->value, ['open_written', 'file_based'], true);
+            $this->assertSame($manual ? 'waiting_for_teacher_review' : 'auto_checked', $answer->getRawOriginal('checking_status'));
+            $this->assertSame($manual, $answer->awarded_points === null);
+            $this->assertSame($manual, $answer->checked_at === null);
+            $this->assertNull($answer->feedback);
+            $this->assertNull($answer->checked_by_user_id);
         }
         foreach ($unanswered as $question) {
             $this->assertDatabaseMissing('attempt_answers', ['attempt_id' => $attempt->id, 'question_id' => $question->id]);
         }
-        $this->assertSame($answersBefore, $this->fileAnswerSnapshot());
+        $this->assertSame($answersBefore, $this->fileAnswerContentSnapshot());
         $this->assertSame($bytesBefore, Storage::disk('local')->get($file->storage_key));
         $this->assertSame($parentsBefore, [$assessment->fresh()->getAttributes(), $assessment->topic->fresh()->getAttributes(), $blitz->fresh()->getAttributes(),
             $pair->fresh()->getAttributes(), AssessmentStudent::query()->where('assessment_id', $assessment->id)->sole()->getAttributes()]);

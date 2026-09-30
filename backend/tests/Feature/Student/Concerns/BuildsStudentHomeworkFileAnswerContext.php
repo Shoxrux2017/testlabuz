@@ -63,9 +63,17 @@ trait BuildsStudentHomeworkFileAnswerContext
 
     protected function fileAnswerSnapshot(): array
     {
-        return $this->answerSnapshot() + [
-            'files' => DB::table('files')->orderBy('id')->get()->map(fn (object $row): array => (array) $row)->all(),
-        ];
+        return $this->answerSnapshot() + ['files' => $this->fileRows()];
+    }
+
+    protected function fileAnswerContentSnapshot(): array
+    {
+        return $this->answerContentSnapshot() + ['files' => $this->fileRows()];
+    }
+
+    private function fileRows(): array
+    {
+        return DB::table('files')->orderBy('id')->get()->map(fn (object $row): array => (array) $row)->all();
     }
 
     protected function assertNoFileAnswerSecrets(array $value): void

@@ -8,6 +8,7 @@ use App\Enums\AssessmentAttemptStatus;
 use App\Enums\TopicStatus;
 use App\Models\AssessmentAttempt;
 use App\Models\AttemptAnswer;
+use App\Support\Checking\FrozenAttemptCheckQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -62,7 +63,7 @@ class StudentBlitzAttemptSubmitLifecycleTest extends TestCase
         $otherStudent = $this->studentBlitzActor($student->institution);
         $this->studentBlitzAttempt($blitz->assessment, $otherStudent);
         $attemptsBefore = AssessmentAttempt::query()->orderBy('id')->get()->map->getAttributes()->all();
-        $answersBefore = $this->fileAnswerSnapshot();
+        $answersBefore = $this->fileAnswerContentSnapshot();
         $bytesBefore = Storage::disk('local')->get($file->storage_key);
         $blitzBefore = $blitz->getAttributes();
         $this->travelTo($attempt->deadline_at->copy()->addSeconds($offset));
@@ -71,16 +72,19 @@ class StudentBlitzAttemptSubmitLifecycleTest extends TestCase
         $this->studentBlitzRequest($student, 'POST', '/api/v1/student/attempts/'.$attempt->id.'/submit', key: $key)
             ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
 
-        $transition = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+        $transition = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at',
+            'earned_points', 'normalized_score', 'scoring_completed_at']);
         foreach (AssessmentAttempt::query()->orderBy('id')->get() as $index => $finalized) {
             $this->assertSame(array_diff_key($attemptsBefore[$index], $transition), array_diff_key($finalized->getAttributes(), $transition));
-            $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $finalized->status);
+            // Both timeouts are checked after the response: the manual answers wait, the empty Attempt scores zero.
+            $this->assertSame($finalized->id === $attempt->id ? AssessmentAttemptStatus::WaitingForTeacherReview
+                : AssessmentAttemptStatus::Checked, $finalized->status);
             $this->assertSame(AssessmentAttemptFinalizationReason::TimeoutAutoSubmit, $finalized->finalization_reason);
             $this->assertNull($finalized->submitted_at);
             $this->assertTrue($finalized->deadline_at->equalTo($finalized->finalized_at));
             $this->assertTrue($finalized->deadline_at->equalTo($finalized->locked_at));
         }
-        $this->assertSame($answersBefore, $this->fileAnswerSnapshot());
+        $this->assertSame($answersBefore, $this->fileAnswerContentSnapshot());
         $this->assertSame($bytesBefore, Storage::disk('local')->get($file->storage_key));
         $this->assertSame($blitzBefore, $blitz->fresh()->getAttributes());
         $this->assertDatabaseCount('idempotency_records', 0);
@@ -208,7 +212,10 @@ class StudentBlitzAttemptSubmitLifecycleTest extends TestCase
         [$student, $blitz, $attempt] = $this->answerContext();
         $this->travelTo($attempt->deadline_at);
         app(FinalizeTimedOutBlitzAttempts::class)($student->institution_id, $blitz->assessment_id);
+        // Callers of the reconciler check what it froze (S09-T1).
+        app(FrozenAttemptCheckQueue::class)->drain();
         $before = $attempt->fresh()->getAttributes();
+        $this->assertSame('checked', $before['status']);
         $this->studentBlitzRequest($student, 'POST', '/api/v1/student/attempts/'.$attempt->id.'/submit')
             ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
         $this->assertSame($before, $attempt->fresh()->getAttributes());

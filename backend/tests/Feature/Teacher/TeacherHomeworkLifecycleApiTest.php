@@ -449,7 +449,8 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
         $homework = $assessment->homeworkAssignment()->firstOrFail();
         $deadlineWins = $deadline !== null && $deadline->lte($transitionedAt);
         $finalizedAt = $deadlineWins ? $deadline : $transitionedAt;
-        $this->assertSame(AssessmentAttemptStatus::Submitted, $attempt->status);
+        // The freeze is checked right after the close commits; its written answer waits for review (S09-T1).
+        $this->assertSame(AssessmentAttemptStatus::WaitingForTeacherReview, $attempt->status);
         $this->assertNull($attempt->submitted_at);
         $this->assertSame($deadlineWins ? AssessmentAttemptFinalizationReason::HomeworkDeadlineAutoSubmit
             : AssessmentAttemptFinalizationReason::TaskClosedAutoFinalize, $attempt->finalization_reason);
@@ -462,7 +463,11 @@ class TeacherHomeworkLifecycleApiTest extends TestCase
             collect($attemptBefore)->except(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at'])->all(),
             collect($attempt->getAttributes())->except(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at'])->all(),
         );
-        $this->assertSame($snapshots, [$answer->fresh()->getAttributes(), $payload->fresh()->getAttributes(), $terminal->fresh()->getAttributes()]);
+        $checkingColumns = array_flip(['checking_status', 'awarded_points', 'checked_by_user_id', 'checked_at']);
+        $snapshots[0] = array_diff_key($snapshots[0], $checkingColumns);
+        $this->assertSame($snapshots, [array_diff_key($answer->fresh()->getAttributes(), $checkingColumns),
+            $payload->fresh()->getAttributes(), $terminal->fresh()->getAttributes()]);
+        $this->assertSame('waiting_for_teacher_review', $answer->fresh()->getRawOriginal('checking_status'));
         $this->assertDatabaseMissing('assessment_attempts', ['assessment_student_id' => $neverStarted->id]);
         $this->assertDatabaseCount('assessment_attempts', 2);
         $this->assertDatabaseCount('attempt_answers', 1);

@@ -232,7 +232,9 @@ class StudentHomeworkAttemptIdempotencyTest extends TestCase
         $attemptBefore = $attempt->fresh()->getAttributes();
         $recordBefore = IdempotencyRecord::query()->sole()->getAttributes();
         $this->travel(1)->minutes();
-        $this->start($student, $homework, $key)->assertCreated()->assertJsonPath('data.id', $attemptId)->assertJsonPath('data.status', 'submitted');
+        // A freeze by the deadline-reconciling read is checked right after that read's response (S09-T1).
+        $this->start($student, $homework, $key)->assertCreated()->assertJsonPath('data.id', $attemptId)
+            ->assertJsonPath('data.status', $change === 'deadline' ? 'checked' : 'submitted');
         $this->assertSame($attemptBefore, $attempt->fresh()->getAttributes());
         $this->assertSame($recordBefore, IdempotencyRecord::query()->sole()->getAttributes());
         $this->assertDatabaseCount('assessment_attempts', 1);

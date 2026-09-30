@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-BE-003A` delivery, then `S09-BE-003B` contract and readiness |
+| Next permitted gate | `S09-BE-003B` delivery, then `S09-BE-004` contract and readiness |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -131,8 +131,8 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `1` | `S09-DOC-001` | Documentation | `docs/01-09` aligned to `S09-D*`/`S09-T*` | `FE-UX-001` delivered | `Approved` (revalidated on `main` `4432f27`) | Accepted — delivered (PR #289, `main` `4cff8af`) | `tasks/S09-DOC-001-stage-09-checking-scoring-contract-alignment.md` |
 | `2` | `S09-BE-001` | Backend | Checking domain: the seven automatic checkers, checking route, text normalizer, exact decimal score arithmetic; `brick/math` and the NFC polyfill declared as direct dependencies | `DOC-001` | `Approved` (on `main` `4cff8af`) | Accepted — delivered (PR #290, `main` `830b9b1`) | `tasks/backend/stage-09/S09-BE-001-checking-domain.md` |
 | `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint) | `BE-001` | `Approved` (on `main` `830b9b1`) | Accepted — delivered (PR #291, `main` `9b772b4`) | `tasks/backend/stage-09/S09-BE-002-scoring-persistence-review-deadline.md` |
-| `4a` | `S09-BE-003A` | Backend | Checking readiness: `S09-T2` timeout rekey, historical Homework reads (no checking yet) | `BE-002` | `Approved` (on `main` `9b772b4`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-003A-checking-readiness.md` |
-| `4b` | `S09-BE-003B` | Backend (+ FE parser if needed) | Automatic checking pipeline, post-freeze trigger, minute sweep, deliberate Stage 7/8 test updates | `BE-003A` | Not written | Not started | `tasks/backend/stage-09/` |
+| `4a` | `S09-BE-003A` | Backend | Checking readiness: `S09-T2` timeout rekey, historical Homework reads (no checking yet) | `BE-002` | `Approved` (on `main` `9b772b4`) | Delivered (PR #292, `main` `f8bf790`) | `tasks/backend/stage-09/S09-BE-003A-checking-readiness.md` |
+| `4b` | `S09-BE-003B` | Backend | Automatic checking pipeline, post-freeze trigger, minute sweep, deliberate Stage 7/8 test updates | `BE-003A` | `Approved` (on `main` `f8bf790`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-003B-checking-pipeline.md` |
 | `5` | `S09-BE-004` | Backend | Official score resolver (Homework, Blitz, grant withdrawal) | `BE-003B` | Not written | Not started | `tasks/backend/stage-09/` |
 | `6` | `S09-BE-005` | Backend + FE parser | Review queue (with its supporting index), submission detail, `review_summary`, Teacher file download | `BE-004` | Not written | Not started | `tasks/backend/stage-09/` |
 | `7` | `S09-BE-006` | Backend | Review save and correction, recalculation | `BE-005` | Not written | Not started | `tasks/backend/stage-09/` |
@@ -240,7 +240,14 @@ Only a row whose readiness is `Approved` may be implemented.
   pending-metadata tests added. Carried to `S09-BE-003B` and `S09-BE-006`: checking and review keep
   `attempt_answers.updated_at` unchanged (the Student sees it as the answer's last save). Re-verification:
   P1 = 0, P2 = 0; its two new P3 (accept every finalization reason in the re-read proof; tie intent to the
-  Attempt number) are fixed. PR open.
+  Attempt number) are fixed.
+- `S09-BE-003A` accepted and delivered (PR #292, `main` `f8bf790`).
+- `S09-BE-003B` contract written and approved on `f8bf790`; no frontend change (every Student read and replay
+  already accepts checked Attempts). Implemented on `feat/s09-be-003b-checking-pipeline`: 27 Stage 7/8 test
+  files deliberately re-baselined to the checked state (listed in the PR). Independent review: P1 = 0,
+  P2 = 1 (zero credit untested for most automatic types, including a `false` true/false key), P3 = 6; all
+  fixed with tests except the sweep/Homework-Submit re-read window, documented in the PR (Student reads
+  accept checked Attempts). Re-verification: P1 = 0, P2 = 0, no new P3; its carried P3 is fixed. PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -286,3 +293,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-09-29 | `S09-DOC-001` accepted and delivered (PR #289); `S09-BE-001` contract approved on `4cff8af` |
 | 2026-09-29 | `S09-BE-001` delivered (PR #290); `S09-BE-002` approved on `830b9b1`; review-queue index moved to `S09-BE-005` |
 | 2026-09-29 | `S09-BE-002` delivered (PR #291); `S09-BE-003` split into `003A` (readiness) and `003B` (pipeline) |
+| 2026-09-30 | `S09-BE-003A` delivered (PR #292); `S09-BE-003B` approved on `f8bf790` |

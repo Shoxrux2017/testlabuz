@@ -118,8 +118,9 @@ class TeacherBlitzAttemptExceptionApiTest extends TestCase
         [$student, $assessment, $normal, $teacher] = $this->exceptionContext('synchronized', false);
         $this->travelTo($normal->deadline_at->copy()->addSeconds($offset));
         $this->grantException($teacher, $assessment, $student)->assertCreated();
+        // The invalidated timeout is still checked right after the grant commits (S09-T1).
         $fresh = $normal->fresh();
-        $this->assertSame('timed_out_finalized', $fresh->status->value);
+        $this->assertSame('checked', $fresh->status->value);
         $this->assertSame('timeout_auto_submit', $fresh->finalization_reason->value);
         $this->assertNull($fresh->submitted_at);
         $this->assertTrue($fresh->finalized_at->equalTo($normal->deadline_at));

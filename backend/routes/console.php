@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('homework:reconcile-deadlines')->everyMinute()->withoutOverlapping(5);
 Schedule::command('blitz:reconcile-timeouts')->everyMinute()->withoutOverlapping(5);
+Schedule::command('attempts:check-frozen')->everyMinute()->withoutOverlapping(5);

@@ -5,12 +5,16 @@ namespace App\Actions\Homework;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\HomeworkStatus;
 use App\Models\HomeworkAssignment;
+use App\Support\Checking\FrozenAttemptCheckQueue;
 use Illuminate\Database\Query\Builder;
 use Throwable;
 
 final class ReconcileDueHomeworkDeadlines
 {
-    public function __construct(private readonly FinalizeHomeworkAttemptsAtDeadline $finalizeAtDeadline) {}
+    public function __construct(
+        private readonly FinalizeHomeworkAttemptsAtDeadline $finalizeAtDeadline,
+        private readonly FrozenAttemptCheckQueue $checks,
+    ) {}
 
     /** @return array{candidates: int, finalized_attempts: int, failures: int} */
     public function __invoke(): array
@@ -42,6 +46,9 @@ final class ReconcileDueHomeworkDeadlines
                 report($exception);
                 $counts['failures']++;
             }
+
+            // The candidate's freeze committed; checking failures are reported, not counted.
+            $this->checks->drain();
         }
 
         return $counts;

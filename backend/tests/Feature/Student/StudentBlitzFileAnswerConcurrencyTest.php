@@ -165,7 +165,8 @@ class StudentBlitzFileAnswerConcurrencyTest extends TestCase
         $this->assertSame('student_submission_compensation', $result['cleanups'][0]['operation']);
         $this->assertTrue($result['cleanups'][0]['deleted']);
         $this->disk()->assertMissing($result['stored'][0]['key']);
-        $this->assertPersistedGraph('first', 'initial-first', $this->ids['first_key']);
+        // The rejected write reconciles the timeouts and checks them when its request terminates (S09-T1).
+        $this->assertPersistedGraph('first', 'initial-first', $this->ids['first_key'], $winnerMode === 'hold');
         $this->assertCount(2, $this->disk()->allFiles());
         if ($winnerMode === 'hold') {
             $attemptsAfter = AssessmentAttempt::query()->where('assessment_id', $this->ids['assessment'])->orderBy('id')->get();
@@ -173,7 +174,7 @@ class StudentBlitzFileAnswerConcurrencyTest extends TestCase
             $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
             foreach ($attemptsAfter as $index => $attempt) {
                 $this->assertSame(array_diff_key($attemptsBefore[$index], $transitionFields), array_diff_key($attempt->getAttributes(), $transitionFields));
-                $this->assertSame('timed_out_finalized', $attempt->status->value);
+                $this->assertSame('waiting_for_teacher_review', $attempt->status->value);
                 $this->assertNull($attempt->submitted_at);
                 $this->assertEquals($attempt->deadline_at, $attempt->finalized_at);
                 $this->assertEquals($attempt->deadline_at, $attempt->locked_at);
@@ -230,16 +231,19 @@ class StudentBlitzFileAnswerConcurrencyTest extends TestCase
         $this->disk()->assertMissing($oldKey);
     }
 
-    private function assertPersistedGraph(string $student, string $content, string $key): void
+    private function assertPersistedGraph(string $student, string $content, string $key, bool $checked = false): void
     {
         $attempt = AssessmentAttempt::query()->findOrFail($this->ids[$student.'_attempt']);
         $questions = Question::query()->whereKey($this->ids['question'])->get();
-        $states = app(StudentHomeworkAttemptAnswerStates::class)($this->ids['institution'], $attempt, $questions);
+        $answerStates = app(StudentHomeworkAttemptAnswerStates::class);
+        $states = $checked ? $answerStates->historicalRead($this->ids['institution'], $attempt, $questions)
+            : $answerStates($this->ids['institution'], $attempt, $questions);
         $this->assertCount(1, $states);
         $answer = $states->sole()->attemptAnswer;
         $this->assertSame($this->ids[$student.'_answer'], $answer->id);
         $this->assertSame(1, AttemptAnswer::query()->where('attempt_id', $attempt->id)->count());
-        $this->assertSame(AttemptAnswerCheckingStatus::Pending, $answer->checking_status);
+        $this->assertSame($checked ? AttemptAnswerCheckingStatus::WaitingForTeacherReview : AttemptAnswerCheckingStatus::Pending,
+            $answer->checking_status);
         foreach (['awarded_points', 'feedback', 'checked_by_user_id', 'checked_at'] as $field) {
             $this->assertNull($answer->{$field}, $field);
         }

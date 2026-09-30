@@ -108,6 +108,7 @@ class StudentHomeworkCheckedAttemptReadTest extends TestCase
         $this->savedFileAnswer($attempt, $this->answerQuestion($homework, 'file_based', 4));
         $key = (string) Str::uuid();
         $this->submit($student, $attempt, $key)->assertOk()->assertJsonPath('data.status', 'submitted');
+        $this->uncheckFrozenAttempt($attempt);
 
         return [$student, $attempt->fresh(), $key];
     }

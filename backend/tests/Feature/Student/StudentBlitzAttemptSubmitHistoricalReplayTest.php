@@ -61,6 +61,7 @@ class StudentBlitzAttemptSubmitHistoricalReplayTest extends TestCase
         [$student, , $attempt, , $typed, $fileAnswer] = $this->historicalReplayContext();
         $key = (string) Str::uuid();
         $this->submitHistoricalReplay($student, $attempt, $key)->assertOk();
+        $this->uncheckFrozenAttempt($attempt);
         $this->addHistoricalCheckingMetadata($attempt, 'checked', $typed, $fileAnswer);
         $before = $this->historicalReplaySnapshot();
         $this->submitHistoricalReplay($student, $attempt, $key)->assertStatus(500);
