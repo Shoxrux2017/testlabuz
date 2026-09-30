@@ -8,6 +8,7 @@ use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
 use App\Models\AttemptAnswer;
+use App\Models\BlitzAttemptException;
 use App\Models\BlitzTask;
 use App\Models\GroupTeacherMembership;
 use App\Models\HomeworkAssignment;
@@ -249,6 +250,61 @@ class TeacherSubmissionReviewApiTest extends TestCase
         $this->assertSame(['topics share', 'assessments share', 'blitz_tasks share', 'assessment_students update',
             'assessment_attempts update', 'attempt_answers update'], $locks->getArrayCopy());
         $this->assertSame('75.00000000', $attempt->fresh()->normalized_score);
+    }
+
+    public function test_reviews_on_the_official_blitz_store_the_normal_or_the_replacement_score(): void
+    {
+        [$blitz, $written] = $this->closedBlitzWithWrittenQuestion();
+        TopicResultPair::factory()->create(['homework_assessment_id' => $this->homework->assessment_id, 'blitz_assessment_id' => $blitz->id]);
+        $regular = AssessmentStudent::factory()->create(['assessment_id' => $blitz->id, 'student_id' => $this->student->id]);
+        $normal = $this->writtenBlitzAttempt($regular, $written, 1);
+        $this->freezeAndCheck($normal);
+
+        $this->review($normal, [$this->item($written, 1.5, null, $normal)])->assertOk();
+
+        $row = OfficialTaskScore::query()->where('student_id', $regular->student_id)->sole();
+        $this->assertSame([$normal->id, '75.00000000', 'valid_normal_blitz'],
+            [$row->official_attempt_id, $row->normalized_score, $row->getRawOriginal('selection_policy_code')]);
+
+        $excused = AssessmentStudent::factory()->create(['assessment_id' => $blitz->id]);
+        $invalidated = $this->writtenBlitzAttempt($excused, $written, 1, ['official_score_eligible' => false]);
+        $this->freeze($invalidated);
+        $replacement = $this->writtenBlitzAttempt($excused, $written, 2);
+        $this->freeze($replacement);
+        BlitzAttemptException::factory()->create([
+            'assessment_id' => $blitz->id, 'assessment_student_id' => $excused->id,
+            'invalidated_attempt_id' => $invalidated->id, 'replacement_attempt_id' => $replacement->id,
+        ]);
+        $this->check($invalidated);
+        $this->check($replacement);
+
+        // The invalidated #1 never counts, however it is reviewed.
+        $this->review($invalidated, [$this->item($written, 2, null, $invalidated)])->assertOk();
+        $this->assertDatabaseMissing('official_task_scores', ['student_id' => $excused->student_id]);
+
+        $this->review($replacement, [$this->item($written, 1, null, $replacement)])->assertOk();
+
+        $row = OfficialTaskScore::query()->where('student_id', $excused->student_id)->sole();
+        $this->assertSame([$replacement->id, '50.00000000', 'approved_blitz_exception_replacement'],
+            [$row->official_attempt_id, $row->normalized_score, $row->getRawOriginal('selection_policy_code')]);
+    }
+
+    public function test_an_archived_topic_and_homework_still_list_show_and_accept_a_review(): void
+    {
+        $this->answerAll($this->attempt);
+        $this->freezeAndCheck($this->attempt);
+        // Topic and task status never restrict review (S09-DOC-001 §10.1).
+        DB::table('homework_assignments')->where('assessment_id', $this->homework->assessment_id)
+            ->update(['status' => 'archived', 'closed_at' => now(), 'archived_at' => now()]);
+        DB::table('topics')->where('id', $this->homework->assessment->topic_id)
+            ->update(['status' => 'archived', 'closed_at' => now(), 'archived_at' => now()]);
+
+        $this->answerHttp($this->teacher, 'GET', '/api/v1/teacher/submissions')->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $this->attempt->id);
+        $this->answerHttp($this->teacher, 'GET', '/api/v1/teacher/submissions/'.$this->attempt->id)->assertOk()
+            ->assertJsonPath('data.id', $this->attempt->id);
+        $this->review($this->attempt, [$this->item($this->essay, 1, null), $this->item($this->explanation, 1, null)])
+            ->assertOk()->assertJsonPath('data.status', 'checked');
     }
 
     public function test_completing_the_review_stores_the_official_score_and_a_correction_moves_it(): void
@@ -501,6 +557,30 @@ class TeacherSubmissionReviewApiTest extends TestCase
     {
         $this->freeze($attempt);
         $this->check($attempt);
+    }
+
+    /** @return array{Assessment, Question} A closed Blitz in the Homework's Topic with one 2-point written Question. */
+    private function closedBlitzWithWrittenQuestion(): array
+    {
+        $assessment = Assessment::factory()->blitz()->create([
+            'institution_id' => $this->teacher->institution_id, 'topic_id' => $this->homework->assessment->topic_id,
+            'teacher_id' => $this->teacher->id, 'total_possible_points' => '2.000000',
+        ]);
+        $written = $this->answerQuestion(BlitzTask::factory()->closedIndividual()->create(['assessment_id' => $assessment->id]), 'open_written');
+        $written->update(['points' => '2.000000']);
+
+        return [$assessment, $written];
+    }
+
+    /** An in-progress Blitz Attempt that has answered the written Question. */
+    private function writtenBlitzAttempt(AssessmentStudent $recipient, Question $written, int $number, array $attributes = []): AssessmentAttempt
+    {
+        $attempt = AssessmentAttempt::factory()->create(['assessment_student_id' => $recipient->id, 'attempt_number' => $number,
+            'possible_points' => '2.000000', 'started_at' => now()->subMinutes(20)] + $attributes)->fresh();
+        $answer = AttemptAnswer::factory()->create(['attempt_id' => $attempt->id, 'question_id' => $written->id]);
+        AnswerTextValue::factory()->create(['answer_id' => $answer->id, 'text_value' => 'DNS resolves names.']);
+
+        return $attempt;
     }
 
     private function answerTo(AssessmentAttempt $attempt, Question $question): AttemptAnswer

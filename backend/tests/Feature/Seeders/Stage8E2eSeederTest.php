@@ -282,7 +282,10 @@ class Stage8E2eSeederTest extends TestCase
         $sentinels = $seeder->sentinelState();
         $this->assertSame(['candidates' => 1, 'finalized_attempts' => 1, 'failures' => 0], app(ReconcileDueBlitzTimeouts::class)());
         $due = DB::table('assessment_attempts')->where('id', $manifest['attempts']['sched_due_1'])->sole();
-        $this->assertSame(['timed_out_finalized', 'timeout_auto_submit', null], [$due->status, $due->finalization_reason, $due->submitted_at]);
+        // Stage 9 checks each freeze once the reconciler commits it; the seeded Attempt has no answers.
+        $this->assertSame(['checked', 'timeout_auto_submit', null, '0.00000000', '0.00000000'],
+            [$due->status, $due->finalization_reason, $due->submitted_at, $due->earned_points, $due->normalized_score]);
+        $this->assertNotNull($due->scoring_completed_at);
         $this->assertTrue(Carbon::parse($due->finalized_at)->equalTo(Carbon::parse($due->deadline_at)));
         $this->assertSame('in_progress', DB::table('assessment_attempts')->where('id', $future->id)->value('status'));
         $this->assertSame(['candidates' => 0, 'finalized_attempts' => 0, 'failures' => 0], app(ReconcileDueBlitzTimeouts::class)());

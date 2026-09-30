@@ -145,6 +145,21 @@ class StudentFinishedBlitzApiTest extends TestCase
         ], $item);
     }
 
+    public function test_an_archived_blitz_still_shows_the_released_result_and_feedback(): void
+    {
+        $blitz = $this->blitz('archived_after_close');
+        $attempt = $this->attempt($blitz, 1, 'checked');
+        $question = $this->question($blitz, 1);
+        $this->reviewedAnswer($attempt, $question, 'Archived remark.');
+
+        $item = $this->item($blitz);
+
+        $this->assertSame('archived', $item['status']);
+        $this->assertSame(['attempt_number' => 1, 'visible' => true, 'normalized_score' => 75, 'feedback' => [
+            ['question_id' => $question->id, 'position' => 1, 'text' => 'Archived remark.'],
+        ]], $item['result']);
+    }
+
     public function test_attempts_that_are_not_checked_stay_hidden_with_their_feedback(): void
     {
         foreach (['waiting_for_teacher_review', 'submitted', 'timed_out_finalized'] as $status) {

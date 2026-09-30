@@ -15,6 +15,8 @@ use App\Models\Topic;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use LogicException;
@@ -79,6 +81,31 @@ class TeacherBlitzCloseApiTest extends TestCase
             'before deadline' => ['2026-09-17 12:00:00 UTC', 'task_closed_auto_finalize', '2026-09-17 12:00:00'],
             'exact deadline' => ['2026-09-17 12:05:00 UTC', 'timeout_auto_submit', '2026-09-17 12:05:00'],
             'after deadline' => ['2026-09-17 12:08:00 UTC', 'timeout_auto_submit', '2026-09-17 12:05:00'],
+        ];
+    }
+
+    #[DataProvider('synchronizedFreezeStatuses')]
+    public function test_the_close_freezes_the_status_that_the_deadline_decides(string $closedAt, string $status, string $reason): void
+    {
+        Exceptions::fake();
+        [, $teacher, , , , $student, $assessment] = $this->closeContext('synchronized');
+        $attempt = $this->closeAttempt($assessment, $student, '2026-09-17 12:05:00 UTC');
+        // A zero possible-points snapshot cannot be checked, so the Attempt keeps the status the close froze.
+        DB::table('assessment_attempts')->where('id', $attempt->id)->update(['possible_points' => '0.000000']);
+        $this->travelTo(CarbonImmutable::parse($closedAt));
+
+        $this->blitzRaw($teacher, 'POST', "/api/v1/teacher/blitz/{$assessment->id}/close", '{}')->assertOk();
+
+        Exceptions::assertReported(LogicException::class);
+        $this->assertSame([$status, $reason], [$attempt->fresh()->getRawOriginal('status'), $attempt->fresh()->getRawOriginal('finalization_reason')]);
+    }
+
+    public static function synchronizedFreezeStatuses(): array
+    {
+        return [
+            'before deadline' => ['2026-09-17 12:00:00 UTC', 'submitted', 'task_closed_auto_finalize'],
+            'exact deadline' => ['2026-09-17 12:05:00 UTC', 'timed_out_finalized', 'timeout_auto_submit'],
+            'after deadline' => ['2026-09-17 12:08:00 UTC', 'timed_out_finalized', 'timeout_auto_submit'],
         ];
     }
 
