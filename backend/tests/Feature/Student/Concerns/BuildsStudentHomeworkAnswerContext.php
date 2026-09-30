@@ -26,6 +26,9 @@ use Illuminate\Testing\TestResponse;
 
 trait BuildsStudentHomeworkAnswerContext
 {
+    // The one statement that checking a frozen Attempt writes to its answers (S09-T1).
+    protected const CHECKING_ANSWER_UPDATE = 'update "attempt_answers" set "checking_status" = ?, "awarded_points" = ?, "checked_by_user_id" = ?, "checked_at" = ? where';
+
     protected function answerContext(): array
     {
         $institution = Institution::factory()->create();
@@ -174,12 +177,46 @@ trait BuildsStudentHomeworkAnswerContext
         $snapshot = [];
         foreach (['attempt_answers', 'answer_choice_selections', 'answer_boolean_values', 'answer_text_values',
             'answer_matching_pairs', 'answer_ordering_items', 'answer_fill_blank_values', 'answer_files'] as $table) {
-            $rows = DB::table($table)->get()->map(fn (object $row): array => (array) $row)->all();
-            usort($rows, fn (array $a, array $b): int => json_encode($a) <=> json_encode($b));
-            $snapshot[$table] = $rows;
+            $snapshot[$table] = $this->sortedAnswerRows(DB::table($table)->get()->map(fn (object $row): array => (array) $row)->all());
         }
 
         return $snapshot;
+    }
+
+    /**
+     * The saved answers without the columns that checking fills right after a freeze (S09-T1),
+     * for comparisons across a freeze. The answer save time and feedback stay compared.
+     */
+    protected function answerContentSnapshot(): array
+    {
+        $snapshot = $this->answerSnapshot();
+        $checkingColumns = array_flip(['checking_status', 'awarded_points', 'checked_by_user_id', 'checked_at']);
+        $snapshot['attempt_answers'] = $this->sortedAnswerRows(array_map(
+            fn (array $row): array => array_diff_key($row, $checkingColumns), $snapshot['attempt_answers'],
+        ));
+
+        return $snapshot;
+    }
+
+    /**
+     * Returns a frozen Attempt to the state that checking has not reached yet, as a failed check
+     * leaves it until the sweep retries (S09-T1). The answer save times stay unchanged.
+     */
+    protected function uncheckFrozenAttempt(AssessmentAttempt $attempt, string $status = 'submitted'): void
+    {
+        DB::table('attempt_answers')->where('attempt_id', $attempt->id)->update([
+            'checking_status' => 'pending', 'awarded_points' => null, 'checked_by_user_id' => null, 'checked_at' => null,
+        ]);
+        DB::table('assessment_attempts')->where('id', $attempt->id)->update([
+            'status' => $status, 'earned_points' => null, 'normalized_score' => null, 'scoring_completed_at' => null,
+        ]);
+    }
+
+    private function sortedAnswerRows(array $rows): array
+    {
+        usort($rows, fn (array $a, array $b): int => json_encode($a) <=> json_encode($b));
+
+        return $rows;
     }
 
     protected function assertNoAnswerSecrets(array $value): void

@@ -19,7 +19,7 @@ class StudentBlitzAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSubmitGate($race['second']);
         $this->assertSame('replacement', $race['second']['snapshot']['text']['text_value']);
         $this->assertSame('replacement', $this->answerInResponse($race['second'], $this->ids['text_question'])['text']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
     }
 
     public function test_submit_commits_first_and_waiting_answer_replacement_cannot_mutate_frozen_answers(): void
@@ -30,9 +30,10 @@ class StudentBlitzAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSubmitGate($race['first']);
         $this->assertSame(409, $race['second']['status']);
         $this->assertSame('attempt_not_editable', $race['second']['body']['code']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
         $this->assertSame('initial-first', $race['second']['snapshot']['text']['text_value']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_file_replacement_commits_first_and_submit_freezes_the_new_stable_file_graph(): void
@@ -42,7 +43,7 @@ class StudentBlitzAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSame(200, $race['first']['status'], json_encode($race['first']['body']));
         $this->assertSubmitSuccess($race['second']);
         $this->assertSubmitGate($race['second']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
         $file = $race['second']['snapshot']['file'];
         $this->assertSame($this->ids['first_file'], $file['id']);
         $this->assertSame($this->ids['first_answer_file'], $race['second']['snapshot']['answer_file']['id']);
@@ -67,8 +68,9 @@ class StudentBlitzAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSubmitGate($race['first']);
         $this->assertSame(409, $race['second']['status']);
         $this->assertSame('attempt_not_editable', $race['second']['body']['code']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
         $this->assertCount(1, $race['second']['stored']);
         $newKey = $race['second']['stored'][0]['key'];
         $this->assertSame([[

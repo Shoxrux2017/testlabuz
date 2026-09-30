@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Student\Concerns;
 
+use App\Models\AssessmentAttempt;
+use App\Models\AttemptAnswer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -133,17 +135,37 @@ trait RunsStudentBlitzSubmitConcurrency
         }
     }
 
-    protected function assertFrozenAnswerGraph(array $before, array $after): void
+    /**
+     * Checking runs right after an HTTP freeze commits (S09-T1) and may interleave with the other
+     * worker's snapshot, so the checking state is read once both workers have finished.
+     */
+    protected function assertFrozenAnswerGraph(array $before, array $after, string $checkingStatus = 'pending'): void
     {
-        foreach (['answers', 'text', 'answer_file', 'file'] as $field) {
+        foreach (['text', 'answer_file', 'file'] as $field) {
             $this->assertSame($before[$field], $after[$field], 'Submit must preserve '.$field);
         }
-        foreach ($after['answers'] as $answer) {
-            $this->assertSame('pending', $answer['checking_status']);
+        $withoutStatus = fn (array $answers): array => array_map(fn (array $answer): array => array_diff_key($answer, ['checking_status' => true]), $answers);
+        $this->assertSame($withoutStatus($before['answers']), $withoutStatus($after['answers']), 'Submit must preserve answers');
+        $answers = AttemptAnswer::query()->where('attempt_id', $after['attempt']['id'])->orderBy('id')->get();
+        $this->assertCount(count($after['answers']), $answers);
+        // Both Questions are manual, so checking leaves every answer waiting without points.
+        foreach ($answers as $answer) {
+            $this->assertSame($checkingStatus, $answer->getRawOriginal('checking_status'));
             foreach (['awarded_points', 'feedback', 'checked_by_user_id', 'checked_at'] as $field) {
-                $this->assertNull($answer[$field]);
+                $this->assertNull($answer->getAttribute($field));
             }
         }
+    }
+
+    /** An Attempt snapshot without the status that checking may change after the other worker's snapshot. */
+    protected function frozenAttempt(array $attempt): array
+    {
+        return array_diff_key($attempt, ['status' => true]);
+    }
+
+    protected function assertAttemptStatus(string $student, string $status): void
+    {
+        $this->assertSame($status, AssessmentAttempt::query()->findOrFail($this->ids[$student.'_attempt'])->getRawOriginal('status'));
     }
 
     protected function waitForPostgresLock(int $waitingPid, int $holdingPid, string $table): void
@@ -497,6 +519,7 @@ if (isset($arguments['started'])) {
     publishSignal($arguments['started'], ['pid' => $pid]);
 }
 $uploadPath = null;
+$requestAttemptWrites = null;
 try {
     $result = ['pid' => $pid];
     if ($mode === 'deadline') {
@@ -529,13 +552,15 @@ try {
         }
         $kernel = $app->make(HttpKernel::class);
         $response = $kernel->handle($request);
+        // The request's own writes; checking after the response writes the Attempt again (S09-T1).
+        $requestAttemptWrites = $attemptWrites;
         $kernel->terminate($request, $response);
         $result['status'] = $response->getStatusCode();
         $result['body'] = json_decode($response->getContent(), true, flags: JSON_THROW_ON_ERROR);
     }
     $result += ['locks' => $locks, 'gate_reads' => $gateReads, 'snapshot' => snapshot($arguments),
         'stored' => $storage->stored, 'cleanups' => $storage->cleanups, 'deadline_entries' => $deadlineEntries,
-        'transaction_level' => DB::transactionLevel(), 'attempt_writes' => $attemptWrites];
+        'transaction_level' => DB::transactionLevel(), 'attempt_writes' => $requestAttemptWrites ?? $attemptWrites];
     echo json_encode($result, JSON_THROW_ON_ERROR);
 } finally {
     if ($uploadPath !== null && file_exists($uploadPath)) {

@@ -40,7 +40,7 @@ class TeacherBlitzCloseApiTest extends TestCase
     }
 
     #[DataProvider('synchronizedCloseTimes')]
-    public function test_synchronized_close_uses_deadline_precedence_and_returns_complete_resource(string $closedAt, string $status, string $reason, string $finalizedAt): void
+    public function test_synchronized_close_uses_deadline_precedence_and_returns_complete_resource(string $closedAt, string $reason, string $finalizedAt): void
     {
         [, $teacher, , , , $student, $assessment] = $this->closeContext('synchronized');
         $attempt = $this->closeAttempt($assessment, $student, '2026-09-17 12:05:00 UTC');
@@ -59,9 +59,9 @@ class TeacherBlitzCloseApiTest extends TestCase
             'status', 'timer_start_mode_snapshot', 'attempt_policy', 'activated_at', 'synchronized_ends_at',
             'closed_at', 'archived_at', 'created_at', 'updated_at', 'questions',
         ], array_keys($response->json('data')));
-        $this->assertFinalization($attempt, $status, $reason, $finalizedAt);
+        $this->assertFinalization($attempt, $reason, $finalizedAt);
         foreach (['started_at', 'deadline_at', 'attempt_number', 'assessment_student_id', 'student_id',
-            'official_score_eligible', 'possible_points', 'earned_points', 'normalized_score', 'scoring_completed_at'] as $field) {
+            'official_score_eligible', 'possible_points'] as $field) {
             $this->assertSame($before[$field], $attempt->fresh()->getAttributes()[$field], $field);
         }
         $blitz = BlitzTask::query()->findOrFail($assessment->id);
@@ -76,9 +76,9 @@ class TeacherBlitzCloseApiTest extends TestCase
     public static function synchronizedCloseTimes(): array
     {
         return [
-            'before deadline' => ['2026-09-17 12:00:00 UTC', 'submitted', 'task_closed_auto_finalize', '2026-09-17 12:00:00'],
-            'exact deadline' => ['2026-09-17 12:05:00 UTC', 'timed_out_finalized', 'timeout_auto_submit', '2026-09-17 12:05:00'],
-            'after deadline' => ['2026-09-17 12:08:00 UTC', 'timed_out_finalized', 'timeout_auto_submit', '2026-09-17 12:05:00'],
+            'before deadline' => ['2026-09-17 12:00:00 UTC', 'task_closed_auto_finalize', '2026-09-17 12:00:00'],
+            'exact deadline' => ['2026-09-17 12:05:00 UTC', 'timeout_auto_submit', '2026-09-17 12:05:00'],
+            'after deadline' => ['2026-09-17 12:08:00 UTC', 'timeout_auto_submit', '2026-09-17 12:05:00'],
         ];
     }
 
@@ -111,14 +111,19 @@ class TeacherBlitzCloseApiTest extends TestCase
         $this->blitzRaw($teacher, 'POST', "/api/v1/teacher/blitz/{$assessment->id}/close")->assertOk();
 
         foreach ($attempts as $index => $attempt) {
-            $this->assertFinalization($attempt, $index < 2 ? 'timed_out_finalized' : 'submitted',
+            $this->assertFinalization($attempt,
                 $index < 2 ? 'timeout_auto_submit' : 'task_closed_auto_finalize',
                 $index < 2 ? $attempt->deadline_at->format('Y-m-d H:i:s') : '2026-09-17 12:00:00');
         }
+        // Only the freezes this close made are checked; earlier terminal Attempts stay untouched.
         foreach ($terminal as $id => $attributes) {
             $this->assertSame($attributes, AssessmentAttempt::query()->findOrFail($id)->getAttributes());
         }
-        $this->assertSame($answerBefore, [$answer->fresh()->getAttributes(), $value->fresh()->getAttributes()]);
+        $checkingColumns = array_flip(['checking_status', 'awarded_points', 'checked_by_user_id', 'checked_at']);
+        $this->assertSame([array_diff_key($answerBefore[0], $checkingColumns), $answerBefore[1]],
+            [array_diff_key($answer->fresh()->getAttributes(), $checkingColumns), $value->fresh()->getAttributes()]);
+        // The saved `false` misses the `true` key.
+        $this->assertSame(['auto_checked', '0.00000000'], [$answer->fresh()->getRawOriginal('checking_status'), $answer->fresh()->awarded_points]);
         $this->assertDatabaseCount('attempt_answers', 1);
         $this->assertDatabaseCount('assessment_attempts', 5);
         $this->assertDatabaseMissing('assessment_attempts', ['student_id' => $neverStarted->id]);
@@ -283,16 +288,16 @@ class TeacherBlitzCloseApiTest extends TestCase
         ])->fresh();
     }
 
-    private function assertFinalization(AssessmentAttempt $attempt, string $status, string $reason, string $instant): void
+    // Each freeze is checked right after the close commits; no Attempt here holds a correct answer (S09-T1).
+    private function assertFinalization(AssessmentAttempt $attempt, string $reason, string $instant): void
     {
         $attempt->refresh();
-        $this->assertSame($status, $attempt->status->value);
+        $this->assertSame('checked', $attempt->status->value);
         $this->assertSame($reason, $attempt->finalization_reason->value);
         $this->assertNull($attempt->submitted_at);
         $this->assertSame($instant, $attempt->finalized_at->format('Y-m-d H:i:s'));
         $this->assertSame($instant, $attempt->locked_at->format('Y-m-d H:i:s'));
-        foreach (['earned_points', 'normalized_score', 'scoring_completed_at'] as $field) {
-            $this->assertNull($attempt->{$field});
-        }
+        $this->assertSame(['0.00000000', '0.00000000'], [$attempt->earned_points, $attempt->normalized_score]);
+        $this->assertTrue($attempt->scoring_completed_at->equalTo(now()));
     }
 }

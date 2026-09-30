@@ -43,20 +43,20 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
     {
         [$student, , $attempt] = $this->savedAnswerContext();
         $key = '6f115db9-3a55-4074-bbdd-f5c8d50a8b63';
-        $answersBefore = $this->savedState();
+        $answersBefore = $this->savedContentState();
         $this->travel(1)->minutes();
 
         $first = $this->submit($student, $attempt, strtoupper($key), '{}')->assertOk()
             ->assertJsonPath('message', 'Homework submitted successfully.');
         $record = $this->assertCompletedRecord($student, $attempt, $key);
-        $before = [$attempt->fresh()->getAttributes(), $record->getAttributes()];
-        $this->assertSame($answersBefore, $this->savedState());
+        $before = [$attempt->fresh()->getAttributes(), $record->getAttributes(), $this->savedState()];
+        $this->assertSame($answersBefore, $this->savedContentState());
         $this->travel(10)->minutes();
 
-        $this->submit($student, $attempt, $key)->assertOk()->assertExactJson($first->json());
+        $this->assertReplaysCheckedSubmit($this->submit($student, $attempt, $key), $first);
 
-        $this->assertSame($before, [$attempt->fresh()->getAttributes(), $record->fresh()->getAttributes()]);
-        $this->assertSame($answersBefore, $this->savedState());
+        $this->assertSame($before, [$attempt->fresh()->getAttributes(), $record->fresh()->getAttributes(), $this->savedState()]);
+        $this->assertSame($answersBefore, $this->savedContentState());
         $this->assertDatabaseCount('assessment_attempts', 1);
         $this->assertDatabaseCount('idempotency_records', 1);
     }
@@ -104,6 +104,7 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
         [$student, , $attempt] = $this->savedAnswerContext();
         $key = (string) Str::uuid();
         $this->submit($student, $attempt, $key)->assertOk();
+        $this->uncheckFrozenAttempt($attempt);
         $record = $this->assertCompletedRecord($student, $attempt, $key);
         $recordBefore = $record->getAttributes();
         $originalFinalization = array_intersect_key($attempt->fresh()->getAttributes(), array_flip([
@@ -151,6 +152,7 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
         [$student, , $attempt, $writtenAnswer, $file] = $this->savedAnswerContext();
         $key = (string) Str::uuid();
         $this->submit($student, $attempt, $key)->assertOk();
+        $this->uncheckFrozenAttempt($attempt);
         $record = $this->assertCompletedRecord($student, $attempt, $key);
         $before = [$attempt->fresh()->getAttributes(), $record->getAttributes()];
         $this->changeSavedFixtureIntegrity($family, $writtenAnswer, $file, false);
@@ -341,6 +343,7 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
     {
         [$student, , $attempt, $writtenAnswer, $file] = $this->savedAnswerContext();
         $validState = $this->savedState();
+        $validContent = $this->savedContentState();
         $attemptBefore = $attempt->fresh()->getAttributes();
         $this->changeSavedFixtureIntegrity($family, $writtenAnswer, $file, false);
         $corruptState = $this->savedState();
@@ -361,7 +364,7 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
         $first = $this->submit($student, $attempt, $key)->assertOk()->assertJsonPath('data.status', 'submitted')
             ->assertJsonPath('data.finalization_reason', 'student_submit');
         $record = $this->assertCompletedRecord($student, $attempt, $key);
-        $this->assertSame($validState, $this->savedState());
+        $this->assertSame($validContent, $this->savedContentState());
         $this->assertDatabaseCount('idempotency_records', 1);
         foreach (['submitted_at', 'finalized_at', 'locked_at', 'updated_at'] as $field) {
             $this->assertTrue($attempt->fresh()->getAttribute($field)->equalTo(now()));
@@ -369,10 +372,10 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
         $completedBefore = [$attempt->fresh()->getAttributes(), $record->getAttributes()];
         $this->travel(1)->minutes();
 
-        $this->submit($student, $attempt, $key)->assertOk()->assertExactJson($first->json());
+        $this->assertReplaysCheckedSubmit($this->submit($student, $attempt, $key), $first);
 
         $this->assertSame($completedBefore, [$attempt->fresh()->getAttributes(), $record->fresh()->getAttributes()]);
-        $this->assertSame($validState, $this->savedState());
+        $this->assertSame($validContent, $this->savedContentState());
         $this->assertDatabaseCount('idempotency_records', 1);
         $this->assertDatabaseCount('assessment_attempts', 1);
     }
@@ -399,12 +402,31 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
 
     private function savedState(): array
     {
+        return $this->fileAnswerSnapshot() + ['file_contents' => $this->fileContents()];
+    }
+
+    // The saved answers without the checking columns that the post-commit check fills (S09-T1).
+    private function savedContentState(): array
+    {
+        return $this->fileAnswerContentSnapshot() + ['file_contents' => $this->fileContents()];
+    }
+
+    private function fileContents(): array
+    {
         $contents = [];
         foreach (File::query()->orderBy('id')->get() as $file) {
             $contents[$file->storage_key] = Storage::disk($file->storage_disk)->get($file->storage_key);
         }
 
-        return $this->fileAnswerSnapshot() + ['file_contents' => $contents];
+        return $contents;
+    }
+
+    // The Submit was checked after its response, so a replay projects the waiting Attempt.
+    private function assertReplaysCheckedSubmit(TestResponse $replay, TestResponse $first): void
+    {
+        $first->assertJsonPath('data.status', 'submitted');
+        $replay->assertOk()->assertJsonPath('data.status', 'waiting_for_teacher_review');
+        $this->assertSame(array_replace_recursive($first->json(), ['data' => ['status' => 'waiting_for_teacher_review']]), $replay->json());
     }
 
     private function assertCompletedRecord(User $student, AssessmentAttempt $attempt, string $key): IdempotencyRecord

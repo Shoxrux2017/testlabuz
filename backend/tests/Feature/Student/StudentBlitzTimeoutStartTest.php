@@ -4,6 +4,7 @@ namespace Tests\Feature\Student;
 
 use App\Enums\AssessmentAttemptStatus;
 use App\Models\AssessmentAttempt;
+use App\Models\AttemptAnswer;
 use App\Models\GroupTeacherMembership;
 use App\Models\IdempotencyRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,8 +54,11 @@ class StudentBlitzTimeoutStartTest extends TestCase
         $this->startStudentBlitz($student, $assessment, $key, $intent, $intent === 'resume' ? $attempt->id : null)
             ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
 
+        // The reconciled timeout is checked after the response; without answers it scores zero (S09-T1).
         $current = $attempt->fresh();
-        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $current->status);
+        $this->assertSame(AssessmentAttemptStatus::Checked, $current->status);
+        $this->assertSame(['0.00000000', '0.00000000'], [$current->earned_points, $current->normalized_score]);
+        $this->assertTrue($current->scoring_completed_at->equalTo(now()));
         $this->assertTrue($attempt->deadline_at->equalTo($current->finalized_at));
         $this->assertTrue($attempt->deadline_at->equalTo($current->locked_at));
         $this->assertNull($current->submitted_at);
@@ -93,7 +97,7 @@ class StudentBlitzTimeoutStartTest extends TestCase
             $this->startStudentBlitz($student, $assessment, $key, $intent, $target)->assertOk();
         }
         $claimsBefore = IdempotencyRecord::query()->orderBy('id')->get()->map->getAttributes()->all();
-        $answersBefore = $this->fileAnswerSnapshot();
+        $answersBefore = $this->fileAnswerContentSnapshot();
         $this->travelTo($attempt->deadline_at->copy()->addMinutes(3));
 
         $response = $this->startStudentBlitz($student, $assessment, $key, $intent, $target)
@@ -109,12 +113,15 @@ class StudentBlitzTimeoutStartTest extends TestCase
 
         $this->assertNoAnswerSecrets($response->json('data'));
         $this->assertNoFileAnswerSecrets($response->json('data'));
-        $this->assertSame($answersBefore, $this->fileAnswerSnapshot());
+        $this->assertSame($answersBefore, $this->fileAnswerContentSnapshot());
         $this->assertSame($claimsBefore, IdempotencyRecord::query()->orderBy('id')->get()->map->getAttributes()->all());
+        // The replay's timeout is checked after its response: the wrong text scores zero and the file waits.
+        $this->assertSame('auto_checked', AttemptAnswer::query()->where('question_id', $textQuestion->id)->sole()->getRawOriginal('checking_status'));
+        $this->assertSame('waiting_for_teacher_review', AttemptAnswer::query()->where('question_id', $fileQuestion->id)->sole()->getRawOriginal('checking_status'));
         $frozen = $attempt->fresh()->getAttributes();
         $this->travel(1)->minutes();
         $this->startStudentBlitz($student, $assessment, $key, $intent, $target)->assertStatus($originalStatus)
-            ->assertJsonPath('data.status', 'timed_out_finalized')->assertJsonPath('data.timing.remaining_seconds', 0);
+            ->assertJsonPath('data.status', 'waiting_for_teacher_review')->assertJsonPath('data.timing.remaining_seconds', 0);
         $this->assertSame($frozen, $attempt->fresh()->getAttributes());
         $this->assertSame($claimsBefore, IdempotencyRecord::query()->orderBy('id')->get()->map->getAttributes()->all());
         $this->assertDatabaseCount('assessment_attempts', 1);
@@ -154,8 +161,9 @@ class StudentBlitzTimeoutStartTest extends TestCase
         $frozen = $attempt->fresh()->getAttributes();
         $this->travel(1)->minutes();
 
+        // The close was checked after its response, so the replay projects the checked Attempt.
         $this->startStudentBlitz($student, $assessment, $key, $intent, $target)->assertStatus($originalStatus)
-            ->assertJsonPath('data.id', $attempt->id)->assertJsonPath('data.status', 'submitted')
+            ->assertJsonPath('data.id', $attempt->id)->assertJsonPath('data.status', 'checked')
             ->assertJsonPath('data.submitted_at', null)->assertJsonPath('data.finalized_at', $closedAt)
             ->assertJsonPath('data.finalization_reason', 'task_closed_auto_finalize')
             ->assertJsonPath('data.started_at', $started->json('data.started_at'))

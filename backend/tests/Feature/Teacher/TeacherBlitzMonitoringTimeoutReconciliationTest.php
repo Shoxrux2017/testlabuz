@@ -73,7 +73,8 @@ class TeacherBlitzMonitoringTimeoutReconciliationTest extends TestCase
             'waiting_for_teacher_review' => 0, 'attempt_exceptions_granted' => 0,
         ]);
         $this->assertMonitoringPartition($response);
-        $this->assertSame('timed_out_finalized', $due->fresh()->status->value);
+        // The reconciled timeout is checked after the response; without answers it scores zero (S09-T1).
+        $this->assertSame('checked', $due->fresh()->status->value);
         $this->assertSame('in_progress', $future->fresh()->status->value);
         $row = collect($response->json('data.students'))->firstWhere('student.id', $futureStudent->id);
         $this->assertSame(540, $row['remaining_seconds']);
@@ -107,7 +108,8 @@ class TeacherBlitzMonitoringTimeoutReconciliationTest extends TestCase
                 ->assertJsonPath('data.students.0.status', $due ? 'finalized' : 'in_progress')
                 ->assertJsonPath('data.students.0.remaining_seconds', $due ? 0 : 1);
             $this->assertSame($due ? 2 : 1, $snapshots);
-            $this->assertSame($due ? 1 : 0, $writes);
+            // The timeout freeze and, after the response, its check (S09-T1).
+            $this->assertSame($due ? 2 : 0, $writes);
             if ($due) {
                 $this->assertTrue($attempt->fresh()->finalized_at->equalTo($attempt->deadline_at));
             }

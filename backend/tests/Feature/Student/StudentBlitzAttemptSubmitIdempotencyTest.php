@@ -44,14 +44,17 @@ class StudentBlitzAttemptSubmitIdempotencyTest extends TestCase
         $before = [$attempt->fresh()->getAttributes(), $record->getAttributes(), $this->fileAnswerSnapshot()];
         $this->travel(1)->minutes();
 
+        // The Submit was checked after its response, so the replay projects the waiting Attempt.
+        $first->assertJsonPath('data.status', 'submitted');
         $replay = $this->submit($student, $attempt, $key)->assertOk()
             ->assertJsonPath('message', 'Blitz attempt submitted successfully.')
-            ->assertJsonPath('data.id', $attempt->id)->assertJsonPath('data.status', 'submitted')
+            ->assertJsonPath('data.id', $attempt->id)->assertJsonPath('data.status', 'waiting_for_teacher_review')
             ->assertJsonPath('data.timing.remaining_seconds', 0);
 
         $firstJson = $first->json();
         $replayJson = $replay->json();
-        unset($firstJson['data']['timing']['server_now'], $replayJson['data']['timing']['server_now']);
+        unset($firstJson['data']['timing']['server_now'], $replayJson['data']['timing']['server_now'],
+            $firstJson['data']['status'], $replayJson['data']['status']);
         $this->assertSame($firstJson, $replayJson);
         $this->assertSame($before, [$attempt->fresh()->getAttributes(), $record->fresh()->getAttributes(), $this->fileAnswerSnapshot()]);
         $this->assertDatabaseCount('assessment_attempts', 1);
@@ -263,6 +266,7 @@ class StudentBlitzAttemptSubmitIdempotencyTest extends TestCase
         $key = (string) Str::uuid();
         $this->submit($student, $attempt, $key)->assertOk();
         $record = $this->assertCompletedRecord($student, $attempt, $key);
+        $this->uncheckFrozenAttempt($attempt);
         DB::table('attempt_answers')->where('attempt_id', $attempt->id)->update(['feedback' => 'Not permitted while submitted']);
         $before = [$attempt->fresh()->getAttributes(), $record->getAttributes(), $this->fileAnswerSnapshot()];
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Student\Concerns;
 
+use App\Models\AssessmentAttempt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -120,10 +121,34 @@ trait RunsStudentHomeworkSubmitConcurrency
         ];
     }
 
+    // Checking the frozen Attempt when the Submit request terminates (S09-T1).
+    protected function checkingLocks(): array
+    {
+        return [
+            ['table' => 'topics', 'mode' => 'share'],
+            ['table' => 'assessments', 'mode' => 'share'],
+            ['table' => 'homework_assignments', 'mode' => 'share'],
+            ['table' => 'assessment_students', 'mode' => 'update'],
+            ['table' => 'assessment_attempts', 'mode' => 'update'],
+            ['table' => 'attempt_answers', 'mode' => 'update'],
+        ];
+    }
+
     protected function assertSubmitGate(array $result): void
     {
-        $this->assertSame($this->submitLocks(), $result['locks']);
+        $this->assertSame([...$this->submitLocks(), ...$this->checkingLocks()], $result['locks']);
         $this->assertSame([['transaction_level' => 1, 'locks' => $this->submitLocks()]], $result['gate_reads']);
+    }
+
+    /** An Attempt snapshot without the status that checking may change after the other worker's snapshot. */
+    protected function frozenAttempt(array $attempt): array
+    {
+        return array_diff_key($attempt, ['status' => true]);
+    }
+
+    protected function assertAttemptStatus(string $student, string $status): void
+    {
+        $this->assertSame($status, AssessmentAttempt::query()->findOrFail($this->ids[$student.'_attempt'])->getRawOriginal('status'));
     }
 
     protected function waitForPostgresLock(int $waitingPid, int $holdingPid, string $table): void

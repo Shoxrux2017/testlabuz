@@ -19,7 +19,7 @@ class StudentBlitzAttemptSubmitConcurrencyTest extends TestCase
 
         foreach (['first', 'second'] as $worker) {
             $this->assertSubmitSuccess($race[$worker]);
-            $this->assertSame($race['held']['snapshot']['attempt'], $race[$worker]['snapshot']['attempt']);
+            $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race[$worker]['snapshot']['attempt']));
             $this->assertSame($race['held']['snapshot']['records'], $race[$worker]['snapshot']['records']);
         }
         $this->assertSubmitGate($race['first']);
@@ -32,7 +32,8 @@ class StudentBlitzAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSame('assessment_attempt', $record['result_resource_type']);
         $this->assertSame($this->ids['first_attempt'], $record['result_resource_id']);
         $this->assertSame('2026-09-17 09:01:00+00', $record['completed_at']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_different_keys_have_exactly_one_success_and_the_loser_leaves_no_claim(): void
@@ -45,12 +46,13 @@ class StudentBlitzAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSame(409, $race['second']['status']);
         $this->assertSame('attempt_not_editable', $race['second']['body']['code']);
         $this->assertSame(1, $race['first']['attempt_writes'] + $race['second']['attempt_writes']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
         $this->assertSame($race['held']['snapshot']['records'], $race['second']['snapshot']['records']);
         $this->assertCount(1, $race['second']['snapshot']['records']);
         $this->assertSame($winner, $race['second']['snapshot']['records'][0]['idempotency_key']);
         $this->assertSame(0, IdempotencyRecord::query()->where('idempotency_key', $loser)->count());
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_pre_deadline_submit_wins_and_waiting_timeout_reconciliation_preserves_its_history(): void
@@ -62,10 +64,12 @@ class StudentBlitzAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSubmitSuccess($race['first']);
         $this->assertSame(1, $race['second']['finalized_count']);
         $this->assertSame(1, $race['first']['attempt_writes'] + $race['second']['attempt_writes']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
         $this->assertSame($race['held']['snapshot']['records'], $race['second']['snapshot']['records']);
+        // The reconciler runs without an HTTP request here, so only the Submit is checked.
         $this->assertTimedOut(AssessmentAttempt::query()->findOrFail($this->ids['second_attempt'])->getAttributes());
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_timeout_wins_at_exact_deadline_and_waiting_submit_never_rewrites_it(): void
@@ -93,11 +97,12 @@ class StudentBlitzAttemptSubmitConcurrencyTest extends TestCase
 
         $this->assertSubmitSuccess($race['first']);
         $this->assertSame('closed', $race['second']['snapshot']['blitz_status']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
         $this->assertSame($race['held']['snapshot']['records'], $race['second']['snapshot']['records']);
         $this->assertSame($race['held']['snapshot']['recipients'], $race['second']['snapshot']['recipients']);
         $this->assertSame(1, $race['first']['attempt_writes'] + $race['second']['attempt_writes']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_teacher_close_wins_before_deadline_and_submit_preserves_close_lineage_without_claim(): void
@@ -145,14 +150,15 @@ class StudentBlitzAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSame('in_progress', $race['first']['probe']['status']);
         $this->assertSame(409, $race['second']['status']);
         $this->assertSame('blitz_time_expired', $race['second']['body']['code']);
-        $this->assertTimedOut($race['second']['snapshot']['attempt']);
+        // The rejected Submit reconciles the timeout and checks it before the worker's snapshot.
+        $this->assertTimedOut($race['second']['snapshot']['attempt'], 'waiting_for_teacher_review');
         $this->assertSame([], $race['second']['snapshot']['records']);
         $this->assertSame(0, $race['second']['transaction_level']);
         $this->assertCount(1, $race['second']['deadline_entries']);
         $this->assertSame(0, $race['second']['deadline_entries'][0]['claims']);
         $this->assertSame([0], $race['second']['deadline_entries'][0]['preceding_transaction_ends']);
         $this->assertSame(1, $race['second']['attempt_writes']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
     }
 
     public function test_late_submit_releases_its_attempt_lock_and_claim_before_shared_timeout_reconciliation_waits(): void
@@ -205,15 +211,16 @@ class StudentBlitzAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSame([], $submitResult['snapshot']['records']);
         $this->assertSame(1, $submitResult['attempt_writes']);
         $this->assertSame(0, IdempotencyRecord::query()->where('institution_id', $this->ids['institution'])->count());
+        // The rejected Submit reconciles both timeouts and checks them when its request terminates.
         foreach (AssessmentAttempt::query()->where('assessment_id', $this->ids['assessment'])->get() as $attempt) {
-            $this->assertTimedOut($attempt->getAttributes());
+            $this->assertTimedOut($attempt->getAttributes(), 'waiting_for_teacher_review');
         }
-        $this->assertFrozenAnswerGraph($probeResult['snapshot'], $submitResult['snapshot']);
+        $this->assertFrozenAnswerGraph($probeResult['snapshot'], $submitResult['snapshot'], 'waiting_for_teacher_review');
     }
 
-    private function assertTimedOut(array $attempt): void
+    private function assertTimedOut(array $attempt, string $status = 'timed_out_finalized'): void
     {
-        $this->assertSame('timed_out_finalized', $attempt['status']);
+        $this->assertSame($status, $attempt['status']);
         $this->assertNull($attempt['submitted_at']);
         $this->assertSame('timeout_auto_submit', $attempt['finalization_reason']);
         $this->assertSame('2026-09-17 09:10:00+00', $attempt['finalized_at']);

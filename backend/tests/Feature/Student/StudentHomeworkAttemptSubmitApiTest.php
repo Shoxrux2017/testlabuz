@@ -98,7 +98,7 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
         ];
     }
 
-    public function test_submit_freezes_every_saved_answer_family_and_file_without_checking_scoring_or_result_mutation(): void
+    public function test_submit_freezes_every_saved_answer_family_and_file_then_checking_leaves_the_result_pair_untouched(): void
     {
         [$student, $homework, $attempt] = $this->answerContext();
         $pair = TopicResultPair::factory()->create([
@@ -112,7 +112,7 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
         }
         $fileQuestion = $this->answerQuestion($homework, 'file_based', 9);
         [, , $file] = $this->savedFileAnswer($attempt, $fileQuestion);
-        $answersBefore = $this->fileAnswerSnapshot();
+        $answersBefore = $this->fileAnswerContentSnapshot();
         $contentsBefore = Storage::disk('local')->get($file->storage_key);
         $attemptBefore = $attempt->fresh()->getAttributes();
         $pairBefore = $pair->fresh()->getAttributes();
@@ -140,15 +140,18 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
             $this->assertStringNotContainsString($secret, $response->getContent());
         }
         $this->assertExplicitTransition($attempt, $attemptBefore);
-        $this->assertSame($answersBefore, $this->fileAnswerSnapshot());
+        $this->assertCheckingOutcome($attempt, AssessmentAttemptStatus::WaitingForTeacherReview);
+        $this->assertSame($answersBefore, $this->fileAnswerContentSnapshot());
         $this->assertSame($contentsBefore, Storage::disk('local')->get($file->storage_key));
         $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
         $this->assertDatabaseCount('assessment_attempts', 1);
-        foreach (AttemptAnswer::query()->get() as $answer) {
-            $this->assertSame('pending', $answer->getRawOriginal('checking_status'));
-            foreach (['awarded_points', 'feedback', 'checked_by_user_id', 'checked_at'] as $field) {
-                $this->assertNull($answer->getAttribute($field));
-            }
+        foreach (AttemptAnswer::query()->with('question')->get() as $answer) {
+            $manual = in_array($answer->question->type->value, ['open_written', 'file_based'], true);
+            $this->assertSame($manual ? 'waiting_for_teacher_review' : 'auto_checked', $answer->getRawOriginal('checking_status'));
+            $this->assertSame($manual, $answer->awarded_points === null);
+            $this->assertSame($manual, $answer->checked_at === null);
+            $this->assertNull($answer->feedback);
+            $this->assertNull($answer->checked_by_user_id);
         }
     }
 
@@ -160,7 +163,7 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
         $savedFileQuestion = $this->answerQuestion($homework, 'file_based', 2);
         [, , $file] = $this->savedFileAnswer($attempt, $savedFileQuestion);
         $unanswered = [$this->answerQuestion($homework, 'single_choice', 3), $this->answerQuestion($homework, 'file_based', 4)];
-        $before = $this->fileAnswerSnapshot();
+        $before = $this->fileAnswerContentSnapshot();
         $contentsBefore = Storage::disk('local')->get($file->storage_key);
         $attemptBefore = $attempt->fresh()->getAttributes();
         $this->travel(1)->minutes();
@@ -173,7 +176,8 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
             $this->assertDatabaseMissing('attempt_answers', ['attempt_id' => $attempt->id, 'question_id' => $question->id]);
         }
         $this->assertExplicitTransition($attempt, $attemptBefore);
-        $this->assertSame($before, $this->fileAnswerSnapshot());
+        $this->assertCheckingOutcome($attempt, AssessmentAttemptStatus::WaitingForTeacherReview);
+        $this->assertSame($before, $this->fileAnswerContentSnapshot());
         $this->assertSame($contentsBefore, Storage::disk('local')->get($file->storage_key));
     }
 
@@ -194,6 +198,7 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
             ->assertJsonPath('data.deadline_at', $hasDeadline ? '2026-09-10T12:00:00Z' : null);
 
         $this->assertExplicitTransition($attempt, $before);
+        $this->assertCheckingOutcome($attempt, AssessmentAttemptStatus::Checked, '0.00000000', '0.00000000');
         $this->assertDatabaseCount('attempt_answers', 0);
         $this->assertDatabaseCount('files', 0);
         $this->assertDatabaseCount('assessment_attempts', 1);
@@ -256,7 +261,6 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
     private function assertExplicitTransition(AssessmentAttempt $attempt, array $before): void
     {
         $fresh = $attempt->fresh();
-        $this->assertSame(AssessmentAttemptStatus::Submitted, $fresh->status);
         $this->assertSame(AssessmentAttemptFinalizationReason::StudentSubmit, $fresh->finalization_reason);
         foreach (['submitted_at', 'finalized_at', 'locked_at', 'updated_at'] as $field) {
             $this->assertTrue($fresh->getAttribute($field)->equalTo(now()));
@@ -264,9 +268,16 @@ class StudentHomeworkAttemptSubmitApiTest extends TestCase
         foreach (['started_at', 'deadline_at', 'attempt_number', 'assessment_student_id', 'official_score_eligible', 'possible_points'] as $field) {
             $this->assertSame($before[$field], $fresh->getAttributes()[$field]);
         }
-        foreach (['earned_points', 'normalized_score', 'scoring_completed_at'] as $field) {
-            $this->assertNull($fresh->getAttribute($field));
-        }
+    }
+
+    // Checking runs right after the Submit commits (S09-T1); scores stay null while review waits.
+    private function assertCheckingOutcome(AssessmentAttempt $attempt, AssessmentAttemptStatus $status, ?string $earnedPoints = null, ?string $normalizedScore = null): void
+    {
+        $fresh = $attempt->fresh();
+        $this->assertSame($status, $fresh->status);
+        $this->assertSame($earnedPoints, $fresh->earned_points);
+        $this->assertSame($normalizedScore, $fresh->normalized_score);
+        $this->assertSame($earnedPoints !== null, $fresh->scoring_completed_at?->equalTo(now()) ?? false);
     }
 
     private function submitRequest(?User $student, AssessmentAttempt $attempt, ?string $key, string $body = '', string $contentType = 'application/json', string $query = ''): TestResponse

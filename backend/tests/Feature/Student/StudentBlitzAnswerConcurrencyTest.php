@@ -45,6 +45,10 @@ class StudentBlitzAnswerConcurrencyTest extends TestCase
                         ['table' => 'assessments', 'mode' => 'update'],
                         ['table' => 'blitz_tasks', 'mode' => 'update'],
                         ['table' => 'assessment_attempts', 'mode' => 'update'],
+                        // The timeout it froze is checked when the request terminates (S09-T1).
+                        ['table' => 'topics', 'mode' => 'share'], ['table' => 'assessments', 'mode' => 'share'],
+                        ['table' => 'blitz_tasks', 'mode' => 'share'], ['table' => 'assessment_attempts', 'mode' => 'update'],
+                        ['table' => 'attempt_answers', 'mode' => 'update'],
                     );
                 }
                 $this->assertSame($expectedLocks, $result['locks']);
@@ -53,16 +57,19 @@ class StudentBlitzAnswerConcurrencyTest extends TestCase
                 'clear-last' => [], 'terminal' => $ids['initial_options'],
                 'different', 'deadline' => $ids['first_options'], default => $ids['second_options'],
             };
-            $this->assertAnswer($ids['attempt'], $ids['question'], $firstExpected);
-            $this->assertAnswer($ids['attempt'], $ids['other_question'], $scenario === 'different' ? $ids['other_options'] : []);
+            $checked = $scenario === 'deadline';
+            $this->assertAnswer($ids['attempt'], $ids['question'], $firstExpected, $checked);
+            $this->assertAnswer($ids['attempt'], $ids['other_question'], $scenario === 'different' ? $ids['other_options'] : [], $checked);
             $attempt = AssessmentAttempt::query()->findOrFail($ids['attempt']);
             if ($scenario === 'terminal') {
                 $this->assertSame(AssessmentAttemptStatus::Submitted, $attempt->status);
                 $this->assertSame('2026-09-17 12:01:00', $attempt->finalized_at->format('Y-m-d H:i:s'));
             } elseif ($scenario === 'deadline') {
-                $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+                $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at',
+                    'earned_points', 'normalized_score', 'scoring_completed_at']);
                 $this->assertSame(array_diff_key($attemptBefore, $transitionFields), array_diff_key($attempt->getAttributes(), $transitionFields));
-                $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->status);
+                $this->assertSame(AssessmentAttemptStatus::Checked, $attempt->status);
+                $this->assertNotNull($attempt->earned_points);
                 $this->assertNull($attempt->submitted_at);
                 $this->assertEquals($attempt->deadline_at, $attempt->finalized_at);
                 $this->assertEquals($attempt->deadline_at, $attempt->locked_at);
@@ -81,7 +88,7 @@ class StudentBlitzAnswerConcurrencyTest extends TestCase
         return array_map(fn (string $scenario): array => [$scenario], ['create', 'replace', 'different', 'clear-first', 'clear-last', 'deadline', 'terminal']);
     }
 
-    private function assertAnswer(string $attemptId, string $questionId, array $options): void
+    private function assertAnswer(string $attemptId, string $questionId, array $options, bool $checked): void
     {
         $answers = AttemptAnswer::query()->where('attempt_id', $attemptId)->where('question_id', $questionId)->get();
         $this->assertCount($options === [] ? 0 : 1, $answers);
@@ -89,10 +96,11 @@ class StudentBlitzAnswerConcurrencyTest extends TestCase
             return;
         }
         $answer = $answers->sole();
-        $this->assertSame(AttemptAnswerCheckingStatus::Pending, $answer->checking_status);
-        foreach (['awarded_points', 'feedback', 'checked_by_user_id', 'checked_at'] as $field) {
-            $this->assertNull($answer->{$field});
-        }
+        $this->assertSame($checked ? AttemptAnswerCheckingStatus::AutoChecked : AttemptAnswerCheckingStatus::Pending, $answer->checking_status);
+        $this->assertSame($checked, $answer->awarded_points !== null);
+        $this->assertSame($checked, $answer->checked_at !== null);
+        $this->assertNull($answer->feedback);
+        $this->assertNull($answer->checked_by_user_id);
         $actual = DB::table('answer_choice_selections')->where('answer_id', $answer->id)->pluck('option_id')->all();
         $this->assertEqualsCanonicalizing($options, $actual);
         $this->assertCount(count(array_unique($actual)), $actual);

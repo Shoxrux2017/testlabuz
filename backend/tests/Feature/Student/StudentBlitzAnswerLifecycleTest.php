@@ -6,6 +6,7 @@ use App\Enums\AssessmentAttemptFinalizationReason;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\TopicStatus;
 use App\Models\AssessmentAttempt;
+use App\Models\AttemptAnswer;
 use App\Models\BlitzTask;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -118,7 +119,7 @@ class StudentBlitzAnswerLifecycleTest extends TestCase
         $otherStudent = $this->studentBlitzActor($student->institution);
         $this->studentBlitzAttempt($blitz->assessment, $otherStudent);
         $this->travelTo($attempt->deadline_at->copy()->addSeconds($offset));
-        $answersBefore = $this->answerSnapshot();
+        $answersBefore = $this->answerContentSnapshot();
         $attemptsBefore = AssessmentAttempt::query()->orderBy('id')->get()->map->getAttributes()->all();
         $blitzBefore = $blitz->getAttributes();
         DB::flushQueryLog();
@@ -130,27 +131,34 @@ class StudentBlitzAnswerLifecycleTest extends TestCase
                 }], JSON_THROW_ON_ERROR), headers: ['HTTP_X_CLIENT_TIME' => '2026-09-17T11:59:00Z'])
                 ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
             foreach (DB::getQueryLog() as $query) {
-                if (preg_match('/^\s*(insert|update|delete)\b/i', $query['query']) === 1) {
+                // The only answer write is the post-commit checking of the frozen Attempts (S09-T1).
+                if (preg_match('/^\s*(insert|update|delete)\b/i', $query['query']) === 1
+                    && ! str_starts_with($query['query'], self::CHECKING_ANSWER_UPDATE)) {
                     $this->assertDoesNotMatchRegularExpression('/"(?:attempt_answers|answer_[a-z_]+|blitz_tasks)"/', $query['query']);
                 }
             }
         } finally {
             DB::disableQueryLog();
         }
-        $this->assertSame($answersBefore, $this->answerSnapshot());
+        $this->assertSame($answersBefore, $this->answerContentSnapshot());
+        // The saved short answer is wrong and checks automatically at zero.
+        foreach (AttemptAnswer::query()->get() as $answer) {
+            $this->assertSame(['auto_checked', '0.00000000'], [$answer->getRawOriginal('checking_status'), $answer->awarded_points]);
+        }
         $attemptsAfter = AssessmentAttempt::query()->orderBy('id')->get();
         $this->assertCount(count($attemptsBefore), $attemptsAfter);
         foreach ($attemptsAfter as $index => $finalized) {
-            $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+            $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at',
+                'earned_points', 'normalized_score', 'scoring_completed_at']);
             $this->assertSame(array_diff_key($attemptsBefore[$index], $transitionFields), array_diff_key($finalized->getAttributes(), $transitionFields));
-            $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $finalized->status);
+            $this->assertSame(AssessmentAttemptStatus::Checked, $finalized->status);
+            $this->assertSame(['0.00000000', '0.00000000'], [$finalized->earned_points, $finalized->normalized_score]);
             $this->assertSame(AssessmentAttemptFinalizationReason::TimeoutAutoSubmit, $finalized->finalization_reason);
             $this->assertNull($finalized->submitted_at);
             $this->assertTrue($finalized->deadline_at->equalTo($finalized->finalized_at));
             $this->assertTrue($finalized->deadline_at->equalTo($finalized->locked_at));
         }
         $this->assertSame($blitzBefore, $blitz->fresh()->getAttributes());
-        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
     }
 
     public static function expiredMutations(): array

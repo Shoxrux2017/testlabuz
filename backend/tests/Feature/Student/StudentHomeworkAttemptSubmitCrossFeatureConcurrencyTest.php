@@ -3,6 +3,7 @@
 namespace Tests\Feature\Student;
 
 use App\Models\AssessmentAttempt;
+use App\Models\AttemptAnswer;
 use App\Models\IdempotencyRecord;
 use Illuminate\Support\Facades\Storage;
 use Tests\Feature\Student\Concerns\RunsStudentHomeworkSubmitConcurrency;
@@ -21,7 +22,7 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSubmitGate($race['second']);
         $this->assertSame('replacement', $race['second']['snapshot']['text']['text_value']);
         $this->assertSame('replacement', $this->answerInResponse($race['second'], $this->ids['text_question'])['text']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
     }
 
     public function test_submit_commits_first_and_waiting_answer_replacement_cannot_mutate_frozen_answers(): void
@@ -32,9 +33,10 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSubmitGate($race['first']);
         $this->assertSame(409, $race['second']['status']);
         $this->assertSame('attempt_not_editable', $race['second']['body']['code']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
         $this->assertSame('initial-first', $race['second']['snapshot']['text']['text_value']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_file_replacement_commits_first_and_submit_freezes_the_new_stable_file_graph(): void
@@ -44,7 +46,7 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSame(200, $race['first']['status'], json_encode($race['first']['body']));
         $this->assertSubmitSuccess($race['second']);
         $this->assertSubmitGate($race['second']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
         $file = $race['second']['snapshot']['file'];
         $this->assertSame($this->ids['first_file'], $file['id']);
         $this->assertSame($this->ids['first_answer_file'], $race['second']['snapshot']['answer_file']['id']);
@@ -69,8 +71,9 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSubmitGate($race['first']);
         $this->assertSame(409, $race['second']['status']);
         $this->assertSame('attempt_not_editable', $race['second']['body']['code']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
         $this->assertCount(1, $race['second']['stored']);
         $newKey = $race['second']['stored'][0]['key'];
         $this->assertSame([[
@@ -90,9 +93,10 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSubmitSuccess($race['first']);
         $this->assertSubmitGate($race['first']);
         $this->assertSame('closed', $race['second']['snapshot']['homework_status']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
         $this->assertSame($race['held']['snapshot']['records'], $race['second']['snapshot']['records']);
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_teacher_close_wins_before_deadline_and_waiting_submit_leaves_no_claim(): void
@@ -122,12 +126,15 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
 
         $this->assertSubmitSuccess($race['first']);
         $this->assertSubmitGate($race['first']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
         $this->assertSame($race['held']['snapshot']['records'], $race['second']['snapshot']['records']);
         $this->assertSame(1, $race['second']['finalized_count']);
         $this->assertSame('homework_deadline_auto_submit', AssessmentAttempt::query()
             ->whereKey($this->ids['second_attempt'])->firstOrFail()->getRawOriginal('finalization_reason'));
-        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot']);
+        $this->assertFrozenAnswerGraph($race['held']['snapshot'], $race['second']['snapshot'], 'waiting_for_teacher_review');
+        // The reconciler runs without an HTTP request here, so only the Submit is checked.
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
+        $this->assertAttemptStatus('second', 'submitted');
     }
 
     public function test_deadline_wins_and_a_request_started_before_deadline_uses_time_after_its_lock_wait(): void
@@ -199,10 +206,11 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         $this->assertSame([], $submitResult['gate_reads']);
         $this->assertSame([['transaction_level' => 1, 'preceding_commits' => [0]]], $submitResult['deadline_entries']);
         $this->assertSame(0, IdempotencyRecord::query()->where('institution_id', $this->ids['institution'])->count());
+        // The rejected Submit reconciles both deadlines and checks them when its request terminates.
         foreach (AssessmentAttempt::query()->where('assessment_id', $this->ids['assessment'])->get() as $attempt) {
-            $this->assertDeadlineAttempt($attempt->getAttributes());
+            $this->assertDeadlineAttempt($attempt->getAttributes(), 'waiting_for_teacher_review');
         }
-        $this->assertFrozenAnswerGraph($probeResult['snapshot'], $submitResult['snapshot']);
+        $this->assertFrozenAnswerGraph($probeResult['snapshot'], $submitResult['snapshot'], 'waiting_for_teacher_review');
     }
 
     private function answerInResponse(array $result, string $questionId): array
@@ -213,22 +221,31 @@ class StudentHomeworkAttemptSubmitCrossFeatureConcurrencyTest extends TestCase
         return $answers[$questionId]['answer'];
     }
 
-    private function assertFrozenAnswerGraph(array $before, array $after): void
+    /**
+     * Checking runs right after an HTTP freeze commits (S09-T1) and may interleave with the other
+     * worker's snapshot, so the checking state is read once both workers have finished.
+     */
+    private function assertFrozenAnswerGraph(array $before, array $after, string $checkingStatus = 'pending'): void
     {
-        foreach (['answers', 'text', 'answer_file', 'file'] as $field) {
+        foreach (['text', 'answer_file', 'file'] as $field) {
             $this->assertSame($before[$field], $after[$field], 'Submit must preserve '.$field);
         }
-        foreach ($after['answers'] as $answer) {
-            $this->assertSame('pending', $answer['checking_status']);
+        $withoutStatus = fn (array $answers): array => array_map(fn (array $answer): array => array_diff_key($answer, ['checking_status' => true]), $answers);
+        $this->assertSame($withoutStatus($before['answers']), $withoutStatus($after['answers']), 'Submit must preserve answers');
+        $answers = AttemptAnswer::query()->where('attempt_id', $after['attempt']['id'])->orderBy('id')->get();
+        $this->assertCount(count($after['answers']), $answers);
+        // Both Questions are manual, so checking leaves every answer waiting without points.
+        foreach ($answers as $answer) {
+            $this->assertSame($checkingStatus, $answer->getRawOriginal('checking_status'));
             foreach (['awarded_points', 'feedback', 'checked_by_user_id', 'checked_at'] as $field) {
-                $this->assertNull($answer[$field]);
+                $this->assertNull($answer->getAttribute($field));
             }
         }
     }
 
-    private function assertDeadlineAttempt(array $attempt): void
+    private function assertDeadlineAttempt(array $attempt, string $status = 'submitted'): void
     {
-        $this->assertSame('submitted', $attempt['status']);
+        $this->assertSame($status, $attempt['status']);
         $this->assertNull($attempt['submitted_at']);
         $this->assertSame('homework_deadline_auto_submit', $attempt['finalization_reason']);
         $this->assertSame('2026-09-09 10:00:00+00', $attempt['finalized_at']);

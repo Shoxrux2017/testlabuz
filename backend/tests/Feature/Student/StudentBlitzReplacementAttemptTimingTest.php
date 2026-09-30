@@ -7,6 +7,7 @@ use App\Actions\Teacher\CloseTeacherBlitz;
 use App\Models\AssessmentAttempt;
 use App\Models\IdempotencyRecord;
 use App\Models\InstitutionSetting;
+use App\Support\Checking\FrozenAttemptCheckQueue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -30,7 +31,10 @@ class StudentBlitzReplacementAttemptTimingTest extends TestCase
         [$student, $assessment, , , $replacement] = $this->replacementContext($mode);
         $this->travelTo($replacement->deadline_at);
         $this->assertSame(1, app(FinalizeTimedOutBlitzAttempts::class)($student->institution_id, $assessment->id));
+        // Callers of the reconciler check what it froze (S09-T1).
+        app(FrozenAttemptCheckQueue::class)->drain();
         $frozen = $replacement->fresh()->getAttributes();
+        $this->assertSame('checked', $frozen['status']);
         $claimsBefore = IdempotencyRecord::query()->count();
 
         $this->startStudentBlitz($student, $assessment, intent: 'resume', attemptId: $replacement->id)

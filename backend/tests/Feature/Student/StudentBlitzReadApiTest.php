@@ -66,9 +66,13 @@ class StudentBlitzReadApiTest extends TestCase
         $this->assertSame(['data'], array_keys($response->json()));
         $this->assertSame([...array_reverse($expected), $older->id], array_column($response->json('data'), 'id'));
         $this->assertStudentBlitzMetadataIsSecret($response);
-        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $expiredAttempt->fresh()->status);
+        // The reconciled timeout is checked after the response; without answers it scores zero (S09-T1).
+        $this->assertSame(AssessmentAttemptStatus::Checked, $expiredAttempt->fresh()->status);
+        $this->assertSame(['0.00000000', '0.00000000'], [$expiredAttempt->fresh()->earned_points, $expiredAttempt->fresh()->normalized_score]);
+        $this->assertTrue($expiredAttempt->fresh()->scoring_completed_at->equalTo(now()));
         $this->assertTrue($expiredAttempt->deadline_at->equalTo($expiredAttempt->fresh()->finalized_at));
-        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at',
+            'earned_points', 'normalized_score', 'scoring_completed_at']);
         $this->assertSame(array_diff_key($before, $transitionFields), array_diff_key($expiredAttempt->fresh()->getAttributes(), $transitionFields));
         $this->assertDatabaseCount('idempotency_records', 0);
     }
@@ -122,10 +126,13 @@ class StudentBlitzReadApiTest extends TestCase
         $this->travelTo($attempt->deadline_at);
         $this->studentBlitzRequest($student, 'GET', '/api/v1/student/blitz/'.$assessment->id)->assertConflict()
             ->assertJsonPath('code', 'blitz_time_expired')->assertJsonPath('message', 'The Blitz time has expired.');
-        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
+        $this->assertSame(AssessmentAttemptStatus::Checked, $attempt->fresh()->status);
+        $this->assertSame(['0.00000000', '0.00000000'], [$attempt->fresh()->earned_points, $attempt->fresh()->normalized_score]);
+        $this->assertTrue($attempt->fresh()->scoring_completed_at->equalTo(now()));
         $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->finalized_at));
         $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->locked_at));
-        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at',
+            'earned_points', 'normalized_score', 'scoring_completed_at']);
         $this->assertSame(array_diff_key($before, $transitionFields), array_diff_key($attempt->fresh()->getAttributes(), $transitionFields));
     }
 

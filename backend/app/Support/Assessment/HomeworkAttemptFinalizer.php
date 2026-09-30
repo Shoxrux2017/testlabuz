@@ -5,11 +5,15 @@ namespace App\Support\Assessment;
 use App\Enums\AssessmentAttemptFinalizationReason;
 use App\Enums\AssessmentAttemptStatus;
 use App\Models\AssessmentAttempt;
+use App\Support\Checking\FrozenAttemptCheckQueue;
 use Carbon\CarbonInterface;
 use LogicException;
 
 final class HomeworkAttemptFinalizer
 {
+    // Every freeze is checked right after its transaction commits (S09-T1).
+    public function __construct(private readonly FrozenAttemptCheckQueue $checks) {}
+
     public function finalizeByStudentSubmit(AssessmentAttempt $attempt, CarbonInterface $submittedAt): bool
     {
         if ($attempt->status !== AssessmentAttemptStatus::InProgress) {
@@ -28,6 +32,7 @@ final class HomeworkAttemptFinalizer
         $attempt->finalization_reason = AssessmentAttemptFinalizationReason::StudentSubmit;
         $attempt->updated_at = $submittedAt;
         $attempt->save();
+        $this->checks->add($attempt->id);
 
         return true;
     }
@@ -63,6 +68,7 @@ final class HomeworkAttemptFinalizer
         $attempt->locked_at = $finalizedAt;
         $attempt->finalization_reason = $reason;
         $attempt->save();
+        $this->checks->add($attempt->id);
 
         return true;
     }

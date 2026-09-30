@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Support\Auth\LoginRateLimitKey;
+use App\Support\Checking\FrozenAttemptCheckQueue;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -17,7 +18,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // One collector per request or command, drained after the freeze commits.
+        $this->app->scoped(FrozenAttemptCheckQueue::class);
     }
 
     /**

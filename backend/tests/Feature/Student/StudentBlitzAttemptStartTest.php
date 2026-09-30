@@ -192,9 +192,13 @@ class StudentBlitzAttemptStartTest extends TestCase
             $this->startStudentBlitz($student, $assessment, intent: $intent, attemptId: $intent === 'resume' ? $attemptId : null)
                 ->assertConflict()->assertJsonPath('code', 'blitz_time_expired');
         }
-        $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
+        // The timeout is checked right after it commits; an Attempt without answers scores zero (S09-T1).
+        $this->assertSame(AssessmentAttemptStatus::Checked, $attempt->fresh()->status);
+        $this->assertSame('timeout_auto_submit', $attempt->fresh()->finalization_reason->value);
+        $this->assertSame('0.00000000', $attempt->fresh()->earned_points);
         $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->finalized_at));
-        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
+        $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at',
+            'earned_points', 'normalized_score', 'scoring_completed_at']);
         $this->assertSame(array_diff_key($before, $transitionFields), array_diff_key($attempt->fresh()->getAttributes(), $transitionFields));
         $this->assertDatabaseCount('idempotency_records', 3);
     }

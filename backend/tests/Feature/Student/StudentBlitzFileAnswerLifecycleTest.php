@@ -3,6 +3,7 @@
 namespace Tests\Feature\Student;
 
 use App\Enums\AssessmentAttemptStatus;
+use App\Models\AttemptAnswer;
 use App\Models\InstitutionSetting;
 use App\Models\User;
 use App\Support\Files\PrivateFileStorage;
@@ -66,7 +67,8 @@ class StudentBlitzFileAnswerLifecycleTest extends TestCase
     {
         [$student, $blitz, $attempt, $question] = $this->fileAnswerContext();
         [, , $file] = $this->savedFileAnswer($attempt, $question);
-        $before = $this->fileAnswerSnapshot();
+        $deadline = in_array($state, ['exact deadline', 'after deadline'], true);
+        $before = $deadline ? $this->fileAnswerContentSnapshot() : $this->fileAnswerSnapshot();
         $attemptAfterChange = null;
         $storage = $this->trackedStorage(function () use ($state, $blitz, $attempt, &$attemptAfterChange): void {
             if ($state === 'terminal' || $state === 'terminal after deadline') {
@@ -92,9 +94,12 @@ class StudentBlitzFileAnswerLifecycleTest extends TestCase
         $this->fileAnswerRequest($student, $attempt, $question, $this->fileAnswerUpload('replacement.pdf'))
             ->assertConflict()->assertJsonPath('code', $expectedCode);
 
-        $this->assertRejectedUpload($storage, $before, $file->storage_key);
-        if (in_array($state, ['exact deadline', 'after deadline'], true)) {
-            $this->assertSame(AssessmentAttemptStatus::TimedOutFinalized, $attempt->fresh()->status);
+        $this->assertRejectedUpload($storage, $before, $file->storage_key, $deadline);
+        if ($deadline) {
+            // The reconciled timeout is checked after the response; its manual file answer waits for review (S09-T1).
+            $this->assertSame(AssessmentAttemptStatus::WaitingForTeacherReview, $attempt->fresh()->status);
+            $this->assertSame('waiting_for_teacher_review', AttemptAnswer::query()->sole()->getRawOriginal('checking_status'));
+            $this->assertSame('timeout_auto_submit', $attempt->fresh()->finalization_reason->value);
             $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->finalized_at));
             $this->assertTrue($attempt->deadline_at->equalTo($attempt->fresh()->locked_at));
             $transitionFields = array_flip(['status', 'finalized_at', 'locked_at', 'finalization_reason', 'updated_at']);
@@ -204,12 +209,12 @@ class StudentBlitzFileAnswerLifecycleTest extends TestCase
         return $storage;
     }
 
-    private function assertRejectedUpload(PrivateFileStorage $storage, array $before, ?string $originalStorageKey): void
+    private function assertRejectedUpload(PrivateFileStorage $storage, array $before, ?string $originalStorageKey, bool $checkedAfterResponse = false): void
     {
         $this->assertCount(1, $storage->stored);
         $this->assertSame($storage->stored, $storage->deleted, 'A rejected new blob receives exactly one cleanup attempt.');
         Storage::disk($storage->stored[0][0])->assertMissing($storage->stored[0][1]);
-        $this->assertSame($before, $this->fileAnswerSnapshot());
+        $this->assertSame($before, $checkedAfterResponse ? $this->fileAnswerContentSnapshot() : $this->fileAnswerSnapshot());
         if ($originalStorageKey !== null) {
             Storage::disk('local')->assertExists($originalStorageKey);
         }

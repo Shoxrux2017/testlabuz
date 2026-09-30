@@ -20,7 +20,7 @@ class StudentHomeworkAttemptSubmitConcurrencyTest extends TestCase
 
         foreach (['first', 'second'] as $worker) {
             $this->assertSubmitSuccess($race[$worker]);
-            $this->assertSame($race['held']['snapshot']['attempt'], $race[$worker]['snapshot']['attempt']);
+            $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race[$worker]['snapshot']['attempt']));
             $this->assertSame($race['held']['snapshot']['records'], $race[$worker]['snapshot']['records']);
         }
         $this->assertSubmitGate($race['first']);
@@ -34,6 +34,7 @@ class StudentHomeworkAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSame($this->ids['first_attempt'], $record['result_resource_id']);
         $this->assertNotNull($record['completed_at']);
         $this->assertSame('2026-09-09 09:30:00+00', $record['completed_at']);
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
     }
 
     public function test_different_key_waits_and_leaves_no_claim_after_losing_the_finalization(): void
@@ -47,7 +48,8 @@ class StudentHomeworkAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSame(409, $race['second']['status']);
         $this->assertSame('attempt_not_editable', $race['second']['body']['code']);
         $this->assertSame([], $race['second']['gate_reads']);
-        $this->assertSame($race['held']['snapshot']['attempt'], $race['second']['snapshot']['attempt']);
+        $this->assertSame($this->frozenAttempt($race['held']['snapshot']['attempt']), $this->frozenAttempt($race['second']['snapshot']['attempt']));
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
         $this->assertSame($race['held']['snapshot']['records'], $race['second']['snapshot']['records']);
         $this->assertCount(1, $race['second']['snapshot']['records']);
         $this->assertSame($winningKey, $race['second']['snapshot']['records'][0]['idempotency_key']);
@@ -92,5 +94,7 @@ class StudentHomeworkAttemptSubmitConcurrencyTest extends TestCase
         $this->assertSame(2, IdempotencyRecord::query()->where('institution_id', $this->ids['institution'])->count());
         $this->assertSame(2, AssessmentAttempt::query()->where('assessment_id', $this->ids['assessment'])
             ->where('finalization_reason', 'student_submit')->count());
+        $this->assertAttemptStatus('first', 'waiting_for_teacher_review');
+        $this->assertAttemptStatus('second', 'waiting_for_teacher_review');
     }
 }
