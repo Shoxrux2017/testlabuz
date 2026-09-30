@@ -161,6 +161,8 @@ class StudentHomeworkResultsApiTest extends TestCase
         $this->assertSame(['normalized_score' => 37.5, 'attempt_number' => 1], $own[0]['official_score']);
 
         // A classmate on the same Homework with a better reviewed Attempt, feedback and a stored official row.
+        // Their row is stored after the Student's own, so a row query without the Student filter lets it
+        // replace the Student's row in the per-task lookup and hide the Student's official score.
         $classmate = AssessmentStudent::factory()->create(['assessment_id' => $this->homework->assessment_id, 'assigned_by_user_id' => $this->teacher->id]);
         $theirs = AssessmentAttempt::factory()->create(['assessment_student_id' => $classmate->id, 'status' => 'checked',
             'started_at' => now()->subHour(), 'submitted_at' => now(), 'finalized_at' => now(), 'locked_at' => now(),
