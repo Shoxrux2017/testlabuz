@@ -444,6 +444,42 @@ void main() {
       }
     });
 
+    test('requires a review summary that is never overdue', () {
+      final blitz = TeacherBlitzDto.fromJson(
+        teacherBlitzJson()
+          ..['review_summary'] = {
+            'waiting_for_teacher_review': 3,
+            'overdue': 0,
+          },
+      ).toDomain();
+      expect(blitz.reviewSummary.waitingForTeacherReview, 3);
+      expect(blitz.reviewSummary.overdue, 0);
+
+      for (final summary in <Object?>[
+        null,
+        {'waiting_for_teacher_review': 3, 'overdue': 1},
+        {'waiting_for_teacher_review': -1, 'overdue': 0},
+        {'waiting_for_teacher_review': 1, 'overdue': -1},
+        {'waiting_for_teacher_review': 1},
+        {'waiting_for_teacher_review': 1, 'overdue': 0, 'extra': 0},
+        {'waiting_for_teacher_review': '1', 'overdue': 0},
+      ]) {
+        expect(
+          () => TeacherBlitzDto.fromJson(
+            teacherBlitzJson()..['review_summary'] = summary,
+          ),
+          throwsFormatException,
+          reason: '$summary',
+        );
+      }
+      expect(
+        () => TeacherBlitzDto.fromJson(
+          teacherBlitzJson()..remove('review_summary'),
+        ),
+        throwsFormatException,
+      );
+    });
+
     test('requires the exact canonical attempt policy', () {
       for (final policy in <Object?>[
         {'normal_attempts': 2, 'max_additional_exception_attempts': 1},

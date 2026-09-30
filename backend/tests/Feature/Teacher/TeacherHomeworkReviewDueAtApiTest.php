@@ -244,7 +244,7 @@ class TeacherHomeworkReviewDueAtApiTest extends TestCase
             ->assertJsonPath('data.review_due_at', self::UTC);
         $this->assertSame([
             'id', 'topic_id', 'title', 'description', 'student_instructions', 'assignment_mode',
-            'student_ids', 'total_possible_points', 'deadline_at', 'review_due_at', 'institution_timezone', 'status',
+            'student_ids', 'total_possible_points', 'deadline_at', 'review_due_at', 'review_summary', 'institution_timezone', 'status',
             'attempt_policy', 'activated_at', 'closed_at', 'archived_at', 'created_at', 'updated_at', 'questions',
         ], array_keys($response->json('data')));
         $this->assertReviewDueAt($assessment, self::UTC);

@@ -907,6 +907,7 @@ Map<String, Object?> _homeworkJson() {
     'total_possible_points': 0,
     'deadline_at': null,
     'review_due_at': null,
+    'review_summary': {'waiting_for_teacher_review': 0, 'overdue': 0},
     'institution_timezone': 'Asia/Tashkent',
     'status': 'draft',
     'attempt_policy': {

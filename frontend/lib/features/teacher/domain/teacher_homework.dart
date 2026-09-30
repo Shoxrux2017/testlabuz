@@ -1,4 +1,5 @@
 import 'teacher_question.dart';
+import 'teacher_review_summary.dart';
 
 final canonicalTeacherHomeworkIdPattern = RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -101,6 +102,7 @@ class TeacherHomework {
     required this.totalPossiblePoints,
     required this.deadlineAt,
     required this.reviewDueAt,
+    required this.reviewSummary,
     required this.institutionTimezone,
     required this.status,
     required this.attemptPolicy,
@@ -125,6 +127,7 @@ class TeacherHomework {
 
   /// The Teacher's optional “check by” reminder for manual review (UTC).
   final DateTime? reviewDueAt;
+  final TeacherReviewSummary reviewSummary;
   final String institutionTimezone;
   final TeacherHomeworkStatus status;
   final TeacherHomeworkAttemptPolicy attemptPolicy;

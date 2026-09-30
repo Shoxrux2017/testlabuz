@@ -52,6 +52,7 @@ Map<String, Object?> teacherBlitzJson({
       'normal_attempts': 1,
       'max_additional_exception_attempts': 1,
     },
+    'review_summary': {'waiting_for_teacher_review': 0, 'overdue': 0},
     'activated_at': activated ? blitzJsonActivatedAt : null,
     'synchronized_ends_at':
         activated && timerMode == TeacherBlitzTimerStartMode.synchronized

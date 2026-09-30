@@ -65,7 +65,7 @@ class TeacherBlitzAuthoringApiTest extends TestCase
         $this->assertSame([
             'id', 'topic_id', 'group_id', 'title', 'description', 'student_instructions', 'assignment_mode',
             'student_ids', 'total_possible_points', 'duration_seconds', 'scheduled_at', 'institution_timezone',
-            'status', 'timer_start_mode_snapshot', 'attempt_policy', 'activated_at', 'synchronized_ends_at',
+            'status', 'timer_start_mode_snapshot', 'attempt_policy', 'review_summary', 'activated_at', 'synchronized_ends_at',
             'closed_at', 'archived_at', 'created_at', 'updated_at', 'questions',
         ], array_keys($response->json('data')));
         $this->assertDatabaseHas('assessments', [

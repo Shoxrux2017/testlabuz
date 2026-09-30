@@ -22,9 +22,11 @@ class TeacherHomeworkResource extends JsonResource
             ? $this->getRelation('homeworkAssignment')
             : null;
         $timezone = $this->getAttribute('institution_timezone');
+        $reviewSummary = $this->getAttribute('review_summary');
 
         if (! $homework instanceof HomeworkAssignment
             || ! is_string($timezone)
+            || ! is_array($reviewSummary)
             || ! $this->relationLoaded('recipients')
             || ! $this->relationLoaded('questions')) {
             throw new LogicException('Teacher Homework resources require the complete authoring projection.');
@@ -45,6 +47,7 @@ class TeacherHomeworkResource extends JsonResource
             'total_possible_points' => (float) $this->total_possible_points,
             'deadline_at' => $this->timestamp($homework->deadline_at),
             'review_due_at' => $this->timestamp($homework->review_due_at),
+            'review_summary' => $reviewSummary,
             'institution_timezone' => $timezone,
             'status' => $homework->status->value,
             'attempt_policy' => [

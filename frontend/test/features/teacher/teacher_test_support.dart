@@ -43,6 +43,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pa
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_review_summary.dart';
 
 import 'teacher_blitz_monitoring_fixtures.dart';
 
@@ -319,6 +320,10 @@ TeacherHomework teacherHomework({
       normalAttempts: 3,
       officialScorePolicy: 'highest_valid_completed',
     ),
+    reviewSummary: const TeacherReviewSummary(
+      waitingForTeacherReview: 0,
+      overdue: 0,
+    ),
     activatedAt: activatedAt,
     closedAt: closedAt,
     archivedAt: status == TeacherHomeworkStatus.archived
@@ -570,6 +575,10 @@ TeacherBlitz teacherBlitz({
       normalAttempts: TeacherBlitzAttemptPolicy.requiredNormalAttempts,
       maxAdditionalExceptionAttempts:
           TeacherBlitzAttemptPolicy.requiredMaxAdditionalExceptionAttempts,
+    ),
+    reviewSummary: const TeacherReviewSummary(
+      waitingForTeacherReview: 0,
+      overdue: 0,
     ),
     activatedAt: activatedAt,
     synchronizedEndsAt:

@@ -1,4 +1,5 @@
 import 'teacher_question.dart';
+import 'teacher_review_summary.dart';
 
 final canonicalTeacherBlitzIdPattern = RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -133,6 +134,7 @@ class TeacherBlitz {
     required this.status,
     required this.timerStartModeSnapshot,
     required this.attemptPolicy,
+    required this.reviewSummary,
     required this.activatedAt,
     required this.synchronizedEndsAt,
     required this.closedAt,
@@ -160,6 +162,7 @@ class TeacherBlitz {
   /// Null until activation; the backend snapshot is authoritative afterwards.
   final TeacherBlitzTimerStartMode? timerStartModeSnapshot;
   final TeacherBlitzAttemptPolicy attemptPolicy;
+  final TeacherReviewSummary reviewSummary;
   final DateTime? activatedAt;
   final DateTime? synchronizedEndsAt;
   final DateTime? closedAt;

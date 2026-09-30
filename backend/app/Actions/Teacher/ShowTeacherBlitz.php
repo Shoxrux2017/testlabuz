@@ -7,6 +7,7 @@ use App\Models\Assessment;
 use App\Models\User;
 use App\Support\Teacher\InstitutionBlitzScheduledAt;
 use App\Support\Teacher\TeacherBlitzAccess;
+use App\Support\Teacher\TeacherReviewSummary;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class ShowTeacherBlitz
@@ -14,6 +15,7 @@ final class ShowTeacherBlitz
     public function __construct(
         private readonly TeacherBlitzAccess $access,
         private readonly InstitutionBlitzScheduledAt $scheduledAt,
+        private readonly TeacherReviewSummary $reviewSummary,
     ) {}
 
     public function __invoke(User $teacher, string $blitzId): Assessment
@@ -36,6 +38,8 @@ final class ShowTeacherBlitz
             'questions.fillBlanks.acceptedAnswers' => fn (HasMany $query) => $query->orderBy('position'),
         ]);
         $assessment->setAttribute('institution_timezone', $this->scheduledAt->timezone($teacher));
+        // Blitz has no review deadline, so nothing is ever overdue.
+        $assessment->setAttribute('review_summary', $this->reviewSummary->forTask($teacher, $assessment, null));
 
         return $assessment;
     }

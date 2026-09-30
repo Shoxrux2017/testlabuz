@@ -24,10 +24,12 @@ class TeacherBlitzResource extends JsonResource
         $blitz = $this->relationLoaded('blitzTask') ? $this->getRelation('blitzTask') : null;
         $topic = $this->relationLoaded('topic') ? $this->getRelation('topic') : null;
         $timezone = $this->getAttribute('institution_timezone');
+        $reviewSummary = $this->getAttribute('review_summary');
 
         if (! $blitz instanceof BlitzTask
             || ! $topic instanceof Topic
             || ! is_string($timezone)
+            || ! is_array($reviewSummary)
             || ! $this->relationLoaded('recipients')
             || ! $this->relationLoaded('questions')) {
             throw new LogicException('Teacher Blitz resources require the complete authoring projection.');
@@ -57,6 +59,7 @@ class TeacherBlitzResource extends JsonResource
                 'normal_attempts' => 1,
                 'max_additional_exception_attempts' => 1,
             ],
+            'review_summary' => $reviewSummary,
             'activated_at' => $this->timestamp($blitz->activated_at),
             'synchronized_ends_at' => $this->timestamp($blitz->synchronized_ends_at),
             'closed_at' => $this->timestamp($blitz->closed_at),
