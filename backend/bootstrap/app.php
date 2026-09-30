@@ -31,6 +31,7 @@ use App\Exceptions\Student\StudentHomeworkDeadlinePassedException;
 use App\Exceptions\Student\StudentHomeworkNotActiveException;
 use App\Exceptions\Teacher\AssessmentHasNoScoreablePointsException;
 use App\Exceptions\Teacher\AssessmentNotAssignedException;
+use App\Exceptions\Teacher\AutomaticCheckingPendingException;
 use App\Exceptions\Teacher\BlitzAttemptExceptionAlreadyGrantedException;
 use App\Exceptions\Teacher\BlitzAttemptExceptionNotAllowedException;
 use App\Exceptions\Teacher\BlitzNormalAttemptRequiredException;
@@ -131,6 +132,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (SelectionLimitExceededException $e, Request $request) => ApiErrorResponse::selectionLimitExceeded($request));
         $exceptions->render(fn (OfficialTaskRequiresGroupAssignmentException $e, Request $request) => ApiErrorResponse::officialTaskRequiresGroupAssignment($request));
         $exceptions->render(fn (ResultPairLockedException $e, Request $request) => ApiErrorResponse::resultPairLocked($request));
+        $exceptions->render(fn (AutomaticCheckingPendingException $e, Request $request) => ApiErrorResponse::automaticCheckingPending($request));
         $exceptions->render(fn (AssessmentHasNoScoreablePointsException $e, Request $request) => ApiErrorResponse::assessmentHasNoScoreablePoints($request));
         $exceptions->render(fn (UnsupportedFileTypeException $e, Request $request) => ApiErrorResponse::unsupportedFileType($request));
         $exceptions->render(fn (FileTooLargeException $e, Request $request) => ApiErrorResponse::fileTooLarge($e->maxSizeBytes, $request));

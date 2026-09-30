@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Api\V1\Teacher;
 
 use App\Actions\Teacher\ListTeacherSubmissions;
+use App\Actions\Teacher\ReviewTeacherSubmission;
 use App\Actions\Teacher\ShowTeacherSubmission;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teacher\TeacherSubmissionIndexRequest;
+use App\Http\Requests\Teacher\TeacherSubmissionReviewRequest;
 use App\Http\Requests\Teacher\TeacherSubmissionShowRequest;
 use App\Http\Resources\Teacher\TeacherSubmissionCollection;
 use App\Http\Resources\Teacher\TeacherSubmissionDetailResource;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class TeacherSubmissionController extends Controller
 {
@@ -34,5 +38,16 @@ class TeacherSubmissionController extends Controller
         $teacher = $request->user();
 
         return new TeacherSubmissionDetailResource($showTeacherSubmission($teacher, $submission));
+    }
+
+    public function review(TeacherSubmissionReviewRequest $request, string $submission, ReviewTeacherSubmission $reviewTeacherSubmission): JsonResponse
+    {
+        /** @var User $teacher */
+        $teacher = $request->user();
+
+        return (new TeacherSubmissionDetailResource($reviewTeacherSubmission($teacher, $submission, $request->answers())))
+            ->additional(['message' => 'Submission review saved successfully.'])
+            ->response()
+            ->setStatusCode(Response::HTTP_OK);
     }
 }

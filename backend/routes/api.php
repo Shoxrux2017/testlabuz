@@ -132,6 +132,7 @@ Route::prefix('teacher')
         Route::put('homework/{homework}/review-due-at', [TeacherHomeworkController::class, 'updateReviewDueAt']);
         Route::get('submissions', [TeacherSubmissionController::class, 'index']);
         Route::get('submissions/{submission}', [TeacherSubmissionController::class, 'show']);
+        Route::put('submissions/{submission}/review', [TeacherSubmissionController::class, 'review']);
         Route::get('blitz', [TeacherBlitzController::class, 'index']);
         Route::get('blitz/{blitz}', [TeacherBlitzController::class, 'show']);
         Route::get('blitz/{blitz}/monitoring', [TeacherBlitzController::class, 'monitoring']);
