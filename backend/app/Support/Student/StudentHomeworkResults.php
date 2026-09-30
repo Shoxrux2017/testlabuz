@@ -27,6 +27,7 @@ final class StudentHomeworkResults
         private readonly OfficialTaskDesignation $designation,
         private readonly OfficialScoreEvaluator $evaluator,
         private readonly OfficialScoreReader $reader,
+        private readonly StudentResultVisibility $visibility,
     ) {}
 
     /**
@@ -37,7 +38,7 @@ final class StudentHomeworkResults
     public function apply(User $student, iterable $homework, ?StudentResultReleaseMode $mode): void
     {
         $homework = Collection::make($homework);
-        $released = $mode === StudentResultReleaseMode::Automatic;
+        $released = $this->visibility->released($mode);
 
         foreach ($homework as $assessment) {
             $assessment->setAttribute('student_official_score', null);
@@ -78,11 +79,7 @@ final class StudentHomeworkResults
     /** @return array{visible: bool, normalized_score: float|null} */
     private function result(AssessmentAttempt $attempt, bool $released): array
     {
-        $visible = $released && $attempt->status === AssessmentAttemptStatus::Checked && $attempt->official_score_eligible;
-
-        if ($visible && $attempt->normalized_score === null) {
-            throw new LogicException('A checked Homework Attempt has no normalized score.');
-        }
+        $visible = $this->visibility->visible($attempt, $released);
 
         return ['visible' => $visible, 'normalized_score' => $visible ? (float) $attempt->normalized_score : null];
     }

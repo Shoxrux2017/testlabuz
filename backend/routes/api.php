@@ -154,6 +154,7 @@ Route::prefix('student')
     ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::Student->value])
     ->group(function (): void {
         Route::get('blitz/active', [StudentBlitzController::class, 'active']);
+        Route::get('blitz/finished', [StudentBlitzController::class, 'finished']);
         Route::get('blitz/{blitz}', [StudentBlitzController::class, 'show']);
         Route::post('blitz/{blitz}/attempts', [StudentBlitzAttemptController::class, 'store']);
         Route::get('homework', [StudentHomeworkController::class, 'index']);

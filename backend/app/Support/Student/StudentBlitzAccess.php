@@ -70,6 +70,36 @@ final class StudentBlitzAccess
         ]);
     }
 
+    /**
+     * The Student's activated Blitz tasks that are now closed or archived, latest close first
+     * (docs/09 §20.6). Such a task has only terminal Attempts and a close time.
+     *
+     * @return Builder<Assessment>
+     */
+    public function finishedQuery(User $student): Builder
+    {
+        return $this->query($student)
+            ->whereNotNull('blitz_tasks.activated_at')
+            ->whereIn('blitz_tasks.status', [BlitzStatus::Closed->value, BlitzStatus::Archived->value])
+            ->with([
+                'topic' => fn ($query) => $query->select(['id', 'title'])->where('institution_id', $student->institution_id),
+                'blitzTask' => fn ($query) => $query
+                    ->select(['assessment_id', 'institution_id', 'status', 'closed_at'])
+                    ->where('institution_id', $student->institution_id),
+                'attempts' => fn ($query) => $query
+                    ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id', 'attempt_number',
+                        'status', 'official_score_eligible', 'normalized_score'])
+                    ->where('institution_id', $student->institution_id)
+                    ->where('student_id', $student->id)
+                    ->orderBy('attempt_number')->orderBy('id'),
+                'blitzAttemptExceptions' => fn ($query) => $query
+                    ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id', 'replacement_attempt_id'])
+                    ->where('institution_id', $student->institution_id)->where('student_id', $student->id),
+            ])
+            ->orderByRaw('coalesce(blitz_tasks.closed_at, blitz_tasks.archived_at) desc')
+            ->orderByDesc('assessments.id');
+    }
+
     /** @return Builder<Assessment> */
     public function activeQuery(User $student, CarbonInterface $readAt): Builder
     {

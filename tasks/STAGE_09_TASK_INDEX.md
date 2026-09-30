@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-BE-007B` delivery, then `S09-BE-007C` contract and readiness |
+| Next permitted gate | `S09-BE-007C` delivery, then `S09-BE-PHASE-2` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -138,8 +138,8 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `6b` | `S09-BE-005B` | Backend + FE parser | `review_summary` on Teacher task details, Teacher submitted-file download | `BE-005A` | `Approved` (on `main` `4737ea8`) | Delivered (PR #296, `main` `06fe754`) | `tasks/backend/stage-09/S09-BE-005B-review-summary-and-file-download.md` |
 | `7` | `S09-BE-006` | Backend | Review save and correction, recalculation | `BE-005A` | `Approved` (on `main` `06fe754`) | Delivered (PR #297, `main` `60e62cc`) | `tasks/backend/stage-09/S09-BE-006-review-save-and-correction.md` |
 | `8a` | `S09-BE-007A` | Backend | Teacher official-score read; shared official-score reader | `BE-006` | `Approved` (on `main` `60e62cc`) | Delivered (PR #298, `main` `1171e24`) | `tasks/backend/stage-09/S09-BE-007A-teacher-official-score-read.md` |
-| `8b` | `S09-BE-007B` | Backend + FE parser | Student Homework `result`, answer `feedback`, `attempt_results`, `score_visible`/`official_score` | `BE-007A` | `Approved` (on `main` `1171e24`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-007B-student-homework-results.md` |
-| `8c` | `S09-BE-007C` | Backend | `GET /student/blitz/finished` with the counting Attempt's result and feedback | `BE-007A` | Not written | Not started | `tasks/backend/stage-09/` |
+| `8b` | `S09-BE-007B` | Backend + FE parser | Student Homework `result`, answer `feedback`, `attempt_results`, `score_visible`/`official_score` | `BE-007A` | `Approved` (on `main` `1171e24`) | Delivered (PR #299, `main` `bb6da8b`) | `tasks/backend/stage-09/S09-BE-007B-student-homework-results.md` |
+| `8c` | `S09-BE-007C` | Backend | `GET /student/blitz/finished` with the counting Attempt's result and feedback | `BE-007A` | `Approved` (on `main` `bb6da8b`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-007C-student-finished-blitz.md` |
 | `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007C` | Not written | Not started | `tasks/backend/stage-09/` |
 | `10` | `S09-FE-001` | Frontend | Review deadline field, exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | Not written | Not started | `tasks/frontend/stage-09/` |
 | `11` | `S09-FE-002` | Frontend | Desktop review queue; mobile counts | `FE-001` | Not written | Not started | `tasks/frontend/stage-09/` |
@@ -300,7 +300,13 @@ Only a row whose readiness is `Approved` may be implemented.
   Implemented with the Student parser change. Independent review: P1 = 0, P2 = 1 (a missing stored row was
   not isolated from a not-ready evaluation), P3 = 7; all fixed and mutation-checked. Review correction: the
   parser accepts any non-empty feedback, because the server trims only ASCII whitespace and a Unicode-only
-  feedback would otherwise fail the Student read. Re-verification: P1 = 0, P2 = 0, P3 = 1 (fixed). PR open.
+  feedback would otherwise fail the Student read. Re-verification: P1 = 0, P2 = 0, P3 = 1 (fixed).
+- `S09-BE-007B` accepted and delivered (PR #299, `main` `bb6da8b`).
+- `S09-BE-007C` contract written and approved on `bb6da8b`: a finished Blitz cannot gain an exception or an
+  Attempt, so the list reads without a snapshot; the release mode and the visible feedback are read once
+  per page. Independent review: P1 = 0, P2 = 1 (no test of a classmate's data on the same Blitz), P3 = 5;
+  all fixed and mutation-checked. Review correction: the Attempt visibility rule is one shared class
+  (`StudentResultVisibility`) for `007B` and `007C`. Re-verification: P1 = 0, P2 = 0. PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -353,3 +359,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-09-30 | `S09-BE-005B` delivered (PR #296); `S09-BE-006` approved on `06fe754` |
 | 2026-09-30 | `S09-BE-006` delivered (PR #297); `S09-BE-007` split into `007A`/`007B`/`007C`; `007A` approved on `60e62cc` |
 | 2026-09-30 | `S09-BE-007A` delivered (PR #298); `S09-BE-007B` approved on `1171e24` |
+| 2026-09-30 | `S09-BE-007B` delivered (PR #299); `S09-BE-007C` approved on `bb6da8b` |
