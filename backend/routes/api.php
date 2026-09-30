@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\V1\Teacher\TeacherBlitzController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherGroupController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherHomeworkController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherLearningMaterialController;
+use App\Http\Controllers\Api\V1\Teacher\TeacherOfficialScoreController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherQuestionController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherSubmissionController;
 use App\Http\Controllers\Api\V1\Teacher\TeacherTopicController;
@@ -144,6 +145,7 @@ Route::prefix('teacher')
         Route::post('blitz/{blitz}/archive', [TeacherBlitzController::class, 'archive']);
         Route::post('assessments/{assessment}/questions', [TeacherQuestionController::class, 'store']);
         Route::post('assessments/{assessment}/questions/reorder', [TeacherQuestionController::class, 'reorder']);
+        Route::get('assessments/{assessment}/students/{student}/official-score', [TeacherOfficialScoreController::class, 'show']);
         Route::patch('questions/{question}', [TeacherQuestionController::class, 'update']);
         Route::delete('questions/{question}', [TeacherQuestionController::class, 'destroy']);
     });
