@@ -326,6 +326,13 @@ final class ApiErrorResponse
         );
     }
 
+    public static function automaticCheckingPending(Request $request): ?JsonResponse
+    {
+        return self::isApiRequest($request)
+            ? self::json('The submission is still waiting for automatic checking.', 'automatic_checking_pending', Response::HTTP_CONFLICT)
+            : null;
+    }
+
     public static function resultPairLocked(Request $request): ?JsonResponse
     {
         if (! self::isApiRequest($request)) {
