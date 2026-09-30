@@ -17,6 +17,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_form.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_review_summary.dart';
 
 import 'teacher_test_support.dart';
 
@@ -237,6 +238,10 @@ void main() {
             attemptPolicy: const TeacherBlitzAttemptPolicy(
               normalAttempts: 1,
               maxAdditionalExceptionAttempts: 1,
+            ),
+            reviewSummary: const TeacherReviewSummary(
+              waitingForTeacherReview: 0,
+              overdue: 0,
             ),
             activatedAt: null,
             synchronizedEndsAt: null,

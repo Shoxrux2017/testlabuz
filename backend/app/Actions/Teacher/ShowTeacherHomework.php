@@ -6,6 +6,7 @@ use App\Models\Assessment;
 use App\Models\User;
 use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
 use App\Support\Teacher\TeacherHomeworkAccess;
+use App\Support\Teacher\TeacherReviewSummary;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class ShowTeacherHomework
@@ -13,6 +14,7 @@ final class ShowTeacherHomework
     public function __construct(
         private readonly TeacherHomeworkAccess $access,
         private readonly InstitutionHomeworkDeadlineAt $deadlineAt,
+        private readonly TeacherReviewSummary $reviewSummary,
     ) {}
 
     public function __invoke(User $teacher, string $homeworkId): Assessment
@@ -32,6 +34,8 @@ final class ShowTeacherHomework
             'questions.fillBlanks.acceptedAnswers' => fn (HasMany $query) => $query->orderBy('position'),
         ]);
         $assessment->setAttribute('institution_timezone', $this->deadlineAt->timezone($teacher));
+        $assessment->setAttribute('review_summary', $this->reviewSummary->forTask($teacher, $assessment,
+            $assessment->getRelation('homeworkAssignment')?->review_due_at));
 
         return $assessment;
     }

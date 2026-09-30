@@ -3,6 +3,7 @@
 namespace App\Actions\Files;
 
 use App\Enums\FileCategory;
+use App\Enums\UserRole;
 use App\Models\User;
 use App\Support\Files\ProtectedFileDownload;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ class DownloadProtectedFile
     public function __construct(
         private readonly DownloadLearningMaterialFile $downloadLearningMaterial,
         private readonly DownloadStudentSubmissionFile $downloadStudentSubmission,
+        private readonly DownloadReviewedSubmissionFile $downloadReviewedSubmission,
     ) {}
 
     public function __invoke(User $actor, string $fileId): ProtectedFileDownload
@@ -30,7 +32,9 @@ class DownloadProtectedFile
 
         return match ($category) {
             FileCategory::LearningMaterial->value => ($this->downloadLearningMaterial)($actor, $fileId),
-            FileCategory::StudentSubmission->value => ($this->downloadStudentSubmission)($actor, $fileId),
+            FileCategory::StudentSubmission->value => $actor->role === UserRole::Teacher
+                ? ($this->downloadReviewedSubmission)($actor, $fileId)
+                : ($this->downloadStudentSubmission)($actor, $fileId),
             default => throw new NotFoundHttpException,
         };
     }

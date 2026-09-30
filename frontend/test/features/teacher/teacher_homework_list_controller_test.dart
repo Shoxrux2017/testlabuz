@@ -17,6 +17,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_homework_mutati
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework_repository.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_list_pagination.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_review_summary.dart';
 
 import 'teacher_test_support.dart';
 
@@ -536,6 +537,10 @@ TeacherHomework _homework({
       normalAttempts: TeacherHomeworkAttemptPolicy.requiredNormalAttempts,
       officialScorePolicy:
           TeacherHomeworkAttemptPolicy.requiredOfficialScorePolicy,
+    ),
+    reviewSummary: const TeacherReviewSummary(
+      waitingForTeacherReview: 0,
+      overdue: 0,
     ),
     activatedAt: null,
     closedAt: null,

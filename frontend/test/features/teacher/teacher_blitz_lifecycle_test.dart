@@ -216,6 +216,7 @@ TeacherBlitz _withStatus(TeacherBlitz source, TeacherBlitzStatus status) {
     status: status,
     timerStartModeSnapshot: source.timerStartModeSnapshot,
     attemptPolicy: source.attemptPolicy,
+    reviewSummary: source.reviewSummary,
     activatedAt: source.activatedAt,
     synchronizedEndsAt: source.synchronizedEndsAt,
     closedAt: source.closedAt,

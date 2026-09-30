@@ -1,6 +1,7 @@
 import '../../domain/teacher_homework.dart';
 import 'teacher_dto_parse.dart';
 import 'teacher_question_dto.dart';
+import 'teacher_review_summary_dto.dart';
 
 class TeacherHomeworkSummaryDto {
   const TeacherHomeworkSummaryDto({
@@ -147,6 +148,7 @@ class TeacherHomeworkDto {
     required this.totalPossiblePoints,
     required this.deadlineAt,
     required this.reviewDueAt,
+    required this.reviewSummary,
     required this.institutionTimezone,
     required this.status,
     required this.attemptPolicy,
@@ -204,6 +206,10 @@ class TeacherHomeworkDto {
       ),
       deadlineAt: readTeacherNullableUtcTimestamp(map, 'deadline_at'),
       reviewDueAt: readTeacherNullableUtcTimestamp(map, 'review_due_at'),
+      reviewSummary: TeacherReviewSummaryDto.fromJson(
+        map['review_summary'],
+        allowsOverdue: true,
+      ),
       institutionTimezone: readTeacherNonBlankString(
         map,
         'institution_timezone',
@@ -231,6 +237,7 @@ class TeacherHomeworkDto {
   final double totalPossiblePoints;
   final DateTime? deadlineAt;
   final DateTime? reviewDueAt;
+  final TeacherReviewSummaryDto reviewSummary;
   final String institutionTimezone;
   final TeacherHomeworkStatus status;
   final TeacherHomeworkAttemptPolicyDto attemptPolicy;
@@ -253,6 +260,7 @@ class TeacherHomeworkDto {
       totalPossiblePoints: totalPossiblePoints,
       deadlineAt: deadlineAt,
       reviewDueAt: reviewDueAt,
+      reviewSummary: reviewSummary.toDomain(),
       institutionTimezone: institutionTimezone,
       status: status,
       attemptPolicy: attemptPolicy.toDomain(),
@@ -371,6 +379,7 @@ const _homeworkKeys = <String>{
   'total_possible_points',
   'deadline_at',
   'review_due_at',
+  'review_summary',
   'institution_timezone',
   'status',
   'attempt_policy',

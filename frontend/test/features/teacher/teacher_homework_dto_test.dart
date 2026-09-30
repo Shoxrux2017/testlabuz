@@ -44,6 +44,37 @@ void main() {
       expect(homework.deadlineAt, isNull);
     });
 
+    test('maps the review summary and rejects an inconsistent one', () {
+      final homework = TeacherHomeworkDto.fromJson(_homeworkJson()).toDomain();
+      expect(homework.reviewSummary.waitingForTeacherReview, 2);
+      expect(homework.reviewSummary.overdue, 1);
+
+      for (final summary in <Object?>[
+        null,
+        {'waiting_for_teacher_review': 1},
+        {'waiting_for_teacher_review': 1, 'overdue': 0, 'extra': 0},
+        {'waiting_for_teacher_review': -1, 'overdue': 0},
+        {'waiting_for_teacher_review': 1, 'overdue': -1},
+        {'waiting_for_teacher_review': 1, 'overdue': 2},
+        {'waiting_for_teacher_review': 1.5, 'overdue': 0},
+        {'waiting_for_teacher_review': '1', 'overdue': 0},
+      ]) {
+        expect(
+          () => TeacherHomeworkDto.fromJson(
+            _homeworkJson()..['review_summary'] = summary,
+          ),
+          throwsFormatException,
+          reason: '$summary',
+        );
+      }
+      expect(
+        () => TeacherHomeworkDto.fromJson(
+          _homeworkJson()..remove('review_summary'),
+        ),
+        throwsFormatException,
+      );
+    });
+
     test('requires review_due_at as a nullable UTC timestamp', () {
       expect(
         () => TeacherHomeworkDto.fromJson(
@@ -397,6 +428,7 @@ Map<String, Object?> _homeworkJson({
     'total_possible_points': 18.5,
     'deadline_at': '2026-09-10T12:00:00Z',
     'review_due_at': '2026-09-12T13:00:00Z',
+    'review_summary': {'waiting_for_teacher_review': 2, 'overdue': 1},
     'institution_timezone': 'Asia/Tashkent',
     'status': status.value,
     'attempt_policy': {

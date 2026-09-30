@@ -1,6 +1,7 @@
 import '../../domain/teacher_blitz.dart';
 import 'teacher_dto_parse.dart';
 import 'teacher_question_dto.dart';
+import 'teacher_review_summary_dto.dart';
 
 class TeacherBlitzSummaryDto {
   const TeacherBlitzSummaryDto({
@@ -160,6 +161,7 @@ class TeacherBlitzDto {
     required this.status,
     required this.timerStartModeSnapshot,
     required this.attemptPolicy,
+    required this.reviewSummary,
     required this.activatedAt,
     required this.synchronizedEndsAt,
     required this.closedAt,
@@ -232,6 +234,11 @@ class TeacherBlitzDto {
       attemptPolicy: TeacherBlitzAttemptPolicyDto.fromJson(
         map['attempt_policy'],
       ),
+      // Blitz has no review deadline, so nothing can be overdue.
+      reviewSummary: TeacherReviewSummaryDto.fromJson(
+        map['review_summary'],
+        allowsOverdue: false,
+      ),
       activatedAt: activatedAt,
       synchronizedEndsAt: synchronizedEndsAt,
       closedAt: closedAt,
@@ -260,6 +267,7 @@ class TeacherBlitzDto {
   final TeacherBlitzStatus status;
   final TeacherBlitzTimerStartMode? timerStartModeSnapshot;
   final TeacherBlitzAttemptPolicyDto attemptPolicy;
+  final TeacherReviewSummaryDto reviewSummary;
   final DateTime? activatedAt;
   final DateTime? synchronizedEndsAt;
   final DateTime? closedAt;
@@ -285,6 +293,7 @@ class TeacherBlitzDto {
       status: status,
       timerStartModeSnapshot: timerStartModeSnapshot,
       attemptPolicy: attemptPolicy.toDomain(),
+      reviewSummary: reviewSummary.toDomain(),
       activatedAt: activatedAt,
       synchronizedEndsAt: synchronizedEndsAt,
       closedAt: closedAt,
@@ -471,6 +480,7 @@ const _blitzKeys = <String>{
   'status',
   'timer_start_mode_snapshot',
   'attempt_policy',
+  'review_summary',
   'activated_at',
   'synchronized_ends_at',
   'closed_at',
