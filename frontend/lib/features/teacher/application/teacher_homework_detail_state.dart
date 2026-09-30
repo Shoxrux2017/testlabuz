@@ -1,5 +1,6 @@
 import '../../../core/network/api_failure.dart';
 import '../domain/teacher_homework.dart';
+import 'teacher_question_authority_state.dart';
 
 enum TeacherHomeworkDetailStatus {
   initial,
@@ -10,7 +11,7 @@ enum TeacherHomeworkDetailStatus {
   error,
 }
 
-class TeacherHomeworkDetailState {
+class TeacherHomeworkDetailState implements TeacherQuestionAuthorityState {
   const TeacherHomeworkDetailState({
     this.status = TeacherHomeworkDetailStatus.initial,
     this.homework,

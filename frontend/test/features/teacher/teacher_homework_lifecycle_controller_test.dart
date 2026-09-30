@@ -431,6 +431,12 @@ void main() {
           'Official Homework activation is locked by the current server state.\nReview the current official Homework status before taking another action.',
         ),
         (
+          TeacherHomeworkLifecycleAction.activate,
+          TeacherHomeworkStatus.draft,
+          ApiErrorCodes.officialCohortMismatch,
+          "The official Homework cohort does not match the Topic's established official cohort.\nRefresh the official pair and Homework before continuing.",
+        ),
+        (
           TeacherHomeworkLifecycleAction.close,
           TeacherHomeworkStatus.active,
           ApiErrorCodes.taskNotActive,
@@ -466,8 +472,7 @@ void main() {
         final pairs = _FakePairRepository(
           onFetch: (_) async {
             pairFetchCount += 1;
-            if (testCase.$3 == ApiErrorCodes.resultPairLocked &&
-                pairFetchCount > 1) {
+            if (_refreshesPair(testCase.$3) && pairFetchCount > 1) {
               throw teacherLocalFailure(ApiFailureKind.timeout);
             }
             return null;
@@ -493,9 +498,10 @@ void main() {
         expect(harness.activity.isActive, isFalse);
         expect(
           pairs.fetchRequests,
-          hasLength(testCase.$3 == ApiErrorCodes.resultPairLocked ? 2 : 1),
+          hasLength(_refreshesPair(testCase.$3) ? 2 : 1),
+          reason: testCase.$3,
         );
-        if (testCase.$3 == ApiErrorCodes.resultPairLocked) {
+        if (_refreshesPair(testCase.$3)) {
           expect(harness.pair.status, TeacherTopicResultPairStatus.error);
         }
       }
@@ -805,6 +811,11 @@ class _FakePairRepository implements TeacherTopicResultPairRepository {
     throw UnsupportedError('Blitz designation is outside this Homework test.');
   }
 }
+
+/// Activation conflicts after which the official pair is re-read.
+bool _refreshesPair(String code) =>
+    code == ApiErrorCodes.resultPairLocked ||
+    code == ApiErrorCodes.officialCohortMismatch;
 
 TeacherTopicResultPair _pair({
   String topicId = _topicId,

@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-BE-PHASE-2-FIX-001` delivery (Backend Phase 2 `PASS`), then `S09-FE-001` |
+| Next permitted gate | `S09-FE-001A` delivery, then `S09-FE-001B` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -140,10 +140,11 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `8a` | `S09-BE-007A` | Backend | Teacher official-score read; shared official-score reader | `BE-006` | `Approved` (on `main` `60e62cc`) | Delivered (PR #298, `main` `1171e24`) | `tasks/backend/stage-09/S09-BE-007A-teacher-official-score-read.md` |
 | `8b` | `S09-BE-007B` | Backend + FE parser | Student Homework `result`, answer `feedback`, `attempt_results`, `score_visible`/`official_score` | `BE-007A` | `Approved` (on `main` `1171e24`) | Delivered (PR #299, `main` `bb6da8b`) | `tasks/backend/stage-09/S09-BE-007B-student-homework-results.md` |
 | `8c` | `S09-BE-007C` | Backend | `GET /student/blitz/finished` with the counting Attempt's result and feedback | `BE-007A` | `Approved` (on `main` `bb6da8b`) | Delivered (PR #300, `main` `98747ef`) | `tasks/backend/stage-09/S09-BE-007C-student-finished-blitz.md` |
-| `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007C` | Executed record | Run #1 `NOT ACCEPTED` (`98747ef`); run #2 `PASS` (`5db50d0`) — PR open | `tasks/backend/stage-09/S09-BE-PHASE-2-backend-block-review.md` |
-| `9a` | `S09-BE-PHASE-2-FIX-001` | Backend fix | Stage 8 seeder test re-baseline, Phase 2 test gaps, repair pair filter | Phase 2 run #1 | `Approved` (on `main` `98747ef`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-PHASE-2-FIX-001-seeder-rebaseline-and-test-gaps.md` |
-| `10` | `S09-FE-001` | Frontend | Review deadline field, exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | Not written | Not started | `tasks/frontend/stage-09/` |
-| `11` | `S09-FE-002` | Frontend | Desktop review queue; mobile counts | `FE-001` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007C` | Executed record | `PASS` — run #1 `NOT ACCEPTED` (`98747ef`); run #2 `PASS` (`5db50d0`); delivered (PR #301, `main` `95992d3`) | `tasks/backend/stage-09/S09-BE-PHASE-2-backend-block-review.md` |
+| `9a` | `S09-BE-PHASE-2-FIX-001` | Backend fix | Stage 8 seeder test re-baseline, Phase 2 test gaps, repair pair filter | Phase 2 run #1 | `Approved` (on `main` `98747ef`) | Delivered (PR #301, `main` `95992d3`) | `tasks/backend/stage-09/S09-BE-PHASE-2-FIX-001-seeder-rebaseline-and-test-gaps.md` |
+| `10a` | `S09-FE-001A` | Frontend | Exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | `Approved` (on `main` `95992d3`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-001A-grant-warning-cl6-cl7.md` |
+| `10b` | `S09-FE-001B` | Frontend | Homework review deadline: display and set/clear on the Homework detail | `FE-001A` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `11` | `S09-FE-002` | Frontend | Desktop review queue; mobile counts | `FE-001B` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `12` | `S09-FE-003` | Frontend | Desktop submission review, file download, correction, official score | `FE-002` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `13` | `S09-FE-004` | Frontend | Student Homework results and official score; finished Blitz list with results | `FE-003` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Not written | Not started | `tasks/frontend/stage-09/` |
@@ -204,8 +205,8 @@ Only a row whose readiness is `Approved` may be implemented.
 
 | Item | Source | Stage 9 disposition |
 |---|---|---|
-| `CL-6` `authorityStateAtStart` typed `Object` | Stage 8 closure (`CL-D1`) | `S09-FE-001` |
-| `CL-7` Homework activation lacks `official_cohort_mismatch` | Stage 8 closure (`CL-D1`) | `S09-FE-001` |
+| `CL-6` `authorityStateAtStart` typed `Object` | Stage 8 closure (`CL-D1`) | `S09-FE-001A` |
+| `CL-7` Homework activation lacks `official_cohort_mismatch` | Stage 8 closure (`CL-D1`) | `S09-FE-001A` |
 | `INT-D2` autosave | Stage 8 integration | `FE-UX-001` (`S09-D8`) |
 | Topic-result feedback, Parent-visible feedback flag | Planning audit #6 | Stage 10 planning |
 | `topic_results.official_homework_score_id`/`official_blitz_score_id` default to `ON DELETE RESTRICT` (`docs/08` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; score no longer ready); a tenant-safe composite reference also needs `unique(institution_id, id)` on `official_task_scores`, which Stage 9 does not add | `S09-DOC-001`, `S09-BE-002` | Stage 10 planning: decide the reference rule before `topic_results` exists |
@@ -326,6 +327,19 @@ Only a row whose readiness is `Approved` may be implemented.
   Independent review: P1 = 0, P2 = 0, P3 = 1 (fixed). Full suite run #2 on `5db50d0`: 2787 passed
   (62398 assertions), exit 0. Backend Phase 2: `PASS` once the fix PR merges. The remaining P3 items are
   recorded as `PH2-1`…`PH2-5` (§10). PR open.
+- `S09-BE-PHASE-2` and `S09-BE-PHASE-2-FIX-001` delivered (PR #301, `main` `95992d3`); the merged tree equals
+  the audited branch tree, so Backend Phase 2 is `PASS` on `main`.
+- `S09-FE-001` is split:
+  - `S09-FE-001A`: the exception-grant warning (`S09-D4`), `CL-6` and `CL-7`. These are small changes that need
+    no new API.
+  - `S09-FE-001B`: the Homework review deadline UI.
+  `S09-FE-001A` approved on `95992d3` and implemented. The grant dialog always shows the official-score
+  warning, headed by its condition ("If this is the Topic's official Blitz:"), because monitoring does not
+  know whether the Blitz is official. Independent review: P1 = 0, P2 = 0, P3 = 4, all fixed:
+  - the condition now heads every consequence, and the text names the Teacher review;
+  - a one-line doc comment;
+  - `FE-002` now depends on `FE-001B`;
+  - the close and archive sets are pinned against the new code. PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -379,3 +393,5 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-09-30 | `S09-BE-006` delivered (PR #297); `S09-BE-007` split into `007A`/`007B`/`007C`; `007A` approved on `60e62cc` |
 | 2026-09-30 | `S09-BE-007A` delivered (PR #298); `S09-BE-007B` approved on `1171e24` |
 | 2026-09-30 | `S09-BE-007B` delivered (PR #299); `S09-BE-007C` approved on `bb6da8b` |
+| 2026-09-30 | `S09-BE-007C` delivered (PR #300); `S09-BE-PHASE-2` run #1 `NOT ACCEPTED`; `S09-BE-PHASE-2-FIX-001` approved on `98747ef`; run #2 `PASS` |
+| 2026-10-01 | Backend Phase 2 `PASS` delivered (PR #301); `S09-FE-001` split into `001A`/`001B`; `001A` approved on `95992d3` |

@@ -128,6 +128,16 @@ class _TeacherBlitzAttemptExceptionDialogState
                 'created only when the Student starts it.',
                 key: Key('teacherBlitzAttemptExceptionHelper'),
               ),
+              const SizedBox(height: 12),
+              const Text(
+                "If this is the Topic's official Blitz:\nthe original attempt "
+                'stops counting, and any current official Blitz score is '
+                'withdrawn;\nthe replacement attempt becomes official once it '
+                'is fully checked, including any Teacher review;\nif the Blitz '
+                'is closed before the Student starts the replacement, the '
+                'Student has no official Blitz score.',
+                key: Key('teacherBlitzAttemptExceptionOfficialScoreWarning'),
+              ),
             ],
           ),
         ),
