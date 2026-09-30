@@ -322,7 +322,9 @@ position order:
 ```
 
 - `configuration` is the Teacher Question configuration shape of the Teacher Question resource,
-  including correct answers.
+  including correct answers, plus the ids that `answer.value` refers to (`options[].id`,
+  `pairs[].left_item_id`/`right_item_id`, `items[].id`, `blanks[].id`; correction made in `S09-BE-005A`,
+  `docs/09` §21.2).
 - `answer.value` has the shape of the Student attempt answer state for that type; a file answer carries
   `file { id, original_name, extension, size_bytes }`.
 - `answer` is null for an unanswered Question.

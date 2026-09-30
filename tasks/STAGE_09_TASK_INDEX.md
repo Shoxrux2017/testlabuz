@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-BE-004` delivery, then `S09-BE-005` contract and readiness |
+| Next permitted gate | `S09-BE-005A` delivery, then `S09-BE-005B` contract and readiness |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -133,9 +133,10 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `3` | `S09-BE-002` | Backend + FE parser | `official_task_scores`, `review_due_at` (+ Teacher Homework create/update and the review-due-at endpoint) | `BE-001` | `Approved` (on `main` `830b9b1`) | Accepted — delivered (PR #291, `main` `9b772b4`) | `tasks/backend/stage-09/S09-BE-002-scoring-persistence-review-deadline.md` |
 | `4a` | `S09-BE-003A` | Backend | Checking readiness: `S09-T2` timeout rekey, historical Homework reads (no checking yet) | `BE-002` | `Approved` (on `main` `9b772b4`) | Delivered (PR #292, `main` `f8bf790`) | `tasks/backend/stage-09/S09-BE-003A-checking-readiness.md` |
 | `4b` | `S09-BE-003B` | Backend | Automatic checking pipeline, post-freeze trigger, minute sweep, deliberate Stage 7/8 test updates | `BE-003A` | `Approved` (on `main` `f8bf790`) | Delivered (PR #293, `main` `d324716`) | `tasks/backend/stage-09/S09-BE-003B-checking-pipeline.md` |
-| `5` | `S09-BE-004` | Backend | Official score resolver (Homework, Blitz, grant withdrawal, sweep repair) | `BE-003B` | `Approved` (on `main` `d324716`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-004-official-score-resolver.md` |
-| `6` | `S09-BE-005` | Backend + FE parser | Review queue (with its supporting index), submission detail, `review_summary`, Teacher file download | `BE-004` | Not written | Not started | `tasks/backend/stage-09/` |
-| `7` | `S09-BE-006` | Backend | Review save and correction, recalculation | `BE-005` | Not written | Not started | `tasks/backend/stage-09/` |
+| `5` | `S09-BE-004` | Backend | Official score resolver (Homework, Blitz, grant withdrawal, sweep repair) | `BE-003B` | `Approved` (on `main` `d324716`) | Delivered (PR #294, `main` `da53031`) | `tasks/backend/stage-09/S09-BE-004-official-score-resolver.md` |
+| `6a` | `S09-BE-005A` | Backend | Review access rule, submission queue (existing indexes suffice), submission detail | `BE-004` | `Approved` (on `main` `da53031`) | Implemented — PR open | `tasks/backend/stage-09/S09-BE-005A-review-queue-and-detail.md` |
+| `6b` | `S09-BE-005B` | Backend + FE parser | `review_summary` on Teacher task details, Teacher submitted-file download | `BE-005A` | Not written | Not started | `tasks/backend/stage-09/` |
+| `7` | `S09-BE-006` | Backend | Review save and correction, recalculation | `BE-005A` | Not written | Not started | `tasks/backend/stage-09/` |
 | `8` | `S09-BE-007` | Backend + FE parser | Official-score read; Student `result`, `feedback`, `attempt_results`, `official_score`; `GET /student/blitz/finished` | `BE-006` | Not written | Not started | `tasks/backend/stage-09/` |
 | `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007` | Not written | Not started | `tasks/backend/stage-09/` |
 | `10` | `S09-FE-001` | Frontend | Review deadline field, exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | Not written | Not started | `tasks/frontend/stage-09/` |
@@ -179,7 +180,7 @@ Only a row whose readiness is `Approved` may be implemented.
   would change a Stage 7/8 response and reveal when checking happened. Write with the query builder or
   `withoutTimestamps`, and test with time moved forward.
 - **`S09-BE-004`** also changes the Stage 8 exception grant (withdrawal in the same transaction).
-- **`S09-BE-005`** adds `review_summary` to Teacher Homework/Blitz details with the parser change.
+- **`S09-BE-005B`** adds `review_summary` to Teacher Homework/Blitz details with the parser change.
 - **`S09-BE-007`** adds Student `result`, answer `feedback`, `score_visible`/`official_score` with the
   Student parser change; display comes in `S09-FE-004`.
 - **Frontend tasks** follow the existing desktop/mobile gates (`app_device_surface.dart`,
@@ -255,7 +256,19 @@ Only a row whose readiness is `Approved` may be implemented.
   `feat/s09-be-004-official-score-resolver`; no Stage 7/8 test needed a change. Independent review: P1 = 0,
   P2 = 0, P3 = 6; the four test/code P3 are fixed; the sweep's full-history scan cost and the pre-`BE-004`
   backlog (Students checked by `BE-003B` alone whose pending Attempt cannot overtake) are recorded for Backend
-  Phase 2 and the Stage 9 deployment. PR open.
+  Phase 2 and the Stage 9 deployment.
+- `S09-BE-004` accepted and delivered (PR #294, `main` `da53031`).
+- `S09-BE-005` is split: `S09-BE-005A` (review access, submission queue and detail; new read-only endpoints,
+  no parser change) and `S09-BE-005B` (`review_summary` on the Teacher Homework and Blitz resources with the
+  Teacher parser change, and the Teacher submitted-file download). The queue needs no new index: the existing
+  `assessment_attempts(institution_id, assessment_id, status)` and `attempt_answers(attempt_id, question_id)`
+  indexes serve it. `S09-BE-005A` approved on `da53031`. Review correction applied in `005A`: the submission
+  detail's Question configuration also carries the ids that the Student answer value refers to (options,
+  matching items, ordering items, blanks), otherwise the Teacher cannot tell what the Student chose;
+  `docs/09` §21.2 and `S09-DOC-001` §10.3 updated. Independent review: P1 = 0, P2 = 4 (the answer ids above;
+  missing tests for a mismatched recipient row and a foreign-Institution detail; the `official` subquery not
+  keyed by Topic), P3 = 8; all fixed except a declined read snapshot for the detail. Re-verification: P1 = 0,
+  P2 = 0; its five P3 are fixed. PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -303,3 +316,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-09-29 | `S09-BE-002` delivered (PR #291); `S09-BE-003` split into `003A` (readiness) and `003B` (pipeline) |
 | 2026-09-30 | `S09-BE-003A` delivered (PR #292); `S09-BE-003B` approved on `f8bf790` |
 | 2026-09-30 | `S09-BE-003B` delivered (PR #293); `S09-BE-004` approved on `d324716` |
+| 2026-09-30 | `S09-BE-004` delivered (PR #294); `S09-BE-005` split into `005A`/`005B`; `005A` approved on `da53031` |
