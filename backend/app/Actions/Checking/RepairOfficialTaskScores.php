@@ -58,11 +58,12 @@ final class RepairOfficialTaskScores
             ->selectRaw('distinct on (assessment_student_id) institution_id, assessment_id, assessment_student_id, student_id, id, normalized_score')
             ->where('official_score_eligible', true)
             ->where('status', AssessmentAttemptStatus::Checked->value)
-            ->whereExists(fn (Builder $query) => $query->selectRaw('1')->from('topic_result_pairs')
-                ->whereColumn('topic_result_pairs.institution_id', 'assessment_attempts.institution_id')
-                ->where(fn (Builder $pair) => $pair
-                    ->whereColumn('topic_result_pairs.homework_assessment_id', 'assessment_attempts.assessment_id')
-                    ->orWhereColumn('topic_result_pairs.blitz_assessment_id', 'assessment_attempts.assessment_id')))
+            // One uncorrelated set of paired task ids, so the planner can hash it instead of
+            // probing every pair of the Institution for each Attempt.
+            ->whereIn(DB::raw('(assessment_attempts.institution_id, assessment_attempts.assessment_id)'), fn (Builder $query) => $query
+                ->select(['institution_id', 'homework_assessment_id'])->from('topic_result_pairs')
+                ->unionAll(DB::query()->select(['institution_id', 'blitz_assessment_id'])->from('topic_result_pairs')
+                    ->whereNotNull('blitz_assessment_id')))
             ->whereNotExists(fn (Builder $query) => $query->selectRaw('1')->from('assessment_attempts as pending')
                 ->whereColumn('pending.institution_id', 'assessment_attempts.institution_id')
                 ->whereColumn('pending.assessment_student_id', 'assessment_attempts.assessment_student_id')

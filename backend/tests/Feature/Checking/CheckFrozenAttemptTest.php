@@ -225,6 +225,33 @@ class CheckFrozenAttemptTest extends TestCase
         $this->assertFalse(app(CheckFrozenAttempt::class)('00000000-0000-4000-8000-000000000001'));
     }
 
+    public function test_an_attempt_checked_while_this_run_waited_for_its_locks_is_left_alone(): void
+    {
+        $question = $this->question('true_false', 1, '2.000000');
+        $this->answer($question, $this->correctPayload($question));
+        $this->freeze('2.000000');
+        $answerBefore = AttemptAnswer::query()->sole()->getAttributes();
+        $changed = false;
+        // Runs in the check's transaction right after the recipient lock: what a concurrent check
+        // committed after this run's preliminary read still saw the Attempt frozen.
+        DB::listen(function ($query) use (&$changed): void {
+            if ($changed || ! str_contains($query->sql, 'from "assessment_students"') || ! str_ends_with($query->sql, 'for update')) {
+                return;
+            }
+            $changed = true;
+            DB::table('assessment_attempts')->where('id', $this->attempt->id)->update([
+                'status' => 'checked', 'earned_points' => '1.00000000', 'normalized_score' => '50.00000000', 'scoring_completed_at' => now(),
+            ]);
+        });
+
+        $this->assertFalse($this->check());
+
+        $this->assertTrue($changed);
+        $attempt = $this->attempt->fresh();
+        $this->assertSame(['checked', '1.00000000', '50.00000000'], [$attempt->getRawOriginal('status'), $attempt->earned_points, $attempt->normalized_score]);
+        $this->assertSame($answerBefore, AttemptAnswer::query()->sole()->getAttributes());
+    }
+
     public function test_a_corrupt_answer_throws_and_changes_nothing(): void
     {
         $first = $this->question('true_false', 1, '2.000000');

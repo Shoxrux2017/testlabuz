@@ -6,6 +6,8 @@ use App\Enums\AssessmentAttemptFinalizationReason;
 use App\Enums\AssessmentAttemptStatus;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
+use App\Models\BlitzAttemptException;
+use App\Models\BlitzTask;
 use App\Models\HomeworkAssignment;
 use App\Models\OfficialTaskScore;
 use App\Models\TopicResultPair;
@@ -139,6 +141,61 @@ class CheckFrozenAttemptsCommandTest extends TestCase
         Exceptions::assertReported(LogicException::class);
         $this->assertDatabaseMissing('official_task_scores', ['student_id' => $broken->student_id]);
         $this->assertDatabaseHas('official_task_scores', ['student_id' => $healthy->student_id]);
+    }
+
+    public function test_the_sweep_repairs_official_blitz_rows_including_an_exception_replacement(): void
+    {
+        $normal = $this->officialBlitzRecipient();
+        $normalBest = $this->scoredAttempt($normal, 1, 'checked', '60.00000000');
+        $excused = $this->officialBlitzRecipient();
+        // The invalidated #1 still waits for review; it is ineligible, so it holds nothing back.
+        $invalidated = $this->scoredAttempt($excused, 1, 'waiting_for_teacher_review');
+        DB::table('assessment_attempts')->where('id', $invalidated->id)->update(['official_score_eligible' => false]);
+        $replacement = $this->scoredAttempt($excused, 2, 'checked', '70.00000000');
+        BlitzAttemptException::factory()->create([
+            'assessment_id' => $excused->assessment_id, 'assessment_student_id' => $excused->id,
+            'invalidated_attempt_id' => $invalidated->id, 'replacement_attempt_id' => $replacement->id,
+        ]);
+
+        $this->artisan('attempts:check-frozen')
+            ->expectsOutput('Official scores repaired: 2; failures: 0.')
+            ->assertExitCode(Command::SUCCESS);
+
+        $this->assertSame([[$normalBest->id, 'valid_normal_blitz'], [$replacement->id, 'approved_blitz_exception_replacement']], array_map(
+            fn (AssessmentStudent $recipient): array => [
+                OfficialTaskScore::query()->where('student_id', $recipient->student_id)->sole()->official_attempt_id,
+                OfficialTaskScore::query()->where('student_id', $recipient->student_id)->sole()->getRawOriginal('selection_policy_code'),
+            ], [$normal, $excused]));
+    }
+
+    public function test_a_tie_already_stored_on_the_lower_attempt_number_is_not_a_repair_candidate(): void
+    {
+        $tied = $this->officialRecipient();
+        $first = $this->scoredAttempt($tied, 1, 'checked', '80.00000000');
+        $this->scoredAttempt($tied, 2, 'checked', '80.00000000');
+        $row = $this->officialRow($tied, $first)->getAttributes();
+        $recipientLocks = 0;
+        DB::listen(function ($query) use (&$recipientLocks): void {
+            if (str_contains($query->sql, 'from "assessment_students"') && str_ends_with($query->sql, 'for update')) {
+                $recipientLocks++;
+            }
+        });
+
+        $this->artisan('attempts:check-frozen')
+            ->expectsOutput('Official scores repaired: 0; failures: 0.')
+            ->assertExitCode(Command::SUCCESS);
+
+        // The candidate query keeps the evaluator's tie-break, so nothing is locked or resolved.
+        $this->assertSame(0, $recipientLocks);
+        $this->assertSame($row, OfficialTaskScore::query()->sole()->getAttributes());
+    }
+
+    private function officialBlitzRecipient(): AssessmentStudent
+    {
+        $blitzId = TopicResultPair::factory()->withBlitz()->create()->blitz_assessment_id;
+        BlitzTask::factory()->closedIndividual()->create(['assessment_id' => $blitzId]);
+
+        return AssessmentStudent::factory()->create(['assessment_id' => $blitzId]);
     }
 
     private function officialRecipient(): AssessmentStudent

@@ -149,6 +149,35 @@ class StudentHomeworkResultsApiTest extends TestCase
         $this->assertSame([true, $official], [$this->listItem()['score_visible'], $this->listItem()['official_score']]);
     }
 
+    public function test_a_classmates_official_row_attempts_and_feedback_never_change_the_students_results(): void
+    {
+        $this->release('automatic');
+        $this->designate();
+        $this->answerAll($this->attempt);
+        $this->freezeAndCheck($this->attempt);
+        $this->review($this->attempt, 2, 'Own remark.');
+        $reads = fn (): array => [$this->listItem(), $this->detail()->assertOk()->json('data'), $this->attemptRead($this->attempt)->assertOk()->json('data')];
+        $own = $reads();
+        $this->assertSame(['normalized_score' => 37.5, 'attempt_number' => 1], $own[0]['official_score']);
+
+        // A classmate on the same Homework with a better reviewed Attempt, feedback and a stored official row.
+        // Their row is stored after the Student's own, so a row query without the Student filter lets it
+        // replace the Student's row in the per-task lookup and hide the Student's official score.
+        $classmate = AssessmentStudent::factory()->create(['assessment_id' => $this->homework->assessment_id, 'assigned_by_user_id' => $this->teacher->id]);
+        $theirs = AssessmentAttempt::factory()->create(['assessment_student_id' => $classmate->id, 'status' => 'checked',
+            'started_at' => now()->subHour(), 'submitted_at' => now(), 'finalized_at' => now(), 'locked_at' => now(),
+            'finalization_reason' => 'student_submit', 'possible_points' => '8.000000', 'earned_points' => '7.00000000',
+            'normalized_score' => '87.50000000', 'scoring_completed_at' => now()]);
+        $answer = AttemptAnswer::factory()->create(['attempt_id' => $theirs->id, 'question_id' => $this->essay->id]);
+        DB::table('attempt_answers')->where('id', $answer->id)->update(['checking_status' => 'teacher_checked',
+            'awarded_points' => '7.00000000', 'feedback' => 'Classmate remark.', 'checked_by_user_id' => $this->teacher->id, 'checked_at' => now()]);
+        OfficialTaskScore::factory()->create(['institution_id' => $classmate->institution_id, 'assessment_id' => $classmate->assessment_id,
+            'student_id' => $classmate->student_id, 'official_attempt_id' => $theirs->id, 'normalized_score' => '87.50000000',
+            'selection_policy_code' => 'highest_valid_completed', 'selected_at' => now()]);
+
+        $this->assertSame($own, $reads());
+    }
+
     public function test_no_official_score_shows_for_a_practice_task_or_an_unconfirmed_row(): void
     {
         $this->release('automatic');
