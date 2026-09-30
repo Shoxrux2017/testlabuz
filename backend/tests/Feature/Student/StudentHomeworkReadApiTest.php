@@ -98,6 +98,7 @@ class StudentHomeworkReadApiTest extends TestCase
             'attempts' => ['allowed' => 3, 'used' => 0, 'remaining' => 3, 'official_score_policy' => 'highest_valid_completed'],
             'my_status' => 'not_started',
             'score_visible' => false,
+            'official_score' => null,
         ], $response->json('data.0'));
     }
 
@@ -256,7 +257,7 @@ class StudentHomeworkReadApiTest extends TestCase
             'student_instructions' => 'Complete independently.',
             'total_possible_points' => '10.000000',
         ]);
-        $this->attempt($homework, $student, 1, AssessmentAttemptStatus::Submitted);
+        $first = $this->attempt($homework, $student, 1, AssessmentAttemptStatus::Submitted);
         $current = $this->attempt($homework, $student, 2);
         $otherStudent = $this->student($student->institution);
         $otherRecipient = $this->recipient($homework->assessment, $otherStudent);
@@ -273,14 +274,17 @@ class StudentHomeworkReadApiTest extends TestCase
         $this->assertSame(['data'], array_keys($detail->json()));
         $this->assertSame([
             'id', 'topic', 'title', 'description', 'student_instructions', 'status', 'deadline_at',
-            'total_possible_points', 'attempts', 'my_status', 'score_visible', 'questions',
+            'total_possible_points', 'attempts', 'my_status', 'score_visible', 'official_score', 'attempt_results', 'questions',
         ], array_keys($detail->json('data')));
         $this->assertSame([
             'allowed' => 3, 'used' => 2, 'remaining' => 1, 'official_score_policy' => 'highest_valid_completed',
             'in_progress_attempt' => ['id' => $current->id, 'attempt_number' => 2, 'started_at' => '2026-09-09T09:00:00Z'],
         ], $detail->json('data.attempts'));
-        $detail->assertJsonPath('data.score_visible', false)->assertJsonPath('data.my_status', 'in_progress');
-        foreach (['score', 'official_score', 'earned_points', 'normalized_score', 'answers', 'institution_id', 'teacher_id', 'assignment_mode', 'assessment_student_id'] as $hidden) {
+        $detail->assertJsonPath('data.score_visible', false)->assertJsonPath('data.official_score', null)->assertJsonPath('data.my_status', 'in_progress');
+        // Stage 9: only the terminal Attempt is listed, hidden while results are not released.
+        $this->assertSame([['attempt_id' => $first->id, 'attempt_number' => 1, 'status' => 'submitted',
+            'result' => ['visible' => false, 'normalized_score' => null]]], $detail->json('data.attempt_results'));
+        foreach (['score', 'earned_points', 'normalized_score', 'answers', 'institution_id', 'teacher_id', 'assignment_mode', 'assessment_student_id'] as $hidden) {
             $this->assertArrayNotHasKey($hidden, $detail->json('data'));
         }
     }

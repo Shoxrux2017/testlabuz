@@ -87,6 +87,8 @@ final class OfficialScoreEvaluator
     /**
      * The best score each pending Attempt could still reach: full marks until it is checked
      * automatically, then its awarded points plus the full points of every waiting answer.
+     * A waiting Attempt's already loaded answers (each with its Question) are used as they are,
+     * so a Student's Homework list can load them for all its Homework at once.
      *
      * @param  Collection<int, AssessmentAttempt>  $pending
      * @return array<string, string>
@@ -94,20 +96,23 @@ final class OfficialScoreEvaluator
     private function upperBounds(Collection $pending): array
     {
         $waiting = $pending->filter(fn (AssessmentAttempt $attempt): bool => $attempt->status === AssessmentAttemptStatus::WaitingForTeacherReview);
+        $answers = $waiting->filter(fn (AssessmentAttempt $attempt): bool => $attempt->relationLoaded('answers'))
+            ->flatMap(fn (AssessmentAttempt $attempt) => $attempt->getRelation('answers'));
+        $unloaded = $waiting->reject(fn (AssessmentAttempt $attempt): bool => $attempt->relationLoaded('answers'));
         $points = [];
 
-        if ($waiting->isNotEmpty()) {
-            $institutionId = $waiting->first()->institution_id;
-            $answers = AttemptAnswer::query()
+        if ($unloaded->isNotEmpty()) {
+            $institutionId = $unloaded->first()->institution_id;
+            $answers = $answers->concat(AttemptAnswer::query()
                 ->select(['id', 'institution_id', 'attempt_id', 'question_id', 'checking_status', 'awarded_points'])
                 ->where('institution_id', $institutionId)
-                ->whereIn('attempt_id', $waiting->pluck('id'))
+                ->whereIn('attempt_id', $unloaded->pluck('id'))
                 ->with(['question' => fn ($query) => $query->select(['id', 'institution_id', 'points'])->where('institution_id', $institutionId)])
-                ->get();
+                ->get());
+        }
 
-            foreach ($answers as $answer) {
-                $points[$answer->attempt_id][] = $this->bestPoints($answer);
-            }
+        foreach ($answers as $answer) {
+            $points[$answer->attempt_id][] = $this->bestPoints($answer);
         }
 
         return $pending->mapWithKeys(fn (AssessmentAttempt $attempt): array => [
@@ -119,7 +124,7 @@ final class OfficialScoreEvaluator
 
     private function bestPoints(AttemptAnswer $answer): string
     {
-        $question = $answer->getRelation('question');
+        $question = $answer->relationLoaded('question') ? $answer->getRelation('question') : null;
 
         return match ($answer->checking_status) {
             AttemptAnswerCheckingStatus::AutoChecked, AttemptAnswerCheckingStatus::TeacherChecked => $answer->awarded_points

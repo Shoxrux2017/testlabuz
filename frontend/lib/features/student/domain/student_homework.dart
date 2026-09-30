@@ -1,3 +1,4 @@
+import 'student_homework_attempt.dart';
 import 'student_question.dart';
 
 final _canonicalStudentHomeworkIdPattern = RegExp(
@@ -93,6 +94,7 @@ class StudentHomeworkSummary {
     required this.attempts,
     required this.myStatus,
     required this.scoreVisible,
+    this.officialScore,
   });
 
   final String id;
@@ -103,6 +105,7 @@ class StudentHomeworkSummary {
   final StudentHomeworkAttemptSummary attempts;
   final StudentHomeworkMyStatus myStatus;
   final bool scoreVisible;
+  final StudentOfficialScore? officialScore;
 }
 
 class StudentHomeworkDetail {
@@ -119,7 +122,12 @@ class StudentHomeworkDetail {
     required this.myStatus,
     required this.scoreVisible,
     required List<StudentQuestion> questions,
-  }) : questions = List<StudentQuestion>.unmodifiable(questions);
+    this.officialScore,
+    List<StudentHomeworkAttemptResultItem> attemptResults = const [],
+  }) : questions = List<StudentQuestion>.unmodifiable(questions),
+       attemptResults = List<StudentHomeworkAttemptResultItem>.unmodifiable(
+         attemptResults,
+       );
 
   final String id;
   final StudentHomeworkTopicSummary topic;
@@ -133,4 +141,23 @@ class StudentHomeworkDetail {
   final StudentHomeworkMyStatus myStatus;
   final bool scoreVisible;
   final List<StudentQuestion> questions;
+  final StudentOfficialScore? officialScore;
+
+  /// Every terminal Attempt in attempt-number order.
+  final List<StudentHomeworkAttemptResultItem> attemptResults;
+}
+
+/// One terminal Homework Attempt of the Student with its own result.
+class StudentHomeworkAttemptResultItem {
+  const StudentHomeworkAttemptResultItem({
+    required this.attemptId,
+    required this.attemptNumber,
+    required this.status,
+    required this.result,
+  });
+
+  final String attemptId;
+  final int attemptNumber;
+  final StudentHomeworkAttemptStatus status;
+  final StudentAttemptResult result;
 }

@@ -124,7 +124,8 @@ class StudentHomeworkAttemptStartApiTest extends TestCase
             'id' => $attempt->id, 'assessment_id' => $homework->assessment_id,
             'attempt_number' => 1, 'status' => 'in_progress', 'started_at' => '2026-09-09T12:00:00Z',
             'submitted_at' => null, 'finalized_at' => null, 'finalization_reason' => null,
-            'deadline_at' => $hasDeadline ? '2026-09-10T12:00:00Z' : null, 'questions' => [], 'answers' => [],
+            'deadline_at' => $hasDeadline ? '2026-09-10T12:00:00Z' : null,
+            'result' => ['visible' => false, 'normalized_score' => null], 'questions' => [], 'answers' => [],
         ], $response->json('data'));
         $this->assertSame(['data'], array_keys($response->json()));
         $this->assertTrue(Str::isUuid($attempt->id));
@@ -462,15 +463,17 @@ class StudentHomeworkAttemptStartApiTest extends TestCase
             ->assertJsonPath('data.status', 'submitted')->assertJsonPath('data.finalized_at', '2026-09-09T12:01:00Z')
             ->assertJsonPath('data.finalization_reason', 'homework_deadline_auto_submit');
         $this->assertSame(['id', 'assessment_id', 'attempt_number', 'status', 'started_at', 'submitted_at',
-            'finalized_at', 'finalization_reason', 'deadline_at', 'questions', 'answers'], array_keys($response->json('data')));
+            'finalized_at', 'finalization_reason', 'deadline_at', 'result', 'questions', 'answers'], array_keys($response->json('data')));
         $this->assertSame($safeQuestions, $response->json('data.questions'));
+        // Stage 9: the result and the Teacher's feedback stay hidden while results are not released.
+        $response->assertJsonPath('data.result', ['visible' => false, 'normalized_score' => null]);
         $this->assertSame([[
             'question_id' => $question->id, 'type' => 'single_choice',
-            'answer' => ['selected_option_ids' => [$option->id]], 'updated_at' => '2026-09-09T12:00:00Z',
+            'answer' => ['selected_option_ids' => [$option->id]], 'updated_at' => '2026-09-09T12:00:00Z', 'feedback' => null,
         ]], $response->json('data.answers'));
         $this->assertSame($answerBefore, $answer->fresh()->getAttributes());
         foreach (['is_correct', 'correct_value', 'accepted_answers', 'correct_position', 'match_key',
-            'checking_status', 'awarded_points', 'feedback', 'checked_by_user_id', 'checked_at', 'attempt_id',
+            'checking_status', 'awarded_points', 'checked_by_user_id', 'checked_at', 'attempt_id',
             'checking_mode', 'earned_points', 'possible_points', 'assessment_student_id', 'student_id', 'institution_id'] as $hidden) {
             $this->assertStringNotContainsString('"'.$hidden.'"', $response->getContent());
         }

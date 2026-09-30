@@ -148,6 +148,7 @@ void main() {
                 'type': 'true_false',
                 'answer': {'value': true},
                 'updated_at': '2026-09-08T12:00:00Z',
+                'feedback': null,
               },
             ],
         },
@@ -370,6 +371,7 @@ Map<String, Object?> _attempt() => {
   'finalized_at': null,
   'finalization_reason': null,
   'deadline_at': '2026-09-10T13:00:00Z',
+  'result': <String, Object?>{'visible': false, 'normalized_score': null},
   'questions': [],
   'answers': [],
 };

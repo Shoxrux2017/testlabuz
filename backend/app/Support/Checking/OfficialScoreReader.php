@@ -51,8 +51,7 @@ final class OfficialScoreReader
             ->where('student_id', $recipient->student_id)
             ->first();
 
-        if ($official !== null && $score !== null && $score->official_attempt_id === $official->id
-            && $this->math->compare((string) $score->normalized_score, (string) $official->normalized_score) === 0) {
+        if ($official !== null && $this->confirms($score, $evaluation)) {
             return OfficialScoreReading::ready($assessment, $recipient, $score, $official);
         }
 
@@ -67,6 +66,18 @@ final class OfficialScoreReader
         };
 
         return OfficialScoreReading::notReady($assessment, $recipient, $status);
+    }
+
+    /**
+     * The stored row is the official score only while the live evaluation is ready with the same
+     * Attempt and score (the sweep's definition of a differing row).
+     */
+    public function confirms(?OfficialTaskScore $score, OfficialScoreEvaluation $evaluation): bool
+    {
+        $official = $evaluation->official;
+
+        return $official !== null && $score !== null && $score->official_attempt_id === $official->id
+            && $this->math->compare((string) $score->normalized_score, (string) $official->normalized_score) === 0;
     }
 
     /**

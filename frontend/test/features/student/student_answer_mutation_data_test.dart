@@ -859,8 +859,10 @@ Map<String, Object?> _attempt(StudentQuestionType type, Object? answer) => {
   'finalized_at': null,
   'finalization_reason': null,
   'deadline_at': null,
+  'result': <String, Object?>{'visible': false, 'normalized_score': null},
   'questions': [_questionJson(type)],
-  'answers': [_result(type, answer)],
+  // An Attempt answer is the saved answer plus the hidden Teacher feedback.
+  'answers': [_result(type, answer)..['feedback'] = null],
 };
 
 String _id(int number) =>

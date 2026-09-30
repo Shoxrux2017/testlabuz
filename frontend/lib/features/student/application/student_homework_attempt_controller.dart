@@ -158,6 +158,7 @@ class StudentHomeworkAttemptController
               updatedAt: result.updatedAt!,
             ),
         ],
+        result: attempt.result,
       ),
       publicationToken: StudentHomeworkAttemptPublicationToken(),
       readToken: state.readToken,

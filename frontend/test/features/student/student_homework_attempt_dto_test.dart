@@ -277,9 +277,15 @@ void main() {
             'institution_id',
             'removed_at',
           ]) {
+            final present = map.containsKey(key);
+            final original = map[key];
             map[key] = 'protected';
             _reject(payload);
-            map.remove(key);
+            if (present) {
+              map[key] = original;
+            } else {
+              map.remove(key);
+            }
           }
         }
       },
@@ -542,6 +548,7 @@ Map<String, Object?> _attempt() => {
   'finalized_at': null,
   'finalization_reason': null,
   'deadline_at': _deadline,
+  'result': <String, Object?>{'visible': false, 'normalized_score': null},
   'questions': <Object?>[],
   'answers': <Object?>[],
 };
@@ -610,6 +617,7 @@ Map<String, Object?> _answer(StudentQuestionType type, int position) => {
   'question_id': _uuid(100 + position),
   'type': type.apiValue,
   'updated_at': _finished,
+  'feedback': null,
   'answer': switch (type) {
     StudentQuestionType.singleChoice ||
     StudentQuestionType.multipleChoice => <String, Object?>{

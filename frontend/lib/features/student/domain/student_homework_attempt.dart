@@ -1,7 +1,9 @@
 import 'student_attempt_answer.dart';
 import 'student_question.dart';
+import 'student_result.dart';
 
 export 'student_attempt_answer.dart';
+export 'student_result.dart';
 
 enum StudentHomeworkAttemptStatus {
   inProgress('in_progress'),
@@ -53,6 +55,7 @@ class StudentHomeworkAttempt {
     required this.deadlineAt,
     required List<StudentQuestion> questions,
     required List<StudentAttemptAnswerState> answers,
+    this.result = const StudentAttemptResult.hidden(),
   }) : assert(attemptNumber >= 1 && attemptNumber <= 3),
        questions = List<StudentQuestion>.unmodifiable(questions),
        answers = List<StudentAttemptAnswerState>.unmodifiable(answers);
@@ -68,6 +71,7 @@ class StudentHomeworkAttempt {
   final DateTime? deadlineAt;
   final List<StudentQuestion> questions;
   final List<StudentAttemptAnswerState> answers;
+  final StudentAttemptResult result;
 }
 
 enum StudentHomeworkAttemptStartResultKind { created, resumed }

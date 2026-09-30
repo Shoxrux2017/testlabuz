@@ -2,6 +2,7 @@ import '../../domain/student_homework_attempt.dart';
 import 'student_attempt_answer_parser.dart';
 import 'student_dto_parse.dart';
 import 'student_question_dto.dart';
+import 'student_result_dto.dart';
 
 export 'student_attempt_answer_parser.dart' show parseStudentAttemptAnswerValue;
 
@@ -16,6 +17,7 @@ class StudentHomeworkAttemptDto {
     required this.finalizedAt,
     required this.finalizationReason,
     required this.deadlineAt,
+    required this.result,
     required List<StudentQuestionDto> questions,
     required List<StudentAttemptAnswerState> answers,
   }) : questions = List<StudentQuestionDto>.unmodifiable(questions),
@@ -35,6 +37,7 @@ class StudentHomeworkAttemptDto {
         'finalized_at',
         'finalization_reason',
         'deadline_at',
+        'result',
         'questions',
         'answers',
       },
@@ -72,7 +75,19 @@ class StudentHomeworkAttemptDto {
       reason: reason,
       deadlineAt: deadlineAt,
     );
-    final content = StudentAttemptContentDto.fromAttemptMap(map);
+    final result = readStudentAttemptResult(map['result']);
+    final content = StudentAttemptContentDto.fromAttemptMap(
+      map,
+      withFeedback: true,
+    );
+    // Only a checked Attempt shows its result, and feedback only with it.
+    if ((result.visible && status != StudentHomeworkAttemptStatus.checked) ||
+        (!result.visible &&
+            content.answers.any((answer) => answer.feedback != null))) {
+      throw const FormatException(
+        'Homework Attempt result and feedback are inconsistent.',
+      );
+    }
     return StudentHomeworkAttemptDto(
       id: readStudentCanonicalUuid(map, 'id'),
       assessmentId: readStudentCanonicalUuid(map, 'assessment_id'),
@@ -83,6 +98,7 @@ class StudentHomeworkAttemptDto {
       finalizedAt: finalizedAt,
       finalizationReason: reason,
       deadlineAt: deadlineAt,
+      result: result,
       questions: content.questions,
       answers: content.answers,
     );
@@ -97,6 +113,7 @@ class StudentHomeworkAttemptDto {
   final DateTime? finalizedAt;
   final StudentHomeworkAttemptFinalizationReason? finalizationReason;
   final DateTime? deadlineAt;
+  final StudentAttemptResult result;
   final List<StudentQuestionDto> questions;
   final List<StudentAttemptAnswerState> answers;
 
@@ -112,6 +129,7 @@ class StudentHomeworkAttemptDto {
     deadlineAt: deadlineAt,
     questions: questions.map((question) => question.toDomain()).toList(),
     answers: answers,
+    result: result,
   );
 }
 

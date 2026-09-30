@@ -5,7 +5,8 @@ import 'student_question_dto.dart';
 
 /// Safe Questions and saved answers of one Student Attempt resource.
 ///
-/// Shared by Homework and Blitz so both keep one integrity boundary.
+/// Shared by Homework and Blitz so both keep one integrity boundary. Only
+/// Homework Attempt answers carry the Teacher's `feedback`.
 class StudentAttemptContentDto {
   StudentAttemptContentDto._({
     required List<StudentQuestionDto> questions,
@@ -13,7 +14,10 @@ class StudentAttemptContentDto {
   }) : questions = List<StudentQuestionDto>.unmodifiable(questions),
        answers = List<StudentAttemptAnswerState>.unmodifiable(answers);
 
-  factory StudentAttemptContentDto.fromAttemptMap(Map<String, Object?> map) {
+  factory StudentAttemptContentDto.fromAttemptMap(
+    Map<String, Object?> map, {
+    bool withFeedback = false,
+  }) {
     final questions = readStudentList(
       map,
       'questions',
@@ -31,7 +35,11 @@ class StudentAttemptContentDto {
     }
     final answeredQuestionIds = <String>{};
     final answers = readStudentList(map, 'answers').map((json) {
-      final answer = _readAnswer(json, questionsById);
+      final answer = _readAnswer(
+        json,
+        questionsById,
+        withFeedback: withFeedback,
+      );
       if (!answeredQuestionIds.add(answer.questionId.toLowerCase())) {
         throw const FormatException(
           'Attempt Answer Question IDs must be unique.',
@@ -48,12 +56,19 @@ class StudentAttemptContentDto {
 
 StudentAttemptAnswerState _readAnswer(
   Object? json,
-  Map<String, StudentQuestionDto> questionsById,
-) {
+  Map<String, StudentQuestionDto> questionsById, {
+  required bool withFeedback,
+}) {
   final map = readExactStudentMap(
     json,
     context: 'Student Attempt Answer',
-    keys: const {'question_id', 'type', 'answer', 'updated_at'},
+    keys: {
+      'question_id',
+      'type',
+      'answer',
+      'updated_at',
+      if (withFeedback) 'feedback',
+    },
   );
   final questionId = readStudentCanonicalUuid(map, 'question_id');
   final type = StudentQuestionType.parse(
@@ -70,6 +85,18 @@ StudentAttemptAnswerState _readAnswer(
     type: type,
     value: parseStudentAttemptAnswerValue(map['answer'], question.toDomain()),
     updatedAt: readStudentWholeSecondUtcTimestamp(map, 'updated_at'),
+    feedback: withFeedback ? _readFeedback(map) : null,
+  );
+}
+
+/// The server turns empty feedback into null, so any other text is valid.
+String? _readFeedback(Map<String, Object?> map) {
+  final feedback = map['feedback'];
+  if (feedback == null || (feedback is String && feedback.isNotEmpty)) {
+    return feedback as String?;
+  }
+  throw const FormatException(
+    'Answer feedback must be null or non-empty text.',
   );
 }
 

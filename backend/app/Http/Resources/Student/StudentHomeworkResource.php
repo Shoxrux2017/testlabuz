@@ -2,7 +2,9 @@
 
 namespace App\Http\Resources\Student;
 
+use App\Enums\AssessmentAttemptStatus;
 use App\Models\Assessment;
+use App\Models\AssessmentAttempt;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use LogicException;
@@ -34,7 +36,26 @@ class StudentHomeworkResource extends StudentHomeworkSummaryResource
             'attempts' => $summary['attempts'],
             'my_status' => $summary['my_status'],
             'score_visible' => $summary['score_visible'],
+            'official_score' => $summary['official_score'],
+            'attempt_results' => $this->attemptResults(),
             'questions' => StudentQuestionResource::collection($questions),
         ];
+    }
+
+    /** @return list<array<string, mixed>> Every terminal Attempt in attempt-number order */
+    private function attemptResults(): array
+    {
+        return $this->getRelation('attempts')
+            ->reject(fn (AssessmentAttempt $attempt): bool => $attempt->status === AssessmentAttemptStatus::InProgress)
+            ->sortBy('attempt_number')
+            ->map(fn (AssessmentAttempt $attempt): array => [
+                'attempt_id' => $attempt->id,
+                'attempt_number' => $attempt->attempt_number,
+                'status' => $attempt->status->value,
+                'result' => $attempt->getAttribute('student_result')
+                    ?? throw new LogicException('Student Homework Attempts require their result projection.'),
+            ])
+            ->values()
+            ->all();
     }
 }

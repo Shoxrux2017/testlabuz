@@ -2,9 +2,11 @@
 
 namespace App\Actions\Student;
 
+use App\Models\InstitutionSetting;
 use App\Models\User;
 use App\Support\Student\StudentHomeworkAccess;
 use App\Support\Student\StudentHomeworkAttemptSummary;
+use App\Support\Student\StudentHomeworkResults;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class ListStudentHomework
@@ -19,6 +21,7 @@ class ListStudentHomework
         private readonly StudentHomeworkAccess $access,
         private readonly ReconcileStudentHomeworkDeadlines $reconcileDeadlines,
         private readonly StudentHomeworkAttemptSummary $attemptSummary,
+        private readonly StudentHomeworkResults $results,
     ) {}
 
     public function __invoke(
@@ -57,6 +60,12 @@ class ListStudentHomework
         foreach ($homework->items() as $assessment) {
             $assessment->setAttribute('student_attempt_summary', ($this->attemptSummary)($student, $assessment, $readAt));
         }
+
+        $releaseMode = InstitutionSetting::query()
+            ->select(['institution_id', 'student_result_release_mode'])
+            ->where('institution_id', $student->institution_id)
+            ->first()?->student_result_release_mode;
+        $this->results->apply($student, $homework->items(), $releaseMode);
 
         return $homework;
     }

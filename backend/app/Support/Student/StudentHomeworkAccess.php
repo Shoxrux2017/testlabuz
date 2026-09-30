@@ -20,6 +20,7 @@ class StudentHomeworkAccess
                 'assessments.id',
                 'assessments.institution_id',
                 'assessments.topic_id',
+                'assessments.type',
                 'assessments.title',
                 'assessments.description',
                 'assessments.student_instructions',
@@ -70,6 +71,7 @@ class StudentHomeworkAccess
                     'id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id',
                     'attempt_number', 'status', 'started_at', 'submitted_at', 'finalized_at',
                     'finalization_reason', 'locked_at', 'deadline_at',
+                    'official_score_eligible', 'possible_points', 'normalized_score',
                 ])
                 // Validate the complete recipient graph after loading this Student's rows.
                 ->where('student_id', $student->id)

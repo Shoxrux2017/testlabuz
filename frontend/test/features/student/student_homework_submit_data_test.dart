@@ -237,6 +237,7 @@ void main() {
             'type': 'true_false',
             'answer': {'value': true},
             'updated_at': '2026-09-08T12:00:00Z',
+            'feedback': null,
           },
         ],
     ),
@@ -437,6 +438,7 @@ Map<String, Object?> _attempt({String status = 'submitted'}) => {
   'finalized_at': '2026-09-08T12:10:00Z',
   'finalization_reason': 'student_submit',
   'deadline_at': '2026-09-10T13:00:00Z',
+  'result': <String, Object?>{'visible': false, 'normalized_score': null},
   'questions': [],
   'answers': [],
 };

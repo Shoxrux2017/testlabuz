@@ -93,6 +93,31 @@ class OfficialScoreEvaluatorTest extends TestCase
             : $this->assertNotReady($evaluation, [$waiting]);
     }
 
+    #[DataProvider('waitingBounds')]
+    public function test_loaded_answers_of_a_waiting_attempt_give_the_same_bound_without_an_answer_query(string $waitingPoints, int $waitingNumber, bool $ready): void
+    {
+        $this->homework();
+        $best = $this->attempt(3 - $waitingNumber, 'checked', '66.66666667', possible: '3.000000');
+        $waiting = $this->attempt($waitingNumber, 'waiting_for_teacher_review', possible: '3.000000');
+        $this->answer($waiting, '1.000000', 'auto_checked', '1.00000000');
+        $this->answer($waiting, '1.000000', 'teacher_checked', '0.50000000');
+        $this->answer($waiting, $waitingPoints, 'waiting_for_teacher_review');
+        [$assessment, $attempts] = [$this->assessment(), $this->attempts()->load([
+            'answers' => fn ($query) => $query->select(['id', 'institution_id', 'attempt_id', 'question_id', 'checking_status', 'awarded_points']),
+            'answers.question' => fn ($query) => $query->select(['id', 'institution_id', 'points']),
+        ])];
+        $answerQueries = 0;
+        DB::listen(function ($query) use (&$answerQueries): void {
+            $answerQueries += str_contains($query->sql, '"attempt_answers"') ? 1 : 0;
+        });
+
+        $evaluation = app(OfficialScoreEvaluator::class)->evaluate($assessment, $this->recipient, $attempts);
+
+        $this->assertSame(0, $answerQueries);
+        $ready ? $this->assertReady($evaluation, $best, OfficialScoreSelectionPolicy::HighestValidCompleted)
+            : $this->assertNotReady($evaluation, [$waiting]);
+    }
+
     public function test_in_progress_homework_attempts_neither_count_nor_block(): void
     {
         $this->homework();
