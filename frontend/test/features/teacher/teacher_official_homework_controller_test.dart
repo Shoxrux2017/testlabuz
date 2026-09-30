@@ -681,6 +681,16 @@ class _FakeHomeworkRepository implements TeacherHomeworkRepository {
   }
 
   @override
+  Future<TeacherHomework> setReviewDueAt(
+    String homeworkId,
+    TeacherHomeworkReviewDueAtRequest request,
+  ) {
+    throw UnimplementedError(
+      'Review deadlines are not used by official tests.',
+    );
+  }
+
+  @override
   Future<TeacherHomework> addQuestion(
     String homeworkId,
     TeacherQuestionCreateRequest request,

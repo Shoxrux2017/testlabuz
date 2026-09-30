@@ -58,6 +58,18 @@ String formatTeacherHomeworkDeadline(
       'Institution timezone unavailable';
 }
 
+String formatTeacherHomeworkReviewDeadline(
+  DateTime? reviewDueAt,
+  String institutionTimezone,
+) {
+  if (reviewDueAt == null) {
+    return 'Not set';
+  }
+
+  return formatInstitutionInstant(reviewDueAt, institutionTimezone) ??
+      'Institution timezone unavailable';
+}
+
 String teacherHomeworkOfficialScorePolicyLabel(String policy) {
   return switch (policy) {
     TeacherHomeworkAttemptPolicy.requiredOfficialScorePolicy =>

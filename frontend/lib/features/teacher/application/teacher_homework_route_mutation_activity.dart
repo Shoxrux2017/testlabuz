@@ -13,7 +13,11 @@ final teacherHomeworkRouteMutationActivityProvider = NotifierProvider
       TeacherHomeworkRouteTarget
     >(TeacherHomeworkRouteMutationActivityController.new);
 
-enum TeacherHomeworkRouteMutationOperation { lifecycle, official }
+enum TeacherHomeworkRouteMutationOperation {
+  lifecycle,
+  official,
+  reviewDeadline,
+}
 
 class TeacherHomeworkRouteMutationLease {
   const TeacherHomeworkRouteMutationLease({

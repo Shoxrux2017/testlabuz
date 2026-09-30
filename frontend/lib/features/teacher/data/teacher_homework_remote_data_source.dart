@@ -130,6 +130,29 @@ class TeacherHomeworkRemoteDataSource {
     );
   }
 
+  Future<TeacherHomeworkMutationDto> setReviewDueAt(
+    String homeworkId,
+    TeacherHomeworkReviewDueAtRequest request,
+  ) {
+    if (!isCanonicalTeacherHomeworkId(homeworkId)) {
+      throw ArgumentError.value(
+        homeworkId,
+        'homeworkId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return _sendMutation(
+      () => dio.put<Object?>(
+        '/teacher/homework/${Uri.encodeComponent(homeworkId)}/review-due-at',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      expectedMessage: TeacherHomeworkMutationDto.reviewDueAtSuccessMessage,
+      operation: _TeacherHomeworkMutationOperation.reviewDueAt,
+    );
+  }
+
   Future<TeacherHomeworkMutationDto> performLifecycleAction(
     String homeworkId,
     TeacherHomeworkLifecycleAction action,
@@ -299,7 +322,12 @@ class TeacherHomeworkRemoteDataSource {
   }
 }
 
-enum _TeacherHomeworkMutationOperation { create, update, lifecycle }
+enum _TeacherHomeworkMutationOperation {
+  create,
+  update,
+  lifecycle,
+  reviewDueAt,
+}
 
 Set<String> _homeworkConflictCodes(
   _TeacherHomeworkMutationOperation operation,
@@ -338,6 +366,10 @@ Set<String> _homeworkConflictCodes(
       ApiErrorCodes.taskArchived,
       ApiErrorCodes.businessConflict,
       ApiErrorCodes.officialTaskRequiresGroupAssignment,
+    },
+    _TeacherHomeworkMutationOperation.reviewDueAt => const {
+      ApiErrorCodes.taskArchived,
+      ApiErrorCodes.topicNotEditable,
     },
   };
 }

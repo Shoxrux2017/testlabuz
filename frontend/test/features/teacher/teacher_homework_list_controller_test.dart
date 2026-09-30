@@ -456,6 +456,14 @@ class _FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   }
 
   @override
+  Future<TeacherHomework> setReviewDueAt(
+    String homeworkId,
+    TeacherHomeworkReviewDueAtRequest request,
+  ) {
+    throw UnimplementedError('Mutations are not used by list tests.');
+  }
+
+  @override
   Future<TeacherHomework> deleteQuestion(String questionId) {
     throw UnimplementedError('Mutations are not used by list tests.');
   }
