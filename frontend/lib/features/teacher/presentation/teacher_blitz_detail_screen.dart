@@ -17,6 +17,7 @@ import '../application/teacher_topic_result_pair_controller.dart';
 import '../domain/teacher_blitz.dart';
 import '../domain/teacher_blitz_form.dart';
 import 'teacher_blitz_formatters.dart';
+import 'teacher_task_review_summary_card.dart';
 import 'teacher_blitz_lifecycle_controls.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_question_read_view.dart';
@@ -184,6 +185,15 @@ class _TeacherBlitzDetailScreenState
       );
     }
 
+    void openReviewQueue() {
+      context.go(
+        AppRoutePaths.teacherBlitzReviewsLocation(
+          target.topicId,
+          target.blitzId,
+        ),
+      );
+    }
+
     // The nested route normally pops to its Topic; `go` covers an empty stack.
     void backToTopic() {
       if (context.canPop()) {
@@ -269,6 +279,9 @@ class _TeacherBlitzDetailScreenState
                     onMonitor: showMonitor ? monitor : null,
                     // A lifecycle result must not land on the monitoring route.
                     monitorEnabled: !activity.isActive,
+                    onOpenReviewQueue: isDesktop && !activity.isActive
+                        ? openReviewQueue
+                        : null,
                     lifecycleControls: showLifecycleControls
                         ? TeacherBlitzLifecycleControls(
                             target: target,
@@ -325,6 +338,7 @@ class _BlitzDetailContent extends StatelessWidget {
     required this.onRetry,
     required this.onMonitor,
     required this.monitorEnabled,
+    required this.onOpenReviewQueue,
     required this.lifecycleControls,
   });
 
@@ -337,6 +351,9 @@ class _BlitzDetailContent extends StatelessWidget {
   /// Null unless the confirmed current Blitz is Active.
   final VoidCallback? onMonitor;
   final bool monitorEnabled;
+
+  /// Null on mobile and while a Blitz mutation owns the route.
+  final VoidCallback? onOpenReviewQueue;
   final Widget? lifecycleControls;
 
   @override
@@ -430,6 +447,12 @@ class _BlitzDetailContent extends StatelessWidget {
                 controls,
                 const SizedBox(height: 12),
               ],
+              TeacherTaskReviewSummaryCard(
+                summary: blitz.reviewSummary,
+                showsOverdue: false,
+                onOpenQueue: onOpenReviewQueue,
+              ),
+              const SizedBox(height: 12),
               _BlitzDetailCard(
                 title: 'Blitz information',
                 rows: [

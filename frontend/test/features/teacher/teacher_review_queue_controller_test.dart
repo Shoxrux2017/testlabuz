@@ -7,6 +7,7 @@ import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_review_queue_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_review_queue_scope.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_review_queue_state.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
@@ -16,8 +17,40 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list
 import 'teacher_submission_test_support.dart';
 import 'teacher_test_support.dart';
 
+const _topicId = '10000000-0000-0000-0000-000000000001';
+const _homeworkId = '50000000-0000-0000-0000-000000000001';
+
 void main() {
   group('TeacherReviewQueueController', () {
+    test('a task scope loads and clears within its task', () async {
+      final scope = TeacherReviewQueueScope.task(
+        topicId: _topicId,
+        assessmentId: _homeworkId,
+        type: TeacherSubmissionTaskType.homework,
+      );
+      final harness = _Harness();
+      final state = harness.listen(scope);
+      await flushTeacherControllers();
+
+      expect(harness.repository.queries.single.toQueryParameters(), {
+        'topic_id': _topicId,
+        'assessment_id': _homeworkId,
+        'checking_status': 'waiting_for_teacher_review',
+        'sort': 'default',
+        'page': 1,
+        'per_page': 25,
+      });
+
+      harness.controller.setOfficial(true);
+      await flushTeacherControllers();
+      expect(harness.repository.queries.last.assessmentId, _homeworkId);
+
+      harness.controller.clearFilters();
+      await flushTeacherControllers();
+      expect(state.read().query, scope.initialQuery);
+      expect(harness.repository.queries.last.topicId, _topicId);
+    });
+
     test('loads waiting submissions on desktop', () async {
       final harness = _Harness();
       final state = harness.listen();
@@ -266,14 +299,19 @@ class _Harness {
   final FakeTeacherSubmissionRepository repository;
   late final ProviderContainer container;
 
-  ProviderSubscription<TeacherReviewQueueState> listen() {
+  ProviderSubscription<TeacherReviewQueueState> listen([
+    TeacherReviewQueueScope scope = TeacherReviewQueueScope.all,
+  ]) {
+    this.scope = scope;
     return container.listen(
-      teacherReviewQueueControllerProvider,
+      teacherReviewQueueControllerProvider(scope),
       (_, _) {},
       fireImmediately: true,
     );
   }
 
+  TeacherReviewQueueScope scope = TeacherReviewQueueScope.all;
+
   TeacherReviewQueueController get controller =>
-      container.read(teacherReviewQueueControllerProvider.notifier);
+      container.read(teacherReviewQueueControllerProvider(scope).notifier);
 }

@@ -33,6 +33,8 @@ enum TeacherSubmissionSortDirection {
 /// The review queue filters, sort and page (`S09-DOC-001` §10.2).
 class TeacherSubmissionListQuery {
   const TeacherSubmissionListQuery._({
+    required this.topicId,
+    required this.assessmentId,
     required this.checkingStatus,
     required this.type,
     required this.official,
@@ -43,20 +45,29 @@ class TeacherSubmissionListQuery {
     required this.perPage,
   });
 
-  const TeacherSubmissionListQuery.initial()
-    : this._(
-        checkingStatus: TeacherSubmissionCheckingFilter.waitingForTeacherReview,
-        type: null,
-        official: null,
-        overdueOnly: false,
-        sort: TeacherSubmissionSort.recommended,
-        direction: TeacherSubmissionSortDirection.asc,
-        page: initialPage,
-        perPage: defaultPerPage,
-      );
+  const TeacherSubmissionListQuery.initial({
+    String? topicId,
+    String? assessmentId,
+  }) : this._(
+         topicId: topicId,
+         assessmentId: assessmentId,
+         checkingStatus:
+             TeacherSubmissionCheckingFilter.waitingForTeacherReview,
+         type: null,
+         official: null,
+         overdueOnly: false,
+         sort: TeacherSubmissionSort.recommended,
+         direction: TeacherSubmissionSortDirection.asc,
+         page: initialPage,
+         perPage: defaultPerPage,
+       );
 
   static const initialPage = 1;
   static const defaultPerPage = 25;
+
+  /// Set for a task-scoped queue; they never change with the filters.
+  final String? topicId;
+  final String? assessmentId;
 
   /// Null lists every terminal status.
   final TeacherSubmissionCheckingFilter? checkingStatus;
@@ -74,6 +85,8 @@ class TeacherSubmissionListQuery {
 
   Map<String, Object> toQueryParameters() {
     return Map<String, Object>.unmodifiable(<String, Object>{
+      'topic_id': ?topicId,
+      'assessment_id': ?assessmentId,
       if (checkingStatus case final status?) 'checking_status': status.value,
       if (type case final selectedType?) 'type': selectedType.value,
       if (official case final selectedOfficial?)
@@ -130,6 +143,8 @@ class TeacherSubmissionListQuery {
     int? page,
   }) {
     return TeacherSubmissionListQuery._(
+      topicId: topicId,
+      assessmentId: assessmentId,
       checkingStatus: identical(checkingStatus, _sentinel)
           ? this.checkingStatus
           : checkingStatus as TeacherSubmissionCheckingFilter?,
@@ -152,6 +167,8 @@ class TeacherSubmissionListQuery {
   bool operator ==(Object other) {
     return identical(this, other) ||
         other is TeacherSubmissionListQuery &&
+            other.topicId == topicId &&
+            other.assessmentId == assessmentId &&
             other.checkingStatus == checkingStatus &&
             other.type == type &&
             other.official == official &&
@@ -164,6 +181,8 @@ class TeacherSubmissionListQuery {
 
   @override
   int get hashCode => Object.hash(
+    topicId,
+    assessmentId,
     checkingStatus,
     type,
     official,

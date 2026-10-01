@@ -20,6 +20,7 @@ import '../domain/teacher_homework.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_homework_lifecycle_controls.dart';
 import 'teacher_homework_review_deadline_section.dart';
+import 'teacher_task_review_summary_card.dart';
 import 'teacher_official_homework_section.dart';
 import 'teacher_question_read_view.dart';
 import 'teacher_topic_formatters.dart';
@@ -202,6 +203,15 @@ class _TeacherHomeworkDetailScreenState
       context.go(AppRoutePaths.teacherTopicDetailLocation(_target.topicId));
     }
 
+    final openReviewQueue =
+        surface == AppDeviceSurface.desktop && !activity.isActive
+        ? () => context.go(
+            AppRoutePaths.teacherHomeworkReviewsLocation(
+              _target.topicId,
+              _target.homeworkId,
+            ),
+          )
+        : null;
     final hasConfirmedHomework = detail.homework != null;
     final homework = detail.status == TeacherHomeworkDetailStatus.data
         ? detail.homework
@@ -309,6 +319,7 @@ class _TeacherHomeworkDetailScreenState
                         ),
                       ),
                       onBackToTopic: backToTopic,
+                      onOpenReviewQueue: openReviewQueue,
                     ),
             TeacherHomeworkDetailStatus.data ||
             TeacherHomeworkDetailStatus.refreshing =>
@@ -344,6 +355,7 @@ class _TeacherHomeworkDetailScreenState
                         ),
                       ),
                       onBackToTopic: backToTopic,
+                      onOpenReviewQueue: openReviewQueue,
                     ),
           },
         ),
@@ -365,6 +377,7 @@ class _HomeworkDetailContent extends StatelessWidget {
     required this.onEditHomework,
     required this.onManageQuestions,
     required this.onBackToTopic,
+    required this.onOpenReviewQueue,
   });
 
   final TeacherHomeworkRouteTarget target;
@@ -378,6 +391,7 @@ class _HomeworkDetailContent extends StatelessWidget {
   final VoidCallback onEditHomework;
   final VoidCallback onManageQuestions;
   final VoidCallback onBackToTopic;
+  final VoidCallback? onOpenReviewQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -497,6 +511,12 @@ class _HomeworkDetailContent extends StatelessWidget {
                   ),
                   ('Institution timezone', homework.institutionTimezone),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TeacherTaskReviewSummaryCard(
+                summary: homework.reviewSummary,
+                showsOverdue: true,
+                onOpenQueue: onOpenReviewQueue,
               ),
               if (surface == AppDeviceSurface.desktop &&
                   !stale &&

@@ -11,18 +11,23 @@ import '../data/teacher_submission_repository_impl.dart';
 import '../domain/teacher_submission.dart';
 import '../domain/teacher_submission_list.dart';
 import '../domain/teacher_submission_list_query.dart';
+import 'teacher_review_queue_scope.dart';
 import 'teacher_review_queue_state.dart';
 import 'teacher_session_key.dart';
 
-final teacherReviewQueueControllerProvider =
-    NotifierProvider.autoDispose<
+final teacherReviewQueueControllerProvider = NotifierProvider.autoDispose
+    .family<
       TeacherReviewQueueController,
-      TeacherReviewQueueState
+      TeacherReviewQueueState,
+      TeacherReviewQueueScope
     >(TeacherReviewQueueController.new);
 
 /// The desktop review queue (`S09-D7`): filters, sort and pages over
 /// `GET /teacher/submissions`.
 class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
+  TeacherReviewQueueController(this.scope);
+
+  final TeacherReviewQueueScope scope;
   TeacherSessionKey? _activeSessionKey;
   TeacherSubmissionListQuery? _inFlightQuery;
   int _generation = 0;
@@ -46,7 +51,7 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
     ).eligibleKey;
     if (sessionKey == null || sessionKey.surface != AppDeviceSurface.desktop) {
       _clearOwnership();
-      return const TeacherReviewQueueState();
+      return TeacherReviewQueueState(query: scope.initialQuery);
     }
     if (_activeSessionKey == sessionKey) {
       return state;
@@ -54,15 +59,16 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
 
     _clearOwnership();
     _activeSessionKey = sessionKey;
-    const query = TeacherSubmissionListQuery.initial();
+    final query = scope.initialQuery;
     scheduleMicrotask(() {
       if (_matchesSession(sessionKey)) {
         _startLoad(query, retainResult: false);
       }
     });
 
-    return const TeacherReviewQueueState(
+    return TeacherReviewQueueState(
       status: TeacherReviewQueueStatus.loading,
+      query: query,
     );
   }
 
@@ -104,7 +110,7 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
   }
 
   void clearFilters() {
-    const query = TeacherSubmissionListQuery.initial();
+    final query = scope.initialQuery;
     if (query != state.query) {
       _startLoad(query, retainResult: false);
     }
@@ -264,7 +270,7 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
     }
 
     _clearOwnership();
-    state = const TeacherReviewQueueState();
+    state = TeacherReviewQueueState(query: scope.initialQuery);
     if (code != ApiErrorCodes.authenticationRequired) {
       unawaited(ref.read(authSessionControllerProvider.notifier).bootstrap());
     }

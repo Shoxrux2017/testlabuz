@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-FE-002A` delivery, then `S09-FE-002B` |
+| Next permitted gate | `S09-FE-002B` delivery, then `S09-FE-003` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -144,8 +144,8 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `9a` | `S09-BE-PHASE-2-FIX-001` | Backend fix | Stage 8 seeder test re-baseline, Phase 2 test gaps, repair pair filter | Phase 2 run #1 | `Approved` (on `main` `98747ef`) | Delivered (PR #301, `main` `95992d3`) | `tasks/backend/stage-09/S09-BE-PHASE-2-FIX-001-seeder-rebaseline-and-test-gaps.md` |
 | `10a` | `S09-FE-001A` | Frontend | Exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | `Approved` (on `main` `95992d3`) | Delivered (PR #302, `main` `5aaf9a5`) | `tasks/frontend/stage-09/S09-FE-001A-grant-warning-cl6-cl7.md` |
 | `10b` | `S09-FE-001B` | Frontend | Homework review deadline: display and set/clear on the Homework detail | `FE-001A` | `Approved` (on `main` `5aaf9a5`) | Delivered (PR #303, `main` `6ed9b7a`) | `tasks/frontend/stage-09/S09-FE-001B-homework-review-deadline.md` |
-| `11a` | `S09-FE-002A` | Frontend | Desktop review queue `/teacher/reviews`: filters, sort, pages | `FE-001B` | `Approved` (on `main` `6ed9b7a`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-002A-review-queue.md` |
-| `11b` | `S09-FE-002B` | Frontend | Task review counts on Homework/Blitz detail (all surfaces); task-scoped desktop queue | `FE-002A` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `11a` | `S09-FE-002A` | Frontend | Desktop review queue `/teacher/reviews`: filters, sort, pages | `FE-001B` | `Approved` (on `main` `6ed9b7a`) | Delivered (PR #304, `main` `f3cbefa`) | `tasks/frontend/stage-09/S09-FE-002A-review-queue.md` |
+| `11b` | `S09-FE-002B` | Frontend | Task review counts on Homework/Blitz detail (all surfaces); task-scoped desktop queue | `FE-002A` | `Approved` (on `main` `f3cbefa`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-002B-task-review-counts.md` |
 | `12` | `S09-FE-003` | Frontend | Desktop submission review, file download, correction, official score | `FE-002B` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `13` | `S09-FE-004` | Frontend | Student Homework results and official score; finished Blitz list with results | `FE-003` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Not written | Not started | `tasks/frontend/stage-09/` |
@@ -367,6 +367,21 @@ Only a row whose readiness is `Approved` may be implemented.
     items are fixed too: paging on an emptied later page, the singular `answer`, and the missing tests.
     Every fix is mutation-checked.
   - PR open.
+- `S09-FE-002A` accepted and delivered (PR #304, `main` `f3cbefa`).
+- `S09-FE-002B` contract approved on `f3cbefa`, then implemented.
+  - A `Review` counts card sits on the Homework and Blitz detail on every surface. Blitz shows no overdue
+    count.
+  - The desktop `Open review queue` button opens the nested paths `…/homework/{id}/reviews` and
+    `…/blitz/{id}/reviews`. Mobile is sent to the task detail.
+  - The queue controller is now a family keyed by `TeacherReviewQueueScope`. A task scope sends
+    `topic_id` and `assessment_id`, and hides the task filter.
+  - Independent review: P1 = 0, P2 = 2, P3 = 5, all fixed and mutation-checked.
+    - The new button broke the Stage 8 "no filled button on an Active Blitz" test. It is now an outlined
+      button, like `Monitor`, so the Stage 8 test is unchanged.
+    - The mobile test now asserts the counts themselves.
+    - Tests were added for fragments, malformed entries, Blitz back navigation, the lease precondition
+      and route names.
+  - PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -424,3 +439,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-01 | Backend Phase 2 `PASS` delivered (PR #301); `S09-FE-001` split into `001A`/`001B`; `001A` approved on `95992d3` |
 | 2026-10-01 | `S09-FE-001A` delivered (PR #302); `S09-FE-001B` approved on `5aaf9a5` |
 | 2026-10-01 | `S09-FE-001B` delivered (PR #303); `S09-FE-002` split into `002A`/`002B`; `002A` approved on `6ed9b7a` |
+| 2026-10-01 | `S09-FE-002A` delivered (PR #304); `S09-FE-002B` approved on `f3cbefa` |
