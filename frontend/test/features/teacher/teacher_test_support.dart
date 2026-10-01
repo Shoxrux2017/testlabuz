@@ -85,6 +85,7 @@ AuthUser teacherUser(
   bool isActive = true,
   bool mustChangePassword = false,
   String institutionStatus = 'active',
+  String timezone = 'Asia/Tashkent',
 }) {
   return AuthUser(
     id: '$loginName-id',
@@ -100,7 +101,7 @@ AuthUser teacherUser(
       id: nestedInstitutionId,
       name: 'Example School',
       status: institutionStatus,
-      timezone: 'Asia/Tashkent',
+      timezone: timezone,
     ),
   );
 }

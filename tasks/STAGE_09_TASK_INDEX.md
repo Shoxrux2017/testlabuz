@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-FE-001B` delivery, then `S09-FE-002` |
+| Next permitted gate | `S09-FE-002A` delivery, then `S09-FE-002B` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -143,9 +143,10 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `9` | `S09-BE-PHASE-2` | Backend review | Full Stage 9 backend review + full backend suite | `BE-001…007C` | Executed record | `PASS` — run #1 `NOT ACCEPTED` (`98747ef`); run #2 `PASS` (`5db50d0`); delivered (PR #301, `main` `95992d3`) | `tasks/backend/stage-09/S09-BE-PHASE-2-backend-block-review.md` |
 | `9a` | `S09-BE-PHASE-2-FIX-001` | Backend fix | Stage 8 seeder test re-baseline, Phase 2 test gaps, repair pair filter | Phase 2 run #1 | `Approved` (on `main` `98747ef`) | Delivered (PR #301, `main` `95992d3`) | `tasks/backend/stage-09/S09-BE-PHASE-2-FIX-001-seeder-rebaseline-and-test-gaps.md` |
 | `10a` | `S09-FE-001A` | Frontend | Exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | `Approved` (on `main` `95992d3`) | Delivered (PR #302, `main` `5aaf9a5`) | `tasks/frontend/stage-09/S09-FE-001A-grant-warning-cl6-cl7.md` |
-| `10b` | `S09-FE-001B` | Frontend | Homework review deadline: display and set/clear on the Homework detail | `FE-001A` | `Approved` (on `main` `5aaf9a5`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-001B-homework-review-deadline.md` |
-| `11` | `S09-FE-002` | Frontend | Desktop review queue; mobile counts | `FE-001B` | Not written | Not started | `tasks/frontend/stage-09/` |
-| `12` | `S09-FE-003` | Frontend | Desktop submission review, file download, correction, official score | `FE-002` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `10b` | `S09-FE-001B` | Frontend | Homework review deadline: display and set/clear on the Homework detail | `FE-001A` | `Approved` (on `main` `5aaf9a5`) | Delivered (PR #303, `main` `6ed9b7a`) | `tasks/frontend/stage-09/S09-FE-001B-homework-review-deadline.md` |
+| `11a` | `S09-FE-002A` | Frontend | Desktop review queue `/teacher/reviews`: filters, sort, pages | `FE-001B` | `Approved` (on `main` `6ed9b7a`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-002A-review-queue.md` |
+| `11b` | `S09-FE-002B` | Frontend | Task review counts on Homework/Blitz detail (all surfaces); task-scoped desktop queue | `FE-002A` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `12` | `S09-FE-003` | Frontend | Desktop submission review, file download, correction, official score | `FE-002B` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `13` | `S09-FE-004` | Frontend | Student Homework results and official score; finished Blitz list with results | `FE-003` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | Not written | Not started | `tasks/integration/stage-09/` |
@@ -351,6 +352,21 @@ Only a row whose readiness is `Approved` may be implemented.
     fixed and mutation-checked: a local picker error is shown first, `task_archived` is announced in a
     SnackBar, and stale-detail and list-refresh tests were added.
   - PR open.
+- `S09-FE-001B` accepted and delivered (PR #303, `main` `6ed9b7a`).
+- `S09-FE-002` is split:
+  - `S09-FE-002A`: the desktop review queue at `/teacher/reviews`. It lives on its own path, because
+    every Teacher route sends a query string back to `/teacher`.
+  - `S09-FE-002B`: the task review counts on the Homework and Blitz detail (every surface,
+    `S09-D7`) and a task-scoped desktop queue reached from them.
+- `S09-FE-002A` contract approved on `6ed9b7a`, then implemented.
+  - The default filter is `Waiting for review`, in the recommended order: official first, then
+    overdue.
+  - Rows are display-only until `S09-FE-003`.
+  - Independent review: P1 = 0, P2 = 1, P3 = 4. The P2 was in the contract: the score must be shown with
+    one decimal, half-up (`S09-T3`). It is fixed with a shared formatter that `S09-FE-004` reuses. The P3
+    items are fixed too: paging on an emptied later page, the singular `answer`, and the missing tests.
+    Every fix is mutation-checked.
+  - PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -407,3 +423,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-09-30 | `S09-BE-007C` delivered (PR #300); `S09-BE-PHASE-2` run #1 `NOT ACCEPTED`; `S09-BE-PHASE-2-FIX-001` approved on `98747ef`; run #2 `PASS` |
 | 2026-10-01 | Backend Phase 2 `PASS` delivered (PR #301); `S09-FE-001` split into `001A`/`001B`; `001A` approved on `95992d3` |
 | 2026-10-01 | `S09-FE-001A` delivered (PR #302); `S09-FE-001B` approved on `5aaf9a5` |
+| 2026-10-01 | `S09-FE-001B` delivered (PR #303); `S09-FE-002` split into `002A`/`002B`; `002A` approved on `6ed9b7a` |
