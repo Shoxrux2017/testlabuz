@@ -45,6 +45,7 @@ import '../../features/teacher/presentation/teacher_homework_detail_screen.dart'
 import '../../features/teacher/presentation/teacher_homework_edit_screen.dart';
 import '../../features/teacher/presentation/teacher_question_builder_screen.dart';
 import '../../features/teacher/presentation/teacher_review_queue_screen.dart';
+import '../../features/teacher/presentation/teacher_submission_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
@@ -285,6 +286,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               const TeacherReviewQueueScreen(),
               authoring: true,
             ),
+            routes: [
+              GoRoute(
+                name: AppRouteNames.teacherSubmissionDetail,
+                path: ':${AppRoutePaths.teacherSubmissionIdParameter}',
+                builder: (context, state) {
+                  final submissionId =
+                      state.pathParameters[AppRoutePaths
+                          .teacherSubmissionIdParameter] ??
+                      '';
+                  return _buildTeacherDestination(
+                    TeacherSubmissionDetailScreen(
+                      key: ValueKey<String>(
+                        '${AppRouteNames.teacherSubmissionDetail}:'
+                        '${submissionId.toLowerCase()}',
+                      ),
+                      submissionId: submissionId,
+                    ),
+                    authoring: true,
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(
             name: AppRouteNames.teacherTopicCreate,
@@ -992,6 +1015,7 @@ bool _keepsLocationDuringBootstrap(
               surface == AppDeviceSurface.mobile)) ||
       (surface == AppDeviceSurface.desktop &&
           (AppRoutePaths.isTeacherReviewQueuePath(location) ||
+              AppRoutePaths.isTeacherSubmissionDetailPath(location) ||
               AppRoutePaths.isTeacherHomeworkReviewsPath(location) ||
               AppRoutePaths.isTeacherBlitzReviewsPath(location) ||
               AppRoutePaths.isTeacherTopicCreatePath(location) ||

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
-import '../../../core/scoring/score_display.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/teacher_review_queue_controller.dart';
 import '../application/teacher_review_queue_scope.dart';
@@ -12,7 +11,7 @@ import '../application/teacher_review_queue_state.dart';
 import '../application/teacher_session_key.dart';
 import '../domain/teacher_submission.dart';
 import '../domain/teacher_submission_list_query.dart';
-import 'teacher_topic_formatters.dart';
+import 'teacher_review_formatters.dart';
 
 /// The desktop review queue (`S09-FE-002A`), for every task or one task
 /// (`S09-FE-002B`); a submission opens in `S09-FE-003`.
@@ -78,7 +77,8 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
                   if (scope.type case final type?) ...[
                     const SizedBox(height: 12),
                     Text(
-                      'Submissions of this ${_typeLabel(type)}',
+                      'Submissions of this '
+                      '${teacherSubmissionTaskTypeLabel(type)}',
                       key: const Key('teacherReviewQueueScopeLabel'),
                     ),
                   ],
@@ -436,74 +436,25 @@ class _QueueRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final answers = submission.waitingAnswers + submission.reviewedAnswers;
-    final details = [
-      if (answers > 0)
-        'Reviewed ${submission.reviewedAnswers} of $answers '
-            '${answers == 1 ? 'answer' : 'answers'}',
-      if (submission.reviewDueAt case final reviewDueAt?)
-        'Review by ${_formatTime(reviewDueAt)}',
-      if (submission.normalizedScore case final score?)
-        'Score ${formatScoreOneDecimal(score)}',
-    ];
-
     return Card(
       key: Key('teacherReviewQueueRow:${submission.id}'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  submission.studentName,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Chip(
-                  label: Text(submission.official ? 'Official' : 'Practice'),
-                ),
-                if (!submission.officialScoreEligible)
-                  const Chip(label: Text('Invalidated attempt')),
-                if (submission.reviewOverdue)
-                  const Chip(label: Text('Overdue')),
-              ],
+      clipBehavior: Clip.antiAlias,
+      child: Semantics(
+        button: true,
+        label: 'Open submission of ${submission.studentName}',
+        child: InkWell(
+          onTap: () => context.push(
+            AppRoutePaths.teacherSubmissionDetailLocation(submission.id),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: TeacherSubmissionSummary(
+              submission: submission,
+              timezone: timezone,
             ),
-            const SizedBox(height: 6),
-            Text(
-              '${_typeLabel(submission.taskType)} · ${submission.taskTitle} · '
-              '${submission.topicTitle} · ${submission.groupName}',
-            ),
-            Text(
-              'Attempt ${submission.attemptNumber} · '
-              '${_statusLabel(submission.status)} · '
-              'Finalized ${_formatTime(submission.finalizedAt)}',
-            ),
-            if (details.isNotEmpty) Text(details.join(' · ')),
-          ],
+          ),
         ),
       ),
     );
   }
-
-  String _formatTime(DateTime instant) {
-    final zone = timezone;
-    return (zone == null ? null : formatInstitutionInstant(instant, zone)) ??
-        formatUtcInstant(instant);
-  }
 }
-
-String _typeLabel(TeacherSubmissionTaskType type) => switch (type) {
-  TeacherSubmissionTaskType.homework => 'Homework',
-  TeacherSubmissionTaskType.blitz => 'Blitz',
-};
-
-String _statusLabel(TeacherSubmissionStatus status) => switch (status) {
-  TeacherSubmissionStatus.waitingForTeacherReview => 'Waiting for review',
-  TeacherSubmissionStatus.checked => 'Checked',
-  TeacherSubmissionStatus.submitted ||
-  TeacherSubmissionStatus.timedOutFinalized => 'Automatic checking pending',
-};

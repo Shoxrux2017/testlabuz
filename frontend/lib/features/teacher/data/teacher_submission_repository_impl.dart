@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_failure.dart';
+import '../../../core/network/api_request_exception.dart';
+import '../domain/teacher_submission_detail.dart';
 import '../domain/teacher_submission_list.dart';
 import '../domain/teacher_submission_list_query.dart';
 import '../domain/teacher_submission_repository.dart';
@@ -23,5 +26,20 @@ class TeacherSubmissionRepositoryImpl implements TeacherSubmissionRepository {
   ) async {
     final dto = await remoteDataSource.fetchSubmissions(query);
     return dto.toDomain();
+  }
+
+  @override
+  Future<TeacherSubmissionDetail> fetchSubmission(String submissionId) async {
+    final dto = await remoteDataSource.fetchSubmission(submissionId);
+    final detail = dto.toDomain();
+    if (detail.submission.id.toLowerCase() != submissionId.toLowerCase()) {
+      throw ApiRequestException(
+        ApiFailure.local(
+          kind: ApiFailureKind.invalidResponse,
+          message: 'The submission detail belongs to another submission.',
+        ),
+      );
+    }
+    return detail;
   }
 }
