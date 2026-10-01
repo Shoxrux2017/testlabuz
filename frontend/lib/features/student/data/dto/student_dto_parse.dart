@@ -134,6 +134,14 @@ double readStudentNonNegativeNumber(Map<String, Object?> map, String key) {
   return parsed;
 }
 
+bool readStudentBool(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is bool) {
+    return value;
+  }
+  throw FormatException('$key must be a boolean.');
+}
+
 List<Object?> readStudentList(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! List) {

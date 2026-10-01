@@ -10,6 +10,7 @@ import 'package:testlabuz_client/features/student/domain/student_blitz_attempt.d
 import 'package:testlabuz_client/features/student/domain/student_blitz_attempt_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz_repository.dart';
 import 'package:testlabuz_client/features/student/domain/student_blitz_submit.dart';
+import 'package:testlabuz_client/features/student/domain/student_finished_blitz.dart';
 import 'package:testlabuz_client/features/student/domain/student_question.dart';
 
 import 'student_test_support.dart';
@@ -21,6 +22,74 @@ const studentBlitzReplacementAttemptId = 'b2000000-0000-0000-0000-000000000002';
 const studentBlitzQuestionPrefix = 'b3000000-0000-0000-0000-';
 
 // --- Wire JSON ----------------------------------------------------------------
+
+const finishedQuestionId = 'b3000000-0000-0000-0000-000000000001';
+
+/// One `GET /student/blitz/finished` item: a closed Blitz whose Attempt 1
+/// result is released with one feedback line by default.
+Map<String, Object?> finishedBlitzJson({
+  String id = studentBlitzId,
+  String title = 'Classroom Blitz',
+  String status = 'closed',
+  String? closedAt = '2026-09-30T10:00:00Z',
+  bool attemptException = false,
+  Object? result = const _DefaultFinishedResult(),
+}) => {
+  'id': id,
+  'topic': blitzTopicJson(),
+  'title': title,
+  'status': status,
+  'closed_at': closedAt,
+  'attempt_exception': attemptException,
+  'result': result is _DefaultFinishedResult
+      ? finishedResultJson(attemptNumber: attemptException ? 2 : 1)
+      : result,
+};
+
+Map<String, Object?> finishedResultJson({
+  int attemptNumber = 1,
+  bool visible = true,
+  num? normalized = 82,
+  List<Map<String, Object?>>? feedback,
+}) => {
+  'attempt_number': attemptNumber,
+  'visible': visible,
+  'normalized_score': visible ? normalized : null,
+  'feedback': visible
+      ? feedback ??
+            [
+              <String, Object?>{
+                'question_id': finishedQuestionId,
+                'position': 3,
+                'text': 'Good explanation.',
+              },
+            ]
+      : const <Object?>[],
+};
+
+class _DefaultFinishedResult {
+  const _DefaultFinishedResult();
+}
+
+Map<String, Object?> finishedBlitzPageJson(
+  List<Map<String, Object?>> items, {
+  int page = 1,
+  int perPage = 5,
+  int? total,
+}) {
+  final count = total ?? items.length;
+  return <String, Object?>{
+    'data': items,
+    'meta': <String, Object?>{
+      'pagination': <String, Object?>{
+        'page': page,
+        'per_page': perPage,
+        'total': count,
+        'last_page': count == 0 ? 1 : (count + perPage - 1) ~/ perPage,
+      },
+    },
+  };
+}
 
 Map<String, Object?> blitzTopicJson({
   String id = studentTopicId,
@@ -514,12 +583,37 @@ StudentBlitzAttemptStartResult studentBlitzStartResult({
 // --- Fakes --------------------------------------------------------------------
 
 class FakeStudentBlitzRepository implements StudentBlitzRepository {
-  FakeStudentBlitzRepository({this.onFetchActive, this.onFetchBlitz});
+  FakeStudentBlitzRepository({
+    this.onFetchActive,
+    this.onFetchBlitz,
+    this.onFetchFinished,
+  });
 
   Future<List<StudentActiveBlitzSummary>> Function()? onFetchActive;
   Future<StudentBlitzDetail> Function(String blitzId)? onFetchBlitz;
+  Future<StudentFinishedBlitzPage> Function(int page, int perPage)?
+  onFetchFinished;
   var activeCalls = 0;
   final detailIds = <String>[];
+  final finishedPages = <int>[];
+
+  @override
+  Future<StudentFinishedBlitzPage> fetchFinishedBlitz({
+    required int page,
+    required int perPage,
+  }) {
+    finishedPages.add(page);
+    return onFetchFinished?.call(page, perPage) ??
+        Future.value(
+          StudentFinishedBlitzPage(
+            items: const [],
+            page: page,
+            perPage: perPage,
+            total: 0,
+            lastPage: 1,
+          ),
+        );
+  }
 
   @override
   Future<List<StudentActiveBlitzSummary>> fetchActiveBlitz() {

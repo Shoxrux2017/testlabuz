@@ -8,6 +8,7 @@ import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/student_blitz.dart';
 import 'dto/student_blitz_dto.dart';
 import 'dto/student_dto_parse.dart';
+import 'dto/student_finished_blitz_dto.dart';
 
 final studentBlitzRemoteDataSourceProvider =
     Provider<StudentBlitzRemoteDataSource>((ref) {
@@ -38,6 +39,29 @@ class StudentBlitzRemoteDataSource {
         );
       }
       return StudentActiveBlitzListDto.fromJson(response.data);
+    });
+  }
+
+  Future<StudentFinishedBlitzPageDto> fetchFinishedBlitz({
+    required int page,
+    required int perPage,
+  }) {
+    return _mapFailures(() async {
+      final response = await dio.get<Object?>(
+        '/student/blitz/finished',
+        queryParameters: {'page': page, 'per_page': perPage},
+        options: Options(followRedirects: false),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'Student finished Blitz success status must be 200.',
+        );
+      }
+      return StudentFinishedBlitzPageDto.fromJson(
+        response.data,
+        page: page,
+        perPage: perPage,
+      );
     });
   }
 

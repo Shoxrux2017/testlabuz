@@ -119,6 +119,15 @@ String studentActiveBlitzFailureMessage(ApiFailure failure) =>
       _ => 'Try again.',
     };
 
+String studentFinishedBlitzFailureMessage(ApiFailure failure) =>
+    switch (failure.kind) {
+      ApiFailureKind.connection => 'Could not reach the server.',
+      ApiFailureKind.timeout => 'The finished Blitz request timed out.',
+      ApiFailureKind.invalidResponse =>
+        'The server returned an unexpected finished Blitz response.',
+      _ => 'Try again.',
+    };
+
 String studentBlitzDetailFailureMessage(ApiFailure failure) =>
     switch (failure.kind) {
       ApiFailureKind.connection =>
