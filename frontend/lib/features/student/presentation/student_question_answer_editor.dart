@@ -52,11 +52,17 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
         state.saveStatus == StudentAnswerSaveStatus.saving ||
         (uncertain && isReconciling);
     final failure = state.failure;
+    final failed =
+        state.saveStatus == StudentAnswerSaveStatus.failure && failure != null;
+    final invalid = state.isDirty && state.validation != null;
+    // Autosave changes the status at every typing pause, so only messages
+    // that need the Student's attention are announced.
+    final announced = uncertain || failed || invalid;
     final status = uncertain
         ? 'Save not confirmed. Checking…'
-        : state.saveStatus == StudentAnswerSaveStatus.failure && failure != null
+        : failed
         ? failureMessage(failure)
-        : state.isDirty && state.validation != null
+        : invalid
         ? state.validation!
         : state.isDirty || state.saveStatus == StudentAnswerSaveStatus.saving
         ? 'Saving…'
@@ -77,7 +83,7 @@ class StudentQuestionAnswerEditor extends StatelessWidget {
           _editorBody(),
           const SizedBox(height: 12),
           Semantics(
-            liveRegion: true,
+            liveRegion: announced,
             child: Text(
               status,
               key: ValueKey('studentSaveStatus${question.id}'),

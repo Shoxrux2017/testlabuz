@@ -230,6 +230,46 @@ void main() {
       },
     );
 
+    testWidgets(
+      '${surface.name} a flush cancelled by leaving is not a save failure',
+      (tester) async {
+        final harness = await _pump(tester, surface: surface);
+        harness.editor.updateDraft(
+          _questionId(1),
+          const StudentShortWrittenDraft(text: 'pending'),
+        );
+        await tester.pump();
+        await tester.ensureVisible(_submitButton);
+        await tester.tap(_submitButton);
+        await tester.pump();
+
+        // The leave dialog shares this flush and cancels it.
+        harness.editor.cancelFlush();
+        await tester.pump();
+
+        expect(
+          find.text(
+            'Some answers are not saved yet. Check the marked questions.',
+          ),
+          findsNothing,
+        );
+        harness.repository.saves.single.complete(
+          StudentAttemptAnswerMutationResult(
+            questionId: _questionId(1),
+            type: StudentQuestionType.shortWritten,
+            answer: const StudentTextAnswerValue(text: 'pending'),
+            updatedAt: DateTime.utc(2026, 9, 10, 8),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('studentHomeworkSubmitConfirmDialog')),
+          findsNothing,
+        );
+        expect(harness.repository.submits, isEmpty);
+      },
+    );
+
     testWidgets('${surface.name} Cancel stops saving before Submit', (
       tester,
     ) async {

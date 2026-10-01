@@ -13,6 +13,7 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/idempotency_key_generator.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_active_blitz_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_answer_editor_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_detail_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_submission_file_picker.dart';
 import 'package:testlabuz_client/features/student/data/student_attempt_answer_repository_impl.dart';
@@ -173,6 +174,40 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await _settle(tester);
     expect(h.attempts.submits, isEmpty);
+  });
+
+  testWidgets('a flush cancelled by leaving is not a save failure', (
+    tester,
+  ) async {
+    final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
+    await _tap(tester, find.text('True'));
+    await tester.pump();
+    await _tap(tester, find.byKey(const Key('studentBlitzSubmitButton')));
+    await tester.pump();
+
+    // The leave dialog shares this flush and cancels it.
+    h.container
+        .read(
+          studentBlitzAnswerEditorControllerProvider(
+            blitzExecutionTarget,
+          ).notifier,
+        )
+        .cancelFlush();
+    await tester.pump();
+
+    expect(
+      find.text('Some answers are not saved yet. Check the marked questions.'),
+      findsNothing,
+    );
+    h.answers.saves.single.complete(
+      blitzMutationResult(
+        1,
+        StudentQuestionType.trueFalse,
+        const StudentBooleanAnswerValue(value: true),
+      ),
+    );
+    await _settle(tester);
+    expect(find.text('Submit Blitz?'), findsNothing);
   });
 
   testWidgets('Cancel stops saving before Submit', (tester) async {

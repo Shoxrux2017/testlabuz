@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-FE-004B`, then Frontend Phase 2 |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | Frontend Phase 2 `FIX-001` merge, then `S09-INT-001` |
 
 Current Stage 5 progress:
 
@@ -1193,9 +1193,12 @@ their historical completion handoffs.
   `main` `8d401ca`). `S09-FE-003B`: accepted and delivered (PR #307, `main` `1983fdc`).
   `S09-FE-003C`: accepted and delivered (PR #308, `main` `473d8a0`).
 - `S09-FE-004` split into `S09-FE-004A` (Student Homework results) and `S09-FE-004B` (finished Blitz list).
-  `S09-FE-004A`: accepted and delivered (PR #309, `main` `c1082e5`). `S09-FE-004B`: approved on `c1082e5`;
-  implemented; PR open.
-- Next permitted action: after `S09-FE-004B` merges, Frontend Phase 2.
+  `S09-FE-004A`: accepted and delivered (PR #309, `main` `c1082e5`). `S09-FE-004B`: accepted and delivered
+  (PR #310, `main` `6e58259`).
+- `S09-FE-PHASE-2` run #1 on `6e58259`: `NOT ACCEPTED` (one P2). `S09-FE-PHASE-2-FIX-001` (the P2 and five
+  user-visible P3 findings, owner decision `S09-FE-PH2-D1`): approved on `6e58259`; implemented; PR open.
+  Run #2 on `ccc1d60`: `PASS` (3788 tests, analyze, format, Windows and Android debug builds).
+- Next permitted action: after the `FIX-001` PR merges (Frontend Phase 2 `PASS`), `S09-INT-001`.
 
 ---
 

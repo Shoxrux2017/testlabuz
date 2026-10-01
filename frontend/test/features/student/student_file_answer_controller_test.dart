@@ -797,7 +797,9 @@ void main() {
       StudentHomeworkAttemptLoadStatus.error,
     ]) {
       test(
-        '${failure.code} keeps the rejected file dropped when picker loses $status authority',
+        // S09-FE-PHASE-2-FIX-001 item 3: a pick made while the Attempt is
+        // read again is kept and uploaded once the Attempt is current.
+        '${failure.code} keeps a replacement picked while $status and uploads it later',
         () async {
           final h = _Harness();
           await h.pick();
@@ -827,13 +829,14 @@ void main() {
             ),
           );
           await h.flush();
-          h.picker.requests.last.complete(_selected(name: 'replacement.pdf'));
+          final replacement = _selected(name: 'replacement.pdf');
+          h.picker.requests.last.complete(replacement);
           await repick;
 
-          expect(h.entry.selectedFile, isNull);
-          expect(h.entry.failure, same(serverFailure));
-          expect(h.entry.status, StudentFileAnswerStatus.failure);
-          expect(h.entry.rejectedFileName, 'answer.pdf');
+          expect(h.entry.selectedFile, same(replacement));
+          expect(h.entry.failure, isNull);
+          expect(h.entry.status, StudentFileAnswerStatus.ready);
+          expect(h.entry.rejectedFileName, isNull);
           expect(h.entry.question, isNot(same(previousQuestion)));
           expect(h.entry.question, same(currentQuestion));
           expect(h.entry.serverFile, same(currentFile));
@@ -844,8 +847,9 @@ void main() {
 
           h.parent.publish(_data(currentAttempt));
           await h.flush();
-          expect(h.state.canChoose(_questionId), isTrue);
-          expect(h.state.canUpload(_questionId), isFalse);
+          expect(h.repository.uploads, hasLength(2));
+          expect(h.repository.uploads.last.file, same(replacement));
+          expect(h.entry.status, StudentFileAnswerStatus.uploading);
         },
       );
     }
@@ -1225,6 +1229,57 @@ void main() {
       await h.pick();
       expect(h.repository.uploads, hasLength(1));
       expect(h.entry.status, StudentFileAnswerStatus.uploading);
+    });
+
+    test('a file chosen during a refresh uploads once it publishes', () async {
+      final h = _Harness();
+      await h.flush();
+      final choosing = h.controller.chooseFile(_questionId);
+      // The Attempt is being read again when the picker returns.
+      h.parent.publish(
+        StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.refreshing,
+          attempt: _attempt(),
+        ),
+      );
+      await h.flush();
+      h.picker.requests.last.complete(_selected());
+      await choosing;
+      await h.flush();
+
+      expect(h.repository.uploads, isEmpty);
+      expect(h.entry.status, StudentFileAnswerStatus.ready);
+      expect(h.entry.selectedFile, isNotNull);
+
+      h.parent.publish(_data(_attempt()));
+      await h.flush();
+
+      expect(h.repository.uploads, hasLength(1));
+      expect(h.entry.status, StudentFileAnswerStatus.uploading);
+    });
+
+    test('a deferred upload is dropped when the Attempt ends', () async {
+      final h = _Harness();
+      await h.flush();
+      final choosing = h.controller.chooseFile(_questionId);
+      h.parent.publish(
+        StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.refreshing,
+          attempt: _attempt(),
+        ),
+      );
+      await h.flush();
+      h.picker.requests.last.complete(_selected());
+      await choosing;
+      await h.flush();
+
+      h.parent.publish(_data(_attempt(saved: true, terminal: true)));
+      await h.flush();
+      h.parent.publish(_data(_attempt()));
+      await h.flush();
+
+      expect(h.repository.uploads, isEmpty);
+      expect(h.entry.selectedFile, isNull);
     });
 
     test(

@@ -234,7 +234,7 @@ class TeacherSubmissionReviewController
       current == null ? _unconfirmedMessage : _notMatchingMessage,
     );
     // The save may still have committed.
-    _refreshRelatedViews(submission);
+    _refreshRelatedViews(submission, sessionKey);
   }
 
   void _publishSuccess(
@@ -243,7 +243,7 @@ class TeacherSubmissionReviewController
   ) {
     _detailController.acceptAuthoritativeDetail(detail, sessionKey);
     state = const TeacherSubmissionReviewState(successFeedback: _savedFeedback);
-    _refreshRelatedViews(detail.submission);
+    _refreshRelatedViews(detail.submission, sessionKey);
   }
 
   void _publishDefiniteFailure(
@@ -295,7 +295,7 @@ class TeacherSubmissionReviewController
   ) {
     _detailController.markNotFound(sessionKey);
     state = const TeacherSubmissionReviewState();
-    _refreshRelatedViews(submission);
+    _refreshRelatedViews(submission, sessionKey);
   }
 
   /// Maps `answers.N.<field>` errors to the answer of sent item N.
@@ -334,7 +334,12 @@ class TeacherSubmissionReviewController
   }
 
   /// Views below the detail in the route stack keep their filters and page.
-  void _refreshRelatedViews(TeacherSubmission submission) {
+  /// A view already loading is reloaded, because that load may have been
+  /// read before the save.
+  void _refreshRelatedViews(
+    TeacherSubmission submission,
+    TeacherSessionKey sessionKey,
+  ) {
     final queues = [
       TeacherReviewQueueScope.all,
       TeacherReviewQueueScope.task(
@@ -346,7 +351,7 @@ class TeacherSubmissionReviewController
     for (final scope in queues) {
       final provider = teacherReviewQueueControllerProvider(scope);
       if (ref.exists(provider)) {
-        ref.read(provider.notifier).refresh();
+        ref.read(provider.notifier).refreshAfterReview(sessionKey);
       }
     }
     final officialScore = teacherOfficialScoreControllerProvider(
@@ -364,7 +369,7 @@ class TeacherSubmissionReviewController
           ),
         );
         if (ref.exists(provider)) {
-          ref.read(provider.notifier).refresh();
+          ref.read(provider.notifier).refreshAfterReview(sessionKey);
         }
       case TeacherSubmissionTaskType.blitz:
         final provider = teacherBlitzDetailControllerProvider(
@@ -374,7 +379,7 @@ class TeacherSubmissionReviewController
           ),
         );
         if (ref.exists(provider)) {
-          ref.read(provider.notifier).refresh();
+          ref.read(provider.notifier).refreshAfterReview(sessionKey);
         }
     }
   }

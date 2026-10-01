@@ -334,6 +334,64 @@ void main() {
       },
     );
 
+    test('a missing Homework while reconciling releases the route', () async {
+      var fetches = 0;
+      final harness = _Harness(
+        onSet: (_, _) async =>
+            throw const TeacherHomeworkMutationOutcomeUnknownException(),
+        onFetch: (_) async {
+          if (++fetches == 1) {
+            return teacherHomework(status: TeacherHomeworkStatus.closed);
+          }
+          throw teacherServerFailure(
+            ApiErrorCodes.resourceNotFound,
+            statusCode: 404,
+          );
+        },
+      );
+      final state = harness.listen();
+      await flushTeacherControllers();
+
+      await harness.controller.submit(_request());
+      await flushTeacherControllers();
+
+      expect(harness.detail.status, TeacherHomeworkDetailStatus.notFound);
+      expect(state.read().status, TeacherHomeworkReviewDeadlineStatus.idle);
+      expect(state.read().canCheckCurrent, isFalse);
+      expect(harness.activity.isActive, isFalse);
+    });
+
+    test('a missing Homework after a conflict marks it not found', () async {
+      var fetches = 0;
+      final harness = _Harness(
+        onSet: (_, _) async => throw teacherServerFailure(
+          ApiErrorCodes.topicNotEditable,
+          statusCode: 409,
+        ),
+        onFetch: (_) async {
+          if (++fetches == 1) {
+            return teacherHomework(status: TeacherHomeworkStatus.closed);
+          }
+          throw teacherServerFailure(
+            ApiErrorCodes.resourceNotFound,
+            statusCode: 404,
+          );
+        },
+      );
+      final state = harness.listen();
+      await flushTeacherControllers();
+
+      await harness.controller.submit(_request());
+      await flushTeacherControllers();
+
+      expect(harness.detail.status, TeacherHomeworkDetailStatus.notFound);
+      expect(
+        state.read().status,
+        TeacherHomeworkReviewDeadlineStatus.definiteFailure,
+      );
+      expect(harness.activity.isActive, isFalse);
+    });
+
     test('a missing Homework marks the detail not found', () async {
       final harness = _Harness(
         onSet: (_, _) async => throw teacherServerFailure(

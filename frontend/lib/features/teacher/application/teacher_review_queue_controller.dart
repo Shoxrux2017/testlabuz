@@ -140,6 +140,17 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
     }
   }
 
+  /// Reloads after a review save owned by [originatingSessionKey]. A load in
+  /// flight may have been read before that save, so it is replaced.
+  void refreshAfterReview(TeacherSessionKey originatingSessionKey) {
+    if (_activeSessionKey != originatingSessionKey ||
+        !_matchesSession(originatingSessionKey)) {
+      return;
+    }
+    _inFlightQuery = null;
+    _startLoad(state.query, retainResult: state.result != null);
+  }
+
   void retry() {
     if (state.status == TeacherReviewQueueStatus.error &&
         _activeSessionKey != null) {

@@ -48,7 +48,7 @@ class _StudentHomeworkSubmitControlsState
     if (!mounted) return;
     setState(() {
       _saving = false;
-      _notSaved = !saved && !_savingCancelled;
+      _notSaved = !saved && !_savingCancelled && !editor.flushWasCancelled;
     });
     if (!saved) return;
     final token = ref

@@ -248,46 +248,49 @@ class _ReviewBar extends StatelessWidget {
                 key: Key('teacherSubmissionReviewProgress'),
                 semanticsLabel: 'Saving review',
               ),
+            // Text above the actions, which wrap, so large text still fits.
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(switch (changedCount) {
-                          0 => 'No unsaved changes',
-                          1 => '1 answer changed',
-                          _ => '$changedCount answers changed',
-                        }),
-                        if (failureMessage != null)
-                          Semantics(
-                            key: const Key('teacherSubmissionReviewMessage'),
-                            liveRegion: true,
-                            child: Text(
-                              failureMessage,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                      ],
+                  Text(switch (changedCount) {
+                    0 => 'No unsaved changes',
+                    1 => '1 answer changed',
+                    _ => '$changedCount answers changed',
+                  }),
+                  if (failureMessage != null)
+                    Semantics(
+                      key: const Key('teacherSubmissionReviewMessage'),
+                      liveRegion: true,
+                      child: Text(
+                        failureMessage,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    key: const Key('teacherSubmissionReviewDiscardButton'),
-                    onPressed: changedCount > 0 && !review.isBusy
-                        ? onDiscard
-                        : null,
-                    child: const Text('Discard changes'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    key: const Key('teacherSubmissionReviewSaveButton'),
-                    onPressed: canSave ? onSave : null,
-                    child: const Text('Save review'),
+                  const SizedBox(height: 4),
+                  OverflowBar(
+                    alignment: MainAxisAlignment.end,
+                    overflowAlignment: OverflowBarAlignment.end,
+                    spacing: 8,
+                    overflowSpacing: 4,
+                    children: [
+                      TextButton(
+                        key: const Key('teacherSubmissionReviewDiscardButton'),
+                        onPressed: changedCount > 0 && !review.isBusy
+                            ? onDiscard
+                            : null,
+                        child: const Text('Discard changes'),
+                      ),
+                      FilledButton(
+                        key: const Key('teacherSubmissionReviewSaveButton'),
+                        onPressed: canSave ? onSave : null,
+                        child: const Text('Save review'),
+                      ),
+                    ],
                   ),
                 ],
               ),

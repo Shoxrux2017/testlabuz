@@ -23,9 +23,12 @@ import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_de
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_official_score.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_detail.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_review.dart';
 
 import 'teacher_submission_test_support.dart';
@@ -286,6 +289,149 @@ void main() {
 
       expect(harness.blitz.fetchIds, [_assessmentId, _assessmentId]);
       expect(harness.homework.fetchIds, isEmpty);
+    });
+
+    test('related views still loading are reloaded after a save', () async {
+      // Each view's first load was read before the save; it must not win.
+      final harness = _Harness();
+      final firstQueue = Completer<TeacherSubmissionList>();
+      var queueCalls = 0;
+      harness.submissions.onFetch = (_) => ++queueCalls == 1
+          ? firstQueue.future
+          : Future.value(
+              teacherSubmissionList([teacherSubmission(studentName: 'New')]),
+            );
+      final firstHomework = Completer<TeacherHomework>();
+      var homeworkCalls = 0;
+      harness.homework.onFetch = (id) => ++homeworkCalls == 1
+          ? firstHomework.future
+          : Future.value(teacherHomework(id: id, title: 'New'));
+      harness.container.listen(
+        teacherReviewQueueControllerProvider(TeacherReviewQueueScope.all),
+        (_, _) {},
+      );
+      final homework = TeacherHomeworkRouteTarget(
+        topicId: _topicId,
+        homeworkId: _assessmentId,
+      );
+      harness.container.listen(
+        teacherHomeworkDetailControllerProvider(homework),
+        (_, _) {},
+      );
+      await harness.loaded();
+      harness.review
+        ..editPoints(_waitingId, '2')
+        ..editFeedback(_waitingId, 'Clear report.');
+
+      await harness.review.save();
+      await flushTeacherControllers();
+      firstQueue.complete(
+        teacherSubmissionList([teacherSubmission(studentName: 'Old')]),
+      );
+      firstHomework.complete(teacherHomework(id: _assessmentId, title: 'Old'));
+      await flushTeacherControllers();
+
+      expect(queueCalls, 2);
+      expect(homeworkCalls, 2);
+      expect(
+        harness.container
+            .read(
+              teacherReviewQueueControllerProvider(TeacherReviewQueueScope.all),
+            )
+            .result
+            ?.items
+            .single
+            .studentName,
+        'New',
+      );
+      expect(
+        harness.container
+            .read(teacherHomeworkDetailControllerProvider(homework))
+            .homework
+            ?.title,
+        'New',
+      );
+    });
+
+    test('a Blitz detail still loading is reloaded after a save', () async {
+      Map<String, Object?> blitz(Map<String, Object?> json) => json
+        ..['assessment'] = <String, Object?>{
+          'id': _assessmentId,
+          'type': 'blitz',
+          'title': 'Quick check',
+        };
+      final firstBlitz = Completer<TeacherBlitz>();
+      var blitzCalls = 0;
+      final harness = _Harness(
+        onFetchDetail: (_) async =>
+            _detail(blitz(submissionDetailJson()..['review_due_at'] = null)),
+        onSaveReview: (_, _) async =>
+            _detail(blitz(reviewedDetailJson()..['review_due_at'] = null)),
+      );
+      harness.blitz.onFetch = (id) => ++blitzCalls == 1
+          ? firstBlitz.future
+          : Future.value(teacherBlitz(id: id, title: 'New'));
+      final target = TeacherBlitzRouteTarget(
+        topicId: _topicId,
+        blitzId: _assessmentId,
+      );
+      harness.container.listen(
+        teacherBlitzDetailControllerProvider(target),
+        (_, _) {},
+      );
+      await harness.loaded();
+      harness.review
+        ..editPoints(_waitingId, '2')
+        ..editFeedback(_waitingId, 'Clear report.');
+
+      await harness.review.save();
+      await flushTeacherControllers();
+      firstBlitz.complete(teacherBlitz(id: _assessmentId, title: 'Old'));
+      await flushTeacherControllers();
+
+      expect(blitzCalls, 2);
+      expect(
+        harness.container
+            .read(teacherBlitzDetailControllerProvider(target))
+            .blitz
+            ?.title,
+        'New',
+      );
+    });
+
+    test('a reload for another session does nothing', () async {
+      final harness = _Harness();
+      final scope = teacherReviewQueueControllerProvider(
+        TeacherReviewQueueScope.all,
+      );
+      final homework = teacherHomeworkDetailControllerProvider(
+        TeacherHomeworkRouteTarget(
+          topicId: _topicId,
+          homeworkId: _assessmentId,
+        ),
+      );
+      final blitz = teacherBlitzDetailControllerProvider(
+        TeacherBlitzRouteTarget(topicId: _topicId, blitzId: _assessmentId),
+      );
+      for (final provider in [scope, homework, blitz]) {
+        harness.container.listen(provider, (_, _) {});
+      }
+      await harness.loaded();
+      final previousKey = harness.sessionKey;
+      harness.auth.replaceUser(teacherUser('teacher-b'));
+      await flushTeacherControllers();
+      final queries = harness.submissions.queries.length;
+      final homeworkFetches = harness.homework.fetchIds.length;
+      final blitzFetches = harness.blitz.fetchIds.length;
+
+      harness.container.read(scope.notifier).refreshAfterReview(previousKey);
+      harness.container.read(homework.notifier).refreshAfterReview(previousKey);
+      harness.container.read(blitz.notifier).refreshAfterReview(previousKey);
+      await flushTeacherControllers();
+
+      expect(harness.submissions.queries, hasLength(queries));
+      expect(harness.homework.fetchIds, hasLength(homeworkFetches));
+      expect(harness.blitz.fetchIds, hasLength(blitzFetches));
     });
 
     test('views that are not shown are not created', () async {

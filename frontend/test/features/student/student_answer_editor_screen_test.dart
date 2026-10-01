@@ -394,6 +394,125 @@ void main() {
     },
   );
 
+  testWidgets('only save messages that need attention are announced', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    bool announced() =>
+        tester
+            .widget<Semantics>(
+              find
+                  .ancestor(
+                    of: find.byKey(
+                      ValueKey('studentSaveStatus${_questionId(4)}'),
+                    ),
+                    matching: find.byType(Semantics),
+                  )
+                  .first,
+            )
+            .properties
+            .liveRegion ??
+        false;
+
+    expect(announced(), isFalse, reason: 'not answered');
+    await _enter(tester, _inside(4, find.byType(TextField)), 'draft');
+    expect(_inside(4, find.text('Saving…')), findsOneWidget);
+    expect(announced(), isFalse, reason: 'saving');
+
+    await _enter(tester, _inside(4, find.byType(TextField)), 'a' * 1001);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(ValueKey('studentSaveStatus${_questionId(4)}')),
+          )
+          .data,
+      'Use at most 1000 characters.',
+    );
+    expect(announced(), isTrue, reason: 'validation');
+    expect(harness.repository.saves, isEmpty);
+  });
+
+  testWidgets('a confirmed save is not announced', (tester) async {
+    final harness = await _pump(tester);
+    await _enter(tester, _inside(4, find.byType(TextField)), 'saved text');
+    await _autosave(tester);
+    harness.repository.saves.single.complete(
+      const StudentTextAnswerValue(text: 'saved text'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_inside(4, find.text('Saved')), findsOneWidget);
+    expect(
+      tester
+              .widget<Semantics>(
+                find
+                    .ancestor(
+                      of: find.byKey(
+                        ValueKey('studentSaveStatus${_questionId(4)}'),
+                      ),
+                      matching: find.byType(Semantics),
+                    )
+                    .first,
+              )
+              .properties
+              .liveRegion ??
+          false,
+      isFalse,
+    );
+  });
+
+  testWidgets('a rejected save is announced', (tester) async {
+    final harness = await _pump(tester);
+    await _rejectSave(tester, harness, 'draft');
+
+    expect(
+      _inside(4, find.text('Review your answer before saving again.')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Semantics>(
+            find
+                .ancestor(
+                  of: find.byKey(
+                    ValueKey('studentSaveStatus${_questionId(4)}'),
+                  ),
+                  matching: find.byType(Semantics),
+                )
+                .first,
+          )
+          .properties
+          .liveRegion,
+      isTrue,
+    );
+  });
+
+  testWidgets('a save that is not confirmed is announced', (tester) async {
+    final harness = await _pump(tester);
+    await _makeUncertain(tester, harness);
+
+    expect(
+      _inside(4, find.text('Save not confirmed. Checking…')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Semantics>(
+            find
+                .ancestor(
+                  of: find.byKey(
+                    ValueKey('studentSaveStatus${_questionId(4)}'),
+                  ),
+                  matching: find.byType(Semantics),
+                )
+                .first,
+          )
+          .properties
+          .liveRegion,
+      isTrue,
+    );
+  });
+
   testWidgets(
     'uncertainty has one owned Reload recovery and retains other drafts',
     (tester) async {
