@@ -46,6 +46,8 @@ final _parentTarget = StudentHomeworkRouteTarget(
 );
 
 void main() {
+  _resultsTests();
+
   for (final surface in [AppDeviceSurface.desktop, AppDeviceSurface.mobile]) {
     testWidgets(
       '${surface.name} waits for both hierarchy reads then shows shell',
@@ -407,6 +409,110 @@ void main() {
   });
 }
 
+void _resultsTests() {
+  testWidgets('a finished Attempt shows its result', (tester) async {
+    for (final (result, text) in [
+      // 1.45 is stored just below 1.45, so only S09-T3 rounding gives 1.5.
+      (const StudentAttemptResult.visible(1.45), 'Score 1.5'),
+      (const StudentAttemptResult.hidden(), 'Not available yet'),
+    ]) {
+      await _pump(
+        tester,
+        attemptRepository: _AttemptRepository(
+          onFetch: (_) async => _attempt(
+            status: StudentHomeworkAttemptStatus.checked,
+            result: result,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final summary = find.byKey(
+        const Key('studentAttemptFinalizationSummary'),
+      );
+      expect(
+        find.descendant(of: summary, matching: find.text('Result')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('studentHomeworkAttemptResult')),
+          matching: find.text(text),
+        ),
+        findsOneWidget,
+        reason: text,
+      );
+    }
+  });
+
+  testWidgets('Teacher feedback appears under its answers', (tester) async {
+    await _pump(
+      tester,
+      attemptRepository: _AttemptRepository(
+        onFetch: (_) async => _attempt(
+          status: StudentHomeworkAttemptStatus.checked,
+          result: const StudentAttemptResult.visible(80),
+          feedback: const {3: 'Check the spelling.', 5: 'Clear report.'},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final questions = _questions();
+
+    for (final (index, text, answerKey) in [
+      (3, 'Check the spelling.', 'studentAttemptAnswer'),
+      (5, 'Clear report.', 'studentFileAnswerCard'),
+    ]) {
+      final id = questions[index].id;
+      final feedback = find.byKey(ValueKey('studentAttemptFeedback$id'));
+      await tester.ensureVisible(feedback);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: feedback,
+          matching: find.widgetWithText(SelectableText, text),
+        ),
+        findsOneWidget,
+      );
+      // Directly under its own answer, before the next Question.
+      expect(
+        tester.getTopLeft(feedback).dy,
+        greaterThanOrEqualTo(
+          tester.getBottomLeft(find.byKey(ValueKey('$answerKey$id'))).dy,
+        ),
+      );
+      expect(
+        tester.getBottomLeft(feedback).dy,
+        lessThanOrEqualTo(
+          tester
+              .getTopLeft(
+                find.byKey(
+                  ValueKey('studentQuestion${questions[index + 1].id}'),
+                ),
+              )
+              .dy,
+        ),
+      );
+    }
+    expect(find.text('Teacher feedback'), findsNWidgets(2));
+  });
+
+  testWidgets('no feedback block without feedback', (tester) async {
+    await _pump(
+      tester,
+      attemptRepository: _AttemptRepository(
+        onFetch: (_) async => _attempt(
+          status: StudentHomeworkAttemptStatus.checked,
+          result: const StudentAttemptResult.visible(80),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Teacher feedback'), findsNothing);
+  });
+}
+
 Future<void> _pump(
   WidgetTester tester, {
   AppDeviceSurface surface = AppDeviceSurface.desktop,
@@ -557,6 +663,8 @@ List<StudentQuestion> _questions() {
 
 StudentHomeworkAttempt _attempt({
   StudentHomeworkAttemptStatus status = StudentHomeworkAttemptStatus.inProgress,
+  StudentAttemptResult result = const StudentAttemptResult.hidden(),
+  Map<int, String> feedback = const {},
 }) {
   final questions = _questions();
   final values = <StudentAttemptAnswerValue>[
@@ -619,8 +727,10 @@ StudentHomeworkAttempt _attempt({
           type: questions[index].type,
           value: values[index],
           updatedAt: DateTime.utc(2026, 9, 8, 12, 30),
+          feedback: feedback[index],
         ),
     ],
+    result: result,
   );
 }
 

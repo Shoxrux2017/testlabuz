@@ -1207,6 +1207,382 @@ void main() {
       }
     },
   );
+  group('results', () {
+    const checkedId = _startedAttemptId;
+    const pendingId = '61000000-0000-0000-0000-000000000002';
+    // An official 100 cannot be overtaken, so a pending Attempt beside it is
+    // consistent with a released official score.
+    const results = [
+      StudentHomeworkAttemptResultItem(
+        attemptId: checkedId,
+        attemptNumber: 1,
+        status: StudentHomeworkAttemptStatus.checked,
+        result: StudentAttemptResult.visible(100),
+      ),
+      StudentHomeworkAttemptResultItem(
+        attemptId: pendingId,
+        attemptNumber: 2,
+        status: StudentHomeworkAttemptStatus.submitted,
+        result: StudentAttemptResult.hidden(),
+      ),
+    ];
+    const official = StudentOfficialScore(
+      normalizedScore: 100,
+      attemptNumber: 1,
+    );
+
+    testWidgets('the list shows a released official score only', (
+      tester,
+    ) async {
+      const otherId = '40000000-0000-0000-0000-000000000002';
+      await _pumpSection(
+        tester,
+        repository: _HomeworkRepository(
+          onList: (_) async => _page(
+            items: [
+              // 1.45 is stored just below 1.45: only S09-T3 rounding gives 1.5.
+              _summary(
+                officialScore: const StudentOfficialScore(
+                  normalizedScore: 1.45,
+                  attemptNumber: 1,
+                ),
+              ),
+              _summary(id: otherId, title: 'Homework 2'),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('studentHomeworkOfficialScore$_homeworkId'),
+          ),
+          matching: find.text('Official score: 1.5'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('studentHomeworkOfficialScore$otherId')),
+        findsNothing,
+      );
+      expect(find.textContaining('Official score'), findsOneWidget);
+    });
+
+    testWidgets('the detail lists the official score and its Attempt', (
+      tester,
+    ) async {
+      await _pumpDetail(
+        tester,
+        repository: _HomeworkRepository(
+          onDetail: (_) async => _detail(
+            inProgress: false,
+            officialScore: const StudentOfficialScore(
+              normalizedScore: 1.45,
+              attemptNumber: 1,
+            ),
+            attemptResults: const [
+              StudentHomeworkAttemptResultItem(
+                attemptId: checkedId,
+                attemptNumber: 1,
+                status: StudentHomeworkAttemptStatus.checked,
+                result: StudentAttemptResult.visible(1.45),
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final card = find.byKey(const Key('studentHomeworkResultsCard'));
+      expect(card, findsOneWidget);
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics &&
+                (widget.properties.header ?? false) &&
+                widget.child is Text &&
+                (widget.child! as Text).data == 'Results',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getTopLeft(card).dy,
+        greaterThan(tester.getTopLeft(find.text('Attempt information')).dy),
+      );
+      expect(
+        tester.getTopLeft(card).dy,
+        lessThan(tester.getTopLeft(find.text('Questions')).dy),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('studentHomeworkOfficialScore')),
+          matching: find.text('Official score: 1.5 (Attempt 1)'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('studentHomeworkAttemptResult$checkedId'),
+          ),
+          matching: find.text('Attempt 1 · Checked · Score 1.5'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Open attempt 1'), findsOneWidget);
+    });
+
+    testWidgets('an Attempt without a released result says so', (tester) async {
+      await _pumpDetail(
+        tester,
+        repository: _HomeworkRepository(
+          onDetail: (_) async => _detail(
+            inProgress: false,
+            officialScore: official,
+            attemptResults: results,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey('studentHomeworkAttemptResult$pendingId'),
+          ),
+          matching: find.text(
+            'Attempt 2 · Submitted · Result not available yet',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Official score: 100.0 (Attempt 1)'), findsOneWidget);
+      expect(find.text('Open attempt 2'), findsOneWidget);
+    });
+
+    testWidgets('no results card without results', (tester) async {
+      await _pumpDetail(tester, repository: _HomeworkRepository());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('studentHomeworkResultsCard')), findsNothing);
+      expect(find.textContaining('Official score:'), findsNothing);
+    });
+
+    testWidgets('an Attempt opens on its own route', (tester) async {
+      final (router, _) = await _pumpStartDetail(
+        tester,
+        homework: _HomeworkRepository(
+          onDetail: (_) async => _detail(
+            inProgress: false,
+            officialScore: official,
+            attemptResults: results,
+          ),
+        ),
+      );
+
+      await _tap(tester, 'studentHomeworkOpenAttempt$pendingId');
+
+      expect(
+        router.routeInformationProvider.value.uri.path,
+        AppRoutePaths.studentHomeworkAttemptLocation(
+          studentTopicId,
+          _homeworkId,
+          pendingId,
+        ),
+      );
+      expect(find.text('Attempt destination'), findsOneWidget);
+    });
+
+    testWidgets('opening an Attempt recreates its retained route providers', (
+      tester,
+    ) async {
+      final attemptTarget = StudentHomeworkAttemptRouteTarget(
+        topicId: studentTopicId,
+        homeworkId: _homeworkId,
+        attemptId: checkedId,
+      );
+      final observer = _ResumeScopeObserver();
+      final container = ProviderContainer(
+        observers: [observer],
+        overrides: [
+          appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
+          authSessionControllerProvider.overrideWith(
+            () => FakeStudentAuthSessionController.authenticated(
+              studentUser('student-a'),
+            ),
+          ),
+          studentHomeworkRepositoryProvider.overrideWithValue(
+            _HomeworkRepository(
+              onDetail: (_) async => _detail(
+                inProgress: false,
+                officialScore: official,
+                attemptResults: results,
+              ),
+            ),
+          ),
+          studentHomeworkAttemptRepositoryProvider.overrideWithValue(
+            _ResumeRepository(
+              _resumeAttempt(text: 'Answer', filename: 'answer.pdf'),
+            ),
+          ),
+          protectedLearningMaterialTransferProvider.overrideWithValue(
+            _UnavailableSubmissionTransfer(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final routeProviders = [
+        studentHomeworkAttemptControllerProvider(attemptTarget),
+        studentAttemptAnswerEditorControllerProvider(attemptTarget),
+        studentFileAnswerControllerProvider(attemptTarget),
+        studentHomeworkSubmitControllerProvider(attemptTarget),
+        studentAttemptRouteOperationGateProvider(attemptTarget),
+        studentSubmissionTransferControllerProvider(attemptTarget),
+      ];
+      final subscriptions = [
+        for (final provider in routeProviders)
+          container.listen(provider, (_, _) {}),
+      ];
+      addTearDown(() {
+        for (final subscription in subscriptions) {
+          subscription.close();
+        }
+      });
+      final router = GoRouter(
+        initialLocation: AppRoutePaths.studentHomeworkDetailLocation(
+          studentTopicId,
+          _homeworkId,
+        ),
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.studentHomeworkDetail,
+            builder: (_, _) =>
+                StudentHomeworkDetailScreen(target: _startTarget),
+          ),
+          GoRoute(
+            path: AppRoutePaths.studentHomeworkAttempt,
+            builder: (_, _) =>
+                const Scaffold(body: Text('Attempt destination')),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.binding.setSurfaceSize(const Size(1100, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final open = find.byKey(
+        const ValueKey('studentHomeworkOpenAttempt$checkedId'),
+      );
+      await tester.ensureVisible(open);
+      await tester.pumpAndSettle();
+      observer.disposedProviders.clear();
+
+      await tester.tap(open);
+
+      expect(observer.disposedProviders, containsAll(routeProviders));
+      await tester.pumpAndSettle();
+      expect(find.text('Attempt destination'), findsOneWidget);
+    });
+
+    testWidgets('Attempts cannot be opened while the detail refreshes', (
+      tester,
+    ) async {
+      final refresh = Completer<StudentHomeworkDetail>();
+      var calls = 0;
+      await _pumpDetail(
+        tester,
+        repository: _HomeworkRepository(
+          onDetail: (_) => ++calls == 1
+              ? Future.value(
+                  _detail(
+                    inProgress: false,
+                    officialScore: official,
+                    attemptResults: results,
+                  ),
+                )
+              : refresh.future,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        _button(tester, 'studentHomeworkOpenAttempt$checkedId').onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('studentHomeworkDetailRefreshButton')),
+      );
+      await tester.pump();
+
+      expect(
+        _button(tester, 'studentHomeworkOpenAttempt$checkedId').onPressed,
+        isNull,
+      );
+      refresh.complete(
+        _detail(
+          inProgress: false,
+          officialScore: official,
+          attemptResults: results,
+        ),
+      );
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Attempts cannot be opened while an Attempt starts', (
+      tester,
+    ) async {
+      final pending = Completer<StudentHomeworkAttemptStartResult>();
+      await _pumpStartDetail(
+        tester,
+        starts: _StartRepository(onStart: (_, _) => pending.future),
+        homework: _HomeworkRepository(
+          onDetail: (_) async => _detail(
+            inProgress: false,
+            officialScore: official,
+            attemptResults: results,
+          ),
+        ),
+      );
+      expect(
+        _button(tester, 'studentHomeworkOpenAttempt$checkedId').onPressed,
+        isNotNull,
+      );
+
+      final start = find.byKey(const Key('studentHomeworkStartAttemptButton'));
+      await tester.ensureVisible(start);
+      await tester.pumpAndSettle();
+      await tester.tap(start);
+      // The pending Start shows a progress indicator that never settles.
+      await tester.pump();
+
+      expect(
+        _button(tester, 'studentHomeworkOpenAttempt$checkedId').onPressed,
+        isNull,
+        reason: 'submitting',
+      );
+
+      pending.completeError(studentLocalFailure(ApiFailureKind.timeout));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Retry Start'), findsOneWidget);
+      expect(
+        _button(tester, 'studentHomeworkOpenAttempt$checkedId').onPressed,
+        isNull,
+        reason: 'uncertain',
+      );
+    });
+  });
 }
 
 Future<void> _pumpSection(
@@ -1328,9 +1704,10 @@ StudentHomeworkAttemptSummary _attempts({
   bool detail = false,
   bool inProgress = true,
   int remaining = 1,
+  int used = 1,
 }) => StudentHomeworkAttemptSummary(
   allowed: 3,
-  used: 1,
+  used: used,
   remaining: remaining,
   officialScorePolicy: 'highest_valid_completed',
   inProgressAttempt: detail && inProgress
@@ -1347,6 +1724,7 @@ StudentHomeworkSummary _summary({
   String title = 'Homework 1',
   StudentHomeworkStatus status = StudentHomeworkStatus.active,
   StudentHomeworkMyStatus myStatus = StudentHomeworkMyStatus.inProgress,
+  StudentOfficialScore? officialScore,
 }) => StudentHomeworkSummary(
   id: id,
   topic: const StudentHomeworkTopicSummary(
@@ -1358,7 +1736,8 @@ StudentHomeworkSummary _summary({
   deadlineAt: DateTime.utc(2020, 9, 10, 13),
   attempts: _attempts(),
   myStatus: myStatus,
-  scoreVisible: false,
+  scoreVisible: officialScore != null,
+  officialScore: officialScore,
 );
 
 StudentHomeworkList _page({
@@ -1382,6 +1761,8 @@ StudentHomeworkDetail _detail({
   bool inProgress = true,
   StudentHomeworkStatus status = StudentHomeworkStatus.active,
   int remaining = 1,
+  StudentOfficialScore? officialScore,
+  List<StudentHomeworkAttemptResultItem> attemptResults = const [],
 }) => StudentHomeworkDetail(
   id: id,
   topic: StudentHomeworkTopicSummary(id: topicId, title: 'Internet Basics'),
@@ -1395,11 +1776,23 @@ StudentHomeworkDetail _detail({
     detail: true,
     inProgress: inProgress,
     remaining: remaining,
+    // As the parser requires: one result per finished Attempt.
+    used: attemptResults.isEmpty
+        ? 1
+        : attemptResults.length + (inProgress ? 1 : 0),
   ),
   myStatus: inProgress
       ? StudentHomeworkMyStatus.inProgress
-      : StudentHomeworkMyStatus.submitted,
-  scoreVisible: false,
+      : switch (attemptResults.lastOrNull?.status) {
+          StudentHomeworkAttemptStatus.waitingForReview =>
+            StudentHomeworkMyStatus.waitingForReview,
+          StudentHomeworkAttemptStatus.checked =>
+            StudentHomeworkMyStatus.checked,
+          _ => StudentHomeworkMyStatus.submitted,
+        },
+  scoreVisible: officialScore != null,
+  officialScore: officialScore,
+  attemptResults: attemptResults,
   questions: questions,
 );
 

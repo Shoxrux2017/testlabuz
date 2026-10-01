@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_route_paths.dart';
+import '../../../core/scoring/score_display.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/student_attempt_answer_editor_controller.dart';
 import '../application/student_attempt_route_operation_gate.dart';
@@ -165,6 +166,22 @@ class StudentHomeworkDetailScreen extends ConsumerWidget {
                               state.status ==
                               StudentHomeworkDetailStatus.refreshing,
                           onRefresh: controller.refresh,
+                          onOpenAttempt:
+                              state.status ==
+                                      StudentHomeworkDetailStatus.data &&
+                                  startState.status !=
+                                      StudentHomeworkAttemptStartStatus
+                                          .submitting &&
+                                  startState.status !=
+                                      StudentHomeworkAttemptStartStatus
+                                          .uncertain
+                              ? (attemptId) => _openAttempt(
+                                  context,
+                                  ref,
+                                  target,
+                                  attemptId,
+                                )
+                              : null,
                           attemptAction: _attemptAction(
                             context,
                             ref,
@@ -200,38 +217,7 @@ class StudentHomeworkDetailScreen extends ConsumerWidget {
       final label = 'Resume Attempt ${inProgress.attemptNumber}';
       return FilledButton.icon(
         key: const Key('studentHomeworkResumeAttemptButton'),
-        onPressed: () {
-          final attemptTarget = StudentHomeworkAttemptRouteTarget(
-            topicId: target.topicId,
-            homeworkId: target.homeworkId,
-            attemptId: inProgress.id,
-          );
-          // Retained providers may still own cleared state from route abandonment.
-          // Resume must recreate this scope from a fresh authoritative Attempt read.
-          ref.invalidate(
-            studentHomeworkAttemptControllerProvider(attemptTarget),
-          );
-          ref.invalidate(
-            studentAttemptAnswerEditorControllerProvider(attemptTarget),
-          );
-          ref.invalidate(studentFileAnswerControllerProvider(attemptTarget));
-          ref.invalidate(
-            studentHomeworkSubmitControllerProvider(attemptTarget),
-          );
-          ref.invalidate(
-            studentAttemptRouteOperationGateProvider(attemptTarget),
-          );
-          ref.invalidate(
-            studentSubmissionTransferControllerProvider(attemptTarget),
-          );
-          context.go(
-            AppRoutePaths.studentHomeworkAttemptLocation(
-              target.topicId,
-              target.homeworkId,
-              inProgress.id,
-            ),
-          );
-        },
+        onPressed: () => _openAttempt(context, ref, target, inProgress.id),
         icon: const Icon(Icons.play_arrow),
         label: Text(label),
       );
@@ -248,6 +234,35 @@ class StudentHomeworkDetailScreen extends ConsumerWidget {
       label: const Text('Start Attempt'),
     );
   }
+}
+
+/// Goes to one of this Homework's Attempts. Retained providers may still own
+/// cleared state from route abandonment, so the Attempt scope is recreated
+/// from a fresh authoritative Attempt read.
+void _openAttempt(
+  BuildContext context,
+  WidgetRef ref,
+  StudentHomeworkRouteTarget target,
+  String attemptId,
+) {
+  final attemptTarget = StudentHomeworkAttemptRouteTarget(
+    topicId: target.topicId,
+    homeworkId: target.homeworkId,
+    attemptId: attemptId,
+  );
+  ref.invalidate(studentHomeworkAttemptControllerProvider(attemptTarget));
+  ref.invalidate(studentAttemptAnswerEditorControllerProvider(attemptTarget));
+  ref.invalidate(studentFileAnswerControllerProvider(attemptTarget));
+  ref.invalidate(studentHomeworkSubmitControllerProvider(attemptTarget));
+  ref.invalidate(studentAttemptRouteOperationGateProvider(attemptTarget));
+  ref.invalidate(studentSubmissionTransferControllerProvider(attemptTarget));
+  context.go(
+    AppRoutePaths.studentHomeworkAttemptLocation(
+      target.topicId,
+      target.homeworkId,
+      attemptId,
+    ),
+  );
 }
 
 class _StartMutationStatus extends StatelessWidget {
@@ -318,6 +333,7 @@ class _HomeworkDetailContent extends StatelessWidget {
     required this.institutionTimezone,
     required this.refreshing,
     required this.onRefresh,
+    required this.onOpenAttempt,
     required this.attemptAction,
   });
 
@@ -325,6 +341,9 @@ class _HomeworkDetailContent extends StatelessWidget {
   final String institutionTimezone;
   final bool refreshing;
   final VoidCallback onRefresh;
+
+  /// Null while an Attempt cannot be opened.
+  final ValueChanged<String>? onOpenAttempt;
   final Widget? attemptAction;
 
   @override
@@ -450,6 +469,14 @@ class _HomeworkDetailContent extends StatelessWidget {
                       ),
                   ],
                 ),
+                // An official score always comes from one of these Attempts.
+                if (homework.attemptResults.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _HomeworkResultsCard(
+                    homework: homework,
+                    onOpenAttempt: onOpenAttempt,
+                  ),
+                ],
                 const SizedBox(height: 20),
                 Semantics(
                   header: true,
@@ -472,6 +499,76 @@ class _HomeworkDetailContent extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The Student's released results (`S09-D3`): the official score and each
+/// finished Attempt, which can be opened to read its feedback.
+class _HomeworkResultsCard extends StatelessWidget {
+  const _HomeworkResultsCard({
+    required this.homework,
+    required this.onOpenAttempt,
+  });
+
+  final StudentHomeworkDetail homework;
+  final ValueChanged<String>? onOpenAttempt;
+
+  @override
+  Widget build(BuildContext context) {
+    final official = homework.officialScore;
+    return Card(
+      key: const Key('studentHomeworkResultsCard'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(
+                'Results',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (official != null) ...[
+              KeyedSubtree(
+                key: const Key('studentHomeworkOfficialScore'),
+                child: Text(
+                  'Official score: '
+                  '${formatScoreOneDecimal(official.normalizedScore)} '
+                  '(Attempt ${official.attemptNumber})',
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            for (final item in homework.attemptResults) ...[
+              KeyedSubtree(
+                key: ValueKey('studentHomeworkAttemptResult${item.attemptId}'),
+                child: Text(
+                  'Attempt ${item.attemptNumber} · '
+                  '${studentHomeworkAttemptStatusLabel(item.status)} · '
+                  '${studentAttemptScoreLabel(item.result) ?? 'Result not available yet'}',
+                ),
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton(
+                  key: ValueKey('studentHomeworkOpenAttempt${item.attemptId}'),
+                  onPressed: switch (onOpenAttempt) {
+                    final open? => () => open(item.attemptId),
+                    null => null,
+                  },
+                  child: Text('Open attempt ${item.attemptNumber}'),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ],
         ),
       ),
     );
