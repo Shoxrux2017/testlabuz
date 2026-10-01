@@ -5,6 +5,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_repository.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_submission_review.dart';
 
 const submissionId = '70000000-0000-0000-0000-000000000001';
 
@@ -165,6 +166,25 @@ class FakeTeacherSubmissionRepository implements TeacherSubmissionRepository {
           TeacherSubmissionDetailDto.fromJson(
             submissionDetailJson(),
           ).toDomain(),
+        );
+  }
+
+  Future<TeacherSubmissionDetail> Function(
+    String submissionId,
+    TeacherSubmissionReviewRequest request,
+  )?
+  onSaveReview;
+  final reviewRequests = <TeacherSubmissionReviewRequest>[];
+
+  @override
+  Future<TeacherSubmissionDetail> saveReview(
+    String submissionId,
+    TeacherSubmissionReviewRequest request,
+  ) {
+    reviewRequests.add(request);
+    return onSaveReview?.call(submissionId, request) ??
+        Future.value(
+          TeacherSubmissionDetailDto.fromJson(reviewedDetailJson()).toDomain(),
         );
   }
 
@@ -459,11 +479,13 @@ Map<String, Object?> submissionDetailJson({
   int waiting = 1,
   int reviewed = 1,
   String? submittedAt = '2026-09-30T10:00:00Z',
+  num? earned,
+  num? normalized,
 }) {
   final item = submissionJson(
     status: status,
-    earned: null,
-    normalized: null,
+    earned: earned,
+    normalized: normalized,
     possible: 14,
     waiting: waiting,
     reviewed: reviewed,
@@ -473,4 +495,30 @@ Map<String, Object?> submissionDetailJson({
     'submitted_at': submittedAt,
     'questions': questions ?? submissionDetailQuestions(),
   };
+}
+
+/// The detail after the waiting file answer (Q6) is reviewed: the submission
+/// is checked.
+Map<String, Object?> reviewedDetailJson({
+  num awarded = 2,
+  String? feedback = 'Clear report.',
+}) {
+  final questions = submissionDetailQuestions();
+  final file = questions[5]['answer']! as Map<String, Object?>;
+  questions[5]['answer'] = _detailAnswer(
+    6,
+    file['value']! as Map<String, Object?>,
+    status: 'teacher_checked',
+    awarded: awarded,
+    feedback: feedback,
+    reviewed: true,
+  );
+  return submissionDetailJson(
+    questions: questions,
+    status: 'checked',
+    waiting: 0,
+    reviewed: 2,
+    earned: 9.5,
+    normalized: 67.857143,
+  );
 }

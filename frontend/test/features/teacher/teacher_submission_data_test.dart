@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
@@ -13,6 +14,7 @@ import 'package:testlabuz_client/features/teacher/data/teacher_submission_remote
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list_query.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_submission_review.dart';
 
 import 'teacher_submission_test_support.dart';
 
@@ -390,6 +392,147 @@ void main() {
     });
   });
 
+  group('Teacher submission review data source', () {
+    const message = 'Submission review saved successfully.';
+    final request = TeacherSubmissionReviewRequest([
+      TeacherAnswerReviewItem(
+        answerId: detailId(206),
+        awardedPoints: 2,
+        feedback: 'Clear report.',
+      ),
+    ]);
+
+    test(
+      'sends PUT /teacher/submissions/{id}/review and parses the detail',
+      () async {
+        final adapter = RecordingAdapter(
+          (_) => jsonResponse(200, {
+            'data': reviewedDetailJson(),
+            'message': message,
+          }),
+        );
+
+        final dto = await _source(adapter).saveReview(submissionId, request);
+
+        expect(request.matches(dto.toDomain()), isTrue);
+        final sent = adapter.requests.single;
+        expect(sent.method, 'PUT');
+        expect(sent.path, '/teacher/submissions/$submissionId/review');
+        expect(sent.queryParameters, isEmpty);
+        expect(sent.data, request.toJson());
+        expect(
+          sent.headers.keys.map((key) => key.toLowerCase()),
+          isNot(contains('idempotency-key')),
+        );
+        expect(sent.followRedirects, isFalse);
+      },
+    );
+
+    test('an unexpected success leaves the outcome unknown', () async {
+      final responses = <FutureOr<ResponseBody> Function(RequestOptions)>[
+        (_) => jsonResponse(201, {
+          'data': reviewedDetailJson(),
+          'message': message,
+        }),
+        (_) => jsonResponse(200, {'data': reviewedDetailJson()}),
+        (_) => jsonResponse(200, {
+          'data': reviewedDetailJson(),
+          'message': 'Saved.',
+        }),
+        (_) => jsonResponse(200, {
+          'data': reviewedDetailJson(),
+          'message': message,
+          'meta': <String, Object?>{},
+        }),
+        (_) => jsonResponse(200, {
+          'data': submissionDetailJson(waiting: 3),
+          'message': message,
+        }),
+        (options) => throw DioException(
+          requestOptions: options,
+          type: DioExceptionType.receiveTimeout,
+        ),
+        (_) => jsonResponse(500, _error('server_error')),
+        (_) => jsonResponse(409, _error('business_conflict')),
+      ];
+
+      for (final response in responses) {
+        await expectLater(
+          _source(RecordingAdapter(response)).saveReview(submissionId, request),
+          throwsA(isA<TeacherSubmissionReviewOutcomeUnknownException>()),
+        );
+      }
+    });
+
+    test('an exact documented failure is definite', () async {
+      final failures = <int, Map<String, Object?>>{
+        409: _error(ApiErrorCodes.automaticCheckingPending),
+        422: _error(ApiErrorCodes.validationFailed, {
+          'answers.0.awarded_points': [
+            'The awarded points must not exceed the Question points.',
+          ],
+        }),
+        404: _error(ApiErrorCodes.resourceNotFound),
+      };
+
+      for (final MapEntry(key: status, value: body) in failures.entries) {
+        await expectLater(
+          _source(
+            RecordingAdapter((_) => jsonResponse(status, body)),
+          ).saveReview(submissionId, request),
+          throwsA(
+            isA<ApiRequestException>()
+                .having(
+                  (exception) => exception.failure.statusCode,
+                  'status',
+                  status,
+                )
+                .having(
+                  (exception) => exception.failure.serverCode,
+                  'code',
+                  body['code'],
+                )
+                .having(
+                  (exception) => exception.failure.fieldErrors.keys,
+                  'field errors',
+                  (body['errors']! as Map).keys,
+                ),
+          ),
+        );
+      }
+    });
+
+    test('a non-canonical id is rejected before transport', () {
+      final adapter = RecordingAdapter(
+        (_) => throw StateError('No transport.'),
+      );
+
+      expect(
+        () => _source(adapter).saveReview('not-an-id', request),
+        throwsArgumentError,
+      );
+      expect(adapter.requests, isEmpty);
+    });
+
+    test('the repository returns the saved detail', () async {
+      final repository = TeacherSubmissionRepositoryImpl(
+        remoteDataSource: _source(
+          RecordingAdapter(
+            (_) => jsonResponse(200, {
+              'data': reviewedDetailJson(),
+              'message': message,
+            }),
+          ),
+        ),
+      );
+
+      final detail = await repository.saveReview(submissionId, request);
+
+      expect(detail.submission.id, submissionId);
+      expect(request.matches(detail), isTrue);
+    });
+  });
+
   group('Teacher submission data source', () {
     test('sends GET /teacher/submissions with the query parameters', () async {
       final adapter = RecordingAdapter(
@@ -456,6 +599,11 @@ TeacherSubmissionRemoteDataSource _source(RecordingAdapter adapter) {
     failureMapper: const DioFailureMapper(),
   );
 }
+
+Map<String, Object?> _error(
+  String code, [
+  Map<String, List<String>> errors = const {},
+]) => {'message': 'Failure.', 'code': code, 'errors': errors};
 
 ResponseBody jsonResponse(int statusCode, Object? body) {
   return ResponseBody.fromString(

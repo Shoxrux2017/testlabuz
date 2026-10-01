@@ -1,14 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/teacher_submission_list_query.dart';
+import '../domain/teacher_submission_review.dart';
 import 'dto/teacher_dto_parse.dart';
 import 'dto/teacher_submission_detail_dto.dart';
 import 'dto/teacher_submission_dto.dart';
+import 'teacher_mutation_transport.dart';
 
 final teacherSubmissionRemoteDataSourceProvider =
     Provider<TeacherSubmissionRemoteDataSource>((ref) {
@@ -17,6 +20,8 @@ final teacherSubmissionRemoteDataSourceProvider =
         failureMapper: const DioFailureMapper(),
       );
     });
+
+const _reviewSavedMessage = 'Submission review saved successfully.';
 
 class TeacherSubmissionRemoteDataSource {
   const TeacherSubmissionRemoteDataSource({
@@ -74,6 +79,46 @@ class TeacherSubmissionRemoteDataSource {
       );
       return TeacherSubmissionDetailDto.fromJson(envelope['data']);
     });
+  }
+
+  /// Sends the review once; an unproven outcome throws
+  /// [TeacherSubmissionReviewOutcomeUnknownException].
+  Future<TeacherSubmissionDetailDto> saveReview(
+    String submissionId,
+    TeacherSubmissionReviewRequest request,
+  ) {
+    if (!canonicalUuidPattern.hasMatch(submissionId)) {
+      throw ArgumentError.value(
+        submissionId,
+        'submissionId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return sendTeacherMutation(
+      send: () => dio.put<Object?>(
+        '/teacher/submissions/${Uri.encodeComponent(submissionId)}/review',
+        data: request.toJson(),
+        options: Options(followRedirects: false),
+      ),
+      expectedStatus: 200,
+      parse: (data) {
+        final envelope = readExactTeacherMap(
+          data,
+          context: 'Teacher submission review envelope',
+          keys: const {'data', 'message'},
+        );
+        if (envelope['message'] != _reviewSavedMessage) {
+          throw const FormatException(
+            'Teacher submission review message is unexpected.',
+          );
+        }
+        return TeacherSubmissionDetailDto.fromJson(envelope['data']);
+      },
+      conflictCodes: const {ApiErrorCodes.automaticCheckingPending},
+      failureMapper: failureMapper,
+      outcomeUnknown: () =>
+          const TeacherSubmissionReviewOutcomeUnknownException(),
+    );
   }
 
   Future<T> _mapFailures<T>(Future<T> Function() request) async {
