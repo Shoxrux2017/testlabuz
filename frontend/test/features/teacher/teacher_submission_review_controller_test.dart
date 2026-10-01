@@ -11,6 +11,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_blitz_deta
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_detail_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_target.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_official_score_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_review_queue_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_review_queue_scope.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_session_key.dart';
@@ -22,6 +23,7 @@ import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_de
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_official_score.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_detail.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_review.dart';
@@ -229,9 +231,20 @@ void main() {
         teacherHomeworkDetailControllerProvider(homework),
         (_, _) {},
       );
+      harness.container.listen(
+        teacherOfficialScoreControllerProvider(
+          TeacherOfficialScoreTarget(
+            assessmentId: _assessmentId,
+            studentId: officialStudentId,
+            type: TeacherSubmissionTaskType.homework,
+          ),
+        ),
+        (_, _) {},
+      );
       await harness.loaded();
       expect(harness.submissions.queries, hasLength(2));
       expect(harness.homework.fetchIds, [_assessmentId]);
+      expect(harness.submissions.officialTargets, hasLength(1));
       harness.review.editPoints(_waitingId, '2');
       harness.review.editFeedback(_waitingId, 'Clear report.');
 
@@ -240,6 +253,7 @@ void main() {
 
       expect(harness.submissions.queries, hasLength(4));
       expect(harness.homework.fetchIds, [_assessmentId, _assessmentId]);
+      expect(harness.submissions.officialTargets, hasLength(2));
     });
 
     test('a Blitz submission refreshes its Blitz detail', () async {
@@ -307,6 +321,7 @@ void main() {
         expect(harness.submissions.queries, isEmpty, reason: '$type');
         expect(harness.homework.fetchIds, isEmpty, reason: '$type');
         expect(harness.blitz.fetchIds, isEmpty, reason: '$type');
+        expect(harness.submissions.officialTargets, isEmpty, reason: '$type');
       }
     });
 
@@ -336,8 +351,10 @@ void main() {
           teacherReviewQueueControllerProvider(TeacherReviewQueueScope.all),
           (_, _) {},
         );
+        harness.listenOfficialScore();
         final state = await harness.loaded();
         expect(harness.submissions.queries, hasLength(1));
+        expect(harness.submissions.officialTargets, hasLength(1));
         harness.review.editPoints(_reviewedId, '3');
 
         await harness.review.save();
@@ -346,6 +363,11 @@ void main() {
         expect(state.read().failureMessage, isNotNull);
         expect(
           harness.submissions.queries,
+          hasLength(2),
+          reason: 'reconcile failed: $failReconcile',
+        );
+        expect(
+          harness.submissions.officialTargets,
           hasLength(2),
           reason: 'reconcile failed: $failReconcile',
         );
@@ -586,6 +608,7 @@ void main() {
         teacherReviewQueueControllerProvider(TeacherReviewQueueScope.all),
         (_, _) {},
       );
+      harness.listenOfficialScore();
       final state = await harness.loaded();
       harness.review.editPoints(_reviewedId, '3');
 
@@ -599,6 +622,7 @@ void main() {
       expect(state.read().drafts, isEmpty);
       expect(state.read().failureMessage, isNull);
       expect(harness.submissions.queries, hasLength(2));
+      expect(harness.submissions.officialTargets, hasLength(2));
     });
 
     test('a 404 while reconciling makes the detail not found', () async {
@@ -782,6 +806,17 @@ class _Harness {
         (_, _) {},
         fireImmediately: true,
       );
+
+  void listenOfficialScore() => container.listen(
+    teacherOfficialScoreControllerProvider(
+      TeacherOfficialScoreTarget(
+        assessmentId: _assessmentId,
+        studentId: officialStudentId,
+        type: TeacherSubmissionTaskType.homework,
+      ),
+    ),
+    (_, _) {},
+  );
 
   /// Listens to both controllers and waits for the first detail load.
   Future<ProviderSubscription<TeacherSubmissionReviewState>> loaded() async {

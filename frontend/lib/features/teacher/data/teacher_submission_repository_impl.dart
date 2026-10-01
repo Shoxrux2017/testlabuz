@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
+import '../domain/teacher_official_score.dart';
 import '../domain/teacher_submission_detail.dart';
 import '../domain/teacher_submission_list.dart';
 import '../domain/teacher_submission_list_query.dart';
@@ -42,6 +43,26 @@ class TeacherSubmissionRepositoryImpl implements TeacherSubmissionRepository {
       );
     }
     return detail;
+  }
+
+  @override
+  Future<TeacherOfficialScore> fetchOfficialScore(
+    TeacherOfficialScoreTarget target,
+  ) async {
+    final dto = await remoteDataSource.fetchOfficialScore(
+      target.assessmentId,
+      target.studentId,
+    );
+    final score = dto.toDomain();
+    if (!score.matches(target)) {
+      throw ApiRequestException(
+        ApiFailure.local(
+          kind: ApiFailureKind.invalidResponse,
+          message: 'The official score belongs to another task or Student.',
+        ),
+      );
+    }
+    return score;
   }
 
   @override

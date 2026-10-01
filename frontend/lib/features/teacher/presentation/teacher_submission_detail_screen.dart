@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
+import '../../../core/scoring/score_display.dart';
 import '../../auth/application/auth_session_controller.dart';
+import '../application/teacher_official_score_controller.dart';
+import '../application/teacher_official_score_state.dart';
 import '../application/teacher_session_key.dart';
 import '../application/teacher_submission_detail_controller.dart';
 import '../application/teacher_submission_detail_state.dart';
@@ -12,6 +15,8 @@ import '../application/teacher_submission_file_controller.dart';
 import '../application/teacher_submission_file_state.dart';
 import '../application/teacher_submission_review_controller.dart';
 import '../application/teacher_submission_review_state.dart';
+import '../domain/teacher_official_score.dart';
+import '../domain/teacher_submission.dart';
 import '../domain/teacher_submission_detail.dart';
 import '../domain/teacher_submission_review.dart';
 import 'teacher_homework_formatters.dart';
@@ -20,7 +25,8 @@ import 'teacher_review_formatters.dart';
 
 /// One submission with every Question and the Student's answers
 /// (`S09-FE-003A`), where the Teacher reviews the manual answers
-/// (`S09-FE-003B`); desktop only.
+/// (`S09-FE-003B`) next to the Student's official score (`S09-FE-003C`);
+/// desktop only.
 class TeacherSubmissionDetailScreen extends ConsumerWidget {
   const TeacherSubmissionDetailScreen({required this.submissionId, super.key});
 
@@ -111,9 +117,24 @@ class TeacherSubmissionDetailScreen extends ConsumerWidget {
             tooltip: 'Refresh submission',
             onPressed: state.isLoading || review.isBusy
                 ? null
-                : state.status == TeacherSubmissionDetailStatus.error
-                ? controller.retry
-                : controller.refresh,
+                : () {
+                    if (state.status == TeacherSubmissionDetailStatus.error) {
+                      controller.retry();
+                    } else {
+                      controller.refresh();
+                    }
+                    if (detail != null) {
+                      ref
+                          .read(
+                            teacherOfficialScoreControllerProvider(
+                              TeacherOfficialScoreTarget.ofSubmission(
+                                detail.submission,
+                              ),
+                            ).notifier,
+                          )
+                          .refresh();
+                    }
+                  },
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -332,6 +353,11 @@ class _DetailBody extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              _OfficialScorePanel(
+                submission: detail.submission,
+                timezone: timezone,
+              ),
               for (final question in detail.questions) ...[
                 const SizedBox(height: 12),
                 _QuestionCard(question: question, submissionId: submissionId),
@@ -342,6 +368,131 @@ class _DetailBody extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The Student's official score for this task, evaluated live by the
+/// server.
+class _OfficialScorePanel extends ConsumerWidget {
+  const _OfficialScorePanel({required this.submission, required this.timezone});
+
+  final TeacherSubmission submission;
+  final String? timezone;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = teacherOfficialScoreControllerProvider(
+      TeacherOfficialScoreTarget.ofSubmission(submission),
+    );
+    final state = ref.watch(provider);
+    final score = state.score;
+    final retry = OutlinedButton.icon(
+      key: const Key('teacherOfficialScoreRetryButton'),
+      onPressed: state.isLoading ? null : ref.read(provider.notifier).retry,
+      icon: const Icon(Icons.refresh),
+      label: const Text('Retry'),
+    );
+
+    return Card(
+      key: const Key('teacherOfficialScorePanel'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(
+                'Official score',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...switch (state.status) {
+              TeacherOfficialScoreLoadStatus.initial ||
+              TeacherOfficialScoreLoadStatus.loading => [
+                const LinearProgressIndicator(
+                  key: Key('teacherOfficialScoreLoading'),
+                  semanticsLabel: 'Loading official score',
+                ),
+              ],
+              TeacherOfficialScoreLoadStatus.notFound => [
+                const Text('The official score is not available.'),
+              ],
+              _ when score == null => [
+                const Text('The official score could not be loaded.'),
+                const SizedBox(height: 8),
+                retry,
+              ],
+              _ => [
+                if (state.status == TeacherOfficialScoreLoadStatus.refreshing)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 6),
+                    child: LinearProgressIndicator(
+                      key: Key('teacherOfficialScoreRefreshing'),
+                      semanticsLabel: 'Refreshing official score',
+                    ),
+                  ),
+                ..._officialScoreLines(
+                  score,
+                  submission.id,
+                  timezone,
+                ).map(Text.new),
+                if (state.isStale) ...[
+                  const SizedBox(height: 8),
+                  const Text('The official score may be out of date.'),
+                  const SizedBox(height: 8),
+                  retry,
+                ],
+              ],
+            },
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+List<String> _officialScoreLines(
+  TeacherOfficialScore score,
+  String submissionId,
+  String? timezone,
+) {
+  return switch (score.status) {
+    TeacherOfficialScoreStatus.ready => [
+      'Score ${formatScoreOneDecimal(score.normalizedScore!)}',
+      [
+        'Attempt ${score.attemptNumber}',
+        switch (score.selectionPolicy!) {
+          TeacherOfficialScoreSelectionPolicy.highestValidCompleted =>
+            'Best checked attempt',
+          TeacherOfficialScoreSelectionPolicy.validNormalBlitz =>
+            'Blitz attempt',
+          TeacherOfficialScoreSelectionPolicy
+              .approvedBlitzExceptionReplacement =>
+            'Replacement attempt',
+        },
+        if (score.officialAttemptId!.toLowerCase() ==
+            submissionId.toLowerCase())
+          'This submission',
+      ].join(' · '),
+      'Selected ${formatTeacherReviewTime(score.selectedAt!, timezone)}',
+    ],
+    TeacherOfficialScoreStatus.notApplicable => [
+      'Practice task: no official score.',
+    ],
+    TeacherOfficialScoreStatus.waitingForReplacement => [
+      "Waiting for the Student's replacement attempt.",
+    ],
+    TeacherOfficialScoreStatus.automaticCheckingPending => [
+      'Waiting for automatic checking.',
+    ],
+    TeacherOfficialScoreStatus.waitingForTeacherReview => [
+      'Waiting for Teacher review.',
+    ],
+    TeacherOfficialScoreStatus.noCompletedAttempt => [
+      'No completed attempt counts yet.',
+    ],
+  };
 }
 
 class _QuestionCard extends StatelessWidget {

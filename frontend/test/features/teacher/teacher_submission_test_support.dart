@@ -1,5 +1,7 @@
+import 'package:testlabuz_client/features/teacher/data/dto/teacher_official_score_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_detail_dto.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_list_pagination.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_official_score.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_detail.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list.dart';
@@ -185,6 +187,21 @@ class FakeTeacherSubmissionRepository implements TeacherSubmissionRepository {
     return onSaveReview?.call(submissionId, request) ??
         Future.value(
           TeacherSubmissionDetailDto.fromJson(reviewedDetailJson()).toDomain(),
+        );
+  }
+
+  Future<TeacherOfficialScore> Function(TeacherOfficialScoreTarget target)?
+  onFetchOfficialScore;
+  final officialTargets = <TeacherOfficialScoreTarget>[];
+
+  @override
+  Future<TeacherOfficialScore> fetchOfficialScore(
+    TeacherOfficialScoreTarget target,
+  ) {
+    officialTargets.add(target);
+    return onFetchOfficialScore?.call(target) ??
+        Future.value(
+          TeacherOfficialScoreDto.fromJson(officialScoreJson()).toDomain(),
         );
   }
 
@@ -521,4 +538,35 @@ Map<String, Object?> reviewedDetailJson({
     earned: 9.5,
     normalized: 67.857143,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Official score fixtures (S09-FE-003C).
+
+const officialAssessmentId = '50000000-0000-0000-0000-000000000001';
+const officialStudentId = '60000000-0000-0000-0000-000000000001';
+
+/// `GET /teacher/assessments/{a}/students/{s}/official-score` data: a ready
+/// Homework score from this submission by default.
+Map<String, Object?> officialScoreJson({
+  String status = 'ready',
+  String type = 'homework',
+  String? officialAttemptId = submissionId,
+  int? attemptNumber = 2,
+  num? normalized = 87.25,
+  String? policy = 'highest_valid_completed',
+  String? selectedAt = '2026-09-30T11:00:00Z',
+}) {
+  final ready = status == 'ready';
+  return <String, Object?>{
+    'assessment_id': officialAssessmentId,
+    'assessment_type': type,
+    'student_id': officialStudentId,
+    'status': status,
+    'official_attempt_id': ready ? officialAttemptId : null,
+    'attempt_number': ready ? attemptNumber : null,
+    'normalized_score': ready ? normalized : null,
+    'selection_policy_code': ready ? policy : null,
+    'selected_at': ready ? selectedAt : null,
+  };
 }

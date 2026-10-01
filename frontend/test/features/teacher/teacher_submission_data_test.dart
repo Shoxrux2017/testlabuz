@@ -12,6 +12,7 @@ import 'package:testlabuz_client/features/teacher/application/teacher_review_que
 import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_remote_data_source.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_official_score.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list_query.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_review.dart';
@@ -530,6 +531,131 @@ void main() {
 
       expect(detail.submission.id, submissionId);
       expect(request.matches(detail), isTrue);
+    });
+  });
+
+  group('Teacher official score data source', () {
+    const path =
+        '/teacher/assessments/$officialAssessmentId/students/$officialStudentId/official-score';
+
+    test('sends GET and parses the official score', () async {
+      final adapter = RecordingAdapter(
+        (_) => jsonResponse(200, {'data': officialScoreJson()}),
+      );
+
+      final dto = await _source(
+        adapter,
+      ).fetchOfficialScore(officialAssessmentId, officialStudentId);
+
+      expect(dto.toDomain().normalizedScore, 87.25);
+      final request = adapter.requests.single;
+      expect(request.method, 'GET');
+      expect(request.path, path);
+      expect(request.queryParameters, isEmpty);
+      expect(request.data, isNull);
+      expect(request.followRedirects, isFalse);
+    });
+
+    test('a wrong status or envelope is an invalid response', () async {
+      final responses = <FutureOr<ResponseBody> Function(RequestOptions)>[
+        (_) => jsonResponse(201, {'data': officialScoreJson()}),
+        (_) => jsonResponse(200, officialScoreJson()),
+        (_) => jsonResponse(200, {'data': officialScoreJson(), 'message': 'x'}),
+        (_) => jsonResponse(200, {
+          'data': officialScoreJson()..['status'] = 'pending',
+        }),
+      ];
+
+      for (final response in responses) {
+        await expectLater(
+          _source(
+            RecordingAdapter(response),
+          ).fetchOfficialScore(officialAssessmentId, officialStudentId),
+          throwsA(
+            isA<ApiRequestException>().having(
+              (exception) => exception.failure.kind,
+              'kind',
+              ApiFailureKind.invalidResponse,
+            ),
+          ),
+        );
+      }
+    });
+
+    test('non-canonical ids are rejected before transport', () {
+      final adapter = RecordingAdapter(
+        (_) => throw StateError('No transport.'),
+      );
+
+      expect(
+        () =>
+            _source(adapter).fetchOfficialScore('not-an-id', officialStudentId),
+        throwsArgumentError,
+      );
+      expect(
+        () => _source(adapter).fetchOfficialScore(officialAssessmentId, 'x'),
+        throwsArgumentError,
+      );
+      expect(adapter.requests, isEmpty);
+    });
+
+    test('the repository rejects a score of another target', () async {
+      final target = TeacherOfficialScoreTarget(
+        assessmentId: officialAssessmentId,
+        studentId: officialStudentId,
+        type: TeacherSubmissionTaskType.homework,
+      );
+      final others = [
+        officialScoreJson()
+          ..['assessment_id'] = '50000000-0000-0000-0000-000000000009',
+        officialScoreJson()
+          ..['student_id'] = '60000000-0000-0000-0000-000000000009',
+        officialScoreJson(
+          type: 'blitz',
+          attemptNumber: 1,
+          policy: 'valid_normal_blitz',
+        ),
+      ];
+
+      const lettered = 'abcdef00-0000-4000-8000-00000000000a';
+      const letteredStudent = 'fedcba00-0000-4000-8000-00000000000b';
+      final matching =
+          await TeacherSubmissionRepositoryImpl(
+            remoteDataSource: _source(
+              RecordingAdapter(
+                (_) => jsonResponse(200, {
+                  'data': officialScoreJson()
+                    ..['assessment_id'] = lettered.toUpperCase()
+                    ..['student_id'] = letteredStudent.toUpperCase(),
+                }),
+              ),
+            ),
+          ).fetchOfficialScore(
+            TeacherOfficialScoreTarget(
+              assessmentId: lettered,
+              studentId: letteredStudent,
+              type: TeacherSubmissionTaskType.homework,
+            ),
+          );
+      expect(matching.status, TeacherOfficialScoreStatus.ready);
+
+      for (final other in others) {
+        final repository = TeacherSubmissionRepositoryImpl(
+          remoteDataSource: _source(
+            RecordingAdapter((_) => jsonResponse(200, {'data': other})),
+          ),
+        );
+        await expectLater(
+          repository.fetchOfficialScore(target),
+          throwsA(
+            isA<ApiRequestException>().having(
+              (exception) => exception.failure.kind,
+              'kind',
+              ApiFailureKind.invalidResponse,
+            ),
+          ),
+        );
+      }
     });
   });
 
