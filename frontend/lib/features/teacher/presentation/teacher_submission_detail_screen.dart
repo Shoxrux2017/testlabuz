@@ -10,13 +10,17 @@ import '../application/teacher_submission_detail_controller.dart';
 import '../application/teacher_submission_detail_state.dart';
 import '../application/teacher_submission_file_controller.dart';
 import '../application/teacher_submission_file_state.dart';
+import '../application/teacher_submission_review_controller.dart';
+import '../application/teacher_submission_review_state.dart';
 import '../domain/teacher_submission_detail.dart';
+import '../domain/teacher_submission_review.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_learning_material_section.dart';
 import 'teacher_review_formatters.dart';
 
 /// One submission with every Question and the Student's answers
-/// (`S09-FE-003A`); desktop only.
+/// (`S09-FE-003A`), where the Teacher reviews the manual answers
+/// (`S09-FE-003B`); desktop only.
 class TeacherSubmissionDetailScreen extends ConsumerWidget {
   const TeacherSubmissionDetailScreen({required this.submissionId, super.key});
 
@@ -28,6 +32,11 @@ class TeacherSubmissionDetailScreen extends ConsumerWidget {
     final state = ref.watch(provider);
     final controller = ref.read(provider.notifier);
     final fileProvider = teacherSubmissionFileControllerProvider(submissionId);
+    final reviewProvider = teacherSubmissionReviewControllerProvider(
+      submissionId,
+    );
+    final review = ref.watch(reviewProvider);
+    final reviewController = ref.read(reviewProvider.notifier);
     final timezone = TeacherSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -45,8 +54,33 @@ class TeacherSubmissionDetailScreen extends ConsumerWidget {
         ..showSnackBar(SnackBar(content: Text(feedback)));
       ref.read(fileProvider.notifier).consumeFeedback();
     });
+    ref.listen<TeacherSubmissionReviewState>(reviewProvider, (previous, next) {
+      final feedback = next.successFeedback;
+      if (feedback == null || !context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(feedback)));
+      ref.read(reviewProvider.notifier).consumeFeedback();
+    });
 
     final detail = state.detail;
+    final showsDetail =
+        detail != null &&
+        state.status != TeacherSubmissionDetailStatus.initial &&
+        state.status != TeacherSubmissionDetailStatus.loading &&
+        state.status != TeacherSubmissionDetailStatus.notFound;
+    final changedCount = detail == null
+        ? 0
+        : buildTeacherSubmissionReview(detail, review.drafts).changedCount;
+    final reviewable =
+        showsDetail &&
+        detail.questions.any(
+          (question) =>
+              question.answer != null &&
+              isTeacherReviewableAnswer(question.answer!),
+        );
     return Scaffold(
       key: const Key('teacherSubmissionDetailScreen'),
       appBar: AppBar(
@@ -54,20 +88,28 @@ class TeacherSubmissionDetailScreen extends ConsumerWidget {
         leading: IconButton(
           key: const Key('teacherSubmissionBackButton'),
           tooltip: 'Back to review queue',
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutePaths.teacherReviews);
-            }
-          },
+          onPressed: review.isBusy
+              ? null
+              : () async {
+                  if (changedCount > 0 && !await _confirmDiscard(context)) {
+                    return;
+                  }
+                  if (!context.mounted) {
+                    return;
+                  }
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go(AppRoutePaths.teacherReviews);
+                  }
+                },
           icon: const Icon(Icons.arrow_back),
         ),
         actions: [
           IconButton(
             key: const Key('teacherSubmissionRefreshButton'),
             tooltip: 'Refresh submission',
-            onPressed: state.isLoading
+            onPressed: state.isLoading || review.isBusy
                 ? null
                 : state.status == TeacherSubmissionDetailStatus.error
                 ? controller.retry
@@ -111,6 +153,126 @@ class TeacherSubmissionDetailScreen extends ConsumerWidget {
             onRetry: controller.retry,
           ),
         },
+      ),
+      bottomNavigationBar: reviewable
+          ? _ReviewBar(
+              review: review,
+              changedCount: changedCount,
+              canSave:
+                  changedCount > 0 &&
+                  !review.isBusy &&
+                  state.status == TeacherSubmissionDetailStatus.data,
+              onSave: () => reviewController.save(),
+              onDiscard: reviewController.discardChanges,
+            )
+          : null,
+    );
+  }
+}
+
+Future<bool> _confirmDiscard(BuildContext context) async {
+  final discard = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Discard unsaved review?'),
+      content: const Text(
+        'The points and feedback you entered have not been saved.',
+      ),
+      actions: [
+        TextButton(
+          key: const Key('teacherSubmissionDiscardCancelButton'),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Keep editing'),
+        ),
+        FilledButton(
+          key: const Key('teacherSubmissionDiscardConfirmButton'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Discard'),
+        ),
+      ],
+    ),
+  );
+  return discard ?? false;
+}
+
+class _ReviewBar extends StatelessWidget {
+  const _ReviewBar({
+    required this.review,
+    required this.changedCount,
+    required this.canSave,
+    required this.onSave,
+    required this.onDiscard,
+  });
+
+  final TeacherSubmissionReviewState review;
+  final int changedCount;
+  final bool canSave;
+  final VoidCallback onSave;
+  final VoidCallback onDiscard;
+
+  @override
+  Widget build(BuildContext context) {
+    final failureMessage = review.failureMessage;
+    return Material(
+      key: const Key('teacherSubmissionReviewBar'),
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (review.isBusy)
+              const LinearProgressIndicator(
+                key: Key('teacherSubmissionReviewProgress'),
+                semanticsLabel: 'Saving review',
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(switch (changedCount) {
+                          0 => 'No unsaved changes',
+                          1 => '1 answer changed',
+                          _ => '$changedCount answers changed',
+                        }),
+                        if (failureMessage != null)
+                          Semantics(
+                            key: const Key('teacherSubmissionReviewMessage'),
+                            liveRegion: true,
+                            child: Text(
+                              failureMessage,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    key: const Key('teacherSubmissionReviewDiscardButton'),
+                    onPressed: changedCount > 0 && !review.isBusy
+                        ? onDiscard
+                        : null,
+                    child: const Text('Discard changes'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: const Key('teacherSubmissionReviewSaveButton'),
+                    onPressed: canSave ? onSave : null,
+                    child: const Text('Save review'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -223,10 +385,136 @@ class _QuestionCard extends StatelessWidget {
               Text(_statusLine(answer, question.points)),
               if (answer.feedback case final feedback?)
                 Text('Feedback: $feedback'),
+              if (isTeacherReviewableAnswer(answer))
+                _ReviewFields(
+                  key: ValueKey<String>(answer.id),
+                  question: question,
+                  answer: answer,
+                  submissionId: submissionId,
+                ),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The Teacher's points and feedback for one reviewable answer.
+class _ReviewFields extends ConsumerStatefulWidget {
+  const _ReviewFields({
+    required this.question,
+    required this.answer,
+    required this.submissionId,
+    super.key,
+  });
+
+  final TeacherReviewQuestion question;
+  final TeacherReviewAnswer answer;
+  final String submissionId;
+
+  @override
+  ConsumerState<_ReviewFields> createState() => _ReviewFieldsState();
+}
+
+class _ReviewFieldsState extends ConsumerState<_ReviewFields> {
+  final _pointsController = TextEditingController();
+  final _feedbackController = TextEditingController();
+
+  @override
+  void dispose() {
+    _pointsController.dispose();
+    _feedbackController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = teacherSubmissionReviewControllerProvider(
+      widget.submissionId,
+    );
+    final review = ref.watch(provider);
+    final controller = ref.read(provider.notifier);
+    final answer = widget.answer;
+    final draft = review.drafts[answer.id];
+    // Untouched fields follow the saved answer; typed text is kept.
+    _setText(
+      _pointsController,
+      draft?.pointsText ?? teacherReviewSavedPointsText(answer),
+    );
+    _setText(_feedbackController, draft?.feedbackText ?? answer.feedback ?? '');
+    final errors = review.errors[answer.id];
+    final points = formatTeacherReviewPoints(widget.question.points);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 200,
+                child: TextField(
+                  key: Key('teacherSubmissionReviewPoints:${answer.id}'),
+                  controller: _pointsController,
+                  enabled: !review.isBusy,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Points',
+                    helperText: '0 to $points',
+                    errorMaxLines: 3,
+                    errorText: switch (errors?.points) {
+                      TeacherReviewPointsError.missing => 'Enter points.',
+                      TeacherReviewPointsError.invalid =>
+                        'Enter 0 to $points with up to 6 decimal places.',
+                      null => null,
+                    },
+                  ),
+                  onChanged: (text) => controller.editPoints(answer.id, text),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextField(
+                  key: Key('teacherSubmissionReviewFeedback:${answer.id}'),
+                  controller: _feedbackController,
+                  enabled: !review.isBusy,
+                  minLines: 2,
+                  maxLines: 6,
+                  keyboardType: TextInputType.multiline,
+                  decoration: InputDecoration(
+                    labelText: 'Feedback (optional)',
+                    errorText: errors?.feedbackTooLong ?? false
+                        ? 'Use at most 2000 characters.'
+                        : null,
+                  ),
+                  onChanged: (text) => controller.editFeedback(answer.id, text),
+                ),
+              ),
+            ],
+          ),
+          if (errors?.notReviewable ?? false) ...[
+            const SizedBox(height: 6),
+            Text(
+              'This answer can no longer be reviewed. Refresh the submission.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+void _setText(TextEditingController controller, String value) {
+  if (controller.text != value) {
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
     );
   }
 }

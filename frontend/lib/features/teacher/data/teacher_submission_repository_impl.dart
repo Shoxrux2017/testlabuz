@@ -6,6 +6,7 @@ import '../domain/teacher_submission_detail.dart';
 import '../domain/teacher_submission_list.dart';
 import '../domain/teacher_submission_list_query.dart';
 import '../domain/teacher_submission_repository.dart';
+import '../domain/teacher_submission_review.dart';
 import 'teacher_submission_remote_data_source.dart';
 
 final teacherSubmissionRepositoryProvider =
@@ -41,5 +42,14 @@ class TeacherSubmissionRepositoryImpl implements TeacherSubmissionRepository {
       );
     }
     return detail;
+  }
+
+  @override
+  Future<TeacherSubmissionDetail> saveReview(
+    String submissionId,
+    TeacherSubmissionReviewRequest request,
+  ) async {
+    final dto = await remoteDataSource.saveReview(submissionId, request);
+    return dto.toDomain();
   }
 }

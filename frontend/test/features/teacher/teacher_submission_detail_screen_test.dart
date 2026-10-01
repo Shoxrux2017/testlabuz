@@ -13,6 +13,7 @@ import 'package:testlabuz_client/core/files/local_file_actions.dart';
 import 'package:testlabuz_client/core/files/protected_learning_material_transfer.dart';
 import 'package:testlabuz_client/core/network/api_error_codes.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
+import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
@@ -474,6 +475,296 @@ void main() {
     );
     expect(find.byKey(const Key('teacherSubmissionHeader')), findsOneWidget);
   });
+
+  group('review', () {
+    final reviewedId = detailId(205);
+    final waitingId = detailId(206);
+
+    testWidgets('sections appear only on reviewable answers', (tester) async {
+      await _pumpApp(tester, location: _detailPath);
+      await tester.pumpAndSettle();
+
+      expect(_fieldText(tester, _points(reviewedId)), '2.5');
+      expect(_fieldText(tester, _feedback(reviewedId)), 'Good start.');
+      expect(_fieldText(tester, _points(waitingId)), '');
+      expect(_fieldText(tester, _feedback(waitingId)), '');
+      expect(find.byKey(_points(detailId(201))), findsNothing);
+      expect(
+        find.byType(TextField),
+        findsNWidgets(4),
+        reason: 'two fields on each reviewable answer only',
+      );
+      expect(find.text('0 to 3 points'), findsOneWidget);
+      expect(find.text('0 to 2 points'), findsOneWidget);
+      expect(find.text('No unsaved changes'), findsOneWidget);
+      expect(_pressable(tester, _saveButton), isFalse);
+      expect(_pressable(tester, _discardButton), isFalse);
+    });
+
+    testWidgets('a save shows the new saved state', (tester) async {
+      final submissions = FakeTeacherSubmissionRepository();
+      await _pumpApp(tester, location: _detailPath, submissions: submissions);
+      await tester.pumpAndSettle();
+
+      await _type(tester, _points(waitingId), '2.0');
+      expect(find.text('1 answer changed'), findsOneWidget);
+      await _type(tester, _points(reviewedId), '3');
+      expect(find.text('2 answers changed'), findsOneWidget);
+      await _type(tester, _points(reviewedId), '2.5');
+      await _type(tester, _feedback(waitingId), 'Clear report.');
+      expect(find.text('1 answer changed'), findsOneWidget);
+      expect(_pressable(tester, _saveButton), isTrue);
+
+      await tester.tap(find.byKey(_saveButton));
+      await tester.pumpAndSettle();
+
+      expect(submissions.reviewRequests, hasLength(1));
+      expect(find.text('Review saved.'), findsOneWidget);
+      final card = find.byKey(
+        Key('teacherSubmissionQuestion:${detailId(106)}'),
+      );
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.text('Reviewed by Dilnoza Teacher · 2 of 2 points'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: card,
+          matching: find.text('Feedback: Clear report.'),
+        ),
+        findsOneWidget,
+      );
+      expect(_fieldText(tester, _points(waitingId)), '2');
+      expect(find.text('No unsaved changes'), findsOneWidget);
+    });
+
+    testWidgets('field errors and failure messages', (tester) async {
+      final submissions = FakeTeacherSubmissionRepository();
+      await _pumpApp(tester, location: _detailPath, submissions: submissions);
+      await tester.pumpAndSettle();
+
+      await _type(tester, _feedback(waitingId), 'Nice.');
+      await _type(tester, _points(reviewedId), '4');
+      await tester.tap(find.byKey(_saveButton));
+      await tester.pumpAndSettle();
+
+      expect(submissions.reviewRequests, isEmpty);
+      expect(find.text('Enter points.'), findsOneWidget);
+      expect(
+        find.text('Enter 0 to 3 points with up to 6 decimal places.'),
+        findsOneWidget,
+      );
+
+      submissions.onSaveReview = (_, _) => Future.error(
+        ApiRequestException(
+          ApiFailure(
+            kind: ApiFailureKind.validation,
+            message: 'Failure.',
+            statusCode: 422,
+            serverCode: ApiErrorCodes.validationFailed,
+            fieldErrors: const {
+              'answers.0.answer_id': ['Not a manual-review answer.'],
+              'answers.1.feedback': ['Too long.'],
+            },
+          ),
+        ),
+      );
+      await _type(tester, _points(waitingId), '2');
+      await _type(tester, _points(reviewedId), '3');
+      await tester.tap(find.byKey(_saveButton));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'This answer can no longer be reviewed. Refresh the submission.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Use at most 2000 characters.'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('teacherSubmissionReviewMessage')),
+          matching: find.text(
+            'Some answers were not saved. Check the marked fields.',
+          ),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('everything is disabled while saving', (tester) async {
+      final release = Completer<TeacherSubmissionDetail>();
+      final submissions = FakeTeacherSubmissionRepository()
+        ..onSaveReview = (_, _) => release.future;
+      await _pumpApp(tester, location: _detailPath, submissions: submissions);
+      await tester.pumpAndSettle();
+      await _type(tester, _points(waitingId), '2');
+      await _type(tester, _feedback(waitingId), 'Clear report.');
+
+      await tester.tap(find.byKey(_saveButton));
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('teacherSubmissionReviewProgress')),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('Saving review'), findsOneWidget);
+      for (final key in [_saveButton, _discardButton]) {
+        expect(_pressable(tester, key), isFalse);
+      }
+      for (final key in [
+        const Key('teacherSubmissionBackButton'),
+        const Key('teacherSubmissionRefreshButton'),
+      ]) {
+        expect(tester.widget<IconButton>(find.byKey(key)).onPressed, isNull);
+      }
+      for (final key in [_points(waitingId), _feedback(reviewedId)]) {
+        expect(tester.widget<TextField>(find.byKey(key)).enabled, isFalse);
+      }
+
+      release.complete(
+        TeacherSubmissionDetailDto.fromJson(reviewedDetailJson()).toDomain(),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('teacherSubmissionReviewProgress')),
+        findsNothing,
+      );
+      expect(
+        tester.widget<TextField>(find.byKey(_points(waitingId))).enabled,
+        isTrue,
+      );
+    });
+
+    testWidgets('discard restores the saved values', (tester) async {
+      await _pumpApp(tester, location: _detailPath);
+      await tester.pumpAndSettle();
+      await _type(tester, _points(reviewedId), '1');
+      await _type(tester, _feedback(reviewedId), '');
+
+      await tester.tap(find.byKey(_discardButton));
+      await tester.pumpAndSettle();
+
+      expect(_fieldText(tester, _points(reviewedId)), '2.5');
+      expect(_fieldText(tester, _feedback(reviewedId)), 'Good start.');
+      expect(find.text('No unsaved changes'), findsOneWidget);
+    });
+
+    testWidgets('back with changes asks before leaving', (tester) async {
+      await _pumpApp(tester, location: '/teacher/reviews');
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('teacherReviewQueueRow:$submissionId')),
+      );
+      await tester.pumpAndSettle();
+      await _type(tester, _points(waitingId), '1.5');
+
+      await tester.tap(find.byKey(const Key('teacherSubmissionBackButton')));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard unsaved review?'), findsOneWidget);
+      expect(
+        find.text('The points and feedback you entered have not been saved.'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const Key('teacherSubmissionDiscardCancelButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(_routerPath(tester), _detailPath);
+      expect(_fieldText(tester, _points(waitingId)), '1.5');
+
+      await tester.tap(find.byKey(const Key('teacherSubmissionBackButton')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('teacherSubmissionDiscardConfirmButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(_routerPath(tester), '/teacher/reviews');
+      expect(find.text('Discard unsaved review?'), findsNothing);
+    });
+
+    testWidgets('refresh keeps typed values and updates untouched ones', (
+      tester,
+    ) async {
+      var fetches = 0;
+      final corrected = submissionDetailQuestions();
+      (corrected[4]['answer']! as Map<String, Object?>)['awarded_points'] = 3;
+      final submissions = FakeTeacherSubmissionRepository()
+        ..onFetchDetail = (_) async => TeacherSubmissionDetailDto.fromJson(
+          ++fetches == 1
+              ? submissionDetailJson()
+              : submissionDetailJson(questions: corrected),
+        ).toDomain();
+      await _pumpApp(tester, location: _detailPath, submissions: submissions);
+      await tester.pumpAndSettle();
+      await _type(tester, _points(waitingId), '1.5');
+
+      await tester.tap(find.byKey(const Key('teacherSubmissionRefreshButton')));
+      await tester.pumpAndSettle();
+
+      expect(fetches, 2);
+      expect(find.text('Discard unsaved review?'), findsNothing);
+      expect(_fieldText(tester, _points(waitingId)), '1.5');
+      expect(_fieldText(tester, _points(reviewedId)), '3');
+      expect(find.text('1 answer changed'), findsOneWidget);
+    });
+
+    testWidgets('no bar without reviewable answers', (tester) async {
+      final questions = submissionDetailQuestions();
+      for (final question in questions) {
+        final answer = question['answer'] as Map<String, Object?>?;
+        answer
+          ?..['checking_status'] = 'pending'
+          ..['awarded_points'] = null
+          ..['feedback'] = null
+          ..['checked_by'] = null
+          ..['checked_at'] = null;
+      }
+      final detail = TeacherSubmissionDetailDto.fromJson(
+        submissionDetailJson(
+          questions: questions,
+          status: 'submitted',
+          waiting: 0,
+          reviewed: 0,
+        ),
+      ).toDomain();
+      await _pumpApp(
+        tester,
+        location: _detailPath,
+        submissions: FakeTeacherSubmissionRepository()
+          ..onFetchDetail = (_) async => detail,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('teacherSubmissionHeader')), findsOneWidget);
+      expect(find.byKey(const Key('teacherSubmissionReviewBar')), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+    });
+  });
+}
+
+const _saveButton = Key('teacherSubmissionReviewSaveButton');
+const _discardButton = Key('teacherSubmissionReviewDiscardButton');
+
+Key _points(String answerId) => Key('teacherSubmissionReviewPoints:$answerId');
+
+Key _feedback(String answerId) =>
+    Key('teacherSubmissionReviewFeedback:$answerId');
+
+String _fieldText(WidgetTester tester, Key key) =>
+    tester.widget<TextField>(find.byKey(key)).controller!.text;
+
+bool _pressable(WidgetTester tester, Key key) =>
+    tester.widget<ButtonStyleButton>(find.byKey(key)).onPressed != null;
+
+Future<void> _type(WidgetTester tester, Key key, String text) async {
+  await tester.ensureVisible(find.byKey(key));
+  await tester.pump();
+  await tester.enterText(find.byKey(key), text);
+  await tester.pump();
 }
 
 GoRouter _router(WidgetTester tester) {

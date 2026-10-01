@@ -83,6 +83,38 @@ class TeacherSubmissionDetailController
     _startLoad(retainDetail: state.detail != null);
   }
 
+  /// Publishes the detail a review save or its reconciliation returned, over
+  /// any load in flight.
+  void acceptAuthoritativeDetail(
+    TeacherSubmissionDetail detail,
+    TeacherSessionKey originatingSessionKey,
+  ) {
+    if (!_matchesSession(originatingSessionKey) ||
+        detail.submission.id.toLowerCase() != submissionId.toLowerCase()) {
+      return;
+    }
+    _dropActiveLoad();
+    state = TeacherSubmissionDetailState(
+      status: TeacherSubmissionDetailStatus.data,
+      detail: detail,
+    );
+  }
+
+  void markNotFound(TeacherSessionKey originatingSessionKey) {
+    if (!_matchesSession(originatingSessionKey)) {
+      return;
+    }
+    _dropActiveLoad();
+    state = const TeacherSubmissionDetailState(
+      status: TeacherSubmissionDetailStatus.notFound,
+    );
+  }
+
+  void _dropActiveLoad() {
+    _generation += 1;
+    _requestActive = false;
+  }
+
   void _startLoad({required bool retainDetail}) {
     final sessionKey = _activeSessionKey;
     if (sessionKey == null || _requestActive || !_matchesSession(sessionKey)) {

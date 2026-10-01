@@ -41,4 +41,5 @@ abstract final class ApiErrorCodes {
   static const blitzAttemptExceptionNotAllowed =
       'blitz_attempt_exception_not_allowed';
   static const blitzNormalAttemptRequired = 'blitz_normal_attempt_required';
+  static const automaticCheckingPending = 'automatic_checking_pending';
 }

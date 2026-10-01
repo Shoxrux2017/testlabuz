@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-FE-003A` delivery, then `S09-FE-003B` |
+| Next permitted gate | `S09-FE-003B` delivery, then `S09-FE-003C` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -146,8 +146,8 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `10b` | `S09-FE-001B` | Frontend | Homework review deadline: display and set/clear on the Homework detail | `FE-001A` | `Approved` (on `main` `5aaf9a5`) | Delivered (PR #303, `main` `6ed9b7a`) | `tasks/frontend/stage-09/S09-FE-001B-homework-review-deadline.md` |
 | `11a` | `S09-FE-002A` | Frontend | Desktop review queue `/teacher/reviews`: filters, sort, pages | `FE-001B` | `Approved` (on `main` `6ed9b7a`) | Delivered (PR #304, `main` `f3cbefa`) | `tasks/frontend/stage-09/S09-FE-002A-review-queue.md` |
 | `11b` | `S09-FE-002B` | Frontend | Task review counts on Homework/Blitz detail (all surfaces); task-scoped desktop queue | `FE-002A` | `Approved` (on `main` `f3cbefa`) | Delivered (PR #305, `main` `bf6df48`) | `tasks/frontend/stage-09/S09-FE-002B-task-review-counts.md` |
-| `12a` | `S09-FE-003A` | Frontend | Desktop submission detail (every Question and answer), Teacher file download | `FE-002B` | `Approved` (on `main` `bf6df48`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-003A-submission-detail.md` |
-| `12b` | `S09-FE-003B` | Frontend | Review save and correction (points, feedback) | `FE-003A` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `12a` | `S09-FE-003A` | Frontend | Desktop submission detail (every Question and answer), Teacher file download | `FE-002B` | `Approved` (on `main` `bf6df48`) | Delivered (PR #306, `main` `8d401ca`) | `tasks/frontend/stage-09/S09-FE-003A-submission-detail.md` |
+| `12b` | `S09-FE-003B` | Frontend | Review save and correction (points, feedback) | `FE-003A` | `Approved` (on `main` `8d401ca`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-003B-review-save.md` |
 | `12c` | `S09-FE-003C` | Frontend | Official-score panel on the submission | `FE-003B` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `13` | `S09-FE-004` | Frontend | Student Homework results and official score; finished Blitz list with results | `FE-003C` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Not written | Not started | `tasks/frontend/stage-09/` |
@@ -406,6 +406,20 @@ Only a row whose readiness is `Approved` may be implemented.
     - `FE-004` now depends on `FE-003C`.
   - Re-verification: P1 = 0, P2 = 0; two new P3 test gaps fixed and mutation-checked.
   - PR open.
+- `S09-FE-003A` accepted and delivered (PR #306, `main` `8d401ca`).
+- `S09-FE-003B` contract approved on `8d401ca`, then implemented.
+  - Each waiting or reviewed answer gets a points field and a feedback field. One `Save review` sends
+    every changed answer to `PUT /teacher/submissions/{id}/review`.
+  - The request holds absolute values, so an unconfirmed save is reconciled with one `GET` and may be
+    sent again.
+  - A confirmed save refreshes the review queues and the task detail that are still mounted.
+  - Back with unsaved changes asks before leaving; refresh keeps typed values.
+  - Independent review: P1 = 0, P2 = 0, P3 = 7.
+    - A save's outcome is now decided before it is published.
+    - A reconcile that does not confirm the save also refreshes the related views.
+    - Tests were added for the remaining gaps.
+    - All fixes are mutation-checked.
+  - PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -465,3 +479,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-01 | `S09-FE-001B` delivered (PR #303); `S09-FE-002` split into `002A`/`002B`; `002A` approved on `6ed9b7a` |
 | 2026-10-01 | `S09-FE-002A` delivered (PR #304); `S09-FE-002B` approved on `f3cbefa` |
 | 2026-10-01 | `S09-FE-002B` delivered (PR #305); `S09-FE-003` split into `003A`/`003B`/`003C`; `003A` approved on `bf6df48` |
+| 2026-10-01 | `S09-FE-003A` delivered (PR #306); `S09-FE-003B` approved on `8d401ca` |
