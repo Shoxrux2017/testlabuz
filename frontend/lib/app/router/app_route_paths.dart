@@ -34,6 +34,7 @@ abstract final class AppRouteNames {
   static const teacherBlitzEdit = 'teacher-blitz-edit';
   static const teacherBlitzQuestions = 'teacher-blitz-questions';
   static const teacherBlitzMonitoring = 'teacher-blitz-monitoring';
+  static const teacherReviews = 'teacher-reviews';
   static const student = 'student';
   static const studentTopicDetail = 'student-topic-detail';
   static const studentHomeworkDetail = 'student-homework-detail';
@@ -132,6 +133,10 @@ abstract final class AppRoutePaths {
       '$teacherBlitzDetail/$teacherBlitzQuestionsSegment';
   static const teacherBlitzMonitoring =
       '$teacherBlitzDetail/$teacherBlitzMonitoringSegment';
+  static const teacherReviewsSegment = 'reviews';
+
+  /// The desktop review queue (`S09-D7`).
+  static const teacherReviews = '$teacher/$teacherReviewsSegment';
   static const student = '/student';
   static const studentTopicsSegment = 'topics';
   static const studentTopicIdParameter = 'topicId';
@@ -349,6 +354,10 @@ abstract final class AppRoutePaths {
     return path == teacher || path.startsWith('$teacher/');
   }
 
+  static bool isTeacherReviewQueuePath(String path) {
+    return path == teacherReviews;
+  }
+
   static bool isTeacherTopicCreatePath(String path) {
     return path == teacherTopicCreate;
   }
@@ -494,7 +503,8 @@ abstract final class AppRoutePaths {
         isTeacherBlitzDetailPath(path) ||
         isTeacherBlitzEditPath(path) ||
         isTeacherBlitzQuestionsPath(path) ||
-        isTeacherBlitzMonitoringPath(path);
+        isTeacherBlitzMonitoringPath(path) ||
+        isTeacherReviewQueuePath(path);
   }
 
   static String? teacherTopicIdFromPath(String path) {

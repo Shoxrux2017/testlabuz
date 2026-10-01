@@ -44,6 +44,7 @@ import '../../features/teacher/presentation/teacher_homework_create_screen.dart'
 import '../../features/teacher/presentation/teacher_homework_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_homework_edit_screen.dart';
 import '../../features/teacher/presentation/teacher_question_builder_screen.dart';
+import '../../features/teacher/presentation/teacher_review_queue_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
@@ -275,6 +276,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             _buildTeacherDestination(const TeacherLearningWorkspaceScreen()),
         routes: [
+          GoRoute(
+            name: AppRouteNames.teacherReviews,
+            path: AppRoutePaths.teacherReviewsSegment,
+            builder: (context, state) => _buildTeacherDestination(
+              const TeacherReviewQueueScreen(),
+              authoring: true,
+            ),
+          ),
           GoRoute(
             name: AppRouteNames.teacherTopicCreate,
             path:
@@ -926,7 +935,8 @@ bool _keepsLocationDuringBootstrap(
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       (surface == AppDeviceSurface.desktop &&
-          (AppRoutePaths.isTeacherTopicCreatePath(location) ||
+          (AppRoutePaths.isTeacherReviewQueuePath(location) ||
+              AppRoutePaths.isTeacherTopicCreatePath(location) ||
               AppRoutePaths.isTeacherTopicEditPath(location) ||
               AppRoutePaths.isTeacherHomeworkCreatePath(location) ||
               AppRoutePaths.isTeacherHomeworkEditPath(location) ||

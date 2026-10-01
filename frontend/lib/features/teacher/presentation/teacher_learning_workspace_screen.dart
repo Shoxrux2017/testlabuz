@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/device/app_device_surface.dart';
+import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../../auth/application/auth_session_state.dart';
 import '../../auth/domain/auth_user.dart';
@@ -218,6 +220,13 @@ class _TeacherWorkspaceHeader extends ConsumerWidget {
               ],
             ),
           ),
+          if (ref.watch(appDeviceSurfaceProvider) == AppDeviceSurface.desktop)
+            FilledButton.tonalIcon(
+              key: const Key('teacherReviewQueueButton'),
+              onPressed: () => context.go(AppRoutePaths.teacherReviews),
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Review queue'),
+            ),
           TextButton.icon(
             key: const Key('entryLogoutButton'),
             onPressed: () {
