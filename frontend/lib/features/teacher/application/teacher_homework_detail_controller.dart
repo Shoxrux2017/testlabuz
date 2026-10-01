@@ -74,6 +74,19 @@ class TeacherHomeworkDetailController
     _startLoad(retainHomework: state.homework != null);
   }
 
+  /// Reloads after a review save owned by [originatingSessionKey], which may
+  /// have changed the review counts. A load in flight may have been read
+  /// before that save, so it is replaced.
+  void refreshAfterReview(TeacherSessionKey originatingSessionKey) {
+    if (_activeSessionKey != originatingSessionKey ||
+        !_matchesSession(originatingSessionKey)) {
+      return;
+    }
+    final retain = state.homework != null;
+    _cancelActiveRequest();
+    _startLoad(retainHomework: retain);
+  }
+
   void retry() {
     if (_requestActive ||
         _activeSessionKey == null ||

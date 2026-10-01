@@ -42,6 +42,9 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
   _FileOperation? _operation;
   StudentAnswerAutosave? _recovery;
   final _uploadWaiters = <Completer<bool>>[];
+
+  /// A chosen file whose upload waits for the Attempt to be authoritative.
+  String? _deferredUpload;
   var _generation = 0;
   var _cleared = false;
 
@@ -84,6 +87,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
         terminal.status != StudentHomeworkAttemptStatus.inProgress) {
       final changed = !identical(terminal, _lastTerminal);
       _lastTerminal = terminal;
+      _deferredUpload = null;
       final fromParentPublication =
           parent.status == StudentHomeworkAttemptLoadStatus.data &&
           identical(parent.attempt, terminal);
@@ -97,17 +101,25 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
             )
           : previous;
     }
-    if (changedParent &&
-        parent.status == StudentHomeworkAttemptLoadStatus.data &&
-        parent.attempt != null &&
-        _matchesAttempt(parent.attempt!)) {
-      return _synchronize(
-        previous,
-        parent.attempt!,
-        sourcePublication: parent.publicationToken,
-      );
+    final next =
+        changedParent &&
+            parent.status == StudentHomeworkAttemptLoadStatus.data &&
+            parent.attempt != null &&
+            _matchesAttempt(parent.attempt!)
+        ? _synchronize(
+            previous,
+            parent.attempt!,
+            sourcePublication: parent.publicationToken,
+          )
+        : _copyState(previous, isAuthoritative: _hasAuthority(parent));
+    final deferred = _deferredUpload;
+    if (deferred != null && _hasAuthority(parent)) {
+      _deferredUpload = null;
+      scheduleMicrotask(() {
+        if (ref.mounted) unawaited(uploadAnswer(deferred));
+      });
     }
-    return _copyState(previous, isAuthoritative: _hasAuthority(parent));
+    return next;
   }
 
   Future<void> chooseFile(String questionId) async {
@@ -156,7 +168,12 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
         return;
       }
       final current = _currentQuestion(id);
-      if (current == null) {
+      // While the Attempt is read again, the pick is kept against the last
+      // known Question and uploaded once the Attempt is authoritative again.
+      final known =
+          current ??
+          (_awaitsAuthority() ? state.questions[id]!.question : null);
+      if (known == null) {
         _finish(
           id,
           _entry(
@@ -169,12 +186,12 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       }
       final error = validateStudentSubmissionSelection(
         selected,
-        current.answerUi as StudentFileAnswerUi,
+        known.answerUi as StudentFileAnswerUi,
       );
       _finish(
         id,
         StudentFileQuestionAnswerState(
-          question: current,
+          question: known,
           serverFile: state.questions[id]!.serverFile,
           selectedFile: error == null ? selected : previous.selectedFile,
           status: error == null
@@ -186,7 +203,11 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
         ),
       );
       // A chosen file is saved at once; there is no separate Upload step.
-      if (error == null) unawaited(uploadAnswer(id));
+      if (error == null && current != null) {
+        unawaited(uploadAnswer(id));
+      } else if (error == null) {
+        _deferredUpload = id;
+      }
     } catch (_) {
       if (!_canPublish(operation, generation)) return;
       _finish(
@@ -613,6 +634,24 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
       _matchesAttempt(parent.attempt!) &&
       parent.attempt!.status == StudentHomeworkAttemptStatus.inProgress;
 
+  /// The in-progress Attempt is being read again in this session and may
+  /// regain authority.
+  bool _awaitsAuthority() {
+    final key = _activeSessionKey;
+    if (key == null ||
+        !_matchesSession(key) ||
+        state.isTerminal ||
+        _terminalAuthority()) {
+      return false;
+    }
+    final attempt = ref
+        .read(studentHomeworkAttemptControllerProvider(target))
+        .attempt;
+    return attempt != null &&
+        _matchesAttempt(attempt) &&
+        attempt.status == StudentHomeworkAttemptStatus.inProgress;
+  }
+
   bool get _gateIsIdle =>
       ref.read(studentAttemptRouteOperationGateProvider(target)) ==
       StudentAttemptRouteOperation.idle;
@@ -798,6 +837,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     _generation += 1;
     _activeSessionKey = null;
     _operation = null;
+    _deferredUpload = null;
     _lastParent = null;
     _lastTerminal = null;
     _recovery?.clear();

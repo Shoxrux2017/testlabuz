@@ -716,6 +716,48 @@ void main() {
       expect(find.text('1 answer changed'), findsOneWidget);
     });
 
+    testWidgets('the bar fits large text on small desktop windows', (
+      tester,
+    ) async {
+      for (final (size, scale) in [
+        (const Size(800, 600), 2.0),
+        (const Size(960, 540), 2.25),
+      ]) {
+        final submissions = FakeTeacherSubmissionRepository()
+          ..onSaveReview = (_, _) => Future.error(
+            ApiRequestException(
+              ApiFailure(
+                kind: ApiFailureKind.server,
+                message: 'Failure.',
+                statusCode: 409,
+                serverCode: ApiErrorCodes.automaticCheckingPending,
+              ),
+            ),
+          );
+        await _pumpApp(tester, location: _detailPath, submissions: submissions);
+        await tester.pumpAndSettle();
+        await _type(tester, _points(reviewedId), '3');
+        await tester.tap(find.byKey(_saveButton));
+        await tester.pumpAndSettle();
+
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        await tester.binding.setSurfaceSize(size);
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull, reason: '$size at $scale');
+        expect(
+          find.byKey(const Key('teacherSubmissionReviewMessage')),
+          findsOneWidget,
+        );
+        for (final key in [_saveButton, _discardButton]) {
+          final rect = tester.getRect(find.byKey(key));
+          expect(rect.right, lessThanOrEqualTo(size.width), reason: '$key');
+          expect(rect.bottom, lessThanOrEqualTo(size.height), reason: '$key');
+        }
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+      }
+    });
+
     testWidgets('no bar without reviewable answers', (tester) async {
       final questions = submissionDetailQuestions();
       for (final question in questions) {

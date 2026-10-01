@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-FE-004B` delivery, then Frontend Phase 2 |
+| Next permitted gate | `S09-FE-PHASE-2-FIX-001` delivery, then Frontend Phase 2 run #2 verdict, then `S09-INT-001` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -150,8 +150,9 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `12b` | `S09-FE-003B` | Frontend | Review save and correction (points, feedback) | `FE-003A` | `Approved` (on `main` `8d401ca`) | Delivered (PR #307, `main` `1983fdc`) | `tasks/frontend/stage-09/S09-FE-003B-review-save.md` |
 | `12c` | `S09-FE-003C` | Frontend | Official-score panel on the submission | `FE-003B` | `Approved` (on `main` `1983fdc`) | Delivered (PR #308, `main` `473d8a0`) | `tasks/frontend/stage-09/S09-FE-003C-official-score-panel.md` |
 | `13a` | `S09-FE-004A` | Frontend | Student Homework results: official score, Attempt results, Teacher feedback | `FE-003C` | `Approved` (on `main` `473d8a0`) | Delivered (PR #309, `main` `c1082e5`) | `tasks/frontend/stage-09/S09-FE-004A-homework-results.md` |
-| `13b` | `S09-FE-004B` | Frontend | Finished Blitz list with results (`GET /student/blitz/finished`) | `FE-004A` | `Approved` (on `main` `c1082e5`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-004B-finished-blitz.md` |
-| `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `13b` | `S09-FE-004B` | Frontend | Finished Blitz list with results (`GET /student/blitz/finished`) | `FE-004A` | `Approved` (on `main` `c1082e5`) | Delivered (PR #310, `main` `6e58259`) | `tasks/frontend/stage-09/S09-FE-004B-finished-blitz.md` |
+| `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Executed record | Run #1 `NOT ACCEPTED` (`6e58259`, one P2); run #2 pending on `FIX-001` | `tasks/frontend/stage-09/S09-FE-PHASE-2-frontend-block-review.md` |
+| `14a` | `S09-FE-PHASE-2-FIX-001` | Frontend fix | Related-view refresh after a review save (P2) and five user-visible P3 defects (`S09-FE-PH2-D1`) | Phase 2 run #1 | `Approved` (on `main` `6e58259`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-PHASE-2-FIX-001-related-refresh-and-ux-defects.md` |
 | `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | Not written | Not started | `tasks/integration/stage-09/` |
 | `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Not written | Not started | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
 
@@ -219,6 +220,7 @@ Only a row whose readiness is `Approved` may be implemented.
 | `PH2-3` `S09-DOC-001` §14 / `docs/09` §24.1 rows 2 and 6 wording | `S09-BE-PHASE-2` | Stage 9 closure |
 | `PH2-4` Blitz condition inside `StudentResultVisibility`; consolidate duplicated official rules | `S09-BE-PHASE-2` | Stage 10 planning |
 | `PH2-5` pre-`BE-004` backlog (databases that ran `d324716` without `da53031`): one-off resolve | `S09-BE-PHASE-2` | Stage 9 deployment notes |
+| `FE-PH2` carried P3 (`S09-FE-PH2-D1`): `A-2` autosave focus/pause widget tests; `B-2` archived message shown twice; `B-3` unreachable 500 test; `B-4` date-picker year range; `B-5` import order; `C-3` review validation announcement and focus; `C-4` detail screen size and controller boilerplate; `D-3` role test on review paths; `D-4` duplicated `scoreVisible` | `S09-FE-PHASE-2` §7 | Stage 10 planning or a later polish task |
 
 ## 11. Current Stage State
 
@@ -465,6 +467,26 @@ Only a row whose readiness is `Approved` may be implemented.
     - The close time has the time-zone fallback.
     - `readStudentBool` is shared; tests were hardened.
   - Re-verification: P1 = 0, P2 = 0; one new P3 test gap fixed and mutation-checked.
+  - PR open.
+- `S09-FE-004B` accepted and delivered (PR #310, `main` `6e58259`). Every planned Stage 9 frontend task is
+  delivered.
+- 2026-10-01: `S09-FE-PHASE-2` run #1 on `6e58259`.
+  - Four independent fresh-context reviewers: Student side, Teacher task pages, Teacher review surface,
+    cross-cutting.
+  - Full `flutter test` 3774 passed; `flutter analyze` and the format gate clean; Windows and Android debug
+    builds succeed.
+  - Findings: P2 = 1, P3 = 15 distinct. The P2: a related-view refresh after a review save was dropped while
+    that view was loading, so the queues and the task counts could show pre-save data as current.
+  - Verdict: `NOT ACCEPTED`.
+  - Owner decision `S09-FE-PH2-D1`: fix the P2 with the five P3 findings that a user can see; carry the
+    rest (§10).
+- `S09-FE-PHASE-2-FIX-001` approved on `6e58259`, then implemented.
+  - `refreshAfterReview` on the review queue and the Homework and Blitz details replaces a load in flight.
+  - A 404 while reconciling the review deadline releases the route.
+  - A Homework file chosen during a refresh is kept and uploaded once the Attempt is current.
+  - A Submit flush cancelled from the leave dialog shows no false "not saved".
+  - Only save messages that need attention are live regions.
+  - The review bar wraps at large text.
   - PR open.
 
 ## 12. Independent Planning Review (2026-09-28)

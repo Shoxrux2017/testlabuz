@@ -211,6 +211,14 @@ class TeacherHomeworkReviewDeadlineController
       if (_clearForSessionFailure(exception.failure)) {
         return;
       }
+      // A Homework that can no longer be read cannot be checked either, so
+      // the route is released instead of blocked.
+      if (_isNotFound(exception.failure)) {
+        _markHomeworkUnavailable(lease.sessionKey);
+        _releaseLease();
+        state = const TeacherHomeworkReviewDeadlineState();
+        return;
+      }
       _publishBlockingOutcomeReview(lease);
     } catch (_) {
       if (_canPublish(generation, lease)) {
@@ -248,8 +256,7 @@ class TeacherHomeworkReviewDeadlineController
     TeacherHomeworkRouteMutationLease lease,
     ApiFailure failure,
   ) async {
-    if (failure.statusCode == 404 &&
-        failure.serverCode == ApiErrorCodes.resourceNotFound) {
+    if (_isNotFound(failure)) {
       _markHomeworkUnavailable(lease.sessionKey);
       _releaseLease();
       state = const TeacherHomeworkReviewDeadlineState();
@@ -298,8 +305,10 @@ class TeacherHomeworkReviewDeadlineController
         _acceptHomework(homework, lease.sessionKey);
       }
     } on ApiRequestException catch (exception) {
-      if (_canPublish(generation, lease)) {
-        _clearForSessionFailure(exception.failure);
+      if (_canPublish(generation, lease) &&
+          !_clearForSessionFailure(exception.failure) &&
+          _isNotFound(exception.failure)) {
+        _markHomeworkUnavailable(lease.sessionKey);
       }
     } catch (_) {
       // The conflict itself remains definite.
@@ -349,6 +358,10 @@ class TeacherHomeworkReviewDeadlineController
             ).eligibleKey ==
             sessionKey;
   }
+
+  bool _isNotFound(ApiFailure failure) =>
+      failure.statusCode == 404 &&
+      failure.serverCode == ApiErrorCodes.resourceNotFound;
 
   bool _clearForSessionFailure(ApiFailure failure) {
     final code = failure.serverCode;

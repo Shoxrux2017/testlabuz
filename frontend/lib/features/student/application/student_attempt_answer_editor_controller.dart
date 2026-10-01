@@ -40,6 +40,7 @@ class StudentAttemptAnswerEditorController
   StudentHomeworkAttemptState? _lastParent;
   StudentAnswerAutosave? _autosave;
   Completer<bool>? _flush;
+  var _flushCancelled = false;
   var _generation = 0;
   var _cleared = false;
 
@@ -153,6 +154,7 @@ class StudentAttemptAnswerEditorController
     }
     final completer = Completer<bool>();
     _flush = completer;
+    _flushCancelled = false;
     state = _copyState(state);
     _queueEveryDirtyQuestion();
     _evaluateFlush();
@@ -167,7 +169,15 @@ class StudentAttemptAnswerEditorController
     }
   }
 
-  void cancelFlush() => _endFlush(false);
+  /// Whether the latest flush ended through [cancelFlush], which another
+  /// owner of the shared flush (the leave dialog) may have called, rather
+  /// than because an answer could not be saved.
+  bool get flushWasCancelled => _flushCancelled;
+
+  void cancelFlush() {
+    if (_flush != null) _flushCancelled = true;
+    _endFlush(false);
+  }
 
   void clearLocalState() {
     final clearedSession = _activeSessionKey;
