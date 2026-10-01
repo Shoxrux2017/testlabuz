@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_review_queue_scope.dart';
 import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_remote_data_source.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
@@ -15,6 +16,67 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list
 import 'teacher_submission_test_support.dart';
 
 void main() {
+  group('Teacher review queue scope', () {
+    const topicId = '10000000-0000-0000-0000-000000000001';
+    const blitzId = '80000000-0000-0000-0000-000000000001';
+
+    test('a task scope sends its Topic and task and keeps them on changes', () {
+      final scope = TeacherReviewQueueScope.task(
+        topicId: topicId,
+        assessmentId: blitzId,
+        type: TeacherSubmissionTaskType.blitz,
+      );
+      final changed = scope.initialQuery
+          .withOfficial(false)
+          .withSort(TeacherSubmissionSort.finalizedAt)
+          .withPage(2);
+
+      expect(changed.toQueryParameters(), {
+        'topic_id': topicId,
+        'assessment_id': blitzId,
+        'checking_status': 'waiting_for_teacher_review',
+        'official': 'false',
+        'sort': 'finalized_at',
+        'direction': 'asc',
+        'page': 2,
+        'per_page': 25,
+      });
+      expect(
+        scope,
+        TeacherReviewQueueScope.task(
+          topicId: topicId,
+          assessmentId: blitzId,
+          type: TeacherSubmissionTaskType.blitz,
+        ),
+      );
+      expect(scope == TeacherReviewQueueScope.all, isFalse);
+    });
+
+    test('the global scope keeps the unscoped initial query', () {
+      expect(
+        TeacherReviewQueueScope.all.initialQuery,
+        const TeacherSubmissionListQuery.initial(),
+      );
+      expect(TeacherReviewQueueScope.all.type, isNull);
+    });
+
+    test('a task scope rejects non-canonical ids', () {
+      for (final (topic, task) in [
+        ('not-a-topic', blitzId),
+        (topicId, 'not-a-task'),
+      ]) {
+        expect(
+          () => TeacherReviewQueueScope.task(
+            topicId: topic,
+            assessmentId: task,
+            type: TeacherSubmissionTaskType.blitz,
+          ),
+          throwsArgumentError,
+        );
+      }
+    });
+  });
+
   group('Teacher submission list query', () {
     test('defaults to waiting submissions in the recommended order', () {
       const query = TeacherSubmissionListQuery.initial();

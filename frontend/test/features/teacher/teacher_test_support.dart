@@ -285,6 +285,10 @@ TeacherHomework teacherHomework({
   String institutionTimezone = 'Asia/Tashkent',
   TeacherHomeworkStatus status = TeacherHomeworkStatus.draft,
   List<TeacherQuestion>? questions,
+  TeacherReviewSummary reviewSummary = const TeacherReviewSummary(
+    waitingForTeacherReview: 0,
+    overdue: 0,
+  ),
 }) {
   final activatedAt = switch (status) {
     TeacherHomeworkStatus.draft => null,
@@ -322,10 +326,7 @@ TeacherHomework teacherHomework({
       normalAttempts: 3,
       officialScorePolicy: 'highest_valid_completed',
     ),
-    reviewSummary: const TeacherReviewSummary(
-      waitingForTeacherReview: 0,
-      overdue: 0,
-    ),
+    reviewSummary: reviewSummary,
     activatedAt: activatedAt,
     closedAt: closedAt,
     archivedAt: status == TeacherHomeworkStatus.archived
@@ -541,6 +542,10 @@ TeacherBlitz teacherBlitz({
       TeacherBlitzTimerStartMode.synchronized,
   bool archivedBeforeActivation = false,
   List<TeacherQuestion>? questions,
+  TeacherReviewSummary reviewSummary = const TeacherReviewSummary(
+    waitingForTeacherReview: 0,
+    overdue: 0,
+  ),
 }) {
   final activatedAt = switch (status) {
     TeacherBlitzStatus.draft || TeacherBlitzStatus.scheduled => null,
@@ -578,10 +583,7 @@ TeacherBlitz teacherBlitz({
       maxAdditionalExceptionAttempts:
           TeacherBlitzAttemptPolicy.requiredMaxAdditionalExceptionAttempts,
     ),
-    reviewSummary: const TeacherReviewSummary(
-      waitingForTeacherReview: 0,
-      overdue: 0,
-    ),
+    reviewSummary: reviewSummary,
     activatedAt: activatedAt,
     synchronizedEndsAt:
         activatedAt != null &&

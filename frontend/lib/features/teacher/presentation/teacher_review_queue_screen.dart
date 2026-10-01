@@ -7,20 +7,28 @@ import '../../../app/router/app_route_paths.dart';
 import '../../../core/scoring/score_display.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/teacher_review_queue_controller.dart';
+import '../application/teacher_review_queue_scope.dart';
 import '../application/teacher_review_queue_state.dart';
 import '../application/teacher_session_key.dart';
 import '../domain/teacher_submission.dart';
 import '../domain/teacher_submission_list_query.dart';
 import 'teacher_topic_formatters.dart';
 
-/// The desktop review queue (`S09-FE-002A`); a submission opens in `S09-FE-003`.
+/// The desktop review queue (`S09-FE-002A`), for every task or one task
+/// (`S09-FE-002B`); a submission opens in `S09-FE-003`.
 class TeacherReviewQueueScreen extends ConsumerWidget {
-  const TeacherReviewQueueScreen({super.key});
+  const TeacherReviewQueueScreen({
+    this.scope = TeacherReviewQueueScope.all,
+    super.key,
+  });
+
+  final TeacherReviewQueueScope scope;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(teacherReviewQueueControllerProvider);
-    final controller = ref.read(teacherReviewQueueControllerProvider.notifier);
+    final provider = teacherReviewQueueControllerProvider(scope);
+    final state = ref.watch(provider);
+    final controller = ref.read(provider.notifier);
     final timezone = TeacherSessionSnapshot.fromSession(
       ref.watch(authSessionControllerProvider),
       ref.watch(appDeviceSurfaceProvider),
@@ -32,8 +40,12 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
         title: const Text('Review queue'),
         leading: IconButton(
           key: const Key('teacherReviewQueueBackButton'),
-          tooltip: 'Back to Teacher workspace',
-          onPressed: () => context.go(AppRoutePaths.teacher),
+          tooltip: switch (scope.type) {
+            null => 'Back to Teacher workspace',
+            TeacherSubmissionTaskType.homework => 'Back to Homework',
+            TeacherSubmissionTaskType.blitz => 'Back to Blitz',
+          },
+          onPressed: () => context.go(_backLocation()),
           icon: const Icon(Icons.arrow_back),
         ),
         actions: [
@@ -58,7 +70,18 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _QueueFilters(state: state, controller: controller),
+                  _QueueFilters(
+                    state: state,
+                    controller: controller,
+                    scope: scope,
+                  ),
+                  if (scope.type case final type?) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Submissions of this ${_typeLabel(type)}',
+                      key: const Key('teacherReviewQueueScopeLabel'),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   if (state.status == TeacherReviewQueueStatus.refreshing) ...[
                     const LinearProgressIndicator(
@@ -83,6 +106,7 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
                   ],
                   _QueueBody(
                     state: state,
+                    scope: scope,
                     timezone: timezone,
                     onRetry: controller.retry,
                     onPrevious: controller.previousPage,
@@ -95,6 +119,21 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _backLocation() {
+    final topicId = scope.topicId;
+    final assessmentId = scope.assessmentId;
+    if (topicId == null || assessmentId == null) {
+      return AppRoutePaths.teacher;
+    }
+    return switch (scope.type) {
+      TeacherSubmissionTaskType.homework =>
+        AppRoutePaths.teacherHomeworkDetailLocation(topicId, assessmentId),
+      TeacherSubmissionTaskType.blitz =>
+        AppRoutePaths.teacherBlitzDetailLocation(topicId, assessmentId),
+      null => AppRoutePaths.teacher,
+    };
   }
 }
 
@@ -155,7 +194,13 @@ const _sortLabels = {
 };
 
 class _QueueFilters extends StatelessWidget {
-  const _QueueFilters({required this.state, required this.controller});
+  const _QueueFilters({
+    required this.state,
+    required this.controller,
+    required this.scope,
+  });
+
+  final TeacherReviewQueueScope scope;
 
   final TeacherReviewQueueState state;
   final TeacherReviewQueueController controller;
@@ -178,14 +223,16 @@ class _QueueFilters extends StatelessWidget {
           labelOf: (option) => option.label,
           onChanged: (option) => controller.setCheckingStatus(option.filter),
         ),
-        _Dropdown<_TypeOption>(
-          key: const Key('teacherReviewQueueTypeFilter'),
-          label: 'Task',
-          value: _TypeOption.of(query.type),
-          values: _TypeOption.values,
-          labelOf: (option) => option.label,
-          onChanged: (option) => controller.setType(option.type),
-        ),
+        // A task-scoped queue already fixes the task type.
+        if (scope.type == null)
+          _Dropdown<_TypeOption>(
+            key: const Key('teacherReviewQueueTypeFilter'),
+            label: 'Task',
+            value: _TypeOption.of(query.type),
+            values: _TypeOption.values,
+            labelOf: (option) => option.label,
+            onChanged: (option) => controller.setType(option.type),
+          ),
         _Dropdown<_OfficialOption>(
           key: const Key('teacherReviewQueueOfficialFilter'),
           label: 'Official',
@@ -222,7 +269,7 @@ class _QueueFilters extends StatelessWidget {
         ),
         TextButton.icon(
           key: const Key('teacherReviewQueueClearFiltersButton'),
-          onPressed: query == const TeacherSubmissionListQuery.initial()
+          onPressed: query == scope.initialQuery
               ? null
               : controller.clearFilters,
           icon: const Icon(Icons.filter_alt_off_outlined),
@@ -285,6 +332,7 @@ class _Dropdown<T> extends StatelessWidget {
 class _QueueBody extends StatelessWidget {
   const _QueueBody({
     required this.state,
+    required this.scope,
     required this.timezone,
     required this.onRetry,
     required this.onPrevious,
@@ -292,6 +340,7 @@ class _QueueBody extends StatelessWidget {
   });
 
   final TeacherReviewQueueState state;
+  final TeacherReviewQueueScope scope;
   final String? timezone;
   final VoidCallback onRetry;
   final VoidCallback onPrevious;
@@ -337,9 +386,11 @@ class _QueueBody extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              state.query == const TeacherSubmissionListQuery.initial()
+              state.query != scope.initialQuery
+                  ? 'No submissions match these filters.'
+                  : scope.type == null
                   ? 'No submissions are waiting for review.'
-                  : 'No submissions match these filters.',
+                  : 'No submissions of this task are waiting for review.',
               textAlign: TextAlign.center,
             ),
           ),
