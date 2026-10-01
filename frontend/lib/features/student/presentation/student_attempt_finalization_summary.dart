@@ -56,6 +56,14 @@ class StudentAttemptFinalizationSummary extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
+            Text('Result', style: Theme.of(context).textTheme.labelLarge),
+            KeyedSubtree(
+              key: const Key('studentHomeworkAttemptResult'),
+              child: Text(
+                studentAttemptScoreLabel(attempt.result) ?? 'Not available yet',
+              ),
+            ),
+            const SizedBox(height: 10),
             for (final field in fields) ...[
               Text(field.$1, style: Theme.of(context).textTheme.labelLarge),
               SelectableText(field.$2),

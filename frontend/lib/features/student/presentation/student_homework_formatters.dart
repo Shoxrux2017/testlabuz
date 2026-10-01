@@ -1,10 +1,19 @@
 import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
+import '../../../core/scoring/score_display.dart';
 import '../domain/student_homework.dart';
 import '../domain/student_homework_attempt.dart';
 import '../application/student_homework_submit_readiness.dart';
 import '../domain/student_question.dart';
 import '../domain/student_submission_upload.dart';
+
+/// `Score <one decimal>` for a released Attempt result (`S09-T3`), or null
+/// while it is hidden.
+String? studentAttemptScoreLabel(StudentAttemptResult result) {
+  // A hidden result never carries a score.
+  final score = result.normalizedScore;
+  return score == null ? null : 'Score ${formatScoreOneDecimal(score)}';
+}
 
 String studentHomeworkStatusLabel(StudentHomeworkStatus status) {
   return switch (status) {

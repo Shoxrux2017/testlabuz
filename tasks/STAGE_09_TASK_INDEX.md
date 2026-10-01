@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-FE-003C` delivery, then `S09-FE-004` |
+| Next permitted gate | `S09-FE-004A` delivery, then `S09-FE-004B` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -148,8 +148,9 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `11b` | `S09-FE-002B` | Frontend | Task review counts on Homework/Blitz detail (all surfaces); task-scoped desktop queue | `FE-002A` | `Approved` (on `main` `f3cbefa`) | Delivered (PR #305, `main` `bf6df48`) | `tasks/frontend/stage-09/S09-FE-002B-task-review-counts.md` |
 | `12a` | `S09-FE-003A` | Frontend | Desktop submission detail (every Question and answer), Teacher file download | `FE-002B` | `Approved` (on `main` `bf6df48`) | Delivered (PR #306, `main` `8d401ca`) | `tasks/frontend/stage-09/S09-FE-003A-submission-detail.md` |
 | `12b` | `S09-FE-003B` | Frontend | Review save and correction (points, feedback) | `FE-003A` | `Approved` (on `main` `8d401ca`) | Delivered (PR #307, `main` `1983fdc`) | `tasks/frontend/stage-09/S09-FE-003B-review-save.md` |
-| `12c` | `S09-FE-003C` | Frontend | Official-score panel on the submission | `FE-003B` | `Approved` (on `main` `1983fdc`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-003C-official-score-panel.md` |
-| `13` | `S09-FE-004` | Frontend | Student Homework results and official score; finished Blitz list with results | `FE-003C` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `12c` | `S09-FE-003C` | Frontend | Official-score panel on the submission | `FE-003B` | `Approved` (on `main` `1983fdc`) | Delivered (PR #308, `main` `473d8a0`) | `tasks/frontend/stage-09/S09-FE-003C-official-score-panel.md` |
+| `13a` | `S09-FE-004A` | Frontend | Student Homework results: official score, Attempt results, Teacher feedback | `FE-003C` | `Approved` (on `main` `473d8a0`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-004A-homework-results.md` |
+| `13b` | `S09-FE-004B` | Frontend | Finished Blitz list with results (`GET /student/blitz/finished`) | `FE-004A` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | Not written | Not started | `tasks/integration/stage-09/` |
 | `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Not written | Not started | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
@@ -433,6 +434,22 @@ Only a row whose readiness is `Approved` may be implemented.
       A refresh now replaces a load in flight.
     - The panel shows progress while it refreshes; tests were added for the remaining gaps.
   - PR open.
+- `S09-FE-003C` accepted and delivered (PR #308, `main` `473d8a0`). `S09-FE-003` is complete.
+- `S09-FE-004` is split:
+  - `S09-FE-004A`: Student Homework results (display only; the parsers shipped with `S09-BE-007B`);
+  - `S09-FE-004B`: the finished Blitz list (`GET /student/blitz/finished`, new parser and section).
+- `S09-FE-004A` contract approved on `473d8a0`, then implemented.
+  - The Homework list shows a released official score.
+  - The Homework detail gets a `Results` card: the official score and each finished Attempt with its
+    own score or `Result not available yet`, each one openable.
+  - A finished Attempt shows its result and the Teacher's feedback under each answer.
+  - Independent review: P1 = 0, P2 = 0, P3 = 5, all fixed and mutation-checked.
+    - Open recreates the retained Attempt route providers, like Resume.
+    - Open is disabled while a Start is in flight.
+    - The feedback key uses the raw Question id.
+    - Tests were hardened.
+  - Re-verification: P1 = 0, P2 = 0; two new P3 test gaps fixed and mutation-checked.
+  - PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -494,3 +511,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-01 | `S09-FE-002B` delivered (PR #305); `S09-FE-003` split into `003A`/`003B`/`003C`; `003A` approved on `bf6df48` |
 | 2026-10-01 | `S09-FE-003A` delivered (PR #306); `S09-FE-003B` approved on `8d401ca` |
 | 2026-10-01 | `S09-FE-003B` delivered (PR #307); `S09-FE-003C` approved on `1983fdc` |
+| 2026-10-01 | `S09-FE-003C` delivered (PR #308); `S09-FE-004` split into `004A`/`004B`; `004A` approved on `473d8a0` |

@@ -684,6 +684,12 @@ class _AttemptContent extends ConsumerWidget {
                       answer: answers[question.id.toLowerCase()],
                     ),
                   ],
+                  if (answers[question.id.toLowerCase()]?.feedback
+                      case final feedback?)
+                    _TeacherFeedback(
+                      questionId: question.id,
+                      feedback: feedback,
+                    ),
                   const SizedBox(height: 12),
                 ],
                 if (!isTerminal)
@@ -700,6 +706,29 @@ class _AttemptContent extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The Teacher's feedback on one answer, present only while the Attempt
+/// result is released (`S09-D3`).
+class _TeacherFeedback extends StatelessWidget {
+  const _TeacherFeedback({required this.questionId, required this.feedback});
+
+  final String questionId;
+  final String feedback;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    key: ValueKey('studentAttemptFeedback$questionId'),
+    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Teacher feedback', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 4),
+        SelectableText(feedback),
+      ],
+    ),
+  );
 }
 
 class _AttemptNotice extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_route_paths.dart';
+import '../../../core/scoring/score_display.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/student_homework_list_controller.dart';
 import '../application/student_homework_list_state.dart';
@@ -248,6 +249,13 @@ class _HomeworkSummaryCard extends StatelessWidget {
             ),
             Text('Remaining: ${homework.attempts.remaining}'),
             Text('Status: ${studentHomeworkMyStatusLabel(homework.myStatus)}'),
+            if (homework.officialScore case final score?)
+              KeyedSubtree(
+                key: ValueKey('studentHomeworkOfficialScore${homework.id}'),
+                child: Text(
+                  'Official score: ${formatScoreOneDecimal(score.normalizedScore)}',
+                ),
+              ),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
