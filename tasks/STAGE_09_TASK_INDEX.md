@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-FE-PHASE-2-FIX-001` delivery, then Frontend Phase 2 run #2 verdict, then `S09-INT-001` |
+| Next permitted gate | `S09-FE-PHASE-2-FIX-001` delivery (Frontend Phase 2 `PASS`), then `S09-INT-001` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
