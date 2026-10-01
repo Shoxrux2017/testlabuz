@@ -53,7 +53,7 @@ class StudentBlitzDetailDto {
     return StudentBlitzDetailDto._(
       StudentBlitzDetail(
         id: readStudentCanonicalUuid(map, 'id'),
-        topic: _readTopic(map['topic']),
+        topic: readStudentBlitzTopic(map['topic']),
         title: readStudentNonBlankString(map, 'title'),
         description: readStudentNullableString(map, 'description'),
         studentInstructions: readStudentNonBlankString(
@@ -96,7 +96,7 @@ StudentActiveBlitzSummary _readActiveBlitz(Object? json) {
   final attempts = _readAttemptSummary(map['attempts']);
   return StudentActiveBlitzSummary(
     id: readStudentCanonicalUuid(map, 'id'),
-    topic: _readTopic(map['topic']),
+    topic: readStudentBlitzTopic(map['topic']),
     title: readStudentNonBlankString(map, 'title'),
     status: StudentBlitzStatus.parse(readStudentNonBlankString(map, 'status')),
     durationSeconds: _readDurationSeconds(map),
@@ -105,7 +105,7 @@ StudentActiveBlitzSummary _readActiveBlitz(Object? json) {
   );
 }
 
-StudentBlitzTopicSummary _readTopic(Object? json) {
+StudentBlitzTopicSummary readStudentBlitzTopic(Object? json) {
   final map = readExactStudentMap(
     json,
     context: 'Student Blitz Topic',
@@ -142,8 +142,11 @@ StudentBlitzAttemptSummary _readAttemptSummary(Object? json) {
   final inProgressAttemptId = map['in_progress_attempt_id'] == null
       ? null
       : readStudentCanonicalUuid(map, 'in_progress_attempt_id');
-  final exceptionGranted = _readBool(map, 'additional_exception_granted');
-  final replacementAvailable = _readBool(map, 'replacement_attempt_available');
+  final exceptionGranted = readStudentBool(map, 'additional_exception_granted');
+  final replacementAvailable = readStudentBool(
+    map,
+    'replacement_attempt_available',
+  );
   final valid =
       normalAttempts == 1 &&
       (normalUsed == 0 || normalUsed == 1) &&
@@ -250,12 +253,4 @@ void _validateTiming(
       'Blitz deadline and remaining seconds are inconsistent.',
     );
   }
-}
-
-bool _readBool(Map<String, Object?> map, String key) {
-  final value = map[key];
-  if (value is bool) {
-    return value;
-  }
-  throw FormatException('$key must be a boolean.');
 }

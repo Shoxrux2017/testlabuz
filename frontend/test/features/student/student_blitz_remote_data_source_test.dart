@@ -122,6 +122,43 @@ void main() {
       expect(adapter.requests, hasLength(1));
     }
   });
+
+  test('the finished list sends GET with its page and size', () async {
+    final adapter = BlitzRecordingAdapter(
+      (_) => blitzJsonResponse(
+        200,
+        finishedBlitzPageJson([finishedBlitzJson()], page: 2, total: 6),
+      ),
+    );
+
+    final page = await _repository(
+      adapter,
+    ).fetchFinishedBlitz(page: 2, perPage: 5);
+
+    expect(page.items.single.id, studentBlitzId);
+    expect(page.page, 2);
+    expect(page.lastPage, 2);
+    expect(adapter.request.method, 'GET');
+    expect(adapter.request.path, '/student/blitz/finished');
+    expect(adapter.request.queryParameters, {'page': 2, 'per_page': 5});
+    expect(adapter.request.data, isNull);
+    expect(adapter.request.followRedirects, isFalse);
+  });
+
+  test('a wrong finished list response is an invalid response', () async {
+    for (final response in [
+      blitzJsonResponse(201, finishedBlitzPageJson([])),
+      blitzJsonResponse(200, {'data': <Object?>[]}),
+      blitzJsonResponse(200, finishedBlitzPageJson([], page: 2)),
+    ]) {
+      await expectLater(
+        _repository(
+          BlitzRecordingAdapter((_) => response),
+        ).fetchFinishedBlitz(page: 1, perPage: 5),
+        throwsA(_failureKind(ApiFailureKind.invalidResponse)),
+      );
+    }
+  });
 }
 
 StudentBlitzRepositoryImpl _repository(BlitzRecordingAdapter adapter) =>
