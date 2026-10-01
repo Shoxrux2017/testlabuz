@@ -432,6 +432,35 @@ void main() {
     expect(harness.repository.saves, isEmpty);
   });
 
+  testWidgets('a confirmed save is not announced', (tester) async {
+    final harness = await _pump(tester);
+    await _enter(tester, _inside(4, find.byType(TextField)), 'saved text');
+    await _autosave(tester);
+    harness.repository.saves.single.complete(
+      const StudentTextAnswerValue(text: 'saved text'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_inside(4, find.text('Saved')), findsOneWidget);
+    expect(
+      tester
+              .widget<Semantics>(
+                find
+                    .ancestor(
+                      of: find.byKey(
+                        ValueKey('studentSaveStatus${_questionId(4)}'),
+                      ),
+                      matching: find.byType(Semantics),
+                    )
+                    .first,
+              )
+              .properties
+              .liveRegion ??
+          false,
+      isFalse,
+    );
+  });
+
   testWidgets('a rejected save is announced', (tester) async {
     final harness = await _pump(tester);
     await _rejectSave(tester, harness, 'draft');

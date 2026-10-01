@@ -151,7 +151,7 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `12c` | `S09-FE-003C` | Frontend | Official-score panel on the submission | `FE-003B` | `Approved` (on `main` `1983fdc`) | Delivered (PR #308, `main` `473d8a0`) | `tasks/frontend/stage-09/S09-FE-003C-official-score-panel.md` |
 | `13a` | `S09-FE-004A` | Frontend | Student Homework results: official score, Attempt results, Teacher feedback | `FE-003C` | `Approved` (on `main` `473d8a0`) | Delivered (PR #309, `main` `c1082e5`) | `tasks/frontend/stage-09/S09-FE-004A-homework-results.md` |
 | `13b` | `S09-FE-004B` | Frontend | Finished Blitz list with results (`GET /student/blitz/finished`) | `FE-004A` | `Approved` (on `main` `c1082e5`) | Delivered (PR #310, `main` `6e58259`) | `tasks/frontend/stage-09/S09-FE-004B-finished-blitz.md` |
-| `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Executed record | Run #1 `NOT ACCEPTED` (`6e58259`, one P2); run #2 pending on `FIX-001` | `tasks/frontend/stage-09/S09-FE-PHASE-2-frontend-block-review.md` |
+| `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Executed record | Run #1 `NOT ACCEPTED` (`6e58259`, one P2); run #2 `PASS` (`ccc1d60`); PR open | `tasks/frontend/stage-09/S09-FE-PHASE-2-frontend-block-review.md` |
 | `14a` | `S09-FE-PHASE-2-FIX-001` | Frontend fix | Related-view refresh after a review save (P2) and five user-visible P3 defects (`S09-FE-PH2-D1`) | Phase 2 run #1 | `Approved` (on `main` `6e58259`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-PHASE-2-FIX-001-related-refresh-and-ux-defects.md` |
 | `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | Not written | Not started | `tasks/integration/stage-09/` |
 | `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Not written | Not started | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
@@ -220,7 +220,7 @@ Only a row whose readiness is `Approved` may be implemented.
 | `PH2-3` `S09-DOC-001` §14 / `docs/09` §24.1 rows 2 and 6 wording | `S09-BE-PHASE-2` | Stage 9 closure |
 | `PH2-4` Blitz condition inside `StudentResultVisibility`; consolidate duplicated official rules | `S09-BE-PHASE-2` | Stage 10 planning |
 | `PH2-5` pre-`BE-004` backlog (databases that ran `d324716` without `da53031`): one-off resolve | `S09-BE-PHASE-2` | Stage 9 deployment notes |
-| `FE-PH2` carried P3 (`S09-FE-PH2-D1`): `A-2` autosave focus/pause widget tests; `B-2` archived message shown twice; `B-3` unreachable 500 test; `B-4` date-picker year range; `B-5` import order; `C-3` review validation announcement and focus; `C-4` detail screen size and controller boilerplate; `D-3` role test on review paths; `D-4` duplicated `scoreVisible` | `S09-FE-PHASE-2` §7 | Stage 10 planning or a later polish task |
+| `FE-PH2` carried P3 (`S09-FE-PH2-D1`): `A-2` autosave focus/pause widget tests; `B-2` archived message shown twice; `B-3` unreachable 500 test; `B-4` date-picker year range; `B-5` import order; `C-3` review validation announcement and focus; `C-4` detail screen size and controller boilerplate; `D-3` role test on review paths; `D-4` duplicated `scoreVisible`; a deferred file upload (Homework and Blitz) can start while the leave confirmation is open | `S09-FE-PHASE-2` §7, `FIX-001` review | Stage 10 planning or a later polish task |
 
 ## 11. Current Stage State
 
@@ -487,6 +487,14 @@ Only a row whose readiness is `Approved` may be implemented.
   - A Submit flush cancelled from the leave dialog shows no false "not saved".
   - Only save messages that need attention are live regions.
   - The review bar wraps at large text.
+  - Independent review of the fix: P1 = 0, P2 = 0, P3 = 4. A missing `Saved` silence test was added. The
+    record's reference was fixed. Guard-only tests are recorded as such. The deferred upload during the
+    leave dialog is carried (§10).
+  - Phase 2 run #2 on `ccc1d60`:
+    - `flutter test`: 3788 passed;
+    - analyze and the format gate: clean;
+    - Windows and Android debug builds: pass.
+  - Verdict: `PASS` once the PR merges.
   - PR open.
 
 ## 12. Independent Planning Review (2026-09-28)

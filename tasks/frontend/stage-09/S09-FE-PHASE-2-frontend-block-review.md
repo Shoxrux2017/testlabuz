@@ -14,7 +14,7 @@
 | Local `main` / ahead-behind | `6e58259` / `0/0`, clean |
 | Block diff | `git diff b07bdb1...6e58259 -- frontend` (170 files, +22173/−855) |
 | Review and verification executor | Claude (reviewer role since 2026-09-23); every command run locally |
-| Run #1 verdict | `NOT ACCEPTED`: one P2 (§7) |
+| Run #1 verdict | `NOT ACCEPTED`: one P2 (§7). Run #2 on the fix: `PASS` (§9, §10) |
 | Follow-up | `S09-FE-PHASE-2-FIX-001` (§8) |
 
 ## 2. Entry Conditions
@@ -105,7 +105,7 @@ The four reports held 17 findings: P2 = 1 and P3 = 16. Two P3 findings duplicate
 | `A-1` | P3 | Homework: a file chosen while the Attempt is refreshing is dropped silently | `FIX-001` item 3 |
 | `A-3` | P3 | Cancelling the leave flush also ends a Submit flush, and the Submit card shows a false "not saved" message | `FIX-001` item 4 |
 | `A-4` | P3 | The save status is a live region, so screen readers announce "Saving…/Saved" at every typing pause | `FIX-001` item 5 |
-| `A-2` | P3 | No widget test for autosave on focus loss or app pause | Carried (§9 of the fix contract) |
+| `A-2` | P3 | No widget test for autosave on focus loss or app pause | Carried (fix contract §4) |
 | `B-2` | P3 | The archived conflict message can appear twice (SnackBar and inline) | Carried |
 | `B-3` | P3 | A deadline controller test covers a 500 path that the transport cannot produce | Carried |
 | `B-4` | P3 | The date pickers assume years 2000–2100 (also the Stage 6 deadline picker) | Carried |
@@ -121,10 +121,52 @@ The four reports held 17 findings: P2 = 1 and P3 = 16. Two P3 findings duplicate
 
 `tasks/frontend/stage-09/S09-FE-PHASE-2-FIX-001-related-refresh-and-ux-defects.md`.
 
-## 9. Verification — Run #2
+Implemented in commit `ccc1d60` on `fix/s09-fe-phase-2-fix-001`:
+- `refreshAfterReview` on the review queue and the Homework and Blitz details replaces a load in flight. The
+  review controller uses it for every related view.
+- A 404 while reconciling the review deadline, or after a conflict, marks the Homework unavailable and releases
+  the route.
+- A Homework file chosen during a refresh is kept and uploaded once the Attempt is current.
+- A Submit flush cancelled by the leave dialog shows no "not saved" message.
+- Only uncertain, failure and validation save messages are live regions.
+- The review bar lays its text above wrapping actions.
 
-Pending.
+**Tests.**
+- Each item has a test that fails without its fix, and 19 mutations each make a test fail.
+- One pre-existing test changed with the behaviour it represents, as contract §3.3 requires: a replacement
+  picked while the Attempt is read again is now kept and uploaded later.
+- Three new tests are regression guards and could not fail first, because older checks already enforce their
+  behaviour:
+  - the deferred upload dropped when the Attempt ends;
+  - the rejected and unconfirmed saves being announced.
+
+**Independent review of the fix:** P1 = 0, P2 = 0, P3 = 4.
+- `Saved` was not pinned as silent. A test was added in the follow-up commit and is mutation-checked.
+- A section reference in this record was wrong. Fixed.
+- Some tests are guards (above). Recorded.
+- A deferred upload can start while the "Leave Attempt?" dialog is open, as the Blitz deferred upload already
+  can. The file is the one the Student chose and the next visit shows the server state. Carried (index §10).
+
+## 9. Verification — Run #2 (`ccc1d60`)
+
+| Check | Result |
+|---|---|
+| Full frontend suite (`flutter test`) on `ccc1d60f7a53283e1d06c9f94df2f01b88b11e0f` | PASS — 3788 tests (14 more than run #1), 182 s, exit 0 |
+| `flutter analyze` | PASS — no issues |
+| Format gate (`dart format --set-exit-if-changed lib test`) | PASS — 893 files, 0 changed |
+| `flutter build windows --debug` | PASS |
+| `flutter build apk --debug` | PASS |
+| `git diff --check 6e58259...ccc1d60` | PASS |
+
+The follow-up commit adds one test and documentation only. Its test file was run again (passed), and the
+production code is identical to `ccc1d60`.
 
 ## 10. Verdict
 
-Run #1: `NOT ACCEPTED` (P2 `C-1`). The verdict after the fix is pending run #2.
+- Run #1: `NOT ACCEPTED` (P2 `C-1`).
+- Run #2: **`PASS`**:
+  - P1 = 0 and P2 = 0 after `FIX-001`;
+  - every required check passes;
+  - there is no unresolved routing, session, state or cross-task conflict.
+
+Frontend Phase 2 is `PASS` once the fix PR merges. The remaining P3 items are carried in index §10.
