@@ -9,6 +9,7 @@ import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/teacher_submission_list_query.dart';
 import '../domain/teacher_submission_review.dart';
 import 'dto/teacher_dto_parse.dart';
+import 'dto/teacher_official_score_dto.dart';
 import 'dto/teacher_submission_detail_dto.dart';
 import 'dto/teacher_submission_dto.dart';
 import 'teacher_mutation_transport.dart';
@@ -78,6 +79,34 @@ class TeacherSubmissionRemoteDataSource {
         keys: const {'data'},
       );
       return TeacherSubmissionDetailDto.fromJson(envelope['data']);
+    });
+  }
+
+  Future<TeacherOfficialScoreDto> fetchOfficialScore(
+    String assessmentId,
+    String studentId,
+  ) {
+    if (!canonicalUuidPattern.hasMatch(assessmentId) ||
+        !canonicalUuidPattern.hasMatch(studentId)) {
+      throw ArgumentError('Official score ids must be canonical UUIDs.');
+    }
+    return _mapFailures(() async {
+      final response = await dio.get<Object?>(
+        '/teacher/assessments/${Uri.encodeComponent(assessmentId)}'
+        '/students/${Uri.encodeComponent(studentId)}/official-score',
+        options: Options(followRedirects: false),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'Teacher official score success status must be 200.',
+        );
+      }
+      final envelope = readExactTeacherMap(
+        response.data,
+        context: 'Teacher official score envelope',
+        keys: const {'data'},
+      );
+      return TeacherOfficialScoreDto.fromJson(envelope['data']);
     });
   }
 

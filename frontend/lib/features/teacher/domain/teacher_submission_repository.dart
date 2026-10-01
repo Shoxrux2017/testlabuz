@@ -1,3 +1,4 @@
+import 'teacher_official_score.dart';
 import 'teacher_submission_detail.dart';
 import 'teacher_submission_list.dart';
 import 'teacher_submission_list_query.dart';
@@ -9,6 +10,10 @@ abstract interface class TeacherSubmissionRepository {
   );
 
   Future<TeacherSubmissionDetail> fetchSubmission(String submissionId);
+
+  Future<TeacherOfficialScore> fetchOfficialScore(
+    TeacherOfficialScoreTarget target,
+  );
 
   Future<TeacherSubmissionDetail> saveReview(
     String submissionId,

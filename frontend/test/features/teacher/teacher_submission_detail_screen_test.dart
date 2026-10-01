@@ -17,6 +17,7 @@ import 'package:testlabuz_client/core/network/api_request_exception.dart';
 import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
+import 'package:testlabuz_client/features/teacher/data/dto/teacher_official_score_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_detail_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
@@ -26,7 +27,10 @@ import 'package:testlabuz_client/features/teacher/data/teacher_submission_reposi
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_official_score.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_detail.dart';
+import 'package:testlabuz_client/features/teacher/presentation/teacher_review_formatters.dart';
 
 import 'teacher_submission_test_support.dart';
 import 'teacher_test_support.dart';
@@ -742,6 +746,263 @@ void main() {
       expect(find.byKey(const Key('teacherSubmissionHeader')), findsOneWidget);
       expect(find.byKey(const Key('teacherSubmissionReviewBar')), findsNothing);
       expect(find.byType(TextField), findsNothing);
+    });
+  });
+
+  group('official score', () {
+    Finder inPanel(String text) => find.descendant(
+      of: find.byKey(const Key('teacherOfficialScorePanel')),
+      matching: find.text(text),
+    );
+
+    TeacherOfficialScore score([Map<String, Object?>? json]) =>
+        TeacherOfficialScoreDto.fromJson(
+          json ?? officialScoreJson(),
+        ).toDomain();
+
+    testWidgets('a ready score from this submission', (tester) async {
+      // 1.45 is stored just below 1.45, so only S09-T3 rounding gives 1.5.
+      final submissions = FakeTeacherSubmissionRepository()
+        ..onFetchOfficialScore = (_) async =>
+            score(officialScoreJson(normalized: 1.45));
+      await _pumpApp(tester, location: _detailPath, submissions: submissions);
+      await tester.pumpAndSettle();
+
+      expect(inPanel('Official score'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              (widget.properties.header ?? false) &&
+              widget.child is Text &&
+              (widget.child! as Text).data == 'Official score',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getTopLeft(find.byKey(const Key('teacherOfficialScorePanel')))
+            .dy,
+        greaterThan(
+          tester
+              .getBottomLeft(find.byKey(const Key('teacherSubmissionHeader')))
+              .dy,
+        ),
+      );
+      expect(
+        tester
+            .getBottomLeft(find.byKey(const Key('teacherOfficialScorePanel')))
+            .dy,
+        lessThan(
+          tester
+              .getTopLeft(
+                find.byKey(Key('teacherSubmissionQuestion:${detailId(101)}')),
+              )
+              .dy,
+        ),
+      );
+      expect(inPanel('Score 1.5'), findsOneWidget);
+      expect(
+        inPanel('Attempt 2 · Best checked attempt · This submission'),
+        findsOneWidget,
+      );
+      expect(
+        inPanel(
+          'Selected ${formatTeacherReviewTime(DateTime.utc(2026, 9, 30, 11), 'Asia/Tashkent')}',
+        ),
+        findsOneWidget,
+      );
+      expect(submissions.officialTargets, [
+        TeacherOfficialScoreTarget(
+          assessmentId: officialAssessmentId,
+          studentId: officialStudentId,
+          type: TeacherSubmissionTaskType.homework,
+        ),
+      ]);
+    });
+
+    testWidgets('another official attempt and every policy label', (
+      tester,
+    ) async {
+      for (final (json, line) in [
+        (
+          officialScoreJson(
+            officialAttemptId: '70000000-0000-0000-0000-000000000009',
+            attemptNumber: 1,
+          ),
+          'Attempt 1 · Best checked attempt',
+        ),
+        (
+          officialScoreJson(
+            type: 'blitz',
+            attemptNumber: 1,
+            policy: 'valid_normal_blitz',
+          ),
+          'Attempt 1 · Blitz attempt · This submission',
+        ),
+        (
+          officialScoreJson(
+            type: 'blitz',
+            policy: 'approved_blitz_exception_replacement',
+          ),
+          'Attempt 2 · Replacement attempt · This submission',
+        ),
+      ]) {
+        await _pumpApp(
+          tester,
+          location: _detailPath,
+          submissions: FakeTeacherSubmissionRepository()
+            ..onFetchOfficialScore = (_) async => score(json),
+        );
+        await tester.pumpAndSettle();
+
+        expect(inPanel(line), findsOneWidget, reason: line);
+      }
+    });
+
+    testWidgets('every status without a score', (tester) async {
+      for (final (status, line) in [
+        ('not_applicable', 'Practice task: no official score.'),
+        (
+          'waiting_for_replacement',
+          "Waiting for the Student's replacement attempt.",
+        ),
+        ('automatic_checking_pending', 'Waiting for automatic checking.'),
+        ('waiting_for_teacher_review', 'Waiting for Teacher review.'),
+        ('no_completed_attempt', 'No completed attempt counts yet.'),
+      ]) {
+        await _pumpApp(
+          tester,
+          location: _detailPath,
+          submissions: FakeTeacherSubmissionRepository()
+            ..onFetchOfficialScore = (_) async =>
+                score(officialScoreJson(status: status, type: 'blitz')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(inPanel(line), findsOneWidget, reason: status);
+        expect(find.textContaining('Score '), findsNothing, reason: status);
+      }
+    });
+
+    testWidgets('loading, not found, error with retry and stale', (
+      tester,
+    ) async {
+      final pending = Completer<TeacherOfficialScore>();
+      await _pumpApp(
+        tester,
+        location: _detailPath,
+        submissions: FakeTeacherSubmissionRepository()
+          ..onFetchOfficialScore = (_) => pending.future,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const Key('teacherOfficialScoreLoading')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const Key('teacherOfficialScoreLoading')),
+            )
+            .semanticsLabel,
+        'Loading official score',
+      );
+
+      await _pumpApp(
+        tester,
+        location: _detailPath,
+        submissions: FakeTeacherSubmissionRepository()
+          ..onFetchOfficialScore = (_) => Future.error(
+            ApiRequestException(
+              ApiFailure(
+                kind: ApiFailureKind.server,
+                message: 'Raw not found',
+                statusCode: 404,
+                serverCode: ApiErrorCodes.resourceNotFound,
+              ),
+            ),
+          ),
+      );
+      await tester.pumpAndSettle();
+      expect(inPanel('The official score is not available.'), findsOneWidget);
+
+      var calls = 0;
+      final submissions = FakeTeacherSubmissionRepository()
+        ..onFetchOfficialScore = (_) async {
+          calls += 1;
+          if (calls == 1 || calls == 3) {
+            throw ApiRequestException(
+              ApiFailure.local(
+                kind: ApiFailureKind.timeout,
+                message: 'Raw local failure',
+              ),
+            );
+          }
+          return score();
+        };
+      await _pumpApp(tester, location: _detailPath, submissions: submissions);
+      await tester.pumpAndSettle();
+      expect(
+        inPanel('The official score could not be loaded.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Raw local failure'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const Key('teacherOfficialScoreRetryButton')),
+      );
+      await tester.pumpAndSettle();
+      expect(inPanel('Score 87.3'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('teacherSubmissionRefreshButton')));
+      await tester.pumpAndSettle();
+      expect(calls, 3);
+      expect(inPanel('Score 87.3'), findsOneWidget);
+      expect(inPanel('The official score may be out of date.'), findsOneWidget);
+      expect(
+        find.byKey(const Key('teacherOfficialScoreRetryButton')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the refresh button reloads the panel', (tester) async {
+      var calls = 0;
+      final reload = Completer<TeacherOfficialScore>();
+      final submissions = FakeTeacherSubmissionRepository()
+        ..onFetchOfficialScore = (_) => ++calls == 1
+            ? Future.value(
+                score(officialScoreJson(status: 'waiting_for_teacher_review')),
+              )
+            : reload.future;
+      await _pumpApp(tester, location: _detailPath, submissions: submissions);
+      await tester.pumpAndSettle();
+      expect(inPanel('Waiting for Teacher review.'), findsOneWidget);
+      expect(
+        find.byKey(const Key('teacherOfficialScoreRefreshing')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const Key('teacherSubmissionRefreshButton')));
+      await tester.pump();
+      await tester.pump();
+      expect(inPanel('Waiting for Teacher review.'), findsOneWidget);
+      expect(
+        tester
+            .widget<LinearProgressIndicator>(
+              find.byKey(const Key('teacherOfficialScoreRefreshing')),
+            )
+            .semanticsLabel,
+        'Refreshing official score',
+      );
+      reload.complete(score());
+      await tester.pumpAndSettle();
+
+      expect(submissions.detailIds, hasLength(2));
+      expect(submissions.officialTargets, hasLength(2));
+      expect(inPanel('Score 87.3'), findsOneWidget);
+      expect(inPanel('Waiting for Teacher review.'), findsNothing);
     });
   });
 }

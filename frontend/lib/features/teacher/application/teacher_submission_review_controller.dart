@@ -8,6 +8,7 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/network/api_request_exception.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../data/teacher_submission_repository_impl.dart';
+import '../domain/teacher_official_score.dart';
 import '../domain/teacher_submission.dart';
 import '../domain/teacher_submission_detail.dart';
 import '../domain/teacher_submission_review.dart';
@@ -15,6 +16,7 @@ import 'teacher_blitz_detail_controller.dart';
 import 'teacher_blitz_route_target.dart';
 import 'teacher_homework_detail_controller.dart';
 import 'teacher_homework_route_target.dart';
+import 'teacher_official_score_controller.dart';
 import 'teacher_review_queue_controller.dart';
 import 'teacher_review_queue_scope.dart';
 import 'teacher_session_key.dart';
@@ -346,6 +348,12 @@ class TeacherSubmissionReviewController
       if (ref.exists(provider)) {
         ref.read(provider.notifier).refresh();
       }
+    }
+    final officialScore = teacherOfficialScoreControllerProvider(
+      TeacherOfficialScoreTarget.ofSubmission(submission),
+    );
+    if (ref.exists(officialScore)) {
+      ref.read(officialScore.notifier).refresh();
     }
     switch (submission.taskType) {
       case TeacherSubmissionTaskType.homework:
