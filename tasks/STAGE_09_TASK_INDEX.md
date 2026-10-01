@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-FE-002B` delivery, then `S09-FE-003` |
+| Next permitted gate | `S09-FE-003A` delivery, then `S09-FE-003B` |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -145,9 +145,11 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `10a` | `S09-FE-001A` | Frontend | Exception-grant warning, `CL-6`, `CL-7` | Backend Phase 2 PASS | `Approved` (on `main` `95992d3`) | Delivered (PR #302, `main` `5aaf9a5`) | `tasks/frontend/stage-09/S09-FE-001A-grant-warning-cl6-cl7.md` |
 | `10b` | `S09-FE-001B` | Frontend | Homework review deadline: display and set/clear on the Homework detail | `FE-001A` | `Approved` (on `main` `5aaf9a5`) | Delivered (PR #303, `main` `6ed9b7a`) | `tasks/frontend/stage-09/S09-FE-001B-homework-review-deadline.md` |
 | `11a` | `S09-FE-002A` | Frontend | Desktop review queue `/teacher/reviews`: filters, sort, pages | `FE-001B` | `Approved` (on `main` `6ed9b7a`) | Delivered (PR #304, `main` `f3cbefa`) | `tasks/frontend/stage-09/S09-FE-002A-review-queue.md` |
-| `11b` | `S09-FE-002B` | Frontend | Task review counts on Homework/Blitz detail (all surfaces); task-scoped desktop queue | `FE-002A` | `Approved` (on `main` `f3cbefa`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-002B-task-review-counts.md` |
-| `12` | `S09-FE-003` | Frontend | Desktop submission review, file download, correction, official score | `FE-002B` | Not written | Not started | `tasks/frontend/stage-09/` |
-| `13` | `S09-FE-004` | Frontend | Student Homework results and official score; finished Blitz list with results | `FE-003` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `11b` | `S09-FE-002B` | Frontend | Task review counts on Homework/Blitz detail (all surfaces); task-scoped desktop queue | `FE-002A` | `Approved` (on `main` `f3cbefa`) | Delivered (PR #305, `main` `bf6df48`) | `tasks/frontend/stage-09/S09-FE-002B-task-review-counts.md` |
+| `12a` | `S09-FE-003A` | Frontend | Desktop submission detail (every Question and answer), Teacher file download | `FE-002B` | `Approved` (on `main` `bf6df48`) | Implemented — PR open | `tasks/frontend/stage-09/S09-FE-003A-submission-detail.md` |
+| `12b` | `S09-FE-003B` | Frontend | Review save and correction (points, feedback) | `FE-003A` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `12c` | `S09-FE-003C` | Frontend | Official-score panel on the submission | `FE-003B` | Not written | Not started | `tasks/frontend/stage-09/` |
+| `13` | `S09-FE-004` | Frontend | Student Homework results and official score; finished Blitz list with results | `FE-003C` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Not written | Not started | `tasks/frontend/stage-09/` |
 | `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | Not written | Not started | `tasks/integration/stage-09/` |
 | `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Not written | Not started | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
@@ -382,6 +384,28 @@ Only a row whose readiness is `Approved` may be implemented.
     - Tests were added for fragments, malformed entries, Blitz back navigation, the lease precondition
       and route names.
   - PR open.
+- `S09-FE-002B` accepted and delivered (PR #305, `main` `bf6df48`).
+- `S09-FE-003` is split:
+  - `S09-FE-003A`: the submission detail and the file download;
+  - `S09-FE-003B`: review save and correction;
+  - `S09-FE-003C`: the official score.
+- `S09-FE-003A` contract approved on `bf6df48`, then implemented.
+  - Route `/teacher/reviews/{submissionId}`. Rows in both queues push it, so back returns to the queue they
+    came from with its page kept.
+  - A strict parser covers all nine Question types, with the answer-referenced ids, the null rules for
+    each status and the answers' consistency with the submission.
+  - Submitted files download through the protected `/files/{id}/download`.
+  - The queue row and the detail header share `TeacherSubmissionSummary`.
+  - Independent review: P1 = 0, P2 = 3, P3 = 4, all fixed and mutation-checked.
+    - Blank keys that differ only by case were rejected.
+    - The DTO and screen tests were incomplete.
+    - The DTO now also rejects review statuses on automatic Questions and pending answers in a waiting
+      submission.
+    - Student matches follow the configured order.
+    - Tests cover a session change.
+    - `FE-004` now depends on `FE-003C`.
+  - Re-verification: P1 = 0, P2 = 0; two new P3 test gaps fixed and mutation-checked.
+  - PR open.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -440,3 +464,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-01 | `S09-FE-001A` delivered (PR #302); `S09-FE-001B` approved on `5aaf9a5` |
 | 2026-10-01 | `S09-FE-001B` delivered (PR #303); `S09-FE-002` split into `002A`/`002B`; `002A` approved on `6ed9b7a` |
 | 2026-10-01 | `S09-FE-002A` delivered (PR #304); `S09-FE-002B` approved on `f3cbefa` |
+| 2026-10-01 | `S09-FE-002B` delivered (PR #305); `S09-FE-003` split into `003A`/`003B`/`003C`; `003A` approved on `bf6df48` |

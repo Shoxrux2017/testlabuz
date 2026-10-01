@@ -6,6 +6,8 @@ import '../../../core/network/api_request_exception.dart';
 import '../../../core/network/dio_client_provider.dart';
 import '../../../core/network/dio_failure_mapper.dart';
 import '../domain/teacher_submission_list_query.dart';
+import 'dto/teacher_dto_parse.dart';
+import 'dto/teacher_submission_detail_dto.dart';
 import 'dto/teacher_submission_dto.dart';
 
 final teacherSubmissionRemoteDataSourceProvider =
@@ -44,6 +46,33 @@ class TeacherSubmissionRemoteDataSource {
         response.data,
         requestedQuery: query,
       );
+    });
+  }
+
+  Future<TeacherSubmissionDetailDto> fetchSubmission(String submissionId) {
+    if (!canonicalUuidPattern.hasMatch(submissionId)) {
+      throw ArgumentError.value(
+        submissionId,
+        'submissionId',
+        'Must be a canonical UUID.',
+      );
+    }
+    return _mapFailures(() async {
+      final response = await dio.get<Object?>(
+        '/teacher/submissions/${Uri.encodeComponent(submissionId)}',
+        options: Options(followRedirects: false),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'Teacher submission detail success status must be 200.',
+        );
+      }
+      final envelope = readExactTeacherMap(
+        response.data,
+        context: 'Teacher submission detail envelope',
+        keys: const {'data'},
+      );
+      return TeacherSubmissionDetailDto.fromJson(envelope['data']);
     });
   }
 

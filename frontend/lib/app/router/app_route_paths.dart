@@ -35,6 +35,7 @@ abstract final class AppRouteNames {
   static const teacherBlitzQuestions = 'teacher-blitz-questions';
   static const teacherBlitzMonitoring = 'teacher-blitz-monitoring';
   static const teacherReviews = 'teacher-reviews';
+  static const teacherSubmissionDetail = 'teacher-submission-detail';
   static const teacherHomeworkReviews = 'teacher-homework-reviews';
   static const teacherBlitzReviews = 'teacher-blitz-reviews';
   static const student = 'student';
@@ -139,6 +140,11 @@ abstract final class AppRoutePaths {
 
   /// The desktop review queue (`S09-D7`).
   static const teacherReviews = '$teacher/$teacherReviewsSegment';
+  static const teacherSubmissionIdParameter = 'submissionId';
+
+  /// One submission under review (`S09-FE-003A`).
+  static const teacherSubmissionDetail =
+      '$teacherReviews/:$teacherSubmissionIdParameter';
 
   /// The desktop review queue of one Homework or Blitz (`S09-FE-002B`).
   static const teacherHomeworkReviews =
@@ -224,6 +230,9 @@ abstract final class AppRoutePaths {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _teacherBlitzIdPattern = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _teacherSubmissionIdPattern = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
   static final RegExp _studentTopicIdPattern = RegExp(
@@ -364,6 +373,23 @@ abstract final class AppRoutePaths {
 
   static bool isTeacherReviewQueuePath(String path) {
     return path == teacherReviews;
+  }
+
+  static bool isTeacherSubmissionDetailPath(String path) {
+    const prefix = '$teacherReviews/';
+    return path.startsWith(prefix) &&
+        _teacherSubmissionIdPattern.hasMatch(path.substring(prefix.length));
+  }
+
+  static String teacherSubmissionDetailLocation(String submissionId) {
+    if (!_teacherSubmissionIdPattern.hasMatch(submissionId)) {
+      throw ArgumentError.value(
+        submissionId,
+        'submissionId',
+        'Must be an untrimmed canonical hyphenated UUID.',
+      );
+    }
+    return '$teacherReviews/${Uri.encodeComponent(submissionId)}';
   }
 
   static bool isTeacherTopicCreatePath(String path) {
@@ -531,6 +557,7 @@ abstract final class AppRoutePaths {
         isTeacherBlitzQuestionsPath(path) ||
         isTeacherBlitzMonitoringPath(path) ||
         isTeacherReviewQueuePath(path) ||
+        isTeacherSubmissionDetailPath(path) ||
         isTeacherHomeworkReviewsPath(path) ||
         isTeacherBlitzReviewsPath(path);
   }

@@ -1,4 +1,6 @@
+import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_detail_dto.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_list_pagination.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_submission_detail.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list_query.dart';
@@ -152,6 +154,20 @@ class FakeTeacherSubmissionRepository implements TeacherSubmissionRepository {
   onFetch;
   final queries = <TeacherSubmissionListQuery>[];
 
+  Future<TeacherSubmissionDetail> Function(String submissionId)? onFetchDetail;
+  final detailIds = <String>[];
+
+  @override
+  Future<TeacherSubmissionDetail> fetchSubmission(String submissionId) {
+    detailIds.add(submissionId);
+    return onFetchDetail?.call(submissionId) ??
+        Future.value(
+          TeacherSubmissionDetailDto.fromJson(
+            submissionDetailJson(),
+          ).toDomain(),
+        );
+  }
+
   @override
   Future<TeacherSubmissionList> fetchSubmissions(
     TeacherSubmissionListQuery query,
@@ -160,4 +176,301 @@ class FakeTeacherSubmissionRepository implements TeacherSubmissionRepository {
     return onFetch?.call(query) ??
         Future.value(teacherSubmissionList([teacherSubmission()]));
   }
+}
+
+// ---------------------------------------------------------------------------
+// Submission detail fixtures (S09-FE-003A).
+
+const detailTeacherId = '30000000-0000-0000-0000-000000000001';
+const detailFileId = '90000000-0000-0000-0000-000000000001';
+
+String detailId(int n) =>
+    'a0000000-0000-0000-0000-${n.toString().padLeft(12, '0')}';
+
+Map<String, Object?> _detailQuestion(
+  int position,
+  String type,
+  num points,
+  String mode,
+  Map<String, Object?> configuration, {
+  String? prompt,
+}) {
+  return <String, Object?>{
+    'id': detailId(100 + position),
+    'type': type,
+    'position': position,
+    'prompt': prompt ?? 'Question $position prompt',
+    'points': points,
+    'checking_mode': mode,
+    'configuration': configuration,
+  };
+}
+
+Map<String, Object?> _detailAnswer(
+  int position,
+  Map<String, Object?> value, {
+  String status = 'auto_checked',
+  num? awarded,
+  String? feedback,
+  bool reviewed = false,
+}) {
+  final checked = status == 'auto_checked' || status == 'teacher_checked';
+  return <String, Object?>{
+    'id': detailId(200 + position),
+    'value': value,
+    'checking_status': status,
+    'awarded_points': checked ? awarded : null,
+    'feedback': feedback,
+    'checked_by': reviewed
+        ? <String, Object?>{
+            'id': detailTeacherId,
+            'full_name': 'Dilnoza Teacher',
+          }
+        : null,
+    'checked_at': checked ? '2026-09-30T11:00:00Z' : null,
+  };
+}
+
+/// Every question type once, with an unanswered open question at the end.
+/// The submission waits for review: Q5 is reviewed and Q6 (a file) waits.
+List<Map<String, Object?>> submissionDetailQuestions() {
+  return [
+    <String, Object?>{
+      'question': _detailQuestion(
+        1,
+        'single_choice',
+        1,
+        'automatic',
+        <String, Object?>{
+          'options': [
+            <String, Object?>{
+              'id': detailId(1),
+              'text': 'Paris',
+              'is_correct': true,
+              'position': 1,
+            },
+            <String, Object?>{
+              'id': detailId(2),
+              'text': 'Rome',
+              'is_correct': false,
+              'position': 2,
+            },
+          ],
+        },
+      ),
+      'answer': _detailAnswer(1, <String, Object?>{
+        'selected_option_ids': [detailId(1)],
+      }, awarded: 1),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        2,
+        'multiple_choice',
+        1,
+        'automatic',
+        <String, Object?>{
+          'options': [
+            <String, Object?>{
+              'id': detailId(3),
+              'text': 'TCP',
+              'is_correct': true,
+              'position': 1,
+            },
+            <String, Object?>{
+              'id': detailId(4),
+              'text': 'UDP',
+              'is_correct': true,
+              'position': 2,
+            },
+            <String, Object?>{
+              'id': detailId(5),
+              'text': 'HTML',
+              'is_correct': false,
+              'position': 3,
+            },
+          ],
+        },
+      ),
+      'answer': _detailAnswer(2, <String, Object?>{
+        'selected_option_ids': [detailId(3)],
+      }, awarded: 0.5),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        3,
+        'true_false',
+        1,
+        'automatic',
+        <String, Object?>{'correct_value': false},
+      ),
+      'answer': _detailAnswer(3, <String, Object?>{'value': true}, awarded: 0),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        4,
+        'short_written',
+        1,
+        'automatic',
+        <String, Object?>{
+          'accepted_answers': ['DNS', 'Domain Name System'],
+        },
+      ),
+      'answer': _detailAnswer(4, <String, Object?>{'text': 'dns'}, awarded: 1),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        5,
+        'open_written',
+        3,
+        'manual',
+        <String, Object?>{},
+      ),
+      'answer': _detailAnswer(
+        5,
+        <String, Object?>{'text': 'An essay about DNS.'},
+        status: 'teacher_checked',
+        awarded: 2.5,
+        feedback: 'Good start.',
+        reviewed: true,
+      ),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        6,
+        'file_based',
+        2,
+        'manual',
+        <String, Object?>{
+          'allowed_extensions': ['pdf', 'docx', 'ppt', 'pptx'],
+        },
+      ),
+      'answer': _detailAnswer(6, <String, Object?>{
+        'file': <String, Object?>{
+          'id': detailFileId,
+          'original_name': 'report.pdf',
+          'extension': 'pdf',
+          'size_bytes': 2048,
+        },
+      }, status: 'waiting_for_teacher_review'),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        7,
+        'matching',
+        2,
+        'automatic',
+        <String, Object?>{
+          'pairs': [
+            <String, Object?>{
+              'client_key': detailId(10),
+              'left': 'HTTP',
+              'right': 'Web',
+              'left_item_id': detailId(11),
+              'right_item_id': detailId(12),
+            },
+            <String, Object?>{
+              'client_key': detailId(13),
+              'left': 'SMTP',
+              'right': 'Mail',
+              'left_item_id': detailId(14),
+              'right_item_id': detailId(15),
+            },
+          ],
+        },
+      ),
+      'answer': _detailAnswer(7, <String, Object?>{
+        'pairs': [
+          <String, Object?>{
+            'left_item_id': detailId(11),
+            'right_item_id': detailId(15),
+          },
+        ],
+      }, awarded: 0),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        8,
+        'ordering',
+        1,
+        'automatic',
+        <String, Object?>{
+          'items': [
+            <String, Object?>{
+              'id': detailId(20),
+              'text': 'Plan',
+              'correct_position': 1,
+            },
+            <String, Object?>{
+              'id': detailId(21),
+              'text': 'Build',
+              'correct_position': 2,
+            },
+          ],
+        },
+      ),
+      'answer': _detailAnswer(8, <String, Object?>{
+        'items': [
+          <String, Object?>{'item_id': detailId(21), 'position': 1},
+          <String, Object?>{'item_id': detailId(20), 'position': 2},
+        ],
+      }, awarded: 0),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        9,
+        'fill_in_blank',
+        1,
+        'automatic',
+        <String, Object?>{
+          'blanks': [
+            <String, Object?>{
+              'id': detailId(30),
+              'key': 'proto',
+              'position': 1,
+              'accepted_answers': ['HTTP'],
+            },
+          ],
+        },
+        prompt: 'The {{proto}} protocol',
+      ),
+      'answer': _detailAnswer(9, <String, Object?>{
+        'values': [
+          <String, Object?>{'blank_id': detailId(30), 'text': 'http'},
+        ],
+      }, awarded: 1),
+    },
+    <String, Object?>{
+      'question': _detailQuestion(
+        10,
+        'open_written',
+        1,
+        'manual',
+        <String, Object?>{},
+      ),
+      'answer': null,
+    },
+  ];
+}
+
+/// `GET /teacher/submissions/{id}` data: a Homework waiting for review.
+Map<String, Object?> submissionDetailJson({
+  List<Map<String, Object?>>? questions,
+  String status = 'waiting_for_teacher_review',
+  int waiting = 1,
+  int reviewed = 1,
+  String? submittedAt = '2026-09-30T10:00:00Z',
+}) {
+  final item = submissionJson(
+    status: status,
+    earned: null,
+    normalized: null,
+    possible: 14,
+    waiting: waiting,
+    reviewed: reviewed,
+  );
+  return <String, Object?>{
+    ...item,
+    'submitted_at': submittedAt,
+    'questions': questions ?? submissionDetailQuestions(),
+  };
 }

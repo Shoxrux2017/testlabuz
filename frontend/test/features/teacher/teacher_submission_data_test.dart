@@ -10,6 +10,7 @@ import 'package:testlabuz_client/core/network/dio_failure_mapper.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_review_queue_scope.dart';
 import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_remote_data_source.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_submission_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_list_query.dart';
 
@@ -312,6 +313,80 @@ void main() {
       ).toDomain();
 
       expect(submission.reviewOverdue, isTrue);
+    });
+  });
+
+  group('Teacher submission detail data source', () {
+    test('sends GET /teacher/submissions/{id} and parses the detail', () async {
+      final adapter = RecordingAdapter(
+        (_) => jsonResponse(200, {'data': submissionDetailJson()}),
+      );
+
+      final dto = await _source(adapter).fetchSubmission(submissionId);
+
+      expect(dto.toDomain().questions, hasLength(10));
+      final request = adapter.requests.single;
+      expect(request.method, 'GET');
+      expect(request.path, '/teacher/submissions/$submissionId');
+      expect(request.queryParameters, isEmpty);
+      expect(request.data, isNull);
+      expect(request.followRedirects, isFalse);
+    });
+
+    test('a wrong status or envelope is an invalid response', () async {
+      final responses = <FutureOr<ResponseBody> Function(RequestOptions)>[
+        (_) => jsonResponse(201, {'data': submissionDetailJson()}),
+        (_) => jsonResponse(200, submissionDetailJson()),
+        (_) =>
+            jsonResponse(200, {'data': submissionDetailJson(), 'message': 'x'}),
+        (_) => jsonResponse(200, {'data': submissionDetailJson(waiting: 3)}),
+      ];
+
+      for (final response in responses) {
+        await expectLater(
+          _source(RecordingAdapter(response)).fetchSubmission(submissionId),
+          throwsA(
+            isA<ApiRequestException>().having(
+              (exception) => exception.failure.kind,
+              'kind',
+              ApiFailureKind.invalidResponse,
+            ),
+          ),
+        );
+      }
+    });
+
+    test('a non-canonical id is rejected before transport', () {
+      final adapter = RecordingAdapter(
+        (_) => throw StateError('No transport.'),
+      );
+
+      expect(
+        () => _source(adapter).fetchSubmission('not-an-id'),
+        throwsArgumentError,
+      );
+      expect(adapter.requests, isEmpty);
+    });
+
+    test('the repository rejects a detail of another submission', () async {
+      final other = submissionDetailJson()
+        ..['id'] = '70000000-0000-0000-0000-000000000009';
+      final repository = TeacherSubmissionRepositoryImpl(
+        remoteDataSource: _source(
+          RecordingAdapter((_) => jsonResponse(200, {'data': other})),
+        ),
+      );
+
+      await expectLater(
+        repository.fetchSubmission(submissionId),
+        throwsA(
+          isA<ApiRequestException>().having(
+            (exception) => exception.failure.kind,
+            'kind',
+            ApiFailureKind.invalidResponse,
+          ),
+        ),
+      );
     });
   });
 
