@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-FE-001A`, then `S09-FE-001B` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-FE-001B`, then `S09-FE-002` |
 
 Current Stage 5 progress:
 
@@ -1183,8 +1183,9 @@ their historical completion handoffs.
   - run #2 on `5db50d0` passed: 2787 tests, exit 0.
   Backend Phase 2 `PASS`: delivered (PR #301, `main` `95992d3`).
 - `S09-FE-001` split into `S09-FE-001A` (exception-grant warning, `CL-6`, `CL-7`) and `S09-FE-001B`
-  (Homework review deadline). `S09-FE-001A`: approved on `95992d3`; implemented; PR open.
-- Next permitted action: after `S09-FE-001A` merges, `S09-FE-001B`.
+  (Homework review deadline). `S09-FE-001A`: accepted and delivered (PR #302, `main` `5aaf9a5`).
+  `S09-FE-001B`: approved on `5aaf9a5`; implemented; PR open.
+- Next permitted action: after `S09-FE-001B` merges, `S09-FE-002` (desktop review queue, mobile counts).
 
 ---
 

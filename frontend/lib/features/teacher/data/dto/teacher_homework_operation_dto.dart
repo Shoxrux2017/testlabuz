@@ -28,6 +28,8 @@ class TeacherHomeworkMutationDto {
 
   static const createSuccessMessage = 'Homework created successfully.';
   static const updateSuccessMessage = 'Homework updated successfully.';
+  static const reviewDueAtSuccessMessage =
+      'Homework review deadline updated successfully.';
   static const addQuestionSuccessMessage =
       TeacherQuestionMutationMessages.added;
   static const updateQuestionSuccessMessage =

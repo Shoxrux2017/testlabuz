@@ -128,6 +128,19 @@ class TeacherHomeworkRepositoryImpl implements TeacherHomeworkRepository {
   }
 
   @override
+  Future<TeacherHomework> setReviewDueAt(
+    String homeworkId,
+    TeacherHomeworkReviewDueAtRequest request,
+  ) async {
+    final dto = await remoteDataSource.setReviewDueAt(homeworkId, request);
+    final homework = dto.homework.toDomain();
+    if (homework.id.toLowerCase() != homeworkId.toLowerCase()) {
+      throw const TeacherHomeworkMutationOutcomeUnknownException();
+    }
+    return homework;
+  }
+
+  @override
   Future<TeacherHomework> updateQuestion(
     String questionId,
     TeacherQuestionEditRequest request,

@@ -175,6 +175,41 @@ class TeacherHomeworkEditRequest {
   }
 }
 
+/// The absolute review deadline sent to the dedicated endpoint; null clears it.
+class TeacherHomeworkReviewDueAtRequest {
+  TeacherHomeworkReviewDueAtRequest._({
+    required this.reviewDueAtSerialized,
+    required DateTime? reviewDueAtUtc,
+  }) : reviewDueAtUtc = reviewDueAtUtc?.toUtc();
+
+  /// Throws [InstitutionTimezoneException] for a local time that does not
+  /// exist in [institutionTimezone].
+  factory TeacherHomeworkReviewDueAtRequest.fromWallClock(
+    InstitutionWallClock? wallClock,
+    String institutionTimezone,
+  ) {
+    return TeacherHomeworkReviewDueAtRequest._(
+      reviewDueAtSerialized: InstitutionTimezone.serializeWallClock(
+        wallClock,
+        institutionTimezone,
+      ),
+      reviewDueAtUtc: InstitutionTimezone.wallClockToInstant(
+        wallClock,
+        institutionTimezone,
+      ),
+    );
+  }
+
+  final String? reviewDueAtSerialized;
+  final DateTime? reviewDueAtUtc;
+
+  Map<String, Object?> toJson() => {'review_due_at': reviewDueAtSerialized};
+
+  bool matches(TeacherHomework current) {
+    return _sameInstant(current.reviewDueAt, reviewDueAtUtc);
+  }
+}
+
 class TeacherHomeworkMutationOutcomeUnknownException implements Exception {
   const TeacherHomeworkMutationOutcomeUnknownException();
 }

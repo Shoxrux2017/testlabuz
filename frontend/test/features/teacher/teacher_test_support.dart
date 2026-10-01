@@ -280,6 +280,7 @@ TeacherHomework teacherHomework({
   double totalPossiblePoints = 10,
   DateTime? deadlineAt,
   bool hasDeadline = true,
+  DateTime? reviewDueAt,
   String institutionTimezone = 'Asia/Tashkent',
   TeacherHomeworkStatus status = TeacherHomeworkStatus.draft,
   List<TeacherQuestion>? questions,
@@ -313,7 +314,7 @@ TeacherHomework teacherHomework({
     deadlineAt: hasDeadline
         ? deadlineAt ?? DateTime.utc(2026, 9, 10, 12)
         : null,
-    reviewDueAt: null,
+    reviewDueAt: reviewDueAt,
     institutionTimezone: institutionTimezone,
     status: status,
     attemptPolicy: const TeacherHomeworkAttemptPolicy(
@@ -748,6 +749,7 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     this.onCreate,
     this.onUpdate,
     this.onLifecycle,
+    this.onSetReviewDueAt,
     this.onAddQuestion,
     this.onUpdateQuestion,
     this.onDeleteQuestion,
@@ -777,6 +779,11 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
   onLifecycle;
   Future<TeacherHomework> Function(
     String homeworkId,
+    TeacherHomeworkReviewDueAtRequest request,
+  )?
+  onSetReviewDueAt;
+  Future<TeacherHomework> Function(
+    String homeworkId,
     TeacherQuestionCreateRequest request,
   )?
   onAddQuestion;
@@ -800,6 +807,8 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
       <({String homeworkId, TeacherHomeworkEditRequest request})>[];
   final lifecycleRequests =
       <({String homeworkId, TeacherHomeworkLifecycleAction action})>[];
+  final reviewDueAtRequests =
+      <({String homeworkId, TeacherHomeworkReviewDueAtRequest request})>[];
   final addQuestionRequests =
       <({String homeworkId, TeacherQuestionCreateRequest request})>[];
   final updateQuestionRequests =
@@ -856,6 +865,18 @@ class FakeTeacherHomeworkRepository implements TeacherHomeworkRepository {
     return onLifecycle?.call(homeworkId, action) ??
         Future.value(
           teacherHomework(id: homeworkId, status: action.expectedStatus),
+        );
+  }
+
+  @override
+  Future<TeacherHomework> setReviewDueAt(
+    String homeworkId,
+    TeacherHomeworkReviewDueAtRequest request,
+  ) {
+    reviewDueAtRequests.add((homeworkId: homeworkId, request: request));
+    return onSetReviewDueAt?.call(homeworkId, request) ??
+        Future.value(
+          teacherHomework(id: homeworkId, reviewDueAt: request.reviewDueAtUtc),
         );
   }
 

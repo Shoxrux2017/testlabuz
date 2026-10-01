@@ -4,11 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
+import '../../../core/network/api_error_codes.dart';
 import '../../../core/network/api_failure.dart';
 import '../application/teacher_homework_detail_controller.dart';
 import '../application/teacher_homework_detail_state.dart';
 import '../application/teacher_homework_lifecycle_controller.dart';
 import '../application/teacher_homework_lifecycle_state.dart';
+import '../application/teacher_homework_review_deadline_controller.dart';
+import '../application/teacher_homework_review_deadline_state.dart';
 import '../application/teacher_homework_route_mutation_activity.dart';
 import '../application/teacher_homework_route_target.dart';
 import '../application/teacher_official_homework_controller.dart';
@@ -16,6 +19,7 @@ import '../application/teacher_official_homework_state.dart';
 import '../domain/teacher_homework.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_homework_lifecycle_controls.dart';
+import 'teacher_homework_review_deadline_section.dart';
 import 'teacher_official_homework_section.dart';
 import 'teacher_question_read_view.dart';
 import 'teacher_topic_formatters.dart';
@@ -40,6 +44,7 @@ class _TeacherHomeworkDetailScreenState
   late TeacherHomeworkRouteTarget _target;
   late TeacherHomeworkLifecycleController _lifecycleController;
   late TeacherOfficialHomeworkController _officialController;
+  late TeacherHomeworkReviewDeadlineController _reviewDeadlineController;
   late TeacherHomeworkRouteMutationActivityController
   _routeMutationActivityController;
 
@@ -58,13 +63,16 @@ class _TeacherHomeworkDetailScreenState
     }
     final oldLifecycleController = _lifecycleController;
     final oldOfficialController = _officialController;
+    final oldReviewDeadlineController = _reviewDeadlineController;
     final oldActivityController = _routeMutationActivityController;
     oldLifecycleController.invalidateRouteCompletions();
     oldOfficialController.invalidateRouteCompletions();
+    oldReviewDeadlineController.invalidateRouteCompletions();
     _bindTarget();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       oldLifecycleController.leaveRoute();
       oldOfficialController.leaveRoute();
+      oldReviewDeadlineController.leaveRoute();
       oldActivityController.endRoute();
     });
   }
@@ -80,6 +88,9 @@ class _TeacherHomeworkDetailScreenState
     _officialController = ref.read(
       teacherOfficialHomeworkControllerProvider(_target).notifier,
     );
+    _reviewDeadlineController = ref.read(
+      teacherHomeworkReviewDeadlineControllerProvider(_target).notifier,
+    );
     _routeMutationActivityController = ref.read(
       teacherHomeworkRouteMutationActivityProvider(_target).notifier,
     );
@@ -93,12 +104,15 @@ class _TeacherHomeworkDetailScreenState
   void dispose() {
     final lifecycleController = _lifecycleController;
     final officialController = _officialController;
+    final reviewDeadlineController = _reviewDeadlineController;
     final activityController = _routeMutationActivityController;
     lifecycleController.invalidateRouteCompletions();
     officialController.invalidateRouteCompletions();
+    reviewDeadlineController.invalidateRouteCompletions();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       lifecycleController.leaveRoute();
       officialController.leaveRoute();
+      reviewDeadlineController.leaveRoute();
       activityController.endRoute();
     });
     super.dispose();
@@ -116,6 +130,8 @@ class _TeacherHomeworkDetailScreenState
       _target,
     );
     final officialProvider = teacherOfficialHomeworkControllerProvider(_target);
+    final reviewDeadlineProvider =
+        teacherHomeworkReviewDeadlineControllerProvider(_target);
 
     if (surface == AppDeviceSurface.desktop) {
       ref.listen<TeacherHomeworkLifecycleState>(lifecycleProvider, (
@@ -149,6 +165,32 @@ class _TeacherHomeworkDetailScreenState
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(next.feedback!)));
         ref.read(officialProvider.notifier).consumeFeedback();
+      });
+      ref.listen<TeacherHomeworkReviewDeadlineState>(reviewDeadlineProvider, (
+        previous,
+        next,
+      ) {
+        final succeeded =
+            next.status == TeacherHomeworkReviewDeadlineStatus.confirmedSuccess;
+        // The refreshed archived Homework hides the section, so its message
+        // is announced here instead.
+        final archived =
+            next.status ==
+                TeacherHomeworkReviewDeadlineStatus.definiteFailure &&
+            next.conflictCode == ApiErrorCodes.taskArchived;
+        if ((!succeeded && !archived) ||
+            next.feedback == null ||
+            (previous?.status == next.status &&
+                previous?.feedback == next.feedback) ||
+            !context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(next.feedback!)));
+        if (succeeded) {
+          ref.read(reviewDeadlineProvider.notifier).consumeFeedback();
+        }
       });
     }
 
@@ -446,9 +488,30 @@ class _HomeworkDetailContent extends StatelessWidget {
                       homework.institutionTimezone,
                     ),
                   ),
+                  (
+                    'Review deadline',
+                    formatTeacherHomeworkReviewDeadline(
+                      homework.reviewDueAt,
+                      homework.institutionTimezone,
+                    ),
+                  ),
                   ('Institution timezone', homework.institutionTimezone),
                 ],
               ),
+              if (surface == AppDeviceSurface.desktop &&
+                  !stale &&
+                  homework.status != TeacherHomeworkStatus.archived) ...[
+                const SizedBox(height: 12),
+                TeacherHomeworkReviewDeadlineSection(
+                  key: ValueKey(
+                    'teacherHomeworkReviewDeadlineSection${target.topicId}${target.homeworkId}',
+                  ),
+                  target: target,
+                  homework: homework,
+                  enabled: mutationsAvailable,
+                  isCurrentTarget: isCurrentTarget,
+                ),
+              ],
               const SizedBox(height: 12),
               TeacherOfficialHomeworkSection(
                 key: ValueKey(

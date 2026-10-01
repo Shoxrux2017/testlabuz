@@ -28,6 +28,11 @@ abstract interface class TeacherHomeworkRepository {
     TeacherHomeworkLifecycleAction action,
   );
 
+  Future<TeacherHomework> setReviewDueAt(
+    String homeworkId,
+    TeacherHomeworkReviewDueAtRequest request,
+  );
+
   Future<TeacherHomework> addQuestion(
     String homeworkId,
     TeacherQuestionCreateRequest request,
