@@ -229,10 +229,10 @@ $script:checks++
 
 # ---------------------------------------------------------------- every Stage 9 script parses
 # A script that only the owner runs (the Android smoke) must not first fail on a syntax error during the smoke.
-foreach ($script in @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*stage9*.ps1')) {
+foreach ($scriptFile in @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*stage9*.ps1')) {
     $parseErrors = $null
-    [void] [Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref] $null, [ref] $parseErrors)
-    if (@($parseErrors).Count -ne 0) { throw "integration-harness defect: $($script.Name) does not parse: $($parseErrors[0].Message)" }
+    [void] [Management.Automation.Language.Parser]::ParseFile($scriptFile.FullName, [ref] $null, [ref] $parseErrors)
+    if (@($parseErrors).Count -ne 0) { throw "integration-harness defect: $($scriptFile.Name) does not parse: $($parseErrors[0].Message)" }
     $script:checks++
 }
 

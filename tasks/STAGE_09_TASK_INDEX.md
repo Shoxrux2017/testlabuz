@@ -12,7 +12,7 @@
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `S09-INT-001` integration assets (PR 1), Integration Harness Preflight, then the real-stack run on the merged `main` |
+| Next permitted gate | `STAGE_09_CLOSURE_REVIEW` (`S09-INT-001` `PASS / Accepted`, §14) |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -153,7 +153,7 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `13b` | `S09-FE-004B` | Frontend | Finished Blitz list with results (`GET /student/blitz/finished`) | `FE-004A` | `Approved` (on `main` `c1082e5`) | Delivered (PR #310, `main` `6e58259`) | `tasks/frontend/stage-09/S09-FE-004B-finished-blitz.md` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Executed record | Run #1 `NOT ACCEPTED` (`6e58259`, one P2); run #2 `PASS` (`ccc1d60`); delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-frontend-block-review.md` |
 | `14a` | `S09-FE-PHASE-2-FIX-001` | Frontend fix | Related-view refresh after a review save (P2) and five user-visible P3 defects (`S09-FE-PH2-D1`) | Phase 2 run #1 | `Approved` (on `main` `6e58259`) | Delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-FIX-001-related-refresh-and-ux-defects.md` |
-| `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | `Approved` (on `main` `f0259c8`) | Assets + Integration Harness Preflight `PASS` — PR 1 open; evidence run on the merged `main` next | `tasks/integration/stage-09/S09-INT-001-stage-09-real-stack-integration.md` |
+| `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | `Approved` (on `main` `f0259c8`) | `PASS / Accepted` — assets PR #312 (`main` `4224fcf`); Windows run and Android smoke PASS (§14); record PR open | `tasks/integration/stage-09/S09-INT-001-stage-09-real-stack-integration.md` |
 | `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Not written | Not started | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
 
 Detailed contracts for rows 2-16 are written in execution order, each after re-checking `main`.
@@ -517,6 +517,11 @@ Only a row whose readiness is `Approved` may be implemented.
   - Development dry runs of the full runner on the branch (not evidence): `Stage9AutomatedEvidence: PASS`,
     19/19 steps, 6/6 UI checkpoints, about 6.5 minutes.
   - PR 1 open. Next after merge: the evidence run on `main`, then the Android manual smoke (Project Owner).
+- PR 1 merged (#312, `main` `4224fcf`). Windows real-stack run on `4224fcf`: `PASS` (19/19 steps, 402 s). Android manual
+  smoke: `PASS` (owner decision `S09-INT-D2`: emulator, then restore the demo build); a harness parse defect in the smoke
+  preparation was fixed on the record branch (3b06a5b). Final integration review: `PASS`. `S09-INT-001` = `PASS / Accepted`
+  (§14). Next: `STAGE_09_CLOSURE_REVIEW`.
+- 2026-10-02: the Project Owner said that Stage 10 will be run with a different process; it is asked before Stage 10 planning.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -583,3 +588,94 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-01 | `S09-FE-004B` delivered (PR #310); `S09-FE-PHASE-2` run #1 `NOT ACCEPTED`; `FIX-001` approved on `6e58259`; run #2 `PASS` |
 | 2026-10-02 | Frontend Phase 2 `PASS` delivered (PR #311); `S09-INT-001` approved on `f0259c8` (owner decision `S09-INT-D1`) |
 | 2026-10-02 | `S09-INT-001` assets and Integration Harness Preflight (#1 `NOT ACCEPTED`, all fixed; #2 `PASS`); PR 1 open |
+| 2026-10-02 | PR #312 merged; `S09-INT-001` Windows run and Android smoke `PASS`; final integration review `PASS`; `S09-INT-001` `PASS / Accepted` (§14) |
+
+## 14. Integration Execution Record — `S09-INT-001` (2026-10-02)
+
+### Assets and preflight
+
+```text
+PR 1                = #312, merged at main 4224fcfce2af7e7a3843830686f8785255d48fae (tree == branch head 95be1bb)
+Preflight #1        = NOT ACCEPTED (two fresh-context reviewers): P1 = 0, P2 = 3, P3 = 13 — all fixed in 8af2e12
+Preflight #2        = PASS (fresh reviewer): P1 = 0, P2 = 0, P3 = 4 — all fixed in d21c3b4
+Development dry runs on the branch (not evidence) = PASS, 19/19 steps
+```
+
+### Windows real-stack run — PASS (evidence)
+
+```text
+Audited main       = 4224fcfce2af7e7a3843830686f8785255d48fae, checkout clean at start and unchanged before PASS
+Run                = Claude (owner decision S09-INT-D1); TEMP = G:\tmp-testlabuz; host offset +05:00 (Institution +09:00)
+PASS               = 2026-10-02T17:36:11Z, 402 s, 19/19 steps in the audited order, 6/6 UI checkpoints
+Evidence           = G:\tmp-testlabuz\testlabuz-stage9-evidence-4224fcfce2af-20261002T173611Z.json on the execution
+                     machine (not committed); no password, token or key inside; vendor = 108 packages equal to composer.lock
+```
+
+| Step | Result |
+|---|---|
+| Runtime guard | PASS: 4 forked workers, `testlabuz_testing` used exclusively, no other stage runtime, no in-container workload, file/sync drivers |
+| Pure verifiers | PASS: runtime-guard matrix (live), test files 11, oracle 93, API security 92 |
+| Prior cleanup, seeder test | PASS: nothing left from earlier runs; `Stage9E2eSeederTest` 39 passed (2926 assertions) |
+| API setup (§9.1) | PASS: `freeze_trigger_checking`, `homework_overtake`, `blitz_review_official`, `manual_release_hidden` |
+| Review error contract (§9.2) | PASS: 14 probes (409 `automatic_checking_pending`, 422 vectors), nothing written |
+| Scheduled checking (§9.3) | PASS: `homework:reconcile-deadlines` 1/1/0; `blitz:reconcile-timeouts` 1/1/0; `attempts:check-frozen` 2/2/0 with 1 official score repaired; again 0/0/0 and 0 repaired; `schedule:run` ran all three; backfill Blitz `55.55555567` |
+| Windows UI flow (§9.4) | PASS: 6/6 checkpoints, each judged by the DB oracle; process exit 0; 1 idempotency key (grant); 1 file Save As with the fixture SHA-256 |
+| After the UI (§9.5) | PASS: `exception_replacement`, `teacher_file_download`, `tenant_privacy`, `student_results_api` |
+| Post-flow oracle, restart (§9.6) | PASS: Tenant rows, sentinels unchanged; tables, blobs and 12 reads identical after the backend restart |
+| Final cleanup | PASS: manifest rows and blobs removed; sentinels unchanged, then removed |
+
+Texts the UI read (`ui-evidence.json`): official panel `Score 83.8` after the full review and `Score 73.9` after the
+correction (`Attempt 1 · Best checked attempt · This submission`), `Score 95.0` / `Attempt 2 · Replacement attempt` on
+Blitz #1; Student `Official score: 73.9 (Attempt 1)`, `Attempt 1 · Checked · Score 73.9`, feedback `Clear reasoning.` and
+`Good structure, add an example.`; finished Blitz `Score 95.0`, `Attempt 1 was invalidated.`, `Question 2: Replacement
+feedback.`; review deadline `2026-01-15 22:00` before and `2026-10-09 22:00` after the change (Institution time), stored as
+13:00Z; `Selected 2026-10-03 02:34` (Tokyo) for 17:34Z.
+
+### Android manual smoke — PASS
+
+**Project Owner decision `S09-INT-D2` (2026-10-02): emulator, then restore the demo build.** The smoke ran on the existing
+emulator `testlabuz_demo` (`emulator-5554`, Android 36). Afterwards Claude reinstalled a demo build for the demo stack.
+
+Harness defect found when preparing the smoke (classified `integration-harness defect`): `prepare_stage9_manual_smoke.ps1`
+had never parsed in any committed revision (b497d17 through 4224fcf) because checklist line 3 lacked its closing quote. The
+preflights and the §15 checks read this owner-only script but never parsed or ran it. Fixed on
+`fix/s09-int-001-smoke-prep` in 3b06a5b: the quote is restored and `verify_stage9_oracle.ps1` now parses every `stage9`
+script (oracle verifier 93 → 104 checks). The fix is harness-only: `backend`, `frontend/lib`, `frontend/android`, the
+pubspec and `docker` are identical to 4224fcf, the Windows runner never loads the prepare script, and a script that does
+not parse never runs, so the Windows evidence stays valid (`tasks/README.md` §12A, isolated test-only change).
+
+Setup and outcome, in order:
+1. Prepare on 3b06a5b (product-identical to 4224fcf), with a temporary password told to the owner and deleted afterwards:
+   `Stage9ManualReady: PASS`.
+2. Debug APK built from the same tree with `API_BASE_URL=http://127.0.0.1:18009/api/v1` (17:58Z), installed on
+   `emulator-5554` (17:59Z), `adb reverse tcp:18009 tcp:18009`.
+3. The Project Owner performed the six checklist items (contract §12) and reported: «Все совпало».
+   - Student: Finished Blitz `Score 75.0` with `Question 2: Android Blitz feedback.`; Homework card `Official score: 90.0`;
+     Results `Official score: 90.0 (Attempt 1)` and `Attempt 1 · Checked · Score 90.0`; the Attempt shows `Teacher feedback`
+     `Android feedback.` and no correct answers.
+   - Teacher: no `Review queue` button; the Android Homework Review card shows `Waiting for review: 1` and `Overdue: 1`, and
+     no `Open review queue` button.
+4. Complete (`-AndroidDevice emulator-5554`): `Stage9ManualSmokeOracle: PASS`, `Stage9AndroidReverse: removed`,
+   `Stage9ManualSmokeCleanup: PASS`; the marker is gone.
+5. Only after Complete: a profile demo build (`API_BASE_URL=http://10.0.2.2:8010/api/v1`) was built and installed on the
+   emulator (18:24Z). The demo container `testlabuz-demo-app` stays stopped until the owner needs it.
+
+Evidence split:
+- **DB-proven:** the prepared Android state was unchanged by the smoke (statuses, scores, official rows, Attempt counts,
+  review deadline, closed Blitz, Tenant rows, sentinel hash).
+- **Owner attestation only:** what the six screens showed. The same texts are proven on Windows by the UI flow above and by
+  the Frontend Phase 2 widget tests.
+
+### Final integration review (contract §17) — PASS
+
+A fresh-context reviewer found P1 = 0, P2 = 0, P3 = 4. The three record items (exact wording of the defect, verbatim smoke
+lines and device, the Complete-before-demo order) are applied in this record; the naming nit (`$script` loop variable in the
+verifier) is fixed.
+
+```text
+S09-INT-001 = PASS / Accepted (audited integration main 4224fcf; Android smoke on product-identical 3b06a5b)
+Owner decisions = S09-INT-D1 (roles), S09-INT-D2 (smoke device)
+Observations for the closure review = contract §18 (backend real-concurrency gaps: grant vs checking, sweep vs Submit;
+                                       the Stage 8 harness no longer matches the Stage 9 backend)
+Next permitted gate = STAGE_09_CLOSURE_REVIEW
+```
