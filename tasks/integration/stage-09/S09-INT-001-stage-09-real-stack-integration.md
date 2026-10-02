@@ -183,7 +183,7 @@ Pending migrations fail the guard as an environment defect. The operator runs `p
 
 | Institution | `student_result_release_mode` | `blitz_timer_start_mode` | Timezone |
 |---|---|---|---|
-| `auto` | `automatic` | `synchronized` | `Asia/Tashkent` |
+| `auto` | `automatic` | `synchronized` | `Asia/Tokyo` (+09:00, no DST; it differs from the +05:00 runner host, so device time cannot pass for Institution time) |
 | `manual` | `manual_teacher` | `synchronized` | `Asia/Tashkent` |
 
 Settings rows also carry `learning_material_max_mb = 25` and `student_submission_max_mb = 15`.
@@ -218,7 +218,7 @@ Official pair tasks use assignment mode `group`: their recipients are all studen
 
 | Assessment | Type, state | Recipients | Questions (position: type points — key) |
 |---|---|---|---|
-| `review_hw` | Homework, active, deadline seed + 30 days, `review_due_at` `2026-01-15T13:00:00Z` (18:00 Tashkent, past) | student, classmate (group) | 1: single_choice 2 — option 2 of 4; 2: multiple_choice 3 — options 1, 3, 5 of 5; 3: short_written **manual** 5; 4: open_written 5; 5: file_based 5 |
+| `review_hw` | Homework, active, deadline seed + 30 days, `review_due_at` `2026-01-15T13:00:00Z` (22:00 Tokyo, past) | student, classmate (group) | 1: single_choice 2 — option 2 of 4; 2: multiple_choice 3 — options 1, 3, 5 of 5; 3: short_written **manual** 5; 4: open_written 5; 5: file_based 5 |
 | `exception_blitz` | Blitz, active, synchronized, duration 3600, activated at seed time, ends seed + 3600 s | student, classmate (group) | 1: single_choice 4 — option 1 of 3; 2: open_written 6 |
 | `manual_hw` | Homework, active, deadline seed + 30 days | manual_student (group) | 1: single_choice 5 — option 3 of 3; 2: open_written 5 |
 | `backfill_hw` | Homework, closed (practice) | backfill_student | 1: single_choice 2 — option 1 of 3; 2: multiple_choice 3 — options 2, 3, 4 of 5; 3: true_false 1 — `false`; 4: short_written automatic 2 — accepted `Oʻzbekiston` (U+02BB); 5: fill_in_blank 3 — blank 1 `Tashkent`, blank 2 `Samarkand`; 6: matching 3 — three left items; 7: ordering 4 — three items; 8: open_written 5; 9: file_based 5 |
@@ -236,7 +236,7 @@ Every Question set passes the production `AssessmentActivationValidator`. Nested
 | Attempt | State | Saved answers (all `pending`, no checking metadata) |
 |---|---|---|
 | `backfill_hw` #1 (backfill_student) | `submitted`, `student_submit`, history times, `possible_points` 28 | Q1 correct; Q2 options 2, 1, 5 (1 correct); Q3 `false`; Q4 `"  o'ZBEKISTON "`; Q5 `TASHKENT`, `Bukhara`; Q6 one of three pairs correct (a full matching cannot have exactly two); Q7 exactly one item at its correct position; Q8 text; Q9 no answer |
-| `backfill_blitz` #1 (backfill_student) | `timed_out_finalized`, `timeout_auto_submit`, history times, `possible_points` 3 | Q1 one correct option; Q2 exactly one item at its correct position; Q3 `true` |
+| `backfill_blitz` #1 (backfill_student) | `timed_out_finalized`, `timeout_auto_submit`, history times, `possible_points` 3 | Q1 two of the three correct options (2/3 needs half-up rounding); Q2 no item at its correct position; Q3 `true` |
 | `repair_hw` #1 (repair_student) | `checked`, `student_submit`; answer Q1 `auto_checked` `4.00000000`; earned 4, possible 4, normalized `100.00000000`, scoring and checking times in history | **No official row** (the repair case) |
 | `deadline_hw` #1 (deadline_student) | `in_progress`, started seed − 30 min, `deadline_at` = the Homework deadline | Q1 correct |
 | `timeout_blitz` #1 (timeout_student) | `in_progress`, started seed − 20 min, `deadline_at` started + 600 s (past) | Q1 `true` |
@@ -379,7 +379,7 @@ Expected state (oracle):
 | Attempt | Answers (`awarded_points`) | Attempt result | Official row |
 |---|---|---|---|
 | `backfill_hw` #1 | Q1 `2.00000000`, Q2 `1.00000000`, Q3 `1.00000000`, Q4 `2.00000000`, Q5 `1.50000000`, Q6 `1.00000000`, Q7 `1.33333333` (all `auto_checked`); Q8 `waiting_for_teacher_review`; Q9 no row | `waiting_for_teacher_review`; earned/normalized null | none (practice) |
-| `backfill_blitz` #1 | Q1 `0.33333333`, Q2 `0.33333333`, Q3 `1.00000000` | `checked`; earned `1.66666666`; normalized `55.55555533` (sum of stored values, not 5/9) | `valid_normal_blitz`, `55.55555533` |
+| `backfill_blitz` #1 | Q1 `0.66666667` (half-up; truncation gives `0.66666666`), Q2 `0.00000000`, Q3 `1.00000000` | `checked`; earned `1.66666667`; normalized `55.55555567` (from the stored values; not 5/9 = `55.55555556`, not truncated `55.55555533`) | `valid_normal_blitz`, `55.55555567` |
 | `repair_hw` #1 | unchanged | unchanged | **created** by the repair: `highest_valid_completed`, `100.00000000` |
 | `deadline_hw` #1 | Q1 `3.00000000` | `homework_deadline_auto_submit`, `finalized_at` = deadline, then `checked`; earned 3, normalized `75.00000000` | none |
 | `timeout_blitz` #1 | Q1 `2.00000000` | `timeout_auto_submit`, then `checked`; earned 2, normalized `50.00000000` | none |
@@ -414,8 +414,8 @@ flutter test integration_test/stage9_review_flow_test.dart -d windows --no-pub -
 1. Sign in through the login UI and reach `teacherLearningWorkspace`.
 2. On the `review_hw` detail:
    - `teacherTaskReviewWaitingCount` = `Waiting for review: 1`; `teacherTaskReviewOverdueCount` = `Overdue: 1`.
-   - Set the deadline: `teacherHomeworkReviewDeadlineSetButton`, then the date picker in input mode (date = run date + 7 days), then OK on the time picker. The initial time is the current deadline's 18:00. Wait for `Review deadline saved.`, then `Overdue: 0`.
-   - **Checkpoint `review_deadline_set`** (the payload carries the typed date). Oracle: `review_due_at` = typed date 18:00 Asia/Tashkent in UTC (13:00Z); nothing else changed.
+   - Set the deadline: `teacherHomeworkReviewDeadlineSetButton`, then the date picker in input mode (date = run date + 7 days), then OK on the time picker. The initial time is the current deadline in Institution time, 22:00. Wait for `Review deadline saved.`, then `Overdue: 0`.
+   - **Checkpoint `review_deadline_set`** (the payload carries the typed date). Oracle: `review_due_at` = typed date 22:00 Asia/Tokyo in UTC (13:00Z); nothing else changed except the sign-in. The runner refuses a +09:00 host and records the host offset in the evidence.
 3. `teacherTaskReviewQueueButton` → the scope label reads `Submissions of this Homework`. Exactly one row, `teacherReviewQueueRow:<student #1>`, containing `Waiting for review` and `Reviewed 0 of 3 answers`. Tap it.
 4. The detail opens at `/teacher/reviews/<id>`:
    - Q1 block contains `Checked automatically · 2 of 2 points`; Q2 contains `Checked automatically · 2 of 3 points`.
@@ -589,7 +589,7 @@ Required assertion families, each with a classified failure prefix:
 
 - Errors are exactly `{message, code, errors}`. `errors` is `{}` except for `422 validation_failed`, whose fields are non-empty string arrays.
 - Success: `{data}`, with `message` beside `data` on mutations. The review save message is `Submission review saved successfully.`
-- Collections carry `meta.pagination` `{page, per_page, total, last_page}`.
+- Paged collections (the queue, the Student Homework list, finished Blitz) carry exactly `meta.pagination` `{page, per_page, total, last_page}`; `/student/blitz/active` is an unpaged list.
 
 ### 11.3 Negative-probe discipline
 
@@ -731,3 +731,4 @@ P1 and P2 findings are fixed and re-reviewed. P3 findings are fixed, or recorded
 
 - The backend has no real-concurrency test of exception grant against checking, or of the `attempts:check-frozen` sweep against a Submit. The lock order is documented and unit-tested (`S09-DOC-001` §8).
 - The Stage 8 E2E harness no longer matches the Stage 9 backend: its cleanup does not know `official_task_scores`, and its sentinel identity expects an unchecked Attempt. It is historical and not maintained.
+- Integration Harness Preflight #1 (two fresh-context reviewers, 2026-10-02) found P1 = 0, P2 = 3, P3 = 13. All were fixed before PR 1: foreign File keyed into an owned directory, half-up rounding not exercised, the active-list privacy probe that checked nothing; plus Institution-scoped ownership, in-container workload detection, the file-cache/session/queue drivers, failure classes, exact queues, id-leak probe, paged envelopes, fail-fast status waits, answer timestamps after reconciliation, the host-offset and vendor checks, and the smoke sentinel hash.

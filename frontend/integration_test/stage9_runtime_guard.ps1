@@ -47,8 +47,12 @@ $script:Stage9RequiredEnvironment = @{
     DB_HOST = 'postgres'
     DB_PORT = '5432'
     DB_DATABASE = 'testlabuz_testing'
+    # Database-backed drivers would write unowned rows (cache, sessions, jobs) into testlabuz_testing.
+    CACHE_STORE = 'file'
+    SESSION_DRIVER = 'file'
+    QUEUE_CONNECTION = 'sync'
 }
-$script:Stage9NamedEnvironment = @('APP_ENV', 'APP_DEBUG', 'DB_CONNECTION', 'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'PHP_CLI_SERVER_WORKERS')
+$script:Stage9NamedEnvironment = @('APP_ENV', 'APP_DEBUG', 'DB_CONNECTION', 'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'CACHE_STORE', 'SESSION_DRIVER', 'QUEUE_CONNECTION', 'PHP_CLI_SERVER_WORKERS')
 
 function Get-Stage9InputSecrets {
     param([string] $InputJson)
@@ -67,7 +71,7 @@ function Invoke-Stage9ContainerPhp {
         [ValidateRange(1, 3600)][int] $TimeoutSeconds = 300
     )
     if ($BackendContainerName -cne $script:Stage9BackendContainerName) {
-        throw 'Stage 9 PHP transport requires the exact dedicated backend container.'
+        throw 'integration-harness defect: Stage 9 PHP transport requires the exact dedicated backend container.'
     }
     $containerPath = '/tmp/testlabuz-stage9-program-' + [guid]::NewGuid().ToString('N') + '.php'
     $bootstrap = @'
@@ -98,7 +102,7 @@ unset($stage9Raw);
         try {
             $OutputEncoding = [Text.UTF8Encoding]::new($false)
             $null = @($content | & docker exec -i $BackendContainerName sh -c "umask 077; set -C; cat > '$containerPath'" 2>&1)
-            if ($LASTEXITCODE -ne 0) { $knownFailure = 'Stage 9 restricted PHP transport failed.'; throw $knownFailure }
+            if ($LASTEXITCODE -ne 0) { $knownFailure = 'environment/runtime defect: Stage 9 restricted PHP transport failed.'; throw $knownFailure }
             # timeout bounds the PHP process inside the container; stopping the docker client alone would not.
             $output = @($InputJson | & docker exec -i $BackendContainerName timeout --kill-after=10 $TimeoutSeconds php $containerPath 2>&1)
             $exitCode = $LASTEXITCODE
@@ -113,22 +117,22 @@ unset($stage9Raw);
             try { $refusal = [string] ((($output | ForEach-Object { [string] $_ }) -join "`n") | ConvertFrom-Json).stage9_refusal } catch { $refusal = $null }
             if (-not [string]::IsNullOrWhiteSpace($refusal)) {
                 foreach ($secret in @(Get-Stage9InputSecrets $InputJson)) { $refusal = $refusal.Replace($secret, '[REDACTED]') }
-                $knownFailure = "Stage 9 container PHP refused: $refusal"
+                $knownFailure = "environment/runtime defect: Stage 9 container PHP refused: $refusal"
                 throw $knownFailure
             }
         }
-        if ($exitCode -ne 0) { throw 'Stage 9 container PHP operation failed.' }
+        if ($exitCode -ne 0) { throw 'integration-harness defect: Stage 9 container PHP operation failed.' }
         try { return (($output -join "`n") | ConvertFrom-Json) }
-        catch { $knownFailure = 'Stage 9 container PHP operation returned invalid JSON; raw output withheld.'; throw $knownFailure }
+        catch { $knownFailure = 'integration-harness defect: Stage 9 container PHP operation returned invalid JSON; raw output withheld.'; throw $knownFailure }
     }
     catch {
         if ($null -ne $knownFailure) { throw $knownFailure }
-        throw 'Stage 9 container PHP operation failed; raw diagnostics withheld to protect inputs.'
+        throw 'integration-harness defect: Stage 9 container PHP operation failed; raw diagnostics withheld to protect inputs.'
     }
     finally {
         $content = $null; $InputJson = $null; $output = $null
         $null = @(& docker exec $BackendContainerName rm -f -- $containerPath 2>&1)
-        if ($LASTEXITCODE -ne 0) { throw 'Stage 9 restricted container-script cleanup failed.' }
+        if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: Stage 9 restricted container-script cleanup failed.' }
     }
 }
 
@@ -141,17 +145,17 @@ function Resolve-Stage9ApiTarget {
         [Text.RegularExpressions.RegexOptions]::CultureInvariant
     )
     if (-not $match.Success) {
-        throw 'Stage 9 E2E requires exactly http://127.0.0.1:<explicit-port>/api/v1.'
+        throw 'environment/runtime defect: Stage 9 E2E requires exactly http://127.0.0.1:<explicit-port>/api/v1.'
     }
     $port = [int] $match.Groups['port'].Value
     if ($port -lt 1 -or $port -gt 65535) {
-        throw 'Stage 9 E2E requires an explicit port between 1 and 65535.'
+        throw 'environment/runtime defect: Stage 9 E2E requires an explicit port between 1 and 65535.'
     }
     try {
         $uri = [Uri] $ApiBaseUrl
     }
     catch {
-        throw 'The Stage 9 E2E API target is malformed.'
+        throw 'environment/runtime defect: The Stage 9 E2E API target is malformed.'
     }
     if (
         -not $uri.IsAbsoluteUri -or
@@ -163,7 +167,7 @@ function Resolve-Stage9ApiTarget {
         $uri.Query -ne '' -or
         $uri.Fragment -ne ''
     ) {
-        throw 'The Stage 9 E2E API target is outside the dedicated loopback boundary.'
+        throw 'environment/runtime defect: The Stage 9 E2E API target is outside the dedicated loopback boundary.'
     }
 
     [pscustomobject] @{ BaseUrl = $ApiBaseUrl; Port = $port }
@@ -183,18 +187,18 @@ function Assert-Stage9ContainerFacts {
     )
 
     if ($InspectionCount -ne 1 -or $ContainerName -cne $script:Stage9BackendContainerName) {
-        throw 'The dedicated Stage 9 backend container identity is missing or ambiguous.'
+        throw 'environment/runtime defect: The dedicated Stage 9 backend container identity is missing or ambiguous.'
     }
-    if (-not $Running) { throw 'The dedicated Stage 9 backend container must be running.' }
-    if ($AutoRemove -or $RestartPolicy -cne 'no') { throw 'The dedicated Stage 9 backend container must be restartable only on request.' }
+    if (-not $Running) { throw 'environment/runtime defect: The dedicated Stage 9 backend container must be running.' }
+    if ($AutoRemove -or $RestartPolicy -cne 'no') { throw 'environment/runtime defect: The dedicated Stage 9 backend container must be restartable only on request.' }
     if ($WorkingDirectory -cne $script:Stage9BackendRoot) {
-        throw 'The dedicated Stage 9 backend working directory is unsafe.'
+        throw 'environment/runtime defect: The dedicated Stage 9 backend working directory is unsafe.'
     }
-    if ($Image -cne $script:Stage9BackendImage) { throw 'The dedicated Stage 9 backend image is not the approved app image.' }
+    if ($Image -cne $script:Stage9BackendImage) { throw 'environment/runtime defect: The dedicated Stage 9 backend image is not the approved app image.' }
     if (($Command -join "`n") -cne ($script:Stage9BackendCommand -join "`n")) {
-        throw 'The dedicated Stage 9 backend must run artisan serve with --no-reload; otherwise Laravel drops PHP_CLI_SERVER_WORKERS.'
+        throw 'environment/runtime defect: The dedicated Stage 9 backend must run artisan serve with --no-reload; otherwise Laravel drops PHP_CLI_SERVER_WORKERS.'
     }
-    if ($Platform -cne 'linux') { throw 'The Stage 9 concurrency runtime must be a Linux container capable of worker forking.' }
+    if ($Platform -cne 'linux') { throw 'environment/runtime defect: The Stage 9 concurrency runtime must be a Linux container capable of worker forking.' }
 }
 
 function Assert-Stage9MountFacts {
@@ -206,7 +210,7 @@ function Assert-Stage9MountFacts {
     $resolvedExpected = [IO.Path]::GetFullPath($ExpectedBackendSource).TrimEnd('\', '/')
     $backendMounts = @($Mounts | Where-Object { $_.Destination -ceq $script:Stage9BackendRoot })
     if ($backendMounts.Count -ne 1) {
-        throw 'The exact Stage 9 backend source bind is missing or ambiguous.'
+        throw 'environment/runtime defect: The exact Stage 9 backend source bind is missing or ambiguous.'
     }
     $backendMount = $backendMounts[0]
     $resolvedSource = [IO.Path]::GetFullPath([string] $backendMount.Source).TrimEnd('\', '/')
@@ -215,37 +219,37 @@ function Assert-Stage9MountFacts {
         [bool] $backendMount.RW -ne $true -or
         -not $resolvedSource.Equals($resolvedExpected, [StringComparison]::OrdinalIgnoreCase)
     ) {
-        throw 'The Stage 9 backend source bind does not own the current repository backend.'
+        throw 'environment/runtime defect: The Stage 9 backend source bind does not own the current repository backend.'
     }
     foreach ($mount in $Mounts) {
         if ($mount -eq $backendMount) { continue }
         if ([string] $mount.Type -ceq 'bind' -and
             [IO.Path]::GetFullPath([string] $mount.Source).TrimEnd('\', '/').Equals($resolvedExpected, [StringComparison]::OrdinalIgnoreCase)) {
-            throw 'The Stage 9 backend source has an ambiguous alias mount.'
+            throw 'environment/runtime defect: The Stage 9 backend source has an ambiguous alias mount.'
         }
     }
     $privateMounts = @($Mounts | Where-Object { $_.Destination -ceq $script:Stage9PrivateRoot })
-    if ($privateMounts.Count -ne 1) { throw 'The Stage 9 private root mount is missing or ambiguous.' }
+    if ($privateMounts.Count -ne 1) { throw 'environment/runtime defect: The Stage 9 private root mount is missing or ambiguous.' }
     $privateMount = $privateMounts[0]
     if ([string] $privateMount.Type -cne 'volume' -or
         [string] $privateMount.Name -cne $script:Stage9PrivateVolumeName -or
         [bool] $privateMount.RW -ne $true) {
-        throw 'Stage 9 private storage requires the exact read/write named volume.'
+        throw 'environment/runtime defect: Stage 9 private storage requires the exact read/write named volume.'
     }
     foreach ($mount in $Mounts) {
         if ($mount -eq $privateMount) { continue }
         $name = if ($null -eq $mount.PSObject.Properties['Name']) { '' } else { [string] $mount.Name }
         if ($name -ceq $script:Stage9PrivateVolumeName -or [string] $mount.Source -ceq [string] $privateMount.Source) {
-            throw 'Stage 9 private storage is exposed by an alias mount.'
+            throw 'environment/runtime defect: Stage 9 private storage is exposed by an alias mount.'
         }
         if ([string] $mount.Destination -clike ($script:Stage9PrivateRoot + '/*')) {
-            throw 'An additional mount shadows the Stage 9 private volume.'
+            throw 'environment/runtime defect: An additional mount shadows the Stage 9 private volume.'
         }
         if ($mount -ne $backendMount) {
             $destination = ([string] $mount.Destination).TrimEnd('/')
             if ($destination -clike ($script:Stage9BackendRoot + '/*') -or
                 $script:Stage9BackendRoot.StartsWith($destination + '/', [StringComparison]::Ordinal)) {
-                throw 'An unexpected mount shadows the current Stage 9 backend source.'
+                throw 'environment/runtime defect: An unexpected mount shadows the current Stage 9 backend source.'
             }
         }
     }
@@ -264,7 +268,7 @@ function Assert-Stage9PortBindingFacts {
             [string] $bindings[0].HostIp -cne '127.0.0.1' -or
             [string] $bindings[0].HostPort -cne [string] $ApiPort
         ) {
-            throw 'The selected Stage 9 API port is not actively bound exactly once to loopback.'
+            throw 'environment/runtime defect: The selected Stage 9 API port is not actively bound exactly once to loopback.'
         }
     }
 }
@@ -282,7 +286,7 @@ function Assert-Stage9ContainerEnvironment {
     }
     foreach ($name in $script:Stage9RequiredEnvironment.Keys) {
         if ([string] $named[$name] -cne $script:Stage9RequiredEnvironment[$name]) {
-            throw "The dedicated Stage 9 backend container has an unsafe $name value."
+            throw "environment/runtime defect: The dedicated Stage 9 backend container has an unsafe $name value."
         }
     }
     Assert-Stage9WorkerEnvironment -Value ([string] $named['PHP_CLI_SERVER_WORKERS'])
@@ -300,7 +304,7 @@ function Assert-Stage9ContainerConfiguration {
     $configured = @($Inspection.HostConfig.PortBindings.($script:Stage9BackendContainerPort))
     Assert-Stage9PortBindingFacts -ConfiguredBindings $configured -ActiveBindings $configured -ApiPort $ApiPort
     if ([string] $Inspection.HostConfig.NetworkMode -cne $script:Stage9DockerNetworkName) {
-        throw 'The dedicated Stage 9 backend container is not configured on the approved Docker network.'
+        throw 'environment/runtime defect: The dedicated Stage 9 backend container is not configured on the approved Docker network.'
     }
     Assert-Stage9ContainerEnvironment -Environment @($Inspection.Config.Env)
 }
@@ -327,6 +331,16 @@ $sessions = DB::select("select host(client_addr) as client_addr from pg_stat_act
 echo json_encode(['sessions' => $sessions], JSON_THROW_ON_ERROR);
 '@
     Assert-Stage9DatabaseExclusivity (Invoke-Stage9ContainerPhp -Program $program) $ClientAddress
+    # A test run or command started inside this container shares its address, so the session check cannot see it.
+    Assert-Stage9NoContainerWork -Processes @(Get-Stage9ProcessFacts)
+}
+
+function Assert-Stage9NoContainerWork {
+    param([AllowEmptyCollection()][Parameter(Mandatory = $true)][object[]] $Processes)
+    $foreign = @($Processes | Where-Object { [string] $_.cmd -cmatch '(?:\A|[\s/])(?:phpunit|paratest)(?:\s|\z)' -or [string] $_.cmd -cmatch '\bartisan\s+(?!serve\b)\S' })
+    if ($foreign.Count -ne 0) {
+        throw 'environment/runtime defect: another workload (a test run or an artisan command) runs inside the Stage 9 container; stop it and rerun.'
+    }
 }
 
 # Every stage E2E runtime uses testlabuz_testing, so a running runtime of another stage could wipe or change this run's state.
@@ -358,20 +372,20 @@ function Assert-Stage9ServerFacts {
     )
 
     if ($DatabaseHost -cne 'postgres' -or $DatabasePort -cne '5432') {
-        throw 'The dedicated Stage 9 runtime has an unapproved database server target.'
+        throw 'environment/runtime defect: The dedicated Stage 9 runtime has an unapproved database server target.'
     }
     if ($PostgresContainerName -cne $script:Stage9PostgresContainerName -or $PostgresImage -cne $script:Stage9PostgresImage) {
-        throw 'The dedicated Stage 9 runtime has an unapproved PostgreSQL identity.'
+        throw 'environment/runtime defect: The dedicated Stage 9 runtime has an unapproved PostgreSQL identity.'
     }
     if (-not $BackendNetworkPresent -or -not $PostgresNetworkPresent -or -not $PostgresRunning) {
-        throw 'The approved Stage 9 PostgreSQL server/network is unavailable.'
+        throw 'environment/runtime defect: The approved Stage 9 PostgreSQL server/network is unavailable.'
     }
 }
 
 function Assert-Stage9WorkerEnvironment {
     param([AllowNull()][string] $Value)
     if ($Value -cne $script:Stage9WorkerCount) {
-        throw 'The dedicated Stage 9 runtime requires exactly PHP_CLI_SERVER_WORKERS=4.'
+        throw 'environment/runtime defect: The dedicated Stage 9 runtime requires exactly PHP_CLI_SERVER_WORKERS=4.'
     }
 }
 
@@ -379,16 +393,16 @@ function Assert-Stage9ProcessFacts {
     param([AllowEmptyCollection()][Parameter(Mandatory = $true)][object[]] $Processes)
     # Laravel only forks the requested workers with --no-reload; the environment value alone proves nothing.
     $serve = @($Processes | Where-Object { [string] $_.cmd -ceq ($script:Stage9BackendCommand -join ' ') })
-    if ($serve.Count -ne 1) { throw 'The Stage 9 artisan serve process is missing or ambiguous.' }
+    if ($serve.Count -ne 1) { throw 'environment/runtime defect: The Stage 9 artisan serve process is missing or ambiguous.' }
     $servers = @($Processes | Where-Object { [string] $_.cmd -cmatch '\A\S*php -S 0\.0\.0\.0:8000 \S+server\.php\z' })
     $masters = @($servers | Where-Object { [int] $_.ppid -eq [int] $serve[0].pid })
-    if ($masters.Count -ne 1) { throw 'The Stage 9 PHP built-in server master is missing or ambiguous.' }
+    if ($masters.Count -ne 1) { throw 'environment/runtime defect: The Stage 9 PHP built-in server master is missing or ambiguous.' }
     $workers = @($servers | Where-Object { [int] $_.ppid -eq [int] $masters[0].pid })
     if ($workers.Count -ne [int] $script:Stage9WorkerCount -or $servers.Count -ne $workers.Count + 1) {
-        throw 'The Stage 9 PHP built-in server does not run exactly four forked workers.'
+        throw 'environment/runtime defect: The Stage 9 PHP built-in server does not run exactly four forked workers.'
     }
     if (@($Processes | Where-Object { [string] $_.cmd -cmatch 'schedule:(?:run|work)' }).Count -ne 0) {
-        throw 'A Laravel scheduler runs in the Stage 9 container; the scheduled checking commands must stay guarded.'
+        throw 'environment/runtime defect: A Laravel scheduler runs in the Stage 9 container; the scheduled checking commands must stay guarded.'
     }
     $workers.Count
 }
@@ -400,10 +414,10 @@ function Assert-Stage9SessionCorrelation {
         [AllowEmptyString()][string] $ServerAddress, [AllowEmptyString()][string] $PostgresAddress)
     $ipv4 = '\A[0-9]{1,3}(?:\.[0-9]{1,3}){3}\z'
     if ($ContainerAddress -cnotmatch $ipv4 -or $ClientAddress -cne $ContainerAddress) {
-        throw 'Stage 9 application database sessions cannot be correlated to the container network address.'
+        throw 'environment/runtime defect: Stage 9 application database sessions cannot be correlated to the container network address.'
     }
     if ($PostgresAddress -cnotmatch $ipv4 -or $ServerAddress -cne $PostgresAddress) {
-        throw 'The Stage 9 application is not connected to the approved PostgreSQL container.'
+        throw 'environment/runtime defect: The Stage 9 application is not connected to the approved PostgreSQL container.'
     }
 }
 
@@ -437,7 +451,7 @@ function Assert-Stage9LaravelFacts {
         [string] $Facts.database_port -cne '5432' -or
         [int] $Facts.pending_migrations -ne 0
     ) {
-        throw 'The Stage 9 Laravel/database runtime identity is unsafe.'
+        throw 'environment/runtime defect: The Stage 9 Laravel/database runtime identity is unsafe.'
     }
     if ([string]::IsNullOrWhiteSpace([string] $Facts.private_disk) -or
         [string] $Facts.private_disk -ceq 'public' -or
@@ -446,7 +460,7 @@ function Assert-Stage9LaravelFacts {
         [string] $Facts.private_root -cnotmatch '\A/var/www/html/storage/app/private(?:/[^/]+)*\z' -or
         [string] $Facts.private_root -match '/(?:\.|\.\.)(?:/|$)|\\' -or
         [string] $Facts.private_root -ceq [string] $Facts.public_root) {
-        throw 'The Stage 9 configured private disk/root is unsafe.'
+        throw 'environment/runtime defect: The Stage 9 configured private disk/root is unsafe.'
     }
 }
 
@@ -456,7 +470,7 @@ function Assert-Stage9HttpBoundaryFacts {
         [Parameter(Mandatory = $true)][object] $Envelope
     )
 
-    if ($StatusCode -ne 401) { throw 'The Stage 9 HTTP protected boundary returned the wrong status.' }
+    if ($StatusCode -ne 401) { throw 'environment/runtime defect: The Stage 9 HTTP protected boundary returned the wrong status.' }
     $properties = @($Envelope.PSObject.Properties.Name)
     if (
         [string] $Envelope.code -cne 'authentication_required' -or
@@ -468,7 +482,7 @@ function Assert-Stage9HttpBoundaryFacts {
         @($properties | Where-Object { $_ -cnotin @('message', 'code', 'errors') }).Count -ne 0 -or
         @(@('message', 'code', 'errors') | Where-Object { $_ -cnotin $properties }).Count -ne 0
     ) {
-        throw 'The Stage 9 HTTP protected boundary returned an unsafe envelope.'
+        throw 'environment/runtime defect: The Stage 9 HTTP protected boundary returned an unsafe envelope.'
     }
 }
 
@@ -499,11 +513,11 @@ function Invoke-Stage9HttpBoundaryProbe {
         $body = [string] $response.Content
     }
     catch {
-        if ($null -eq $_.Exception.Response) { throw 'The selected Stage 9 API target was not reachable.' }
+        if ($null -eq $_.Exception.Response) { throw 'environment/runtime defect: The selected Stage 9 API target was not reachable.' }
         $statusCode = [int] $_.Exception.Response.StatusCode
         $body = Get-Stage9ErrorResponseBody -Exception $_.Exception
     }
-    try { $envelope = $body | ConvertFrom-Json } catch { throw 'The Stage 9 HTTP protected boundary returned invalid JSON.' }
+    try { $envelope = $body | ConvertFrom-Json } catch { throw 'integration-harness defect: The Stage 9 HTTP protected boundary returned invalid JSON.' }
     Assert-Stage9HttpBoundaryFacts -StatusCode $statusCode -Envelope $envelope
 }
 
@@ -513,7 +527,7 @@ function Wait-Stage9HttpBoundary {
     do {
         try { Invoke-Stage9HttpBoundaryProbe -ApiTarget $ApiTarget; return }
         catch {
-            if ([DateTime]::UtcNow -ge $deadline) { throw 'The Stage 9 backend did not reach its exact HTTP boundary in time.' }
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'environment/runtime defect: The Stage 9 backend did not reach its exact HTTP boundary in time.' }
             Start-Sleep -Milliseconds 250
         }
     } while ($true)
@@ -531,13 +545,13 @@ function Assert-Stage9DedicatedRuntime {
     )
 
     if ($BackendContainerName -cne $script:Stage9BackendContainerName) {
-        throw 'Stage 9 E2E may inspect only the exact dedicated backend container.'
+        throw 'environment/runtime defect: Stage 9 E2E may inspect only the exact dedicated backend container.'
     }
     $validatedTarget = Resolve-Stage9ApiTarget -ApiBaseUrl $ApiTarget.BaseUrl
-    if ($validatedTarget.Port -ne $ApiTarget.Port) { throw 'The Stage 9 API target has inconsistent port facts.' }
+    if ($validatedTarget.Port -ne $ApiTarget.Port) { throw 'environment/runtime defect: The Stage 9 API target has inconsistent port facts.' }
     $inspectionOutput = & docker inspect $BackendContainerName 2>$null
-    if ($LASTEXITCODE -ne 0) { throw 'The dedicated Stage 9 backend container could not be inspected.' }
-    try { $inspections = @($inspectionOutput | ConvertFrom-Json) } catch { throw 'The Stage 9 backend inspection was invalid.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: The dedicated Stage 9 backend container could not be inspected.' }
+    try { $inspections = @($inspectionOutput | ConvertFrom-Json) } catch { throw 'environment/runtime defect: The Stage 9 backend inspection was invalid.' }
     Assert-Stage9NoOtherStageRuntimeLive
     $inspection = if ($inspections.Count -eq 1) { $inspections[0] } else { $null }
     Assert-Stage9ContainerFacts `
@@ -558,9 +572,9 @@ function Assert-Stage9DedicatedRuntime {
         -ApiPort $ApiTarget.Port
 
     $postgresOutput = & docker inspect $script:Stage9PostgresContainerName 2>$null
-    if ($LASTEXITCODE -ne 0) { throw 'The approved Stage 9 PostgreSQL container could not be inspected.' }
-    try { $postgresInspections = @($postgresOutput | ConvertFrom-Json) } catch { throw 'The Stage 9 PostgreSQL inspection was invalid.' }
-    if ($postgresInspections.Count -ne 1) { throw 'The approved Stage 9 PostgreSQL identity was ambiguous.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: The approved Stage 9 PostgreSQL container could not be inspected.' }
+    try { $postgresInspections = @($postgresOutput | ConvertFrom-Json) } catch { throw 'environment/runtime defect: The Stage 9 PostgreSQL inspection was invalid.' }
+    if ($postgresInspections.Count -ne 1) { throw 'environment/runtime defect: The approved Stage 9 PostgreSQL identity was ambiguous.' }
     $postgres = $postgresInspections[0]
     Assert-Stage9ServerFacts `
         -DatabaseHost ([string] $containerEnvironment['DB_HOST']) `
@@ -623,9 +637,9 @@ echo json_encode($facts, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
 function Read-Stage9DatabasePassword {
     $repositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $lines = @(Get-Content -LiteralPath (Join-Path $repositoryRoot 'docker/.env') -ErrorAction Stop | Where-Object { $_ -cmatch '\APOSTGRES_PASSWORD=' })
-    if ($lines.Count -ne 1) { throw 'docker/.env must define POSTGRES_PASSWORD exactly once.' }
+    if ($lines.Count -ne 1) { throw 'environment/runtime defect: docker/.env must define POSTGRES_PASSWORD exactly once.' }
     $value = $lines[0].Substring('POSTGRES_PASSWORD='.Length).Trim()
-    if ([string]::IsNullOrWhiteSpace($value)) { throw 'docker/.env POSTGRES_PASSWORD is blank.' }
+    if ([string]::IsNullOrWhiteSpace($value)) { throw 'environment/runtime defect: docker/.env POSTGRES_PASSWORD is blank.' }
     $value
 }
 
@@ -634,25 +648,25 @@ function Initialize-Stage9Runtime {
     param([Parameter(Mandatory = $true)][psobject] $ApiTarget)
     Assert-Stage9NoOtherStageRuntimeLive
     $existing = @(& docker ps -a --filter "name=^/$($script:Stage9BackendContainerName)$" --format '{{.Names}}' 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw 'Docker could not list the Stage 9 runtime.' }
-    if ($existing.Count -gt 1) { throw 'The Stage 9 runtime container identity is ambiguous.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: Docker could not list the Stage 9 runtime.' }
+    if ($existing.Count -gt 1) { throw 'environment/runtime defect: The Stage 9 runtime container identity is ambiguous.' }
     if ($existing.Count -eq 1) {
         $inspection = @(& docker inspect $script:Stage9BackendContainerName 2>$null | ConvertFrom-Json)
-        if ($LASTEXITCODE -ne 0 -or $inspection.Count -ne 1) { throw 'The existing Stage 9 runtime could not be inspected.' }
+        if ($LASTEXITCODE -ne 0 -or $inspection.Count -ne 1) { throw 'environment/runtime defect: The existing Stage 9 runtime could not be inspected.' }
         $static = $inspection[0]
         Assert-Stage9ContainerConfiguration -Inspection $static -ApiPort $ApiTarget.Port | Out-Null
         if ([string] $static.State.Running -cne 'True') {
             & docker start $script:Stage9BackendContainerName | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'The existing Stage 9 runtime could not be started.' }
+            if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: The existing Stage 9 runtime could not be started.' }
         }
         Wait-Stage9HttpBoundary -ApiTarget $ApiTarget
         return 'existing'
     }
     $volumes = @(& docker volume ls --filter "name=^$($script:Stage9PrivateVolumeName)$" --format '{{.Name}}' 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw 'Docker could not list the Stage 9 private volume.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: Docker could not list the Stage 9 private volume.' }
     if ($volumes.Count -eq 0) {
         & docker volume create $script:Stage9PrivateVolumeName | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'The Stage 9 private volume could not be created.' }
+        if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: The Stage 9 private volume could not be created.' }
     }
     $previous = [Environment]::GetEnvironmentVariable('DB_PASSWORD', 'Process')
     try {
@@ -667,7 +681,7 @@ function Initialize-Stage9Runtime {
             '-e', 'DB_USERNAME=testlabuz', '-e', 'DB_PASSWORD', '-e', "PHP_CLI_SERVER_WORKERS=$($script:Stage9WorkerCount)",
             $script:Stage9BackendImage) + $script:Stage9BackendCommand
         & docker @arguments | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'The Stage 9 runtime container could not be created.' }
+        if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: The Stage 9 runtime container could not be created.' }
     }
     finally { [Environment]::SetEnvironmentVariable('DB_PASSWORD', $previous, 'Process') }
     Wait-Stage9HttpBoundary -ApiTarget $ApiTarget

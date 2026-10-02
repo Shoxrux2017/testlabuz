@@ -30,6 +30,9 @@ class Stage9E2eSeeder extends Seeder
     /** Institution => Student result release mode. */
     private const INSTITUTIONS = ['auto' => 'automatic', 'manual' => 'manual_teacher'];
 
+    /** Asia/Tokyo (+09:00, no DST) differs from the +05:00 runner host, so device time cannot pass for Institution time. */
+    private const TIMEZONES = ['auto' => 'Asia/Tokyo', 'manual' => 'Asia/Tashkent'];
+
     /** Institution => the Teacher who owns its Topics. */
     private const OWNERS = ['auto' => 'teacher', 'manual' => 'manual_teacher'];
 
@@ -96,7 +99,8 @@ class Stage9E2eSeeder extends Seeder
             'q5' => ['blanks' => ['TASHKENT', 'Bukhara']], 'q6' => ['matching' => [0, 2, 1]], 'q7' => ['ordering' => [1, 3, 2]],
             'q8' => ['text' => 'E2E S09 seeded open answer.']]],
         'backfill_blitz_1' => ['backfill_blitz', 'backfill_student', 'timed_out_finalized', [
-            'q1' => ['choice' => [1, 4]], 'q2' => ['ordering' => [2, 1, 3]], 'q3' => ['boolean' => true]]],
+            // 2 of 3 correct options: 2/3 = 0.666... must round half-up to 0.66666667; no item at its position.
+            'q1' => ['choice' => [1, 2]], 'q2' => ['ordering' => [2, 3, 1]], 'q3' => ['boolean' => true]]],
         'repair_hw_1' => ['repair_hw', 'repair_student', 'checked', ['q1' => ['choice' => [1]]]],
         'deadline_hw_1' => ['deadline_hw', 'deadline_student', 'in_progress', ['q1' => ['choice' => [2]]]],
         'timeout_blitz_1' => ['timeout_blitz', 'timeout_student', 'in_progress', ['q1' => ['boolean' => true]]],
@@ -328,6 +332,13 @@ class Stage9E2eSeeder extends Seeder
             }
         }
         $state['blobs'] = array_values(array_unique($state['blobs'], SORT_REGULAR));
+        // Cleanup deletes every blob in an owned Attempt directory, so no foreign File row may point into one.
+        $foreign = DB::table('files')->whereNotIn('id', $state['db']['files'])->where(function ($query) use ($attemptRows): void {
+            foreach ($attemptRows as $attempt) {
+                $query->orWhere('storage_key', 'like', 'student-submissions/'.$attempt->institution_id.'/'.$attempt->id.'/%');
+            }
+        });
+        $this->require($attemptRows->isEmpty() || $foreign->doesntExist(), 'Unowned Stage 9 File row.');
 
         $owners = ['assessment_attempt' => $state['db']['assessment_attempts'], 'blitz_attempt_exception' => $state['db']['blitz_attempt_exceptions']];
         $records = DB::table('idempotency_records')->whereIn('user_id', $manifest['users'])->get();
@@ -340,6 +351,16 @@ class Stage9E2eSeeder extends Seeder
         $state['db']['idempotency_records'] = $records->pluck('id')->all();
         $state['db']['personal_access_tokens'] = DB::table('personal_access_tokens')->where('tokenable_type', (new User)->getMorphClass())
             ->whereIn('tokenable_id', $manifest['users'])->pluck('id')->all();
+
+        // The manifest Institutions belong to these fixtures alone: every Institution-scoped row in them must be owned.
+        $scopedTables = DB::table('information_schema.columns')->where('table_schema', 'public')->where('column_name', 'institution_id')->pluck('table_name');
+        foreach ($scopedTables as $table) {
+            [$column, $owned] = in_array($table, self::ANSWER_TABLES, true)
+                ? ['answer_id', $state['db']['attempt_answers']]
+                : [self::PRIMARY_KEYS[$table] ?? 'id', $state['db'][$table] ?? []];
+            $this->require(DB::table($table)->whereIn('institution_id', $manifest['institutions'])->whereNotIn($column, $owned)->doesntExist(),
+                'Unowned Stage 9 row in an owned Institution: '.$table.'.');
+        }
 
         return $state;
     }
@@ -583,7 +604,7 @@ class Stage9E2eSeeder extends Seeder
                 'login_name' => 'e2e_s09_'.$name, 'is_active' => true, 'must_change_password' => false] + $stamps;
         }
         foreach (self::INSTITUTIONS as $name => $release) {
-            $rows['institution_settings'][] = ['institution_id' => $manifest['institutions'][$name], 'timezone' => 'Asia/Tashkent',
+            $rows['institution_settings'][] = ['institution_id' => $manifest['institutions'][$name], 'timezone' => self::TIMEZONES[$name],
                 'blitz_timer_start_mode' => 'synchronized', 'student_result_release_mode' => $release,
                 'learning_material_max_mb' => 25, 'student_submission_max_mb' => 15] + $stamps;
         }

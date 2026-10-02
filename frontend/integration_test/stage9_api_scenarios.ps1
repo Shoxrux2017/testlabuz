@@ -132,7 +132,7 @@ function Invoke-Stage9FreezeTriggerChecking {
     Assert-Stage9AttemptScore $row waiting_for_teacher_review $null $null 'review #1 after trigger'
     Assert-Stage9SameInstant $row.finalized_at $submit.finalized_at 'checking keeps finalized_at'
     if ([string] $row.finalization_reason -cne 'student_submit' -or [string] $row.possible_points -cne '20.000000') { throw 'production defect: Stage 9 checking changed the Homework freeze.' }
-    foreach ($answer in @($saved | Select-Object -First 4)) {
+    foreach ($answer in @($saved)) {
         $persisted = @(Get-Stage9Rows $facts attempt_answers attempt_id $attempt | Where-Object question_id -CEQ ([string] $answer.question_id))
         if ($persisted.Count -ne 1) { throw 'integration-harness defect: Stage 9 saved answer is missing.' }
         Assert-Stage9SameInstant $persisted[0].updated_at $answer.updated_at 'checking keeps the answer updated_at'
@@ -306,13 +306,16 @@ function Invoke-Stage9ScheduledChecking {
     Assert-Stage9Answer $after $a.backfill_hw_1 $q.backfill_hw.q8 waiting_for_teacher_review $null $null $null 'backfill Homework Q8' | Out-Null
     if (@(Get-Stage9Rows $after attempt_answers attempt_id $a.backfill_hw_1 | Where-Object question_id -CEQ $q.backfill_hw.q9).Count -ne 0) { throw 'production defect: Stage 9 checking fabricated an answer for an unanswered Question.' }
     Assert-Stage9AttemptScore (Get-Stage9Row $after assessment_attempts $a.backfill_hw_1) waiting_for_teacher_review $null $null 'backfill Homework'
-    foreach ($pair in @(@('q1', '0.33333333'), @('q2', '0.33333333'), @('q3', '1.00000000'))) { Assert-Stage9Answer $after $a.backfill_blitz_1 $q.backfill_blitz.($pair[0]) auto_checked $pair[1] $null $null "backfill Blitz $($pair[0])" | Out-Null }
-    # The score is the sum of the stored rounded answer points (1.66666666), not 5/9.
-    Assert-Stage9AttemptScore (Get-Stage9Row $after assessment_attempts $a.backfill_blitz_1) checked '1.66666666' '55.55555533' 'backfill Blitz'
-    Assert-Stage9OfficialRow $after $m.assessments.backfill_blitz $m.users.backfill_student $a.backfill_blitz_1 '55.55555533' valid_normal_blitz 'backfill Blitz official' | Out-Null
+    # 2/3 must round half-up to 0.66666667 (truncation gives 0.66666666); no ordering item is in place.
+    foreach ($pair in @(@('q1', '0.66666667'), @('q2', '0.00000000'), @('q3', '1.00000000'))) { Assert-Stage9Answer $after $a.backfill_blitz_1 $q.backfill_blitz.($pair[0]) auto_checked $pair[1] $null $null "backfill Blitz $($pair[0])" | Out-Null }
+    # The score comes from the stored rounded points (1.66666667 -> 55.55555567), not from 5/9 (55.55555556) or truncation (55.55555533).
+    Assert-Stage9AttemptScore (Get-Stage9Row $after assessment_attempts $a.backfill_blitz_1) checked '1.66666667' '55.55555567' 'backfill Blitz'
+    Assert-Stage9OfficialRow $after $m.assessments.backfill_blitz $m.users.backfill_student $a.backfill_blitz_1 '55.55555567' valid_normal_blitz 'backfill Blitz official' | Out-Null
     Assert-Stage9OfficialRow $after $m.assessments.repair_hw $m.users.repair_student $a.repair_hw_1 '100.00000000' highest_valid_completed 'repaired official row' | Out-Null
     Assert-Stage9Equal (Get-Stage9Row $after assessment_attempts $a.repair_hw_1) (Get-Stage9Row $before assessment_attempts $a.repair_hw_1) 'repair leaves the checked Attempt'
     Assert-Stage9FreezeAndAnswersKept $before $after @($frozen) 'scheduled checking'
+    # The reconcilers freeze these two, so only their answers must stay as the Student saved them.
+    Assert-Stage9AnswerRowsKept $before $after @([string] $a.deadline_hw_1, [string] $a.timeout_blitz_1) 'reconciliation and checking'
     foreach ($case in @(@('deadline_hw_1', 'homework_deadline_auto_submit', '3.00000000', '75.00000000', 'deadline_hw'), @('timeout_blitz_1', 'timeout_auto_submit', '2.00000000', '50.00000000', 'timeout_blitz'))) {
         $row = Get-Stage9Row $after assessment_attempts $a.($case[0])
         $was = Get-Stage9Row $before assessment_attempts $a.($case[0])
@@ -329,6 +332,7 @@ function Invoke-Stage9ScheduledChecking {
     Assert-Stage9ExclusiveDatabase -ClientAddress $ClientAddress
     $outputs['schedule:run'] = Invoke-Stage9GuardedScheduleRun
     Write-Host 'Stage9ScheduledCommand: PASS schedule:run'
+    Assert-Stage9ExclusiveDatabase -ClientAddress $ClientAddress
     Assert-Stage9Equal (Get-Stage9DatabaseFacts).tables $after.tables 'the second check and schedule:run change nothing'
     Add-Stage9Evidence $Context 'scheduled_checking' ([pscustomobject] @{ outputs = $outputs })
     $outputs
@@ -350,10 +354,13 @@ function Invoke-Stage9ReplacementAfterGrant {
     Assert-Stage9NoOfficialRow $Facts $blitz $student 'grant withdraws the official Blitz score'
     Assert-Stage9IdempotencyRecord (Get-Stage9IdempotencyRecord $Facts (New-Stage9Key 1) teacher.blitz.attempt_exception.grant) $m.institutions.auto ([string] $m.users.teacher) teacher.blitz.attempt_exception.grant (New-Stage9Key 1) blitz_attempt_exception ([string] $exceptions[0].id) 201
     Assert-Stage9TeacherOfficial (Get-Stage9TeacherOfficial $Context teacher $blitz $student) waiting_for_replacement $null $null $null $null 'after the grant'
+    # S09-D5: the Blitz is back in the Student's active list while an action is available, next to the checked #1.
+    Assert-Stage9ActiveBlitzHidesResults $Context $blitz 'after the grant'
     $q = $m.questions.exception_blitz
     $second = Start-Stage9Blitz $Context student $blitz (New-Stage9Key 111) start_replacement
     Save-Stage9Answer $Context student $second $q.q1 @{ type = 'single_choice'; selected_option_ids = @(Get-Stage9Choice $Context exception_blitz q1 @(1)) } | Out-Null
     Save-Stage9Answer $Context student $second $q.q2 @{ type = 'open_written'; text = 'Replacement answer.' } | Out-Null
+    Assert-Stage9ActiveBlitzHidesResults $Context $blitz 'during replacement #2'
     Submit-Stage9Attempt $Context student $second (New-Stage9Key 112) 'Blitz attempt submitted successfully.' | Out-Null
     Wait-Stage9Checked $second waiting_for_teacher_review
     $answers = Get-Stage9SubmissionAnswers $Context teacher $second
@@ -363,7 +370,21 @@ function Invoke-Stage9ReplacementAfterGrant {
     $official = Assert-Stage9OfficialRow $final $blitz $student $second '95.00000000' approved_blitz_exception_replacement 'replacement official'
     if ((Get-Stage9Row $final blitz_attempt_exceptions ([string] $exceptions[0].id)).replacement_attempt_id -cne $second) { throw 'production defect: Stage 9 exception does not link replacement #2.' }
     $Context.Runtime.exception_attempt_2_id = $second
+    # With #2 checked and nothing left to do, the still-active Blitz leaves the active list (Stage 8 rule) and stays out of finished.
+    if (@((Invoke-Stage9StudentRead $Context student '/student/blitz/active').data | Where-Object { [string] $_.id -ceq $blitz }).Count -ne 0) { throw 'production defect: Stage 9 active Blitz list keeps a Blitz with no action left.' }
+    Assert-Stage9NoResultKeys (Invoke-Stage9StudentRead $Context student "/student/blitz/$blitz").data 'active detail after the replacement'
+    if (@((Invoke-Stage9StudentRead $Context student '/student/blitz/finished').data | Where-Object { [string] $_.id -ceq $blitz }).Count -ne 0) { throw 'production defect: Stage 9 finished Blitz list shows an active Blitz.' }
     Add-Stage9Evidence $Context 'exception_replacement' ([pscustomobject] @{ replacement = $second; official = [string] $official.id })
+}
+
+# S09-D5: while the Blitz is active, no Student read carries a result, score or feedback, even with a checked Attempt.
+function Assert-Stage9ActiveBlitzHidesResults {
+    param($Context, [string] $BlitzId, [string] $Label)
+    $active = @((Invoke-Stage9StudentRead $Context student '/student/blitz/active').data | Where-Object { [string] $_.id -ceq $BlitzId })
+    if ($active.Count -ne 1) { throw "production defect: Stage 9 active Blitz list misses the Blitz with an available action ($Label)." }
+    Assert-Stage9NoResultKeys $active[0] "active list $Label"
+    Assert-Stage9NoResultKeys (Invoke-Stage9StudentRead $Context student "/student/blitz/$BlitzId").data "active detail $Label"
+    if (@((Invoke-Stage9StudentRead $Context student '/student/blitz/finished').data | Where-Object { [string] $_.id -ceq $BlitzId }).Count -ne 0) { throw "production defect: Stage 9 finished Blitz list shows an active Blitz ($Label)." }
 }
 
 # Checkpoint replacement_seen: the Teacher closes the Blitz; the official row stays.
@@ -397,8 +418,9 @@ function Test-Stage9UiCheckpoint {
     switch ($Checkpoint.checkpoint) {
         'review_deadline_set' {
             if ([string] $Checkpoint.typed_date -cnotmatch '\A(\d{4})-(\d{2})-(\d{2})\z') { throw 'integration-harness defect: Stage 9 review deadline checkpoint lacks the typed date.' }
-            # The pickers enter Institution wall-clock time (Asia/Tashkent, UTC+05:00 without DST); the time stays the initial 18:00.
-            $expected = [DateTimeOffset]::new([int] $Matches[1], [int] $Matches[2], [int] $Matches[3], 18, 0, 0, [TimeSpan]::FromHours(5))
+            # The pickers enter Institution wall-clock time (Asia/Tokyo, UTC+09:00 without DST); the time stays the initial 22:00,
+            # which is the seeded 13:00Z. Device time (+05:00 on the runner host) would give another instant.
+            $expected = [DateTimeOffset]::new([int] $Matches[1], [int] $Matches[2], [int] $Matches[3], 22, 0, 0, [TimeSpan]::FromHours(9))
             $row = Get-Stage9Row $facts homework_assignments $hw assessment_id
             Assert-Stage9SameInstant $row.review_due_at $expected.ToString('o') 'review deadline set through the pickers'
             Assert-Stage9OnlyTablesChanged $previous $facts @('homework_assignments', 'users', 'personal_access_tokens') 'setting the review deadline'
@@ -491,6 +513,10 @@ function Invoke-Stage9StudentResultsApi {
     if ($items.Count -ne 1 -or [string] $items[0].question_id -cne [string] $m.questions.exception_blitz.q2 -or [int] $items[0].position -ne 2 -or [string] $items[0].text -cne 'Replacement feedback.') { throw 'production defect: Stage 9 finished Blitz feedback mismatch.' }
     $classmate = (Invoke-Stage9StudentRead $Context classmate "/student/homework/$hw").data
     Assert-Stage9StudentOfficial $classmate 30 2 'classmate after the UI'
+    $classmateResults = @($classmate.attempt_results)
+    if ($classmateResults.Count -ne 2) { throw 'production defect: Stage 9 classmate attempt_results changed after the UI.' }
+    Assert-Stage9StudentResult $classmateResults[0].result $true 25 'classmate #1 after the UI'
+    Assert-Stage9StudentResult $classmateResults[1].result $true 30 'classmate #2 after the UI'
     Assert-Stage9ManualHidden $Context
     foreach ($read in @($Context.StudentReads)) { Assert-Stage9NoProtectedKeys $read.Json "Student read $($read.Path)" }
     Add-Stage9Evidence $Context 'student_results_api' ([pscustomobject] @{ student_reads = $Context.StudentReads.Count })
@@ -512,12 +538,14 @@ function Get-Stage9RestartReads {
         @('student', "/student/attempts/$($r.review_attempt_id)"),
         @('student', '/student/blitz/finished'),
         @('classmate', "/student/homework/$($m.assessments.review_hw)"),
-        @('manual_student', "/student/homework/$($m.assessments.manual_hw)")
+        @('manual_student', "/student/homework/$($m.assessments.manual_hw)"),
+        @('manual_student', "/student/homework?topic_id=$($m.topics.manual)"),
+        @('manual_student', "/student/attempts/$($r.manual_attempt_id)")
     )
     $captured = [ordered] @{}
     foreach ($read in $reads) {
         $response = Invoke-Stage9Call $Context $read[0] $read[1]
-        Assert-Stage9ApiSuccess $response 200 $(if ($read[1] -ceq '/student/blitz/finished') { 'collection' } else { 'resource' })
+        Assert-Stage9ApiSuccess $response 200 $(if ($read[1] -match '\A/student/(?:blitz/finished|homework\?)') { 'paged' } else { 'resource' })
         $captured["$($read[0]) $($read[1])"] = $response.Text
     }
     $captured

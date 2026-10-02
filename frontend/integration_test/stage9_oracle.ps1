@@ -8,9 +8,9 @@ $script:Stage9FrozenColumns = @('started_at', 'deadline_at', 'submitted_at', 'fi
 $script:Stage9ScheduledCommands = @('homework:reconcile-deadlines', 'blitz:reconcile-timeouts', 'attempts:check-frozen')
 
 function Assert-Stage9Equal {
-    param($Actual, $Expected, [string] $Label)
+    param($Actual, $Expected, [string] $Label, [ValidateSet('production defect', 'integration-harness defect', 'environment/runtime defect')][string] $Class = 'production defect')
     if ((ConvertTo-Json -InputObject $Actual -Depth 60 -Compress) -cne (ConvertTo-Json -InputObject $Expected -Depth 60 -Compress)) {
-        throw "production defect: Stage 9 oracle mismatch: $Label."
+        throw "${Class}: Stage 9 oracle mismatch: $Label."
     }
 }
 
@@ -122,9 +122,9 @@ echo json_encode((new Database\Seeders\Stage9E2eSeeder)->sentinelState(), JSON_T
 }
 
 function Assert-Stage9SentinelsUnchanged {
-    param($Before, $After, [string] $Label)
+    param($Before, $After, [string] $Label, [string] $Class = 'production defect')
     if ($null -eq $Before -or $null -eq $Before.blob -or @($Before.rows.PSObject.Properties).Count -eq 0) { throw 'integration-harness defect: Stage 9 unrelated sentinels were not captured.' }
-    Assert-Stage9Equal $After $Before "unrelated sentinel unchanged by $Label"
+    Assert-Stage9Equal $After $Before "unrelated sentinel unchanged by $Label" -Class $Class
 }
 
 # ---------------------------------------------------------------- scoring assertions
@@ -172,13 +172,10 @@ function Assert-Stage9NoOfficialRow {
     if (@(Get-Stage9OfficialRows $Facts $AssessmentId $StudentId).Count -ne 0) { throw "production defect: Stage 9 official score row must not exist: $Label." }
 }
 
-# Checking and review never touch the freeze or the Student's last-save time (S09-DOC-001 section 7, index section 8).
-function Assert-Stage9FreezeAndAnswersKept {
+# Checking and review never touch the Student's answers or their last-save time (index section 8).
+function Assert-Stage9AnswerRowsKept {
     param($Before, $After, [string[]] $AttemptIds, [string] $Label)
     foreach ($attemptId in $AttemptIds) {
-        $was = Get-Stage9Row $Before assessment_attempts $attemptId
-        $now = Get-Stage9Row $After assessment_attempts $attemptId
-        foreach ($column in $script:Stage9FrozenColumns) { Assert-Stage9Equal $now.$column $was.$column "$Label keeps Attempt $column" }
         $answersBefore = @(Get-Stage9Rows $Before attempt_answers attempt_id $attemptId | Sort-Object id | ForEach-Object { "$($_.id)|$($_.question_id)|$($_.created_at)|$($_.updated_at)" })
         $answersAfter = @(Get-Stage9Rows $After attempt_answers attempt_id $attemptId | Sort-Object id | ForEach-Object { "$($_.id)|$($_.question_id)|$($_.created_at)|$($_.updated_at)" })
         Assert-Stage9Equal $answersAfter $answersBefore "$Label keeps answer rows and their updated_at"
@@ -187,6 +184,17 @@ function Assert-Stage9FreezeAndAnswersKept {
             Assert-Stage9Equal @($After.tables.$table | Where-Object answer_id -CIN $answerIds) @($Before.tables.$table | Where-Object answer_id -CIN $answerIds) "$Label keeps $table"
         }
     }
+}
+
+# Checking and review never touch the freeze either (S09-DOC-001 section 7).
+function Assert-Stage9FreezeAndAnswersKept {
+    param($Before, $After, [string[]] $AttemptIds, [string] $Label)
+    foreach ($attemptId in $AttemptIds) {
+        $was = Get-Stage9Row $Before assessment_attempts $attemptId
+        $now = Get-Stage9Row $After assessment_attempts $attemptId
+        foreach ($column in $script:Stage9FrozenColumns) { Assert-Stage9Equal $now.$column $was.$column "$Label keeps Attempt $column" }
+    }
+    Assert-Stage9AnswerRowsKept $Before $After $AttemptIds $Label
 }
 
 function Assert-Stage9RowsUnchanged {
@@ -303,7 +311,8 @@ function Assert-Stage9TenantRows {
 function Assert-Stage9Baseline {
     param($Facts)
     $m = $Facts.manifest
-    Assert-Stage9TenantRows $Facts
+    # The baseline is the harness's own seed, so a broken baseline is a harness defect.
+    try { Assert-Stage9TenantRows $Facts } catch { throw "integration-harness defect: the Stage 9 baseline is not Tenant-consistent ($($_.Exception.Message))" }
     Assert-Stage9Set @($Facts.tables.assessment_attempts | ForEach-Object id) @($m.attempts.PSObject.Properties.Value) 'baseline Attempts are the seeded history only'
     foreach ($table in @('official_task_scores', 'blitz_attempt_exceptions', 'files', 'idempotency_records')) {
         if (@($Facts.tables.$table).Count -ne 0) { throw "integration-harness defect: Stage 9 baseline already has $table." }
@@ -330,11 +339,11 @@ function Assert-Stage9Baseline {
 function Assert-Stage9CleanupFacts {
     param($Facts, $SentinelsBefore)
     foreach ($property in $Facts.tables.PSObject.Properties) {
-        if (@($property.Value).Count -ne 0) { throw "production defect: Stage 9 cleanup left manifest-owned $($property.Name) rows." }
+        if (@($property.Value).Count -ne 0) { throw "integration-harness defect: Stage 9 cleanup left manifest-owned $($property.Name) rows." }
     }
-    if (@($Facts.blobs).Count -ne 0) { throw 'production defect: Stage 9 cleanup left manifest-owned private blobs.' }
-    if (@($Facts.public_blobs).Count -ne 0) { throw 'production defect: Stage 9 cleanup left manifest-owned public blob copies.' }
-    Assert-Stage9SentinelsUnchanged $SentinelsBefore $Facts.sentinels 'cleanup'
+    if (@($Facts.blobs).Count -ne 0) { throw 'integration-harness defect: Stage 9 cleanup left manifest-owned private blobs.' }
+    if (@($Facts.public_blobs).Count -ne 0) { throw 'integration-harness defect: Stage 9 cleanup left manifest-owned public blob copies.' }
+    Assert-Stage9SentinelsUnchanged $SentinelsBefore $Facts.sentinels 'cleanup' -Class 'integration-harness defect'
 }
 
 # Prior-run cleanup must use the real configured Stage 9 disk, never the isolated seeder-test disk.
@@ -489,7 +498,8 @@ function Invoke-Stage9GuardedScheduleRun {
     $lines = @(([string] $result.Output) -split "`r?`n")
     if (@($lines | Where-Object { $_ -match '(?i)\bFAIL\b' }).Count -ne 0) { throw 'production defect: schedule:run reported a failed command.' }
     foreach ($command in $script:Stage9ScheduledCommands) {
-        if (@($lines | Where-Object { $_.Contains($command) -and $_ -match 'DONE' }).Count -ne 1) { throw "production defect: schedule:run did not run $command." }
+        # schedule:list already proved the registration; a skipped event means a stale withoutOverlapping mutex in the file cache.
+        if (@($lines | Where-Object { $_.Contains($command) -and $_ -match 'DONE' }).Count -ne 1) { throw "environment/runtime defect: schedule:run did not run $command (clear a stale schedule mutex in storage/framework/cache and rerun)." }
     }
     Assert-Stage9SentinelsUnchanged $sentinelsBefore (& $SentinelProvider) 'schedule:run'
     [string] $result.Output
@@ -508,6 +518,8 @@ echo json_encode(['status' => $row?->status], JSON_THROW_ON_ERROR);
     while ($watch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
         $state = Invoke-Stage9ContainerPhp -Program $program -InputJson (@{ attempt = $AttemptId } | ConvertTo-Json -Compress)
         if ([string] $state.status -ceq $Status) { return }
+        # A final status other than the expected one never changes without a review, so it fails at once.
+        if ([string] $state.status -cin @('waiting_for_teacher_review', 'checked')) { throw "production defect: Stage 9 Attempt reached $($state.status), expected $Status." }
         if ([string] $state.status -cnotin @('in_progress', 'submitted', 'timed_out_finalized', 'waiting_for_teacher_review', 'checked')) { throw 'production defect: Stage 9 Attempt disappeared while waiting for checking.' }
         Start-Sleep -Milliseconds 500
     }

@@ -175,7 +175,7 @@ Assert-Stage9SessionCorrelation @validSession
 function New-Stage9Inspection {
     param([hashtable] $Override = @{})
     $environment = [Collections.Generic.List[string]]::new()
-    foreach ($entry in @('APP_ENV=testing', 'APP_DEBUG=false', 'DB_CONNECTION=pgsql', 'DB_HOST=postgres', 'DB_PORT=5432', 'DB_DATABASE=testlabuz_testing', 'PHP_CLI_SERVER_WORKERS=4', 'DB_PASSWORD=never-returned')) {
+    foreach ($entry in @('APP_ENV=testing', 'APP_DEBUG=false', 'DB_CONNECTION=pgsql', 'DB_HOST=postgres', 'DB_PORT=5432', 'DB_DATABASE=testlabuz_testing', 'CACHE_STORE=file', 'SESSION_DRIVER=file', 'QUEUE_CONNECTION=sync', 'PHP_CLI_SERVER_WORKERS=4', 'DB_PASSWORD=never-returned')) {
         $name = $entry.Substring(0, $entry.IndexOf('='))
         if ($Override.ContainsKey("env:$name")) { if ($null -ne $Override["env:$name"]) { $environment.Add("$name=$($Override["env:$name"])") } } else { $environment.Add($entry) }
     }
@@ -198,6 +198,7 @@ $invalidConfigurations = @(
     @{ Bindings = @([pscustomobject] @{ HostIp = '0.0.0.0'; HostPort = [string] $ApiPort }) }, @{ Bindings = @() },
     @{ Bindings = @([pscustomobject] @{ HostIp = '127.0.0.1'; HostPort = [string] ($ApiPort + 1) }) },
     @{ 'env:DB_DATABASE' = 'testlabuz' }, @{ 'env:DB_DATABASE' = 'testlabuz_demo' }, @{ 'env:APP_ENV' = 'local' }, @{ 'env:DB_HOST' = 'remote' },
+    @{ 'env:CACHE_STORE' = 'database' }, @{ 'env:SESSION_DRIVER' = 'database' }, @{ 'env:QUEUE_CONNECTION' = 'database' }, @{ 'env:CACHE_STORE' = $null },
     @{ 'env:PHP_CLI_SERVER_WORKERS' = $null }, @{ 'env:PHP_CLI_SERVER_WORKERS' = '1' }, @{ 'env:APP_DEBUG' = $null },
     @{ NetworkMode = 'bridge' }, @{ NetworkMode = 'host' }, @{ NetworkMode = '' }
 )
@@ -210,6 +211,14 @@ if ($named.ContainsKey('DB_PASSWORD') -or $named['DB_DATABASE'] -cne 'testlabuz_
 $own = [pscustomobject] @{ client_addr = '172.19.0.3' }
 Assert-Stage9DatabaseExclusivity ([pscustomobject] @{ sessions = @() }) '172.19.0.3'
 Assert-Stage9DatabaseExclusivity ([pscustomobject] @{ sessions = @($own, $own) }) '172.19.0.3'
+# Work started inside the container shares its database address, so it is found by its process instead.
+$servePair = @([pscustomobject] @{ pid = 10; ppid = 1; cmd = 'php artisan serve --host=0.0.0.0 --port=8000 --no-reload' }, [pscustomobject] @{ pid = 11; ppid = 10; cmd = 'php /tmp/testlabuz-stage9-program-0.php' })
+Assert-Stage9NoContainerWork -Processes $servePair
+$invalidContainerWork = @('php artisan test tests/Feature', 'php vendor/bin/phpunit', '/var/www/html/vendor/bin/paratest --processes=4', 'php artisan migrate:fresh', 'php artisan schedule:run')
+foreach ($command in $invalidContainerWork) {
+    Assert-Stage9Rejected { Assert-Stage9NoContainerWork -Processes ($servePair + @([pscustomobject] @{ pid = 20; ppid = 1; cmd = $command })) } "The Stage 9 guard accepted '$command' inside the container."
+}
+
 $invalidExclusivity = @(
     [pscustomobject] @{ sessions = @([pscustomobject] @{ client_addr = '172.19.0.9' }) },
     [pscustomobject] @{ sessions = @($own, [pscustomobject] @{ client_addr = $null }) },
@@ -300,10 +309,10 @@ if (-not $SkipLiveRuntime) {
         try { Invoke-Stage9ContainerPhp -Program $probes[$name].Program -InputJson $probes[$name].Input -TimeoutSeconds $probes[$name].Timeout | Out-Null; $messages[$name] = '' }
         catch { $messages[$name] = $_.Exception.Message }
     }
-    if ($messages.refusal -cne 'Stage 9 container PHP refused: Stage 9 verifier refusal probe.' -or
-        $messages.redacted -cne 'Stage 9 container PHP refused: Stage 9 verifier echoes [REDACTED].' -or
-        $messages.generic -cnotlike 'Stage 9 container PHP operation failed*' -or $messages.generic -clike '*canary*' -or
-        $messages.subclass -cnotlike 'Stage 9 container PHP operation failed*' -or
+    if ($messages.refusal -cne 'environment/runtime defect: Stage 9 container PHP refused: Stage 9 verifier refusal probe.' -or
+        $messages.redacted -cne 'environment/runtime defect: Stage 9 container PHP refused: Stage 9 verifier echoes [REDACTED].' -or
+        $messages.generic -cnotlike 'integration-harness defect: Stage 9 container PHP operation failed*' -or $messages.generic -clike '*canary*' -or
+        $messages.subclass -cnotlike 'integration-harness defect: Stage 9 container PHP operation failed*' -or
         $messages.timeout -cnotlike 'environment/runtime defect: Stage 9 container PHP timed out*') {
         throw 'The Stage 9 PHP transport reported a failure unsafely or not at all.'
     }
@@ -315,7 +324,7 @@ Write-Output (
     "($($invalidTargets.Count) targets, $($invalidContainers.Count) container identities, $($invalidMounts.Count) mount shapes, " +
     "$($invalidBindings.Count) bindings, $($invalidServers.Count) server identities, $($invalidWorkers.Count) worker values, " +
     "$($invalidProcessSets.Count) process sets, $($invalidSessions.Count) session correlations, $($invalidConfigurations.Count) static configurations, $($invalidExclusivity.Count) exclusivity facts, " +
-    "$($invalidOtherRuntimes.Count) other-stage runtimes, " +
+    "$($invalidOtherRuntimes.Count) other-stage runtimes, $($invalidContainerWork.Count) container workloads, " +
     "$($invalidLaravel.Count) Laravel/database facts, $($invalidHttpFacts.Count) HTTP envelopes, " +
     "3 wrong containers; live=$(-not $SkipLiveRuntime))"
 )

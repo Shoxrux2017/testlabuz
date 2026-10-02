@@ -37,6 +37,10 @@ Confirm-Stage9Reject 'validation message that is not a string array' { Assert-St
 # ---------------------------------------------------------------- success envelopes
 Confirm-Stage9Accept { Assert-Stage9ApiSuccess (New-Stage9Response 200 ([pscustomobject] @{ data = [pscustomobject] @{ id = 'x' } })) }
 Confirm-Stage9Accept { Assert-Stage9ApiSuccess (New-Stage9Response 200 ([pscustomobject] @{ data = @([pscustomobject] @{ id = 'x' }, [pscustomobject] @{ id = 'y' }) })) 200 collection }
+$paged = [pscustomobject] @{ data = @([pscustomobject] @{ id = 'x' }); meta = [pscustomobject] @{ pagination = [pscustomobject] @{ page = 1; per_page = 25; total = 1; last_page = 1 } } }
+Confirm-Stage9Accept { Assert-Stage9ApiSuccess (New-Stage9Response 200 $paged) 200 paged }
+Confirm-Stage9Reject 'paged collection without meta' { Assert-Stage9ApiSuccess (New-Stage9Response 200 ([pscustomobject] @{ data = @() })) 200 paged }
+Confirm-Stage9Reject 'paged collection with an incomplete pagination' { Assert-Stage9ApiSuccess (New-Stage9Response 200 ([pscustomobject] @{ data = @(); meta = [pscustomobject] @{ pagination = [pscustomobject] @{ page = 1; total = 0 } } })) 200 paged }
 Confirm-Stage9Reject 'resource where a collection is expected' { Assert-Stage9ApiSuccess (New-Stage9Response 200 ([pscustomobject] @{ data = [pscustomobject] @{ id = 'x' } })) 200 collection }
 Confirm-Stage9Reject 'missing data envelope' { Assert-Stage9ApiSuccess (New-Stage9Response 200 ([pscustomobject] @{ id = 'x' })) }
 Confirm-Stage9Reject 'unexpected status' { Assert-Stage9ApiSuccess (New-Stage9Response 201 ([pscustomobject] @{ data = [pscustomobject] @{ id = 'x' } })) }
@@ -133,6 +137,12 @@ Confirm-Stage9Reject 'a probe that succeeded' { Assert-Stage9NegativeProbes $pro
 $script:probeResponse = New-Stage9Response 404 (New-Stage9ErrorBody resource_not_found); $script:probeResponse.Text = '{"message":"E2E S09 Manual Student not found"}'
 $script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row)), (New-Stage9ProbeFacts @($row))))
 Confirm-Stage9Reject 'an error naming a protected identity' { Assert-Stage9NegativeProbes $probeContext @($probe) 'stub' }
+$script:probeResponse = New-Stage9Response 404 (New-Stage9ErrorBody resource_not_found); $script:probeResponse.Text = '{"message":"Attempt 09000000-0000-4000-8000-000003000001 is not yours"}'
+$script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row)), (New-Stage9ProbeFacts @($row))))
+Confirm-Stage9Reject 'an error naming an id the caller did not send' { Assert-Stage9NegativeProbes $probeContext @($probe) 'stub' }
+$echo = $probe.Clone(); $echo.Path = '/teacher/submissions/09000000-0000-4000-8000-000003000001'
+$script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row)), (New-Stage9ProbeFacts @($row))))
+Confirm-Stage9Accept { Assert-Stage9NegativeProbes $probeContext @($echo) 'stub' }
 $keyed = $probe.Clone(); $keyed.Key = '09000000-0000-4000-8000-000009000777'
 $record = [pscustomobject] @{ idempotency_key = '09000000-0000-4000-8000-000009000777' }
 $script:probeResponse = New-Stage9Response 404 (New-Stage9ErrorBody resource_not_found)

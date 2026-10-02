@@ -37,28 +37,42 @@ function Get-Stage9SecretForms {
 }
 
 function Assert-Stage9FlutterExecutable {
-    if (-not (Test-Path -LiteralPath $FlutterExecutable -PathType Leaf)) { throw 'Stage 9 Flutter executable is absent.' }
+    if (-not (Test-Path -LiteralPath $FlutterExecutable -PathType Leaf)) { throw 'environment/runtime defect: Stage 9 Flutter executable is absent.' }
     $pin = (Get-Content -LiteralPath (Join-Path $frontendRoot '.fvmrc') -Raw | ConvertFrom-Json).flutter
     $output = @(& $FlutterExecutable --version --machine 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw 'Stage 9 Flutter version probe failed.' }
-    try { $version = (($output | Where-Object { $_ -is [string] }) -join "`n") | ConvertFrom-Json } catch { throw 'Invalid Flutter version response.' }
-    if ([string]::IsNullOrWhiteSpace($pin) -or $version.frameworkVersion -cne $pin) { throw 'Stage 9 Flutter executable does not match .fvmrc.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: Stage 9 Flutter version probe failed.' }
+    try { $version = (($output | Where-Object { $_ -is [string] }) -join "`n") | ConvertFrom-Json } catch { throw 'environment/runtime defect: Invalid Flutter version response.' }
+    if ([string]::IsNullOrWhiteSpace($pin) -or $version.frameworkVersion -cne $pin) { throw 'environment/runtime defect: Stage 9 Flutter executable does not match .fvmrc.' }
 }
 
 function Read-Stage9Password {
     $value = [Environment]::GetEnvironmentVariable('STAGE9_E2E_PASSWORD', 'Process')
     if ([string]::IsNullOrWhiteSpace($value)) { $value = [Environment]::GetEnvironmentVariable('STAGE9_E2E_PASSWORD', 'User') }
-    if ([string]::IsNullOrWhiteSpace($value) -or $value.Trim().Length -lt 16) { throw 'STAGE9_E2E_PASSWORD must be set (at least 16 characters) in the process or Windows user environment.' }
+    if ([string]::IsNullOrWhiteSpace($value) -or $value.Trim().Length -lt 16) { throw 'environment/runtime defect: STAGE9_E2E_PASSWORD must be set (at least 16 characters) in the process or Windows user environment.' }
     $value
 }
 
 function Get-Stage9CheckoutState {
     param([Parameter(Mandatory = $true)][string] $Root)
     $sha = [string] (& git -C $Root rev-parse HEAD)
-    if ($LASTEXITCODE -ne 0) { throw 'Stage 9 runner could not record the audited Git SHA.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: Stage 9 runner could not record the audited Git SHA.' }
     $changes = @(& git -C $Root status --porcelain --untracked-files=all -- backend frontend docker)
-    if ($LASTEXITCODE -ne 0) { throw 'Stage 9 runner could not read the checkout status.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: Stage 9 runner could not read the checkout status.' }
     [pscustomobject] @{ Sha = $sha.Trim(); Clean = ($changes.Count -eq 0) }
+}
+
+# backend/vendor is ignored by Git but bind-mounted live: it must hold exactly the audited composer.lock packages.
+function Get-Stage9VendorState {
+    param([Parameter(Mandatory = $true)][string] $Root)
+    $lockPath = Join-Path $Root 'backend/composer.lock'
+    $installedPath = Join-Path $Root 'backend/vendor/composer/installed.json'
+    if (-not (Test-Path -LiteralPath $installedPath -PathType Leaf)) { throw 'environment/runtime defect: backend/vendor is not installed.' }
+    $lock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json
+    $installed = Get-Content -LiteralPath $installedPath -Raw | ConvertFrom-Json
+    $locked = @(@($lock.packages) + @($lock.'packages-dev') | ForEach-Object { "$($_.name)@$($_.version)" } | Sort-Object)
+    $present = @(@($installed.packages) | ForEach-Object { "$($_.name)@$($_.version)" } | Sort-Object)
+    if (($locked -join ',') -cne ($present -join ',')) { throw 'environment/runtime defect: backend/vendor does not match backend/composer.lock; run composer install in the dev container.' }
+    [pscustomobject] @{ packages = $present.Count; installed_sha256 = (Get-FileHash -LiteralPath $installedPath -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 
 function Invoke-Stage9Seeder {
@@ -73,7 +87,7 @@ try {
 } finally { putenv('STAGE9_E2E_PASSWORD'); unset($stage9Input['password']); }
 '@
     $result = Invoke-Stage9ContainerPhp -Program $program -InputJson (@{ password = $password; operation = $Operation } | ConvertTo-Json -Compress)
-    if ($result.operation -cne $Operation) { throw "Stage 9 seeder $Operation was not confirmed." }
+    if ($result.operation -cne $Operation) { throw "integration-harness defect: Stage 9 seeder $Operation was not confirmed." }
     $result
 }
 
@@ -82,13 +96,13 @@ function Remove-Stage9LocalRoot {
     $full = [IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
     $temp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
     if (-not [IO.Path]::GetDirectoryName($full).Equals($temp, [StringComparison]::OrdinalIgnoreCase) -or
-        [IO.Path]::GetFileName($full) -cnotmatch "\Atestlabuz-stage9-$Kind-[a-f0-9]{32}\z") { throw 'Unsafe Stage 9 local cleanup root.' }
+        [IO.Path]::GetFileName($full) -cnotmatch "\Atestlabuz-stage9-$Kind-[a-f0-9]{32}\z") { throw 'integration-harness defect: Unsafe Stage 9 local cleanup root.' }
     if (-not (Test-Path -LiteralPath $full)) { return }
-    if ((Get-Item -LiteralPath $full).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Stage 9 local root cannot be a link.' }
+    if ((Get-Item -LiteralPath $full).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'integration-harness defect: Stage 9 local root cannot be a link.' }
     foreach ($entry in @(Get-ChildItem -LiteralPath $full -Force)) {
         if ($entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
             $entry.Name -cnotmatch '\A(?:launcher\.ps1|manifest\.json|ui-evidence\.json(?:\.pending)?|checkpoint-[a-z_]+(?:\.ack)?\.json(?:\.pending)?)\z') {
-            throw 'Unexpected Stage 9 local evidence entry preserved; cleanup stopped.'
+            throw 'integration-harness defect: Unexpected Stage 9 local evidence entry preserved; cleanup stopped.'
         }
         Remove-Item -LiteralPath $entry.FullName
     }
@@ -139,13 +153,13 @@ exit $LASTEXITCODE
         $stderr = $process.StandardError.ReadToEndAsync()
         $deadline = [DateTime]::UtcNow.AddMinutes(40)
         while (-not $process.HasExited) {
-            if ([DateTime]::UtcNow -ge $deadline) { throw 'Stage 9 Windows flow exceeded its bounded completion timeout.' }
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'environment/runtime defect: Stage 9 Windows flow exceeded its bounded completion timeout.' }
             if ($next -lt $checkpointNames.Count) {
                 $name = $checkpointNames[$next]
                 $checkpointPath = Join-Path $evidenceRoot ("checkpoint-$name.json")
                 if (Test-Path -LiteralPath $checkpointPath) {
                     $checkpoint = [IO.File]::ReadAllText($checkpointPath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
-                    if ([int] $checkpoint.version -ne 1 -or $checkpoint.checkpoint -cne $name) { throw 'Stage 9 UI checkpoint identity mismatch.' }
+                    if ([int] $checkpoint.version -ne 1 -or $checkpoint.checkpoint -cne $name) { throw 'integration-harness defect: Stage 9 UI checkpoint identity mismatch.' }
                     Test-Stage9UiCheckpoint -Context $context -Checkpoint $checkpoint -State $state
                     $ackPath = Join-Path $evidenceRoot ("checkpoint-$name.ack.json")
                     [IO.File]::WriteAllText(($ackPath + '.pending'), (@{ version = 1; checkpoint = $name; passed = $true } | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
@@ -163,7 +177,7 @@ exit $LASTEXITCODE
             $diagnostics = Protect-Stage9Diagnostic ($stdout.GetAwaiter().GetResult() + "`n" + $stderr.GetAwaiter().GetResult()) @(Get-Stage9SecretForms)
             throw ('Stage 9 Windows UI process failed: ' + $diagnostics)
         }
-        if ($next -ne $checkpointNames.Count) { throw 'Stage 9 Windows UI omitted mandatory DB checkpoints.' }
+        if ($next -ne $checkpointNames.Count) { throw 'integration-harness defect: Stage 9 Windows UI omitted mandatory DB checkpoints.' }
         Write-Host 'Stage9WindowsUiProcess: PASS exit_code=0'
         $ui = [IO.File]::ReadAllText((Join-Path $evidenceRoot 'ui-evidence.json'), [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
         if ([int] $ui.version -ne 1 -or (@($ui.checkpoints) -join ',') -cne ($checkpointNames -join ',') -or [int] $ui.keys_issued -ne 1 -or
@@ -185,6 +199,7 @@ exit $LASTEXITCODE
 
 $operationFailed = $false
 $stateTouched = $false
+$stateRemoved = $false
 $harnessLock = $null
 try {
     $harnessLock = Enter-Stage9HarnessLock
@@ -197,6 +212,8 @@ try {
     $checkout = Get-Stage9CheckoutState -Root $repositoryRoot
     Assert-Stage9AuditedCheckout $checkout
     $auditedSha = $checkout.Sha
+    if ([TimeZoneInfo]::Local.GetUtcOffset([DateTime]::UtcNow) -eq [TimeSpan]::FromHours(9)) { throw 'environment/runtime defect: the runner host uses +09:00, the Institution offset, so the review-deadline timezone check would prove nothing.' }
+    $vendor = Get-Stage9VendorState -Root $repositoryRoot
     Write-Output "Stage9Run: sha=$auditedSha command=run_stage9_windows_e2e.ps1 ApiPort=$ApiPort plan=$($plan -join ',')"
     $password = Read-Stage9Password
     $apiTarget = Resolve-Stage9ApiTarget $apiBaseUrl
@@ -224,7 +241,7 @@ try {
     Write-Output "Stage9PriorManifestCleanup: PASS disk=local prior_rows_removed=$priorRows prior_blobs_removed=$priorBlobs"
     Complete-Stage9Step prior_cleanup_oracle
     & docker exec $runtime.ContainerName timeout --kill-after=10 900 php artisan test tests/Feature/Seeders/Stage9E2eSeederTest.php
-    if ($LASTEXITCODE -ne 0) { throw 'Stage 9 focused seeder verification failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'integration-harness defect: Stage 9 focused seeder verification failed.' }
     Complete-Stage9Step seeder_test
     Invoke-Stage9Seeder run | Out-Null
     Complete-Stage9Step fresh_seed
@@ -259,7 +276,7 @@ try {
     Complete-Stage9Step post_flow_oracle
     $readsBefore = Get-Stage9RestartReads $context
     & docker restart $runtime.ContainerName | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Stage 9 backend restart failed.' }
+    if ($LASTEXITCODE -ne 0) { throw 'environment/runtime defect: Stage 9 backend restart failed.' }
     Wait-Stage9HttpBoundary -ApiTarget $apiTarget
     $runtime = Assert-Stage9DedicatedRuntime -ApiTarget $apiTarget
     Complete-Stage9Step restart
@@ -270,7 +287,8 @@ try {
     foreach ($name in $readsBefore.Keys) { if ([string] $readsAfter[$name] -cne [string] $readsBefore[$name]) { throw "production defect: Stage 9 read changed across the backend restart: $name." } }
     Add-Stage9Evidence $context 'restart_persistence' ([pscustomobject] @{ reads = $readsBefore.Count })
     Complete-Stage9Step post_restart_oracle
-    $evidence = [ordered] @{ sha = $auditedSha; api_port = $ApiPort; ui = $uiEvidence; runtime = $context.Runtime; scenarios = $context.Evidence; scheduler = $scheduler; rejected_keys = $context.RejectedKeys.Count }
+    # The timezone check is meaningful only because the host offset differs from the Institution's +09:00.
+    $evidence = [ordered] @{ sha = $auditedSha; api_port = $ApiPort; host_utc_offset = [TimeZoneInfo]::Local.GetUtcOffset([DateTime]::UtcNow).ToString(); vendor = $vendor; ui = $uiEvidence; runtime = $context.Runtime; scenarios = $context.Evidence; scheduler = $scheduler; rejected_keys = $context.RejectedKeys.Count }
     Close-Stage9ApiContext $context $false
     $context = $null
     $beforeCleanup = Get-Stage9DatabaseFacts
@@ -278,6 +296,7 @@ try {
     Complete-Stage9Step final_cleanup
     Assert-Stage9CleanupFacts -Facts (Get-Stage9DatabaseFacts -PriorFacts $beforeCleanup) -SentinelsBefore $sentinels
     Invoke-Stage9Seeder removeSentinels | Out-Null
+    $stateRemoved = $true
     Write-Output 'Stage9FinalCleanup: PASS (manifest rows/blobs removed, unrelated sentinels unchanged then removed)'
     Complete-Stage9Step cleanup_oracle
     # Local generated files go before the PASS line, so a PASS never leaves them behind.
@@ -288,6 +307,7 @@ try {
     if (($executed -join ',') -cne ($plan -join ',')) { throw 'integration-harness defect: Stage 9 run did not execute the whole audited plan.' }
     Assert-Stage9ExclusiveDatabase -ClientAddress $runtime.ClientAddress
     Assert-Stage9AuditedCheckout $checkout (Get-Stage9CheckoutState -Root $repositoryRoot)
+    if ((Get-Stage9VendorState -Root $repositoryRoot).installed_sha256 -cne $vendor.installed_sha256) { throw 'environment/runtime defect: backend/vendor changed during the run.' }
     $evidence.checkout_clean = $true
     $evidence.executed_steps = @($executed)
     $evidence.duration_seconds = [math]::Round(([DateTime]::UtcNow - $startedAt).TotalSeconds)
@@ -304,6 +324,7 @@ finally {
     $password = $null
     Exit-Stage9HarnessLock $harnessLock
     if ($cleanupErrors.Count -gt 0 -and -not $operationFailed) { throw ($cleanupErrors -join ' ') }
-    if ($operationFailed -and $stateTouched) { Write-Output 'Stage9Run: FAILED; manifest-owned DB/private state is preserved for diagnosis and is removed by the next invocation.' }
+    if ($operationFailed -and $stateRemoved) { Write-Output 'Stage9Run: FAILED after the final cleanup; no manifest-owned state remains.' }
+    elseif ($operationFailed -and $stateTouched) { Write-Output 'Stage9Run: FAILED; manifest-owned DB/private state is preserved for diagnosis and is removed by the next invocation.' }
     elseif ($operationFailed) { Write-Output 'Stage9Run: FAILED before any Stage 9 manifest state was changed.' }
 }

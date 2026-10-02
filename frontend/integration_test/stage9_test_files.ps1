@@ -10,11 +10,11 @@ function Assert-Stage9FixtureRoot {
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
     if (-not [IO.Path]::GetDirectoryName($root).Equals($tempRoot, [StringComparison]::OrdinalIgnoreCase) -or
         [IO.Path]::GetFileName($root) -cnotmatch '\Atestlabuz-stage9-fixtures-[a-f0-9]{32}\z') {
-        throw 'Stage 9 fixtures require their exact system-temp directory.'
+        throw 'integration-harness defect: Stage 9 fixtures require their exact system-temp directory.'
     }
     if ((Test-Path -LiteralPath $root) -and
         ((Get-Item -LiteralPath $root).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        throw 'Stage 9 fixture roots cannot be links.'
+        throw 'integration-harness defect: Stage 9 fixture roots cannot be links.'
     }
     return $root
 }
@@ -45,7 +45,7 @@ function New-Stage9PdfFixture {
 function New-Stage9FixtureManifest {
     param([Parameter(Mandatory = $true)][string] $DestinationRoot)
     $root = Assert-Stage9FixtureRoot $DestinationRoot
-    if (Test-Path -LiteralPath $root) { throw 'Stage 9 fixture root must be new.' }
+    if (Test-Path -LiteralPath $root) { throw 'integration-harness defect: Stage 9 fixture root must be new.' }
     [void] [IO.Directory]::CreateDirectory($root)
     try {
         New-Stage9PdfFixture -Path (Join-Path $root 'e2e_s09_answer.pdf')
@@ -72,7 +72,7 @@ function New-Stage9FixtureManifest {
 function Assert-Stage9FixtureManifest {
     param([Parameter(Mandatory = $true)][object] $Manifest)
     $root = Assert-Stage9FixtureRoot $Manifest.Root
-    if (@($Manifest.Files.Keys).Count -ne $script:Stage9FixtureSpecs.Count) { throw 'Stage 9 requires exactly the declared generated fixtures.' }
+    if (@($Manifest.Files.Keys).Count -ne $script:Stage9FixtureSpecs.Count) { throw 'integration-harness defect: Stage 9 requires exactly the declared generated fixtures.' }
     foreach ($key in $script:Stage9FixtureSpecs.Keys) {
         $spec = $script:Stage9FixtureSpecs[$key]
         $record = $Manifest.Files[$key]
@@ -80,12 +80,12 @@ function Assert-Stage9FixtureManifest {
         if ($null -eq $record -or $record.path -cne $expectedPath -or $record.original_name -cne $spec[0] -or $record.extension -cne $spec[1] -or
             $record.mime_type -cne $spec[2] -or (Get-Item -LiteralPath $expectedPath).Length -ne $record.size_bytes -or
             (Get-FileHash -LiteralPath $expectedPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $record.sha256) {
-            throw 'Stage 9 fixture metadata/path/integrity mismatch.'
+            throw 'integration-harness defect: Stage 9 fixture metadata/path/integrity mismatch.'
         }
-        if ($record.size_bytes -le 0 -or $record.size_bytes -gt 1048576) { throw 'Stage 9 fixture size is invalid.' }
+        if ($record.size_bytes -le 0 -or $record.size_bytes -gt 1048576) { throw 'integration-harness defect: Stage 9 fixture size is invalid.' }
         $bytes = [IO.File]::ReadAllBytes($expectedPath)
         $pdfHeader = $bytes.Length -ge 5 -and [Text.Encoding]::ASCII.GetString($bytes, 0, 5) -ceq '%PDF-'
-        if ($key -ceq 'answer_pdf' -and -not $pdfHeader) { throw 'Stage 9 valid PDF signature is missing.' }
+        if ($key -ceq 'answer_pdf' -and -not $pdfHeader) { throw 'integration-harness defect: Stage 9 valid PDF signature is missing.' }
     }
 }
 
@@ -97,11 +97,11 @@ function Remove-Stage9FixtureManifest {
         $path = Join-Path $rootPath $name
         if (Test-Path -LiteralPath $path) {
             $entry = Get-Item -LiteralPath $path
-            if ($entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unsafe Stage 9 fixture cleanup entry.' }
+            if ($entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'integration-harness defect: Unsafe Stage 9 fixture cleanup entry.' }
             Remove-Item -LiteralPath $path
         }
     }
     # Nonrecursive removal preserves any unexpected file instead of deleting it.
     [IO.Directory]::Delete($rootPath, $false)
-    if (Test-Path -LiteralPath $rootPath) { throw 'Stage 9 generated fixture cleanup failed.' }
+    if (Test-Path -LiteralPath $rootPath) { throw 'integration-harness defect: Stage 9 generated fixture cleanup failed.' }
 }

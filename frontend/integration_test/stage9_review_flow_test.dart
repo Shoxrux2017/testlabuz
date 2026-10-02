@@ -137,7 +137,7 @@ Future<String> _setReviewDeadline(Stage9Harness h) async {
     () => datePicker.evaluate().isEmpty && timePicker.evaluate().length == 1,
     'review deadline time picker',
   );
-  // The time picker opens at the current deadline's 18:00 Institution time.
+  // The time picker opens at the current deadline in Institution time: 13:00Z is 22:00 in Asia/Tokyo.
   await h.tap(h.within(timePicker, find.text('OK')));
   await h.until(
     () => timePicker.evaluate().isEmpty,

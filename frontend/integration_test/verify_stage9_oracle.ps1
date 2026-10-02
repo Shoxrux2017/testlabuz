@@ -144,6 +144,9 @@ $clean = New-Stage9Facts; $clean.sentinels = $sentinel
 Confirm-Stage9Accept { Assert-Stage9CleanupFacts $clean $sentinel }
 $left = New-Stage9Facts @{ official_task_scores = @($official) }; $left.sentinels = $sentinel
 Confirm-Stage9Reject 'cleanup leaving an official row' { Assert-Stage9CleanupFacts $left $sentinel }
+$message = $null; try { Assert-Stage9CleanupFacts $left $sentinel } catch { $message = $_.Exception.Message }
+if ($message -notlike 'integration-harness defect:*') { throw 'integration-harness defect: a cleanup leftover was not classified as a harness defect.' }
+$script:checks++
 $changedSentinel = Copy-Stage9Synthetic $sentinel; $changedSentinel.blob.sha256 = 'y'
 $touched = New-Stage9Facts; $touched.sentinels = $changedSentinel
 Confirm-Stage9Reject 'cleanup touching the sentinel' { Assert-Stage9CleanupFacts $touched $sentinel }
@@ -220,5 +223,8 @@ if ($script:invocations -ne 0) { throw 'integration-harness defect: schedule:run
 $script:checks++
 Confirm-Stage9Reject 'schedule:run reporting a failed command' { Invoke-Stage9GuardedScheduleRun -FactsProvider { $empty } -SentinelProvider { $sentinelFacts } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = $runOutput + "`n  2026-10-02 12:00:00 Running ['artisan' homework:reconcile-deadlines] .. 10ms FAIL" } } | Out-Null }
 Confirm-Stage9Reject 'schedule:run skipping a command' { Invoke-Stage9GuardedScheduleRun -FactsProvider { $empty } -SentinelProvider { $sentinelFacts } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = ($runOutput -split "`n" | Select-Object -First 2) -join "`n" } } | Out-Null }
+$message = $null; try { Invoke-Stage9GuardedScheduleRun -FactsProvider { $empty } -SentinelProvider { $sentinelFacts } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = ($runOutput -split "`n" | Select-Object -First 2) -join "`n" } } | Out-Null } catch { $message = $_.Exception.Message }
+if ($message -notlike 'environment/runtime defect:*mutex*') { throw 'integration-harness defect: a skipped scheduled command was not classified as a stale-mutex environment defect.' }
+$script:checks++
 
 Write-Output "Stage9Oracle pure verifier: PASS ($script:checks checks; no DB, API or scheduled-command execution)."

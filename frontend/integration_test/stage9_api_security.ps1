@@ -37,13 +37,20 @@ function Assert-Stage9ApiError {
 }
 
 function Assert-Stage9ApiSuccess {
-    param($Response, [int] $ExpectedStatus = 200, [ValidateSet('resource', 'collection', 'login', 'empty')][string] $Shape = 'resource')
+    param($Response, [int] $ExpectedStatus = 200, [ValidateSet('resource', 'collection', 'paged', 'login', 'empty')][string] $Shape = 'resource')
     if ([int] $Response.StatusCode -ne $ExpectedStatus) { throw "production defect: Stage 9 API expected successful HTTP $ExpectedStatus, got $($Response.StatusCode) $(if ($null -ne $Response.Json -and $null -ne $Response.Json.PSObject.Properties['code']) { $Response.Json.code })." }
     if ($Shape -ceq 'empty') { if ($null -ne $Response.Json) { throw 'production defect: Expected an empty Stage 9 response.' }; return }
     if ($null -eq $Response.Json -or $null -eq $Response.Json.PSObject.Properties['data']) { throw 'production defect: Missing Stage 9 success data envelope.' }
     $data = $Response.Json.data
-    if ($Shape -ceq 'collection') {
+    if ($Shape -ceq 'collection' -or $Shape -ceq 'paged') {
         if ($data -isnot [array]) { throw 'production defect: Invalid Stage 9 collection envelope.' }
+        if ($Shape -ceq 'paged') {
+            $meta = $Response.Json.PSObject.Properties['meta']
+            $pagination = if ($null -ne $meta -and $null -ne $meta.Value) { $meta.Value.PSObject.Properties['pagination'] } else { $null }
+            if ($null -eq $pagination -or (@($pagination.Value.PSObject.Properties.Name | Sort-Object) -join ',') -cne 'last_page,page,per_page,total') {
+                throw 'production defect: Stage 9 paged collection lacks the exact meta.pagination {page, per_page, total, last_page}.'
+            }
+        }
     }
     elseif ($data -isnot [pscustomobject]) { throw 'production defect: Invalid Stage 9 success resource.' }
     elseif ($Shape -ceq 'login') {
@@ -241,7 +248,8 @@ function Invoke-Stage9Call {
 function Invoke-Stage9StudentRead {
     param($Context, [string] $Actor, [string] $Path)
     $response = Invoke-Stage9Call $Context $Actor $Path
-    Assert-Stage9ApiSuccess $response 200 $(if ($Path -match '\A/student/(?:homework|blitz/finished|blitz/active)(?:\?|\z)') { 'collection' } else { 'resource' })
+    $shape = if ($Path -match '\A/student/(?:homework|blitz/finished)(?:\?|\z)') { 'paged' } elseif ($Path -match '\A/student/blitz/active\z') { 'collection' } else { 'resource' }
+    Assert-Stage9ApiSuccess $response 200 $shape
     Assert-Stage9NoProtectedKeys $response.Json "Student read $Path"
     $response.Json
 }
@@ -267,6 +275,12 @@ function Assert-Stage9NegativeProbes {
         catch { throw "$($_.Exception.Message) [$Label $($probe.Method) $($probe.Path)]" }
         Assert-Stage9NoBytes $response
         if ($null -ne $response.Text -and ($response.Text.Contains('e2e_s09_') -or $response.Text.Contains('E2E S09'))) { throw 'production defect: P1 Stage 9 privacy-safe error disclosed a protected identity.' }
+        # Contract section 11.3: an error names no id beyond the ones the caller put in the path.
+        if ($null -ne $response.Text) {
+            foreach ($id in @([regex]::Matches($response.Text, '(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}') | ForEach-Object Value)) {
+                if (-not $probe.Path.ToLowerInvariant().Contains($id.ToLowerInvariant())) { throw 'production defect: P1 Stage 9 error response disclosed an id the caller did not send.' }
+            }
+        }
     }
     $after = Get-Stage9DatabaseFacts
     Assert-Stage9Equal $after.tables $before.tables "$Label changes no manifest rows"
@@ -352,13 +366,15 @@ function Invoke-Stage9TenantPrivacyMatrix {
     $probes.Add(@{ Actor = 'manual_student'; Method = 'GET'; Path = "/student/homework/$($m.assessments.review_hw)"; Status = 404; Code = 'resource_not_found' })
     Assert-Stage9NegativeProbes $Context $probes.ToArray() 'Tenant/role/privacy matrix' | Out-Null
 
-    # Queues list only the caller's accessible submissions.
-    $queue = { param($Actor) $response = Invoke-Stage9Call $Context $Actor '/teacher/submissions?checking_status=checked&per_page=100'; Assert-Stage9ApiSuccess $response 200 collection; @($response.Json.data | ForEach-Object { [string] $_.id }) }
-    $autoAttempts = @([string] $runtime.review_attempt_id, [string] $runtime.exception_attempt_1_id, [string] $runtime.exception_attempt_2_id)
+    # Queues list exactly the caller's accessible submissions, in every checking status.
+    $queue = { param($Actor) $response = Invoke-Stage9Call $Context $Actor '/teacher/submissions?per_page=100'; Assert-Stage9ApiSuccess $response 200 paged; if ([int] $response.Json.meta.pagination.last_page -ne 1) { throw 'integration-harness defect: Stage 9 queue check needs one page.' }; @($response.Json.data | ForEach-Object { [string] $_.id }) }
+    $manualAttempts = @([string] $runtime.manual_attempt_id)
+    $facts = Get-Stage9DatabaseFacts
+    $autoAttempts = @($facts.tables.assessment_attempts | Where-Object { $_.institution_id -ceq [string] $Context.Manifest.institutions.auto -and $_.status -cne 'in_progress' } | ForEach-Object { [string] $_.id })
     if (@(& $queue 'peer_teacher').Count -ne 0) { throw 'production defect: P1 a same-Institution non-owner Teacher sees review submissions.' }
     $foreignQueue = @(& $queue 'manual_teacher')
-    if (@($foreignQueue | Where-Object { $_ -cin $autoAttempts }).Count -ne 0 -or [string] $runtime.manual_attempt_id -cnotin $foreignQueue) { throw 'production defect: P1 the manual Institution queue crosses the Tenant boundary.' }
+    if ((@($foreignQueue | Sort-Object) -join ',') -cne (@($manualAttempts | Sort-Object) -join ',')) { throw 'production defect: P1 the manual Institution queue is not exactly its own submission.' }
     $ownerQueue = @(& $queue 'teacher')
-    if ([string] $runtime.manual_attempt_id -cin $ownerQueue -or @($autoAttempts | Where-Object { $_ -cnotin $ownerQueue }).Count -ne 0) { throw 'production defect: P1 the owner queue crosses the Tenant boundary or misses a checked submission.' }
+    if ((@($ownerQueue | Sort-Object) -join ',') -cne (@($autoAttempts | Sort-Object) -join ',')) { throw 'production defect: P1 the owner queue is not exactly the owned frozen Attempts of its Institution.' }
     Add-Stage9Evidence $Context 'tenant_privacy' ([pscustomobject] @{ probes = $probes.Count; owner_queue = $ownerQueue.Count; foreign_queue = $foreignQueue.Count })
 }

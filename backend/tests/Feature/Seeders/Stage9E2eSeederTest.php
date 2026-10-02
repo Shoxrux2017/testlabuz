@@ -172,7 +172,8 @@ class Stage9E2eSeederTest extends TestCase
             }
         }
         $settings = DB::table('institution_settings')->whereIn('institution_id', $manifest['institutions'])->get()->keyBy('institution_id');
-        $this->assertSame(['automatic', 'synchronized', 'Asia/Tashkent'], [$settings[$manifest['institutions']['auto']]->student_result_release_mode,
+        // Asia/Tokyo (+09:00, no DST) differs from the +05:00 runner host, so the UI cannot pass on device time.
+        $this->assertSame(['automatic', 'synchronized', 'Asia/Tokyo'], [$settings[$manifest['institutions']['auto']]->student_result_release_mode,
             $settings[$manifest['institutions']['auto']]->blitz_timer_start_mode, $settings[$manifest['institutions']['auto']]->timezone]);
         $this->assertSame('manual_teacher', $settings[$manifest['institutions']['manual']]->student_result_release_mode);
         $this->assertSame($manifest['institutions']['manual'], DB::table('assessments')->where('id', $manifest['assessments']['manual_hw'])->value('institution_id'));
@@ -266,9 +267,10 @@ class Stage9E2eSeederTest extends TestCase
             'q5' => $auto('1.50000000'), 'q6' => $auto('1.00000000'), 'q7' => $auto('1.33333333'), 'q8' => ['waiting_for_teacher_review', null]], $points('backfill_hw_1', 'backfill_hw'));
         $backfill = $attempt('backfill_hw_1');
         $this->assertSame(['waiting_for_teacher_review', null, null, 'student_submit'], [$backfill->status, $backfill->earned_points, $backfill->normalized_score, $backfill->finalization_reason]);
-        $this->assertSame(['q1' => $auto('0.33333333'), 'q2' => $auto('0.33333333'), 'q3' => $auto('1.00000000')], $points('backfill_blitz_1', 'backfill_blitz'));
+        // 2/3 rounds half-up to 0.66666667: truncation would give 0.66666666 and 55.55555533, unrounded points 55.55555556.
+        $this->assertSame(['q1' => $auto('0.66666667'), 'q2' => $auto('0.00000000'), 'q3' => $auto('1.00000000')], $points('backfill_blitz_1', 'backfill_blitz'));
         $blitz = $attempt('backfill_blitz_1');
-        $this->assertSame(['checked', '1.66666666', '55.55555533', 'timeout_auto_submit'], [$blitz->status, $blitz->earned_points, $blitz->normalized_score, $blitz->finalization_reason]);
+        $this->assertSame(['checked', '1.66666667', '55.55555567', 'timeout_auto_submit'], [$blitz->status, $blitz->earned_points, $blitz->normalized_score, $blitz->finalization_reason]);
         $deadline = $attempt('deadline_hw_1');
         $this->assertSame(['checked', '3.00000000', '75.00000000', 'homework_deadline_auto_submit', null],
             [$deadline->status, $deadline->earned_points, $deadline->normalized_score, $deadline->finalization_reason, $deadline->submitted_at]);
@@ -280,7 +282,7 @@ class Stage9E2eSeederTest extends TestCase
 
         $official = DB::table('official_task_scores')->whereIn('student_id', $manifest['users'])->orderBy('selection_policy_code')->get();
         $this->assertSame([[$manifest['assessments']['repair_hw'], $manifest['users']['repair_student'], $manifest['attempts']['repair_hw_1'], '100.00000000', 'highest_valid_completed'],
-            [$manifest['assessments']['backfill_blitz'], $manifest['users']['backfill_student'], $manifest['attempts']['backfill_blitz_1'], '55.55555533', 'valid_normal_blitz']],
+            [$manifest['assessments']['backfill_blitz'], $manifest['users']['backfill_student'], $manifest['attempts']['backfill_blitz_1'], '55.55555567', 'valid_normal_blitz']],
             $official->map(fn (object $row): array => [$row->assessment_id, $row->student_id, $row->official_attempt_id, $row->normalized_score, $row->selection_policy_code])->all());
         $this->assertSame($answersBefore, DB::table('attempt_answers')->whereIn('attempt_id', $manifest['attempts'])->orderBy('id')->pluck('updated_at', 'id')->all());
         $this->assertNull(DB::table('attempt_answers')->whereIn('attempt_id', $manifest['attempts'])->whereNotNull('checked_by_user_id')->value('id'));
@@ -433,6 +435,55 @@ class Stage9E2eSeederTest extends TestCase
         }
         $seeder->cleanupOwnedState();
         $this->assertNoStaticRows();
+    }
+
+    public function test_ownership_refuses_any_unowned_row_inside_an_owned_institution(): void
+    {
+        $seeder = new Stage9E2eSeeder;
+        $seeder->run();
+        $manifest = Stage9E2eSeeder::manifest();
+        DB::table('users')->insert(['id' => Stage9E2eSeeder::id(999_001), 'institution_id' => $manifest['institutions']['auto'], 'role' => 'student',
+            'full_name' => 'E2E S09 Intruder', 'login_name' => 'e2e_s09_intruder', 'password' => 'x', 'is_active' => true, 'must_change_password' => false,
+            'created_at' => now(), 'updated_at' => now()]);
+        $before = $this->structuralSnapshot();
+        foreach (['ownedState', 'cleanupOwnedState'] as $operation) {
+            try {
+                $seeder->{$operation}();
+                $this->fail($operation.' accepted an unowned row inside an owned Institution.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('Unowned Stage 9 row in an owned Institution: users.', $exception->getMessage());
+            }
+        }
+        $this->assertSame($before, $this->structuralSnapshot());
+        $this->assertSame(1, DB::table('users')->where('id', Stage9E2eSeeder::id(999_001))->count());
+    }
+
+    public function test_ownership_refuses_a_foreign_file_keyed_into_an_owned_attempt_directory(): void
+    {
+        $seeder = new Stage9E2eSeeder;
+        $seeder->ensureSentinels();
+        $seeder->run();
+        $manifest = Stage9E2eSeeder::manifest();
+        $disk = Storage::disk('stage9_seeder_test');
+        $directory = 'student-submissions/'.$manifest['institutions']['auto'].'/'.$manifest['attempts']['backfill_hw_1'].'/'.$manifest['questions']['backfill_hw']['q9'];
+        $key = $directory.'/'.Stage9E2eSeeder::sentinelId(1_401).'.pdf';
+        $disk->put($key, 'E2E S09 foreign bytes in an owned directory');
+        DB::table('files')->insert(['id' => Stage9E2eSeeder::sentinelId(1_402), 'institution_id' => Stage9E2eSeeder::sentinelId(1),
+            'uploaded_by_user_id' => Stage9E2eSeeder::sentinelId(102), 'category' => 'student_submission', 'original_name' => 'e2e_s09_foreign.pdf',
+            'storage_disk' => 'stage9_seeder_test', 'storage_key' => $key, 'mime_type' => 'application/pdf', 'extension' => 'pdf', 'size_bytes' => 41,
+            'created_at' => now(), 'updated_at' => now()]);
+        $before = $this->structuralSnapshot();
+        foreach (['ownedState', 'cleanupOwnedState'] as $operation) {
+            try {
+                $seeder->{$operation}();
+                $this->fail($operation.' accepted a foreign File keyed into an owned Attempt directory.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('Unowned Stage 9 File row.', $exception->getMessage());
+            }
+        }
+        $this->assertSame($before, $this->structuralSnapshot());
+        $this->assertSame('E2E S09 foreign bytes in an owned directory', $disk->get($key));
+        $this->assertSame(1, DB::table('files')->where('id', Stage9E2eSeeder::sentinelId(1_402))->count());
     }
 
     public function test_sentinel_graph_is_idempotent_and_never_silently_accepts_a_change(): void
