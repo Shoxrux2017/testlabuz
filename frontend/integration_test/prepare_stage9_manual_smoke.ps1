@@ -130,7 +130,7 @@ try {
     Write-Output '  1. Workspace: Finished Blitz shows "E2E S09 Android Blitz" with "Score 75.0" and "Question 2: Android Blitz feedback."'
     Write-Output '  2. Topic "E2E S09 Android Topic": the Homework card shows "Official score: 90.0".'
     $dot = [char] 0x00B7
-    Write-Output "  3. Homework detail, Results: `"Official score: 90.0 (Attempt 1)`" and `"Attempt 1 $dot Checked $dot Score 90.0`".
+    Write-Output "  3. Homework detail, Results: `"Official score: 90.0 (Attempt 1)`" and `"Attempt 1 $dot Checked $dot Score 90.0`"."
     Write-Output '  4. "Open attempt 1": "Teacher feedback" with "Android feedback." under Question 2; no correct answers are shown.'
     Write-Output 'Teacher (e2e_s09_teacher):'
     Write-Output '  5. The workspace shows no "Review queue" button.'
