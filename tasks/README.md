@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | Frontend Phase 2 `FIX-001` merge, then `S09-INT-001` |
+| Stage 9 — Checking and Scoring | `Implementation in progress` | `S09-INT-001` (real-stack integration) |
 
 Current Stage 5 progress:
 
@@ -1198,7 +1198,10 @@ their historical completion handoffs.
 - `S09-FE-PHASE-2` run #1 on `6e58259`: `NOT ACCEPTED` (one P2). `S09-FE-PHASE-2-FIX-001` (the P2 and five
   user-visible P3 findings, owner decision `S09-FE-PH2-D1`): approved on `6e58259`; implemented; PR open.
   Run #2 on `ccc1d60`: `PASS` (3788 tests, analyze, format, Windows and Android debug builds).
-- Next permitted action: after the `FIX-001` PR merges (Frontend Phase 2 `PASS`), `S09-INT-001`.
+  Delivered (PR #311, `main` `f0259c8`): Frontend Phase 2 `PASS`.
+- `S09-INT-001`: approved on `f0259c8` (owner decision `S09-INT-D1`: Claude runs the Windows runner, the
+  Project Owner performs the Android smoke). Integration assets in progress (PR 1).
+- Next permitted action: `S09-INT-001` assets, Integration Harness Preflight, then the real-stack run.
 
 ---
 
