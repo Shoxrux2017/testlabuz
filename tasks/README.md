@@ -1200,8 +1200,9 @@ their historical completion handoffs.
   Run #2 on `ccc1d60`: `PASS` (3788 tests, analyze, format, Windows and Android debug builds).
   Delivered (PR #311, `main` `f0259c8`): Frontend Phase 2 `PASS`.
 - `S09-INT-001`: approved on `f0259c8` (owner decision `S09-INT-D1`: Claude runs the Windows runner, the
-  Project Owner performs the Android smoke). Integration assets in progress (PR 1).
-- Next permitted action: `S09-INT-001` assets, Integration Harness Preflight, then the real-stack run.
+  Project Owner performs the Android smoke). Integration assets done; Integration Harness Preflight `PASS`
+  (#1 `NOT ACCEPTED` with all findings fixed, #2 `PASS`); PR 1 open.
+- Next permitted action: after PR 1 merges, the `S09-INT-001` evidence run on `main` and the Android smoke.
 
 ---
 

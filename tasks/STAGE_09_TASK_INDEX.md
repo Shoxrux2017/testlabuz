@@ -153,7 +153,7 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `13b` | `S09-FE-004B` | Frontend | Finished Blitz list with results (`GET /student/blitz/finished`) | `FE-004A` | `Approved` (on `main` `c1082e5`) | Delivered (PR #310, `main` `6e58259`) | `tasks/frontend/stage-09/S09-FE-004B-finished-blitz.md` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Executed record | Run #1 `NOT ACCEPTED` (`6e58259`, one P2); run #2 `PASS` (`ccc1d60`); delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-frontend-block-review.md` |
 | `14a` | `S09-FE-PHASE-2-FIX-001` | Frontend fix | Related-view refresh after a review save (P2) and five user-visible P3 defects (`S09-FE-PH2-D1`) | Phase 2 run #1 | `Approved` (on `main` `6e58259`) | Delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-FIX-001-related-refresh-and-ux-defects.md` |
-| `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | `Approved` (on `main` `f0259c8`) | Assets in progress (PR 1) | `tasks/integration/stage-09/S09-INT-001-stage-09-real-stack-integration.md` |
+| `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | `Approved` (on `main` `f0259c8`) | Assets + Integration Harness Preflight `PASS` — PR 1 open; evidence run on the merged `main` next | `tasks/integration/stage-09/S09-INT-001-stage-09-real-stack-integration.md` |
 | `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Not written | Not started | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
 
 Detailed contracts for rows 2-16 are written in execution order, each after re-checking `main`.
@@ -505,6 +505,18 @@ Only a row whose readiness is `Approved` may be implemented.
     execution record of the run on the merged `main` and the Android smoke.
   - The harness reuses the proven Stage 8 primitives as new `stage9_*` copies with Stage 9 identities;
     Stage 8 assets are not changed.
+- 2026-10-02: `S09-INT-001` integration assets implemented on `feat/s09-int-001-integration-assets`.
+  - `Stage9E2eSeederTest`: 39 passed. Pure verifiers: runtime guard, test files 11, oracle 93, API security 92.
+    A deliberate-break pass of 26 mutations was all caught.
+  - Integration Harness Preflight #1 (two fresh-context reviewers): `NOT ACCEPTED`, P1 = 0, P2 = 3, P3 = 13,
+    all fixed: a foreign File keyed into an owned Attempt directory; half-up rounding not exercised (the backfill
+    Blitz now expects `55.55555567`); an active-Blitz privacy probe that checked an empty list. The P3 fixes add
+    Institution-scoped ownership, in-container workload detection, exact queues, id-leak and paged-envelope checks,
+    failure classes and a timezone (`Asia/Tokyo`) that differs from the runner host.
+  - Preflight #2 (fresh reviewer): `PASS`, P1 = 0, P2 = 0, P3 = 4, all fixed.
+  - Development dry runs of the full runner on the branch (not evidence): `Stage9AutomatedEvidence: PASS`,
+    19/19 steps, 6/6 UI checkpoints, about 6.5 minutes.
+  - PR 1 open. Next after merge: the evidence run on `main`, then the Android manual smoke (Project Owner).
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -570,3 +582,4 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-01 | `S09-FE-004A` delivered (PR #309); `S09-FE-004B` approved on `c1082e5` |
 | 2026-10-01 | `S09-FE-004B` delivered (PR #310); `S09-FE-PHASE-2` run #1 `NOT ACCEPTED`; `FIX-001` approved on `6e58259`; run #2 `PASS` |
 | 2026-10-02 | Frontend Phase 2 `PASS` delivered (PR #311); `S09-INT-001` approved on `f0259c8` (owner decision `S09-INT-D1`) |
+| 2026-10-02 | `S09-INT-001` assets and Integration Harness Preflight (#1 `NOT ACCEPTED`, all fixed; #2 `PASS`); PR 1 open |
