@@ -13,7 +13,7 @@ function Confirm-Stage9Reject {
 }
 function Confirm-Stage9Accept { param([scriptblock] $Check) & $Check | Out-Null; $script:checks++ }
 function Copy-Stage9Synthetic { param($Value) ConvertTo-Json -InputObject $Value -Depth 50 -Compress | ConvertFrom-Json }
-function New-Stage9Response { param([int] $Status, $Json, [byte[]] $Bytes = $null, [hashtable] $Headers = @{}) [pscustomobject] @{ StatusCode = $Status; Json = $Json; Bytes = $Bytes; Headers = $Headers } }
+function New-Stage9Response { param([int] $Status, $Json, [byte[]] $Bytes = $null, [hashtable] $Headers = @{}) [pscustomobject] @{ StatusCode = $Status; Json = $Json; Text = $null; Bytes = $Bytes; Headers = $Headers } }
 function New-Stage9ErrorBody { param([string] $Code, $Errors = ([pscustomobject] @{}), [string] $Message = 'Request failed.') [pscustomobject] @{ message = $Message; code = $Code; errors = $Errors } }
 
 # ---------------------------------------------------------------- exact error envelopes
@@ -47,7 +47,11 @@ $visible = [pscustomobject] @{ data = [pscustomobject] @{ score_visible = $true;
         attempt_results = @([pscustomobject] @{ attempt_id = 'a'; attempt_number = 1; status = 'checked'; result = [pscustomobject] @{ visible = $true; normalized_score = 73.85 } })
         answers = @([pscustomobject] @{ question_id = 'q'; feedback = 'Clear reasoning.' }) } }
 Confirm-Stage9Accept { Assert-Stage9NoProtectedKeys $visible }
-foreach ($key in $script:Stage9ProtectedKeys) {
+# Independent copy of contract section 11.4 plus the Stage 8 key-and-storage list; the harness list must hold every one.
+$contractProtected = @('awarded_points', 'checking_status', 'checked_by', 'checked_by_user_id', 'checked_at', 'is_correct', 'correct_value', 'accepted_answers',
+    'match_key', 'correct_position', 'earned_points', 'official_attempt_id', 'selection_policy_code', 'selected_at', 'review_due_at', 'review_overdue',
+    'accepted_text', 'checking_mode', 'configuration', 'client_key', 'storage_key', 'storage_disk', 'checksum_sha256')
+foreach ($key in $contractProtected) {
     $leak = ConvertTo-Json -InputObject $visible -Depth 20 -Compress | ConvertFrom-Json
     $leak.data.attempt_results[0] | Add-Member $key 'x'
     Confirm-Stage9Reject "Student response disclosing $key" { Assert-Stage9NoProtectedKeys $leak }
@@ -105,5 +109,34 @@ if ($redacted.Contains('abcdefghijklmnopqrstuvwxyz0123') -or $redacted.Contains(
 $script:checks++
 if ((New-Stage9Key 1) -cne '09000000-0000-4000-8000-000009000001' -or (New-Stage9Key 501) -cne '09000000-0000-4000-8000-000009000501') { throw 'integration-harness defect: Stage 9 key namespace changed.' }
 $script:checks++
+
+# ---------------------------------------------------------------- negative-probe discipline (stubbed transport and facts)
+# The stubs live only in this verifier's script scope.
+$script:probeResponse = $null
+$script:factsQueue = $null
+function Get-Stage9Token { param($Context, [string] $Actor) 'token' }
+function Invoke-Stage9Call { param($Context, [string] $Actor, [string] $Path, [string] $Method = 'GET', $Body, [string] $Key, [string] $FilePath, [switch] $Binary, [string] $RawBody, [string] $ContentType = 'application/json') $script:probeResponse }
+function Get-Stage9DatabaseFacts { param($PriorFacts) $script:factsQueue.Dequeue() }
+function New-Stage9ProbeFacts { param($Rows = @(), $Records = @()) [pscustomobject] @{ tables = [pscustomobject] @{ attempt_answers = @($Rows); idempotency_records = @($Records) }; blobs = @() } }
+$probeContext = [pscustomobject] @{ RejectedKeys = [Collections.Generic.List[string]]::new() }
+$probe = @{ Actor = 'peer_teacher'; Method = 'GET'; Path = '/teacher/submissions/x'; Status = 404; Code = 'resource_not_found' }
+$row = [pscustomobject] @{ id = 'a'; awarded_points = $null }
+$script:probeResponse = New-Stage9Response 404 (New-Stage9ErrorBody resource_not_found)
+$script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row)), (New-Stage9ProbeFacts @($row))))
+Confirm-Stage9Accept { Assert-Stage9NegativeProbes $probeContext @($probe) 'stub' }
+$changed = [pscustomobject] @{ id = 'a'; awarded_points = '1.00000000' }
+$script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row)), (New-Stage9ProbeFacts @($changed))))
+Confirm-Stage9Reject 'a rejected probe that changed a row' { Assert-Stage9NegativeProbes $probeContext @($probe) 'stub' }
+$script:probeResponse = New-Stage9Response 200 ([pscustomobject] @{ data = [pscustomobject] @{ id = 'x' } })
+$script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row)), (New-Stage9ProbeFacts @($row))))
+Confirm-Stage9Reject 'a probe that succeeded' { Assert-Stage9NegativeProbes $probeContext @($probe) 'stub' }
+$script:probeResponse = New-Stage9Response 404 (New-Stage9ErrorBody resource_not_found); $script:probeResponse.Text = '{"message":"E2E S09 Manual Student not found"}'
+$script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row)), (New-Stage9ProbeFacts @($row))))
+Confirm-Stage9Reject 'an error naming a protected identity' { Assert-Stage9NegativeProbes $probeContext @($probe) 'stub' }
+$keyed = $probe.Clone(); $keyed.Key = '09000000-0000-4000-8000-000009000777'
+$record = [pscustomobject] @{ idempotency_key = '09000000-0000-4000-8000-000009000777' }
+$script:probeResponse = New-Stage9Response 404 (New-Stage9ErrorBody resource_not_found)
+$script:factsQueue = [Collections.Generic.Queue[object]]::new(@((New-Stage9ProbeFacts @($row) @($record)), (New-Stage9ProbeFacts @($row) @($record))))
+Confirm-Stage9Reject 'a rejected key that left an idempotency record' { Assert-Stage9NegativeProbes $probeContext @($keyed) 'stub' }
 
 Write-Output "Stage9ApiSecurity pure verifier: PASS ($script:checks checks; no network or DB access)."

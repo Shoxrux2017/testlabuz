@@ -218,7 +218,7 @@ $script:invocations = 0
 Confirm-Stage9Reject 'schedule:run while a command has candidates' { Invoke-Stage9GuardedScheduleRun -FactsProvider { $safe } -SentinelProvider { $sentinelFacts } -Invoker { $script:invocations++; [pscustomobject] @{ ExitCode = 0; Output = $runOutput } } | Out-Null }
 if ($script:invocations -ne 0) { throw 'integration-harness defect: schedule:run ran while a command still had candidates.' }
 $script:checks++
-Confirm-Stage9Reject 'schedule:run reporting a failed command' { Invoke-Stage9GuardedScheduleRun -FactsProvider { $empty } -SentinelProvider { $sentinelFacts } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = $runOutput.Replace('90ms DONE', '90ms FAIL') } } | Out-Null }
+Confirm-Stage9Reject 'schedule:run reporting a failed command' { Invoke-Stage9GuardedScheduleRun -FactsProvider { $empty } -SentinelProvider { $sentinelFacts } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = $runOutput + "`n  2026-10-02 12:00:00 Running ['artisan' homework:reconcile-deadlines] .. 10ms FAIL" } } | Out-Null }
 Confirm-Stage9Reject 'schedule:run skipping a command' { Invoke-Stage9GuardedScheduleRun -FactsProvider { $empty } -SentinelProvider { $sentinelFacts } -Invoker { [pscustomobject] @{ ExitCode = 0; Output = ($runOutput -split "`n" | Select-Object -First 2) -join "`n" } } | Out-Null }
 
 Write-Output "Stage9Oracle pure verifier: PASS ($script:checks checks; no DB, API or scheduled-command execution)."

@@ -295,7 +295,7 @@ The test uses `DatabaseTransactions`, a fixed `travelTo`, a test password and an
 
 ## 9. Scenarios and Exact Expected Results
 
-All scores below are the stored `normalized_score`, with 8 decimals. The UI shows them with one decimal, half-up (`S09-T3`). "Poll" means a bounded condition wait of at most 30 s: checking runs after the response is sent.
+All scores below are the stored `normalized_score`, with 8 decimals. The UI shows them with one decimal, half-up (`S09-T3`). "Poll" means a bounded wait of at most 30 s on the authoritative DB status, because checking runs after the response is sent; the Student read is asserted afterwards.
 
 ### 9.1 API setup and trigger checking (before the UI)
 
@@ -331,7 +331,7 @@ All scores below are the stored `normalized_score`, with 8 decimals. The UI show
    - #1 `checked`, earned 7, normalized `70.00000000`.
    - Official row `valid_normal_blitz`, `70.00000000`.
 3. Hidden while active (`S09-D5`):
-   - `/student/blitz/active` and `/student/blitz/{id}` contain no `result`, score or feedback key;
+   - `/student/blitz/active` and `/student/blitz/{id}` contain no `result`, score or feedback key (a submitted #1 without an exception has already left the active list, a Stage 8 rule);
    - `/student/blitz/finished` does not list the Blitz.
 
 **`manual_release_hidden`** — `manual_hw`, `manual_student` #1:
@@ -665,8 +665,10 @@ run_stage9_windows_e2e.ps1 -FlutterExecutable <repo>\frontend\.fvm\flutter_sdk\b
 13. `windows_flow`: §9.4, 6 checkpoints.
 14. `post_ui_api`: §9.5, three scenarios.
 15. `post_flow_oracle`.
-16. `restart`, then `post_restart_oracle`: §9.6.
-17. `final_cleanup`, `cleanup_oracle`, `remove_sentinels`.
+16. `restart`.
+17. `post_restart_oracle`: §9.6.
+18. `final_cleanup`.
+19. `cleanup_oracle`, then `removeSentinels`.
 
 **After the plan:** remove the local temp roots, check that the whole plan ran, run the exclusive-database check, and confirm the checkout is unchanged.
 
@@ -720,7 +722,7 @@ P1 and P2 findings are fixed and re-reviewed. P3 findings are fixed, or recorded
 ## 17. Acceptance Criteria
 
 - [ ] §15 passes; preflight PASS; PR 1 merged.
-- [ ] The Windows run on the merged `main` prints `Stage9AutomatedEvidence: PASS`: 17/17 steps, 6/6 checkpoints, every §9 scenario PASS, the checkout clean and unchanged.
+- [ ] The Windows run on the merged `main` prints `Stage9AutomatedEvidence: PASS`: 19/19 steps, 6/6 checkpoints, every §9 scenario PASS, the checkout clean and unchanged.
 - [ ] The Android manual smoke is PASS: the owner reports the checklist, and Complete prints `Stage9ManualSmokeOracle: PASS` and `Stage9ManualSmokeCleanup: PASS`.
 - [ ] The final integration review finds P1 = 0, P2 = 0. Each finding is classified.
 - [ ] The execution record is delivered (PR 2).
