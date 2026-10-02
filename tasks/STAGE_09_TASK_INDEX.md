@@ -5,14 +5,15 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 9 — Checking and Scoring` (`docs/06-roadmap.md` §14) |
-| Stage status | `Implementation in progress` |
+| Stage status | `Closed / PASS` (when the closure PR merges; `tasks/STAGE_09_CLOSURE_REVIEW.md`) |
 | Verification model | `Workflow v3 — Lean Verification + Backend/Frontend Phase 2 + Real-Stack Integration` |
 | Decomposition status | `Approved by the Project Owner (2026-09-28)` |
 | Planning baseline `origin/main` | `b07bdb14` (Stage 8 closed; `API-FIX-001` merged) |
 | Previous Stage | `Stage 8 — Closed / PASS` (`tasks/STAGE_08_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
-| Next permitted gate | `STAGE_09_CLOSURE_REVIEW` (`S09-INT-001` `PASS / Accepted`, §14) |
+| Closure | `PASS — STAGE CLOSED (2026-10-03)`; audited `main` `38b10f6` + `S09-CLOSURE-FIX-001` (documentation only) |
+| Next permitted gate | Dependency-update task (`S09-CL-D3`), then Stage 10 planning; the Project Owner first decides how Stage 10 is run |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -83,6 +84,9 @@ official score for the designated Homework and the designated Blitz of each Stud
 | `S09-D9` | Fill-in-the-blank text comparison | **A** — the `BR-Q-013A` normalization of short answers |
 | `S09-D8a` | File answers under autosave (`S07-FE-004` forbade upload on pick) | **A** — upload right after the file is chosen; no Upload button |
 | — | Decomposition | **A** — approved as proposed (§7) |
+| `S09-CL-D1` (2026-10-03, closure) | Review-queue Topic, group and Student filters promised by the docs but absent from the UI | Docs describe the delivered filters; the three filters (the API already accepts them) are carried to Stage 10 planning |
+| `S09-CL-D2` (2026-10-03, closure) | Carried items and their targets | Approved as listed (§10) |
+| `S09-CL-D3` (2026-10-03, closure) | `composer audit` advisories present before Stage 9 | A separate dependency-update task right after closure, before Stage 10 code |
 
 ## 5. Technical Decisions (approved with the decomposition)
 
@@ -153,10 +157,11 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `13b` | `S09-FE-004B` | Frontend | Finished Blitz list with results (`GET /student/blitz/finished`) | `FE-004A` | `Approved` (on `main` `c1082e5`) | Delivered (PR #310, `main` `6e58259`) | `tasks/frontend/stage-09/S09-FE-004B-finished-blitz.md` |
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Executed record | Run #1 `NOT ACCEPTED` (`6e58259`, one P2); run #2 `PASS` (`ccc1d60`); delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-frontend-block-review.md` |
 | `14a` | `S09-FE-PHASE-2-FIX-001` | Frontend fix | Related-view refresh after a review save (P2) and five user-visible P3 defects (`S09-FE-PH2-D1`) | Phase 2 run #1 | `Approved` (on `main` `6e58259`) | Delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-FIX-001-related-refresh-and-ux-defects.md` |
-| `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | `Approved` (on `main` `f0259c8`) | `PASS / Accepted` — assets PR #312 (`main` `4224fcf`); Windows run and Android smoke PASS (§14); record PR open | `tasks/integration/stage-09/S09-INT-001-stage-09-real-stack-integration.md` |
-| `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Not written | Not started | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
+| `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | `Approved` (on `main` `f0259c8`) | `PASS / Accepted` — assets PR #312 (`main` `4224fcf`); Windows run and Android smoke PASS (§14); record PR #313 (`main` `38b10f6`) | `tasks/integration/stage-09/S09-INT-001-stage-09-real-stack-integration.md` |
+| `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Executed record | `PASS — STAGE CLOSED` (2026-10-03); delivered with `16a` in the closure PR | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
+| `16a` | `S09-CLOSURE-FIX-001` | Closure fix | `docs/01-09` alignment (`CL9-1`…`CL9-7`) and the Stage 9 deployment notes (`docs/07` §36.2) | Closure audit, `S09-CL-D1`, `S09-CL-D2` | `Approved` (on `main` `38b10f6`) | Accepted; delivered in the closure PR | `tasks/S09-CLOSURE-FIX-001-documentation-and-deployment-notes.md` |
 
-Detailed contracts for rows 2-16 are written in execution order, each after re-checking `main`.
+Detailed contracts for rows 2-16a are written in execution order, each after re-checking `main`.
 Only a row whose readiness is `Approved` may be implemented.
 
 ## 8. Task Intent Notes
@@ -216,11 +221,18 @@ Only a row whose readiness is `Approved` may be implemented.
 | Topic-result feedback, Parent-visible feedback flag | Planning audit #6 | Stage 10 planning |
 | `topic_results.official_homework_score_id`/`official_blitz_score_id` default to `ON DELETE RESTRICT` (`docs/08` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; score no longer ready); a tenant-safe composite reference also needs `unique(institution_id, id)` on `official_task_scores`, which Stage 9 does not add | `S09-DOC-001`, `S09-BE-002` | Stage 10 planning: decide the reference rule before `topic_results` exists |
 | `PH2-1` bound the repair sweep's full-history per-minute scan | `S09-BE-PHASE-2` | Before post-pilot scale (Stage 13 release readiness) |
-| `PH2-2` first sweeps over unchecked Stage 7/8 history may overlap after 5 minutes | `S09-BE-PHASE-2` | Stage 9 deployment notes |
-| `PH2-3` `S09-DOC-001` §14 / `docs/09` §24.1 rows 2 and 6 wording | `S09-BE-PHASE-2` | Stage 9 closure |
+| `PH2-2` first sweeps over unchecked Stage 7/8 history may overlap after 5 minutes | `S09-BE-PHASE-2` | Done — `docs/07` §36.2 (`S09-CLOSURE-FIX-001`) |
+| `PH2-3` `S09-DOC-001` §14 / `docs/09` §24.1 rows 2 and 6 wording | `S09-BE-PHASE-2` | Done — `S09-CLOSURE-FIX-001` (`CL9-1`) |
 | `PH2-4` Blitz condition inside `StudentResultVisibility`; consolidate duplicated official rules | `S09-BE-PHASE-2` | Stage 10 planning |
-| `PH2-5` pre-`BE-004` backlog (databases that ran `d324716` without `da53031`): one-off resolve | `S09-BE-PHASE-2` | Stage 9 deployment notes |
+| `PH2-5` pre-`BE-004` backlog (databases that ran `d324716` without `da53031`): one-off resolve | `S09-BE-PHASE-2` | Done — `docs/07` §36.2 (`S09-CLOSURE-FIX-001`) |
 | `FE-PH2` carried P3 (`S09-FE-PH2-D1`): `A-2` autosave focus/pause widget tests; `B-2` archived message shown twice; `B-3` unreachable 500 test; `B-4` date-picker year range; `B-5` import order; `C-3` review validation announcement and focus; `C-4` detail screen size and controller boilerplate; `D-3` role test on review paths; `D-4` duplicated `scoreVisible`; a deferred file upload (Homework and Blitz) can start while the leave confirmation is open | `S09-FE-PHASE-2` §7, `FIX-001` review | Stage 10 planning or a later polish task |
+| Review-queue Topic, group and Student filters (the API accepts `topic_id`, `group_id`, `student_id`) | Closure `CL9-5`, `S09-CL-D1` | Stage 10 planning |
+| `CL9-9` real-concurrency tests: exception grant vs checking run; `attempts:check-frozen` sweep vs Homework Submit | `S09-INT-001` §18, closure | Stage 10 planning (backend hardening) |
+| `CL9-10` under `manual_teacher` the Student sees the Attempt status move to checked while the score is hidden | Closure | Stage 10 result-release design |
+| `CL9-11` a stored empty feedback string, or Question text of only non-ASCII whitespace created through the API, fails the strict client parsers | Closure | Stage 10 planning or a polish task |
+| `CL9-12` the Homework Submit response is re-read after commit, so a sweep in that window can return `waiting_for_teacher_review` or `checked` (same shape; replays already do) | `S09-BE-003B` review, closure | Accepted: recorded (`docs/09` §17.13) |
+| `CL9-13` the Stage 8 E2E harness no longer matches the Stage 9 backend | `S09-INT-001` §18, closure | Accepted: historical, not maintained |
+| `CL9-14` `composer audit` advisories present before Stage 9 (`league/commonmark` 2.9.0, `laravel/framework` 13.24.0, `league/flysystem` 3.35.2) | Closure | `S09-CL-D3`: dependency-update task right after closure |
 
 ## 11. Current Stage State
 
@@ -522,6 +534,16 @@ Only a row whose readiness is `Approved` may be implemented.
   preparation was fixed on the record branch (3b06a5b). Final integration review: `PASS`. `S09-INT-001` = `PASS / Accepted`
   (§14). Next: `STAGE_09_CLOSURE_REVIEW`.
 - 2026-10-02: the Project Owner said that Stage 10 will be run with a different process; it is asked before Stage 10 planning.
+- PR #313 merged (`main` `38b10f6`): `S09-INT-001` record and the smoke-preparation fix.
+- 2026-10-03: `STAGE_09_CLOSURE_REVIEW` on `38b10f6`.
+  - Three fresh-context reviewers (roadmap acceptance and Definition of Done; documentation; security, contracts and
+    carried items) and two backend-to-frontend contract sweeps: P1 = 0, five distinct P2 (all documentation), P3 fixed, carried or
+    accepted.
+  - Owner decisions `S09-CL-D1`…`S09-CL-D3` (§4).
+  - `S09-CLOSURE-FIX-001` (documentation and the Stage 9 deployment notes) fixes every P2; no production change, so
+    every Phase 2 and integration evidence record stays valid.
+  - Verdict: `PASS — STAGE CLOSED` once the closure PR merges (`tasks/STAGE_09_CLOSURE_REVIEW.md`). Next: the
+    dependency-update task (`S09-CL-D3`), then Stage 10 planning.
 
 ## 12. Independent Planning Review (2026-09-28)
 
@@ -589,6 +611,8 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-02 | Frontend Phase 2 `PASS` delivered (PR #311); `S09-INT-001` approved on `f0259c8` (owner decision `S09-INT-D1`) |
 | 2026-10-02 | `S09-INT-001` assets and Integration Harness Preflight (#1 `NOT ACCEPTED`, all fixed; #2 `PASS`); PR 1 open |
 | 2026-10-02 | PR #312 merged; `S09-INT-001` Windows run and Android smoke `PASS`; final integration review `PASS`; `S09-INT-001` `PASS / Accepted` (§14) |
+| 2026-10-02 | PR #313 merged (`S09-INT-001` record) |
+| 2026-10-03 | Closure review `PASS`; owner decisions `S09-CL-D1`…`D3`; `S09-CLOSURE-FIX-001`; Stage 9 `Closed / PASS` when the closure PR merges |
 
 ## 14. Integration Execution Record — `S09-INT-001` (2026-10-02)
 

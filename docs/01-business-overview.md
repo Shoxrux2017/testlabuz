@@ -262,7 +262,7 @@ The approved MVP categories are:
 
 The first four categories are numeric categories. Each institution configures their score ranges, and those ranges must cover the full 0–100 scale without gaps or overlaps.
 
-**Not completed** is different. It is not a low-score band. It is used only when required Homework, Blitz, or both can no longer validly be completed. A submission waiting for Teacher review is not **Not completed**, and a calculated but unreleased result is not **Not completed**.
+**Not completed** is different. It is not a low-score band. It is used only when required Homework, Blitz, or both can no longer validly be completed. Review that an official score still waits for does not make the result **Not completed**, and a calculated but unreleased result is not **Not completed**.
 
 The final Topic score is calculated from the official Homework and Blitz scores using the institution's acceptable-difference threshold:
 

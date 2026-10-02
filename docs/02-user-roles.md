@@ -289,12 +289,12 @@ An unanswered question scores zero and never needs review. A manual question wor
 
 The Teacher reviews submissions: completed Homework and Blitz attempts, official and practice, of Students who are recipients of the task, in the Teacher's own Topics while the Teacher is still assigned to the Topic's group. An attempt that is still in progress is not a submission. The status of the Topic or task (active, closed, archived) does not restrict review. The Teacher:
 
-- works from a review queue that can be filtered by task, Topic, group, Student, state, official or practice work, and overdue work, with official work listed first;
+- works from a review queue that can be filtered by state, Homework or Blitz, official or practice work, and overdue work, with official work listed first; each Homework and Blitz detail opens the queue for that task;
 - sees every question with the Student's answer and the question's correct-answer configuration;
 - may download a submitted answer file of an accessible submission;
 - awards 0 up to the question's points for each manual answer and may add feedback of at most 2000 characters;
 - may save only some of the manual answers of a submission (partial review);
-- reviews on desktop only; on mobile the Teacher sees only read-only counts of submissions waiting for review and overdue review.
+- reviews on desktop only; on mobile the Teacher sees only read-only counts of submissions waiting for review (Homework and Blitz) and overdue (Homework only).
 
 The Teacher may score and comment on answers requiring judgment, but must not rewrite the Student's submitted answer.
 
@@ -713,7 +713,7 @@ Mobile is suitable for quick classroom actions such as:
 - Activating a Blitz
 - Monitoring Blitz participation
 - Reviewing basic Student progress
-- Viewing read-only counts of submissions waiting for review and overdue review (answer review itself is desktop-only)
+- Viewing read-only counts of submissions waiting for review (Homework and Blitz) and overdue (Homework only); answer review itself is desktop-only
 - Granting a Student-specific Blitz exception when necessary
 - Releasing results when appropriate
 

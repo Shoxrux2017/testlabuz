@@ -403,7 +403,7 @@ The ten previously open MVP decisions are now approved and must be treated as fi
    - Homework gives exactly **3 normal attempts**.
    - The official Homework score is the **highest valid completed score** among those attempts.
    - Blitz gives exactly **1 normal attempt**.
-   - A valid completed Blitz attempt is the official Blitz score unless an approved technical exception invalidates that attempt and a replacement attempt is used.
+   - A valid checked normal Blitz attempt #1 is the official Blitz score. An approved technical exception invalidates #1 and withdraws its official score; replacement #2 becomes official once it is checked. A Blitz closed before the Student took the replacement has no official Blitz score (Stage 10: Not completed).
 
 2. **Technical-attempt exception**
    - An authorized Teacher may grant exactly **one additional Blitz attempt** to one Student for a valid technical or other approved reason.
@@ -431,7 +431,7 @@ The ten previously open MVP decisions are now approved and must be treated as fi
    - Matching uses partial credit per correctly matched pair.
    - Ordering uses partial credit per correctly positioned item.
    - Fill-in-the-blank uses partial credit per correctly completed blank.
-   - Short written answers may be automatic or manual according to accepted-answer rules.
+   - Short written answers are checked automatically against accepted answers, or by the Teacher when the Question is switched to manual checking; only short written answers can be switched.
    - Open written and file-based answers are Teacher-scored.
 
 6. **Score precision**
@@ -1663,7 +1663,7 @@ No negative-marking model is required for the MVP.
 
 ### Checking Trigger
 
-Stage 9 checks each frozen Attempt right after the freezing transaction commits, outside it. Freezing points are Homework Submit, deadline reconciliation and Teacher close, and Blitz Submit, timeout reconciliation, Teacher close and the timeout performed during an exception grant. Freeze responses do not change, and a checking failure never alters the freeze. A scheduled sweep runs every minute without overlap: it checks every Attempt still `submitted` / `timed_out_finalized`, including history frozen before Stage 9, and repairs a missing or stale official row. The integration harness must run the Laravel Scheduler. Architecture: `07-architecture.md` §16.5.
+Stage 9 checks each frozen Attempt right after the freezing transaction commits, outside it. Freezing points are Homework Submit, deadline reconciliation and Teacher close, and Blitz Submit, timeout reconciliation, Teacher close and the timeout performed during an exception grant. Freeze responses do not change, and a checking failure never alters the freeze. A scheduled sweep runs every minute without overlap: it checks every Attempt still `submitted` / `timed_out_finalized`, including history frozen before Stage 9, and repairs a missing or stale official row of a Student who has a `checked` eligible Attempt and no pending eligible Attempt. The integration harness must run the Laravel Scheduler. Architecture: `07-architecture.md` §16.5.
 
 ### Manual Checking
 
@@ -1685,7 +1685,7 @@ Teacher may:
 - Save review, also for a subset of the manual answers (partial review)
 - Correct a saved review; the Attempt stays checked and is recalculated, and the official score may move to another Attempt
 
-A submission still awaiting automatic checking cannot be reviewed (`409 automatic_checking_pending`). Concurrent reviews of one submission serialize; each answer keeps the last committed value. Review is desktop-only; Teacher mobile shows only read-only "waiting for review" and "overdue" counts on Homework and Blitz details.
+A submission still awaiting automatic checking cannot be reviewed (`409 automatic_checking_pending`). Concurrent reviews of one submission serialize; each answer keeps the last committed value. Review is desktop-only; Teacher mobile shows only read-only counts: "waiting for review" counts on Homework and Blitz details; "overdue" counts on Homework details.
 
 Teacher must not:
 
@@ -1783,7 +1783,7 @@ A Student sees an own Attempt result only when the Attempt is checked and offici
 - Teacher file access: submitted files of a reviewable submission only; files of `in_progress` Attempts stay Student-only; everything else returns privacy-safe `404`
 - Student result visibility per release mode (`automatic`, `manual_teacher`, unconfigured) and Blitz status (active, closed, archived)
 - The official-score status table: `not_applicable`, `ready`, `waiting_for_replacement`, `automatic_checking_pending`, `waiting_for_teacher_review`, `no_completed_attempt`
-- Checking runs right after each freeze commits without changing the freeze response; a checking failure never alters the freeze; the sweep checks history frozen before Stage 9 and repairs a missing or stale official row
+- Checking runs right after each freeze commits without changing the freeze response; a checking failure never alters the freeze; the sweep checks history frozen before Stage 9 and repairs a missing or stale official row of a Student who has a `checked` eligible Attempt and no pending eligible Attempt
 - Review of a submission awaiting automatic checking returns `409 automatic_checking_pending`; a correction recalculates the Attempt and may move the official score
 - Stage 8 Blitz Start/Resume/Submit timeout responses and the monitoring wire format are unchanged after checking
 
@@ -1820,6 +1820,13 @@ Carried from Stage 9 into Stage 10 planning:
 - Stage 10 adds `409 result_closed` to review corrections after result closure; until then a correction is always allowed.
 - A Blitz closed after an exception before the Student took the replacement has no official Blitz score; Stage 10 treats the Student as Not completed.
 - `topic_results.official_homework_score_id` and `official_blitz_score_id` default to `ON DELETE RESTRICT` (`08-database.md` §§25.13-25.14), while Stage 9 deletes `official_task_scores` rows (exception grant; a score that stops being ready). Stage 10 planning decides the reference rule before `topic_results` exists.
+- Review-queue Topic, group and Student filters (owner decision S09-CL-D1). The delivered desktop queue filters by state, Homework or Blitz, official or practice work, and overdue work; the API already accepts `topic_id`, `group_id` and `student_id`.
+- Real-concurrency backend tests of an exception grant racing a checking run, and of the `attempts:check-frozen` sweep racing a Homework Submit. The lock orders are compatible and documented.
+- Consolidate the official and visibility rules: add the Blitz condition to `StudentResultVisibility` and consolidate the duplicated official rules (`PH2-4`, `tasks/STAGE_09_TASK_INDEX.md` §10).
+- Student result visibility under `manual_teacher`: the Student still sees the Attempt status change from waiting for review to checked while the score stays hidden (Stage 7 status design). Decide this when designing result release.
+- Hardening: a stored empty feedback string would fail the strict Student read (no current writer stores one); Question text made only of non-ASCII whitespace, created through the API, fails the Teacher parsers (Stage 8 pattern).
+- Frontend Phase 2 carried P3 items (`tasks/STAGE_09_TASK_INDEX.md` §10, `FE-PH2` row).
+- Bounding the repair sweep's full-history scan (`PH2-1`) is not Stage 10 work; it stays targeted at Stage 13 release readiness.
 
 ## Included Scope
 
@@ -2922,7 +2929,7 @@ The TestLabUz MVP is complete when all of the following are true:
 76. New-institution incomplete educational settings block only dependent operations.
 77. Administrator-created accounts cannot use normal app functionality before mandatory password change.
 78. Assessment activation with zero total possible points is rejected.
-79. Automatic Short Written normalization behaves deterministically and preserves punctuation/technical symbols.
+79. Automatic Short Written and fill-in-the-blank normalization behaves deterministically and preserves punctuation/technical symbols.
 80. Highest Homework score ties choose the earliest tied attempt reference.
 81. Pre-deadline Homework close atomically freezes existing `in_progress` Attempts as `submitted` at captured `closedAt` with `task_closed_auto_finalize`; Blitz close retains its separately approved behavior.
 82. Result closure preconditions reject waiting/in-progress/pending-review states.

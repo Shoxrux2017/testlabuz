@@ -2566,7 +2566,7 @@ Topic (shared) → Assessment (shared) → Homework/Blitz task row (shared)
 
 ### Live Evaluation on Read
 
-No read trusts the row alone. The official-score `ready` status and the Student `score_visible` flag (`09-api-contracts.md`) require the row **and** a live evaluation of Homework steps 1-3 (or the Blitz rules) that yields the same Attempt. Stage 10 closure must use the same live evaluation.
+No read trusts the row alone. The official-score `ready` status and the Student `score_visible` flag (`09-api-contracts.md`) require the row **and** a live evaluation of Homework steps 1-3 (or the Blitz rules) that is ready with the same Attempt and the same normalized score. Stage 10 closure must use the same live evaluation.
 
 ### Integrity
 
