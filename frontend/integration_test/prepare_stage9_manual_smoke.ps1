@@ -104,7 +104,7 @@ try {
         Write-Output 'Stage9ManualSmokeCleanup: PASS (manifest rows/blobs removed, unrelated sentinels unchanged then removed)'
         return
     }
-    if (Test-Stage9ManualSmokePending) { throw (Get-Stage9ManualSmokePendingMessage) }
+    if (Test-Stage9ManualSmokePending) { throw ('environment/runtime defect: ' + (Get-Stage9ManualSmokePendingMessage)) }
     Invoke-Stage9ManualSeeder ensureSentinels | Out-Null
     $sentinels = Get-Stage9SentinelFacts
     $priorFacts = Get-Stage9DatabaseFacts

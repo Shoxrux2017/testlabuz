@@ -175,7 +175,8 @@ exit $LASTEXITCODE
         $process.WaitForExit()
         if ($process.ExitCode -ne 0) {
             $diagnostics = Protect-Stage9Diagnostic ($stdout.GetAwaiter().GetResult() + "`n" + $stderr.GetAwaiter().GetResult()) @(Get-Stage9SecretForms)
-            throw ('Stage 9 Windows UI process failed: ' + $diagnostics)
+            # The Flutter test prefixes its own failures; classify by its message below before acting.
+            throw ('integration-harness defect: Stage 9 Windows UI process failed (classify from the test output): ' + $diagnostics)
         }
         if ($next -ne $checkpointNames.Count) { throw 'integration-harness defect: Stage 9 Windows UI omitted mandatory DB checkpoints.' }
         Write-Host 'Stage9WindowsUiProcess: PASS exit_code=0'
@@ -200,6 +201,7 @@ exit $LASTEXITCODE
 $operationFailed = $false
 $stateTouched = $false
 $stateRemoved = $false
+$baselineProven = $false
 $harnessLock = $null
 try {
     $harnessLock = Enter-Stage9HarnessLock
@@ -249,6 +251,7 @@ try {
     Assert-Stage9Baseline $baseline
     Assert-Stage9SentinelsUnchanged $sentinels $baseline.sentinels 'seeding'
     Write-Output 'Stage9BaselineOracle: PASS'
+    $baselineProven = $true
     Complete-Stage9Step baseline_oracle
     $fixtures = New-Stage9FixtureManifest -DestinationRoot (Join-Path ([IO.Path]::GetTempPath()) ('testlabuz-stage9-fixtures-' + [guid]::NewGuid().ToString('N')))
     Assert-Stage9FixtureManifest $fixtures
@@ -315,7 +318,15 @@ try {
     [IO.File]::WriteAllText($evidencePath, ($evidence | ConvertTo-Json -Depth 30), [Text.UTF8Encoding]::new($false))
     Write-Output "Stage9AutomatedEvidence: PASS duration_seconds=$($evidence.duration_seconds) steps=$($executed.Count) evidence=$evidencePath"
 }
-catch { $operationFailed = $true; throw }
+catch {
+    $operationFailed = $true
+    # Isolation was proven by the baseline, so a later ownership refusal means a product write broke ownership.
+    $refusal = 'environment/runtime defect: Stage 9 container PHP refused: '
+    if ($baselineProven -and $_.Exception.Message.StartsWith($refusal, [StringComparison]::Ordinal)) {
+        throw ('production defect: Stage 9 container PHP refused after the baseline: ' + $_.Exception.Message.Substring($refusal.Length))
+    }
+    throw
+}
 finally {
     $cleanupErrors = [Collections.Generic.List[string]]::new()
     if ($null -ne $context) { try { Close-Stage9ApiContext $context $operationFailed } catch { $cleanupErrors.Add('Stage 9 API session cleanup failed.') } }
@@ -323,7 +334,7 @@ finally {
     try { if ($null -ne $evidenceRoot) { Remove-Stage9LocalRoot -Root $evidenceRoot -Kind evidence } } catch { $cleanupErrors.Add('Stage 9 local evidence cleanup failed.') }
     $password = $null
     Exit-Stage9HarnessLock $harnessLock
-    if ($cleanupErrors.Count -gt 0 -and -not $operationFailed) { throw ($cleanupErrors -join ' ') }
+    if ($cleanupErrors.Count -gt 0 -and -not $operationFailed) { throw ('integration-harness defect: ' + ($cleanupErrors -join ' ')) }
     if ($operationFailed -and $stateRemoved) { Write-Output 'Stage9Run: FAILED after the final cleanup; no manifest-owned state remains.' }
     elseif ($operationFailed -and $stateTouched) { Write-Output 'Stage9Run: FAILED; manifest-owned DB/private state is preserved for diagnosis and is removed by the next invocation.' }
     elseif ($operationFailed) { Write-Output 'Stage9Run: FAILED before any Stage 9 manifest state was changed.' }

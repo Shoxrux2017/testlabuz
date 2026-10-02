@@ -250,6 +250,7 @@ foreach ($names in @(@('testlabuz-stage9-e2e-app'), @('testlabuz-stage9-e2e-app'
 $validLaravel = [pscustomobject] @{
     environment = 'testing'; debug = $false; database_default = 'pgsql'; connection_driver = 'pgsql';
     pdo_driver = 'pgsql'; database = 'testlabuz_testing'; pending_migrations = 0
+    cache_store = 'file'; session_driver = 'file'; queue_connection = 'sync'
     database_host = 'postgres'; database_port = '5432'
     private_disk = 'local'; private_driver = 'local'; private_public = $false
     private_root = '/var/www/html/storage/app/private'; public_root = '/var/www/html/storage/app/public'
@@ -258,6 +259,7 @@ $invalidLaravel = @(
     @{ environment = 'local' }, @{ environment = 'production' }, @{ debug = $true }, @{ database_default = 'sqlite' },
     @{ connection_driver = 'mysql' }, @{ pdo_driver = 'mysql' }, @{ database = 'testlabuz' }, @{ database = 'testlabuz_demo' },
     @{ database_host = 'other' }, @{ database_port = '5433' }, @{ pending_migrations = 1 },
+    @{ cache_store = 'database' }, @{ session_driver = 'database' }, @{ queue_connection = 'database' },
     @{ private_disk = '' }, @{ private_disk = 'public' }, @{ private_driver = 's3' }, @{ private_public = $true },
     @{ private_root = '/var/www/html/storage/app/public' }, @{ private_root = '/var/www/html/storage/app/private/../public' },
     @{ public_root = '/var/www/html/storage/app/private' }

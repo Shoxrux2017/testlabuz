@@ -115,6 +115,9 @@ Future<String> _setReviewDeadline(Stage9Harness h) async {
     'Waiting for review: 1',
   );
   await _waitExact(h, overdue, 'Overdue: 1');
+  // 13:00Z shown in Institution time (Asia/Tokyo); device time (+05:00) would show 18:00.
+  final deadlineValue = h.byKey('teacherHomeworkReviewDeadlineValue');
+  await _waitExact(h, deadlineValue, '2026-01-15 22:00');
 
   await h.tap(h.byKey('teacherHomeworkReviewDeadlineSetButton'));
   await h.until(
@@ -148,7 +151,9 @@ Future<String> _setReviewDeadline(Stage9Harness h) async {
     'review deadline confirmation',
   );
   await _waitExact(h, overdue, 'Overdue: 0');
-  return '${day.year}-${two(day.month)}-${two(day.day)}';
+  final typedDate = '${day.year}-${two(day.month)}-${two(day.day)}';
+  await _waitExact(h, deadlineValue, '$typedDate 22:00');
+  return typedDate;
 }
 
 /// Steps 3-4: the task-scoped queue opens the only waiting submission.

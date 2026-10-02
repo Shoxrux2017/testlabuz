@@ -332,10 +332,11 @@ class Stage9E2eSeeder extends Seeder
             }
         }
         $state['blobs'] = array_values(array_unique($state['blobs'], SORT_REGULAR));
-        // Cleanup deletes every blob in an owned Attempt directory, so no foreign File row may point into one.
+        // Cleanup deletes every blob in an owned Attempt directory, so no foreign File row may point into one. The key is
+        // matched anywhere because the storage layer normalizes leading slashes, '.', '..' and backslashes.
         $foreign = DB::table('files')->whereNotIn('id', $state['db']['files'])->where(function ($query) use ($attemptRows): void {
             foreach ($attemptRows as $attempt) {
-                $query->orWhere('storage_key', 'like', 'student-submissions/'.$attempt->institution_id.'/'.$attempt->id.'/%');
+                $query->orWhere('storage_key', 'like', '%'.$attempt->id.'%');
             }
         });
         $this->require($attemptRows->isEmpty() || $foreign->doesntExist(), 'Unowned Stage 9 File row.');

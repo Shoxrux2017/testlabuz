@@ -458,7 +458,8 @@ class Stage9E2eSeederTest extends TestCase
         $this->assertSame(1, DB::table('users')->where('id', Stage9E2eSeeder::id(999_001))->count());
     }
 
-    public function test_ownership_refuses_a_foreign_file_keyed_into_an_owned_attempt_directory(): void
+    #[DataProvider('foreignFileKeys')]
+    public function test_ownership_refuses_a_foreign_file_keyed_into_an_owned_attempt_directory(string $prefix): void
     {
         $seeder = new Stage9E2eSeeder;
         $seeder->ensureSentinels();
@@ -470,7 +471,7 @@ class Stage9E2eSeederTest extends TestCase
         $disk->put($key, 'E2E S09 foreign bytes in an owned directory');
         DB::table('files')->insert(['id' => Stage9E2eSeeder::sentinelId(1_402), 'institution_id' => Stage9E2eSeeder::sentinelId(1),
             'uploaded_by_user_id' => Stage9E2eSeeder::sentinelId(102), 'category' => 'student_submission', 'original_name' => 'e2e_s09_foreign.pdf',
-            'storage_disk' => 'stage9_seeder_test', 'storage_key' => $key, 'mime_type' => 'application/pdf', 'extension' => 'pdf', 'size_bytes' => 41,
+            'storage_disk' => 'stage9_seeder_test', 'storage_key' => $prefix.$key, 'mime_type' => 'application/pdf', 'extension' => 'pdf', 'size_bytes' => 41,
             'created_at' => now(), 'updated_at' => now()]);
         $before = $this->structuralSnapshot();
         foreach (['ownedState', 'cleanupOwnedState'] as $operation) {
@@ -484,6 +485,12 @@ class Stage9E2eSeederTest extends TestCase
         $this->assertSame($before, $this->structuralSnapshot());
         $this->assertSame('E2E S09 foreign bytes in an owned directory', $disk->get($key));
         $this->assertSame(1, DB::table('files')->where('id', Stage9E2eSeeder::sentinelId(1_402))->count());
+    }
+
+    /** The storage layer resolves these to the same owned blob. */
+    public static function foreignFileKeys(): array
+    {
+        return ['canonical key' => [''], 'leading slash' => ['/'], 'current directory' => ['./'], 'parent traversal' => ['x/../']];
     }
 
     public function test_sentinel_graph_is_idempotent_and_never_silently_accepts_a_change(): void

@@ -414,7 +414,8 @@ flutter test integration_test/stage9_review_flow_test.dart -d windows --no-pub -
 1. Sign in through the login UI and reach `teacherLearningWorkspace`.
 2. On the `review_hw` detail:
    - `teacherTaskReviewWaitingCount` = `Waiting for review: 1`; `teacherTaskReviewOverdueCount` = `Overdue: 1`.
-   - Set the deadline: `teacherHomeworkReviewDeadlineSetButton`, then the date picker in input mode (date = run date + 7 days), then OK on the time picker. The initial time is the current deadline in Institution time, 22:00. Wait for `Review deadline saved.`, then `Overdue: 0`.
+   - `teacherHomeworkReviewDeadlineValue` = `2026-01-15 22:00` (the seeded 13:00Z in Institution time; device time would show 18:00).
+   - Set the deadline: `teacherHomeworkReviewDeadlineSetButton`, then the date picker in input mode (date = run date + 7 days), then OK on the time picker. The initial time is the current deadline in Institution time, 22:00. Wait for `Review deadline saved.`, then `Overdue: 0` and `teacherHomeworkReviewDeadlineValue` = `<typed date> 22:00`.
    - **Checkpoint `review_deadline_set`** (the payload carries the typed date). Oracle: `review_due_at` = typed date 22:00 Asia/Tokyo in UTC (13:00Z); nothing else changed except the sign-in. The runner refuses a +09:00 host and records the host offset in the evidence.
 3. `teacherTaskReviewQueueButton` → the scope label reads `Submissions of this Homework`. Exactly one row, `teacherReviewQueueRow:<student #1>`, containing `Waiting for review` and `Reviewed 0 of 3 answers`. Tap it.
 4. The detail opens at `/teacher/reviews/<id>`:

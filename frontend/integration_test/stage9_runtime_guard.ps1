@@ -449,7 +449,11 @@ function Assert-Stage9LaravelFacts {
         [string] $Facts.database -cne 'testlabuz_testing' -or
         [string] $Facts.database_host -cne 'postgres' -or
         [string] $Facts.database_port -cne '5432' -or
-        [int] $Facts.pending_migrations -ne 0
+        [int] $Facts.pending_migrations -ne 0 -or
+        # A cached config could override the container environment; database drivers would write unowned rows.
+        [string] $Facts.cache_store -cne 'file' -or
+        [string] $Facts.session_driver -cne 'file' -or
+        [string] $Facts.queue_connection -cne 'sync'
     ) {
         throw 'environment/runtime defect: The Stage 9 Laravel/database runtime identity is unsafe.'
     }
@@ -601,6 +605,9 @@ $facts = [
     'database_host' => config('database.connections.pgsql.host'),
     'database_port' => (string) config('database.connections.pgsql.port'),
     'pending_migrations' => count(array_diff($expectedMigrations, $ranMigrations)),
+    'cache_store' => config('cache.default'),
+    'session_driver' => config('session.driver'),
+    'queue_connection' => config('queue.default'),
     'private_disk' => config('filesystems.private_files_disk'),
     'private_driver' => config('filesystems.disks.'.config('filesystems.private_files_disk').'.driver'),
     'private_root' => realpath((string) config('filesystems.disks.'.config('filesystems.private_files_disk').'.root')) ?: '',
