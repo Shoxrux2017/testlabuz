@@ -227,4 +227,13 @@ $message = $null; try { Invoke-Stage9GuardedScheduleRun -FactsProvider { $empty 
 if ($message -notlike 'environment/runtime defect:*mutex*') { throw 'integration-harness defect: a skipped scheduled command was not classified as a stale-mutex environment defect.' }
 $script:checks++
 
+# ---------------------------------------------------------------- every Stage 9 script parses
+# A script that only the owner runs (the Android smoke) must not first fail on a syntax error during the smoke.
+foreach ($script in @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*stage9*.ps1')) {
+    $parseErrors = $null
+    [void] [Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref] $null, [ref] $parseErrors)
+    if (@($parseErrors).Count -ne 0) { throw "integration-harness defect: $($script.Name) does not parse: $($parseErrors[0].Message)" }
+    $script:checks++
+}
+
 Write-Output "Stage9Oracle pure verifier: PASS ($script:checks checks; no DB, API or scheduled-command execution)."
