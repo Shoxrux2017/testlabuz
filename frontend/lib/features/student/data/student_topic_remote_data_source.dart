@@ -9,6 +9,7 @@ import '../domain/student_topic.dart';
 import '../domain/student_topic_list_query.dart';
 import 'dto/student_dto_parse.dart';
 import 'dto/student_topic_dto.dart';
+import 'dto/student_topic_result_dto.dart';
 
 final studentTopicRemoteDataSourceProvider =
     Provider<StudentTopicRemoteDataSource>((ref) {
@@ -69,6 +70,37 @@ class StudentTopicRemoteDataSource {
       );
 
       return StudentTopicDetailDto.fromJson(envelope['data']);
+    });
+  }
+
+  /// The Student's own Topic result (docs/09 §29.5); null for `{"data": null}`.
+  Future<StudentTopicResultDto?> fetchTopicResult(String topicId) {
+    if (!isCanonicalStudentTopicId(topicId)) {
+      throw ArgumentError.value(
+        topicId,
+        'topicId',
+        'Must be a canonical UUID.',
+      );
+    }
+
+    return _mapFailures(() async {
+      final response = await dio.get<Object?>(
+        '/student/topics/${Uri.encodeComponent(topicId)}/result',
+        options: Options(followRedirects: false),
+      );
+      if (response.statusCode != 200) {
+        throw const FormatException(
+          'Student Topic result success status must be 200.',
+        );
+      }
+      final envelope = readExactStudentMap(
+        response.data,
+        context: 'Student Topic result envelope',
+        keys: const {'data'},
+      );
+      final data = envelope['data'];
+
+      return data == null ? null : StudentTopicResultDto.fromJson(data);
     });
   }
 

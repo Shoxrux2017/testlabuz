@@ -134,6 +134,9 @@ String studentHomeworkStartFailureMessage(ApiFailure failure) =>
       ApiErrorCodes.businessConflict =>
         'The attempt could not be started because Homework state changed. '
             'Refresh and try again.',
+      ApiErrorCodes.resultClosed =>
+        'Your Topic result is closed, so a new Homework attempt cannot be '
+            'started.',
       _ => 'The attempt could not be started. Refresh and try again.',
     };
 

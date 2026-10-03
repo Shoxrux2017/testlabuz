@@ -477,6 +477,38 @@ void main() {
         expect(repository.keys, hasLength(1));
       },
     );
+
+    testWidgets(
+      '${surface.name} a closed Topic result explains the refused Start',
+      (tester) async {
+        final repository = _StartRepository(
+          onStart: (_, _) async => throw studentServerFailure(
+            ApiErrorCodes.resultClosed,
+            statusCode: 409,
+          ),
+        );
+        await _pumpStartDetail(
+          tester,
+          surface: surface,
+          starts: repository,
+          homework: _HomeworkRepository(
+            onDetail: (_) async => _detail(inProgress: false),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const Key('studentHomeworkStartAttemptButton')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(
+            'Your Topic result is closed, so a new Homework attempt cannot be '
+            'started.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Raw server failure'), findsNothing);
+      },
+    );
   }
 
   for (final status in StudentHomeworkDetailStatus.values.where(

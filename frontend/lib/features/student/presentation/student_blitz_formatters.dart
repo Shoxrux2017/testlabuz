@@ -153,6 +153,9 @@ String studentBlitzStartFailureMessage(ApiFailure failure) =>
             'Refresh and try again.',
       ApiErrorCodes.businessConflict =>
         'The Blitz changed. Refresh and try again.',
+      ApiErrorCodes.homeworkNotSubmitted =>
+        "This Blitz can only be started after the Topic's Homework was "
+            'submitted.',
       _ => 'The Blitz attempt could not be started. Refresh and try again.',
     };
 

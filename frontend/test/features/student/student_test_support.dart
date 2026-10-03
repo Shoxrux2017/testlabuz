@@ -10,6 +10,7 @@ import 'package:testlabuz_client/features/student/domain/student_topic.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list_query.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_repository.dart';
+import 'package:testlabuz_client/features/student/domain/student_topic_result.dart';
 
 const studentTopicId = '10000000-0000-0000-0000-000000000001';
 const studentMaterialId = '20000000-0000-0000-0000-000000000001';
@@ -165,14 +166,110 @@ ApiRequestException studentServerFailure(String code, {int statusCode = 403}) {
   );
 }
 
+/// The JSON of `GET /student/topics/{topic}/result` data: by default a visible
+/// calculated result (H 88, B 84, average 86, Understood well) with a comment.
+Map<String, Object?> studentTopicResultJson({
+  String topicId = studentTopicId,
+  String status = 'calculated',
+  String? closedOutcome,
+  String? missingComponent,
+  bool visible = true,
+  Object? homeworkScore = 88,
+  Object? blitzScore = 84,
+  Object? finalScore = 86,
+  String? method = 'average',
+  Object? category = const {
+    'code': 'understood_well',
+    'label': 'Understood well',
+  },
+  String? teacherComment = 'Revise question 4.',
+}) {
+  return {
+    'topic_id': topicId,
+    'result_status': status,
+    'closed_outcome': closedOutcome,
+    'missing_component': missingComponent,
+    'visible': visible,
+    'homework_score': homeworkScore,
+    'blitz_score': blitzScore,
+    'final_score': finalScore,
+    'calculation_method': method,
+    'category': category,
+    'teacher_comment': teacherComment,
+  };
+}
+
+/// The JSON of a result whose values the Student cannot see yet.
+Map<String, Object?> hiddenStudentTopicResultJson({
+  String status = 'calculated',
+  String? closedOutcome,
+  String? missingComponent,
+}) {
+  return studentTopicResultJson(
+    status: status,
+    closedOutcome: closedOutcome,
+    missingComponent: missingComponent,
+    visible: false,
+    homeworkScore: null,
+    blitzScore: null,
+    finalScore: null,
+    method: null,
+    category: null,
+    teacherComment: null,
+  );
+}
+
+StudentTopicResult studentTopicResult({
+  String topicId = studentTopicId,
+  StudentTopicResultStatus status = StudentTopicResultStatus.calculated,
+  StudentTopicResultOutcome? closedOutcome,
+  StudentTopicResultMissingComponent? missingComponent,
+  bool visible = true,
+  double? homeworkScore = 88,
+  double? blitzScore = 84,
+  double? finalScore = 86,
+  StudentTopicResultMethod? method = StudentTopicResultMethod.average,
+  StudentTopicResultCategory? category = const StudentTopicResultCategory(
+    code: StudentTopicResultCategoryCode.understoodWell,
+    label: 'Understood well',
+  ),
+  String? teacherComment = 'Revise question 4.',
+}) {
+  return StudentTopicResult(
+    topicId: topicId,
+    status: status,
+    closedOutcome: closedOutcome,
+    missingComponent: missingComponent,
+    visible: visible,
+    homeworkScore: homeworkScore,
+    blitzScore: blitzScore,
+    finalScore: finalScore,
+    method: method,
+    category: category,
+    teacherComment: teacherComment,
+  );
+}
+
 class FakeStudentTopicRepository implements StudentTopicRepository {
-  FakeStudentTopicRepository({this.onFetchTopics, this.onFetchTopic});
+  FakeStudentTopicRepository({
+    this.onFetchTopics,
+    this.onFetchTopic,
+    this.onFetchTopicResult,
+  });
 
   Future<StudentTopicListPage> Function(StudentTopicListQuery query)?
   onFetchTopics;
   Future<StudentTopicDetail> Function(String topicId)? onFetchTopic;
+  Future<StudentTopicResult?> Function(String topicId)? onFetchTopicResult;
   final listQueries = <StudentTopicListQuery>[];
   final detailIds = <String>[];
+  final resultIds = <String>[];
+
+  @override
+  Future<StudentTopicResult?> fetchTopicResult(String topicId) {
+    resultIds.add(topicId);
+    return onFetchTopicResult?.call(topicId) ?? Future.value();
+  }
 
   @override
   Future<StudentTopicListPage> fetchTopics(StudentTopicListQuery query) {

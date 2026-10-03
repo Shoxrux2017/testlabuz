@@ -42,4 +42,11 @@ abstract final class ApiErrorCodes {
       'blitz_attempt_exception_not_allowed';
   static const blitzNormalAttemptRequired = 'blitz_normal_attempt_required';
   static const automaticCheckingPending = 'automatic_checking_pending';
+  static const resultClosed = 'result_closed';
+  static const resultNotReady = 'result_not_ready';
+  static const resultNotReadyForClosure = 'result_not_ready_for_closure';
+  static const studentResultNotReleased = 'student_result_not_released';
+  static const manualReleaseNotAllowed = 'manual_release_not_allowed';
+  static const officialHomeworkNotActivated = 'official_homework_not_activated';
+  static const homeworkNotSubmitted = 'homework_not_submitted';
 }

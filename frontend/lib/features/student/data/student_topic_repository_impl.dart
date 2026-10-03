@@ -6,6 +6,7 @@ import '../domain/student_topic.dart';
 import '../domain/student_topic_list.dart';
 import '../domain/student_topic_list_query.dart';
 import '../domain/student_topic_repository.dart';
+import '../domain/student_topic_result.dart';
 import 'student_topic_remote_data_source.dart';
 
 final studentTopicRepositoryProvider = Provider<StudentTopicRepository>((ref) {
@@ -39,5 +40,23 @@ class StudentTopicRepositoryImpl implements StudentTopicRepository {
     }
 
     return topic;
+  }
+
+  @override
+  Future<StudentTopicResult?> fetchTopicResult(String topicId) async {
+    final result = (await remoteDataSource.fetchTopicResult(
+      topicId,
+    ))?.toDomain();
+    if (result != null &&
+        result.topicId.toLowerCase() != topicId.toLowerCase()) {
+      throw ApiRequestException(
+        ApiFailure.local(
+          kind: ApiFailureKind.invalidResponse,
+          message: 'Student Topic result Topic does not match the request.',
+        ),
+      );
+    }
+
+    return result;
   }
 }

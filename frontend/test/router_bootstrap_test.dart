@@ -38,6 +38,7 @@ import 'package:testlabuz_client/features/student/domain/student_topic.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list_query.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_repository.dart';
+import 'package:testlabuz_client/features/student/domain/student_topic_result.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_group_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 
@@ -1234,6 +1235,9 @@ class FakePlatformInstitutionListRepository
 
 class FakeStudentTopicRepository implements StudentTopicRepository {
   final detailIds = <String>[];
+
+  @override
+  Future<StudentTopicResult?> fetchTopicResult(String topicId) async => null;
 
   @override
   Future<StudentTopicListPage> fetchTopics(StudentTopicListQuery query) async {

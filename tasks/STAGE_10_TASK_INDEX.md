@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 10 — Final Result and Understanding Assessment` (`docs/06-roadmap.md` §15) |
-| Stage status | `In Progress — backend` |
+| Stage status | `In Progress — frontend` (backend delivered and `PASS`) |
 | Verification model | `Workflow v3 — Lean Verification + Backend/Frontend Phase 2 + Real-Stack Integration`, with the Stage 10 process below |
-| Decomposition status | Backend plan `Approved by the Project Owner (2026-10-03)`; frontend plan follows the backend report |
+| Decomposition status | Backend plan `Approved by the Project Owner (2026-10-03)`; backend delivered; frontend plan `Approved by the Project Owner (2026-10-03)` |
 | Planning baseline `origin/main` | `ccab413` (Stage 9 closed; `DEP-FIX-001` merged) |
 | Previous Stage | `Stage 9 — Closed / PASS` (`tasks/STAGE_09_CLOSURE_REVIEW.md`) |
 | Roles | Claude: contracts, implementation, review, acceptance, checkpoints, **merges each Stage 10 task PR** after review `PASS` and green verification. Project Owner: decisions reserved to the owner, plan approval, review at the backend and frontend boundaries, Android manual smoke |
@@ -79,6 +79,8 @@ allow, and is frozen by closure.
 | `S10-D9` | When a result can be closed (`BR-RES-011` allowed closure before the tasks end) | Only when the Student's work is finished (the `S10-D3` moment) |
 | — | Backend plan | Approved as proposed (§7) |
 | `S10-BE-PH2-D1` | Seven optional test-hardening P3 from `S10-BE-PHASE-2` (`A-1`, `A-2`, `B-1`, `B-2`, `C-1`, `C-2`, `D-4`) | **A** — one small test-only task (`S10-BE-PHASE-2-FIX-001`) before the frontend plan |
+| `S10-FE-D1` | What the Teacher can do with Topic results on mobile (`docs/03` vs `docs/04`/`docs/07`; `docs/06` leaves it to the frontend plan) | **B** — mobile: the results list, counts and detail plus release (single and bulk, Student and Parent); the comment and closure stay desktop-only |
+| — | Frontend plan | Approved as proposed (§7 rows `6`-`11`) |
 
 ## 5. Technical Decisions (approved with the plan)
 
@@ -133,8 +135,13 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 | `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Approved` (on `main` `b096f18`) | Accepted — delivered (PR #319, `main` `48a607a`) | `tasks/backend/stage-10/S10-BE-003-release-and-student-parent-reads.md` |
 | `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Approved` (on `main` `48a607a`) | Accepted — delivered (PR #320, `main` `4356179`) | `tasks/backend/stage-10/S10-BE-004-closure-and-work-order.md` |
 | `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | Executed on `main` `4356179` | `PASS` — reported to the owner | `tasks/backend/stage-10/S10-BE-PHASE-2-backend-block-review.md` |
-| `5a` | `S10-BE-PHASE-2-FIX-001` | Backend tests | The seven test-hardening P3 of `S10-BE-PHASE-2`; no production change | `S10-BE-PH2-D1` | `Approved` (on `main` `aaaad32`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-PHASE-2-FIX-001-test-hardening.md` |
-| — | Frontend plan | Frontend | Planned after the owner reviews the backend report | Owner review | — | — | — |
+| `5a` | `S10-BE-PHASE-2-FIX-001` | Backend tests | The seven test-hardening P3 of `S10-BE-PHASE-2`; no production change | `S10-BE-PH2-D1` | `Approved` (on `main` `aaaad32`) | Accepted — delivered (PR #322, `main` `15c9a71`) | `tasks/backend/stage-10/S10-BE-PHASE-2-FIX-001-test-hardening.md` |
+| `6` | `S10-FE-001` | Frontend (Student) | The seven Stage 10 error codes; the Student Topic result card; `homework_not_submitted` and `result_closed` Start messages | Backend delivered | `Approved` (on `main` `15c9a71`) | Review `PASS`; PR open | `tasks/frontend/stage-10/S10-FE-001-student-topic-result-and-codes.md` |
+| `7` | `S10-FE-002` | Frontend (Teacher) | Results entry on the Topic detail, results list (filters, counts, pages) and result detail on desktop and mobile | `FE-001` | `Draft` | Not started | written before implementation |
+| `8` | `S10-FE-003` | Frontend (Teacher) | Release single/bulk (desktop and mobile), comment and close single/bulk (desktop), confirmations, skip report, error mapping; docs aligned to `S10-FE-D1` | `FE-002` | `Draft` | Not started | written before implementation |
+| `9` | `S10-FE-004` | Frontend (cross-feature) | `S10-D8` activation warning, archive warning, review `result_closed`, review-queue Topic/group/Student filters (`CL9-5`), related-view refresh | `FE-003` | `Draft` | Not started | written before implementation |
+| `10` | `S10-FE-005` | Frontend (polish) | Carried `FE-PH2` items: the deferred upload during the leave confirmation, `B-2`, `B-4`, `C-3`, `A-2`, `B-3`, `D-3`, `B-5` (`C-4`, `D-4` stay carried) | `FE-004` | `Draft` | Not started | written before implementation |
+| `11` | `S10-FE-PHASE-2` | Frontend checkpoint | Full Flutter suite, analyze, format, Windows and APK builds, fresh review; then report to the owner and wait | `FE-001…005` | `Draft` | Not started | executed record |
 
 Only a row whose readiness is `Approved` may be implemented.
 
@@ -224,6 +231,12 @@ Only a row whose readiness is `Approved` may be implemented.
   (no production change; a shared snapshot probe `AssertsTopicResultSnapshotReads` for five reads). Every
   protected behavior was shown by a mutation check (17/17 killed). Review #1 `PASS` (P3 = 6, all applied).
   The changed test files: 122 passed.
+- 2026-10-03: owner `S10-FE-D1` = B (Teacher results on mobile: view and release; comment and closure desktop-only);
+  frontend plan approved (§7 rows `6`-`11`).
+- 2026-10-03: `S10-FE-001` implemented (TDD; mutation check 7/7 killed). Review #1 `NOT ACCEPTED` (P2 = 1: a Retry after a
+  failed first load showed "no result" while in flight; P3 = 4: ownership pattern, test gaps, button label, bookkeeping),
+  all fixed with a `loaded` flag and the Homework-detail ownership pattern; review #2 `PASS` (P3 = 3, applied). Student,
+  router and core tests: 1630 passed; analyze and format clean.
 
 ## 12. Change Log
 

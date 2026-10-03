@@ -150,6 +150,7 @@ class StudentHomeworkAttemptStartController
       switch (failure.serverCode) {
         case ApiErrorCodes.deadlinePassed:
         case ApiErrorCodes.businessConflict:
+        case ApiErrorCodes.resultClosed:
           _reconcileHomework(key);
         case ApiErrorCodes.attemptsExhausted:
         case ApiErrorCodes.taskNotActive:
