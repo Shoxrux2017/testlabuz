@@ -463,6 +463,8 @@ class StudentHomeworkReadApiTest extends TestCase
             'finalized_at' => $completed ? now() : null,
             'locked_at' => $completed ? now() : null,
             'finalization_reason' => $completed ? AssessmentAttemptFinalizationReason::StudentSubmit : null,
+            // A checked Attempt always carries its score; a practice result is visible in every release mode (S10-D4).
+            'normalized_score' => $status === AssessmentAttemptStatus::Checked ? '50.00000000' : null,
         ]);
     }
 

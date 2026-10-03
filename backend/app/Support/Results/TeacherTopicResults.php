@@ -2,7 +2,6 @@
 
 namespace App\Support\Results;
 
-use App\Models\InstitutionSetting;
 use App\Models\Topic;
 
 /** Builds the Teacher's entries from the live results and the Institution's current release modes. */
@@ -36,18 +35,13 @@ final class TeacherTopicResults
             return [];
         }
 
-        $settings = InstitutionSetting::query()
-            ->select(['institution_id', 'student_result_release_mode', 'parent_result_release_mode'])
-            ->where('institution_id', $topic->institution_id)
-            ->first();
-        $studentMode = $settings?->student_result_release_mode;
-        $parentMode = $settings?->parent_result_release_mode;
+        $modes = TopicResultReleaseModes::current($topic->institution_id);
 
         return array_map(fn (TopicResultView $result): TeacherTopicResultEntry => new TeacherTopicResultEntry(
             $result,
-            $this->visibility->of($result, $studentMode, $parentMode),
-            $studentMode,
-            $parentMode,
+            $this->visibility->of($result, $modes->student, $modes->parent),
+            $modes->student,
+            $modes->parent,
         ), $results);
     }
 }

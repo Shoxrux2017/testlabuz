@@ -112,7 +112,8 @@ class StudentHomeworkAttemptSubmitIdempotencyTest extends TestCase
         ]));
         $answersBefore = $this->savedState();
         $this->travel(1)->minutes();
-        $attempt->update(['status' => $status]);
+        // A checked Attempt always carries its score; a practice result is visible in every release mode (S10-D4).
+        $attempt->update(['status' => $status] + ($status === 'checked' ? ['normalized_score' => '0.00000000'] : []));
         $attemptBefore = $attempt->fresh()->getAttributes();
         $this->travel(1)->minutes();
 

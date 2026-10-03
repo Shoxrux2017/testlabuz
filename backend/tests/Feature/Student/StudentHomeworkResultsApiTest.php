@@ -13,6 +13,7 @@ use App\Models\HomeworkAssignment;
 use App\Models\InstitutionSetting;
 use App\Models\OfficialTaskScore;
 use App\Models\Question;
+use App\Models\TopicResult;
 use App\Models\TopicResultPair;
 use App\Models\User;
 use App\Support\Checking\OfficialTaskScoreResolver;
@@ -108,7 +109,7 @@ class StudentHomeworkResultsApiTest extends TestCase
         $this->assertSame('Partial feedback.', AttemptAnswer::query()->where('question_id', $this->essay->id)->sole()->feedback);
     }
 
-    public function test_nothing_is_visible_unless_results_are_released_automatically(): void
+    public function test_an_official_homework_shows_nothing_until_its_results_are_released(): void
     {
         $this->designate();
         $this->answerAll($this->attempt);
@@ -126,6 +127,47 @@ class StudentHomeworkResultsApiTest extends TestCase
             $this->assertSame([false, null, self::HIDDEN], [$detail->json('data.score_visible'), $detail->json('data.official_score'),
                 $detail->json('data.attempt_results.0.result')]);
             $this->assertSame([false, null], [$this->listItem()['score_visible'], $this->listItem()['official_score']]);
+        }
+    }
+
+    public function test_under_manual_release_the_topic_release_opens_the_official_homework_results(): void
+    {
+        $this->release('manual_teacher');
+        $this->designate();
+        $this->answerAll($this->attempt);
+        $this->freezeAndCheck($this->attempt);
+        $this->review($this->attempt, 5, 'Well argued.');
+        $topicResult = fn (User $student): TopicResult => TopicResult::factory()->create(['institution_id' => $this->student->institution_id,
+            'topic_id' => $this->homework->assessment->topic_id, 'student_id' => $student->id]);
+        // A classmate's release and the Student's own unreleased row open nothing.
+        $topicResult(User::factory()->student()->create(['institution_id' => $this->student->institution_id]))
+            ->update(['student_released_at' => now(), 'student_released_by_user_id' => $this->teacher->id]);
+        $own = $topicResult($this->student);
+        $this->assertOfficialHomeworkHidden();
+
+        $own->update(['student_released_at' => now(), 'student_released_by_user_id' => $this->teacher->id]);
+
+        // The release stays when the mode changes (S10-D6).
+        foreach (['manual_teacher', null] as $mode) {
+            $this->release($mode);
+            $this->assertOfficialHomeworkVisible();
+        }
+    }
+
+    public function test_a_practice_homework_shows_its_result_and_feedback_in_every_release_mode(): void
+    {
+        $this->answerAll($this->attempt);
+        $this->freezeAndCheck($this->attempt);
+        $this->review($this->attempt, 5, 'Well argued.');
+
+        foreach (['manual_teacher', null, 'automatic'] as $mode) {
+            $this->release($mode);
+
+            $attempt = $this->attemptRead($this->attempt)->assertOk();
+            $attempt->assertJsonPath('data.result', ['visible' => true, 'normalized_score' => 75]);
+            $this->assertSame([null, 'Well argued.'], array_column($attempt->json('data.answers'), 'feedback'));
+            $this->assertSame(['visible' => true, 'normalized_score' => 75], $this->detail()->json('data.attempt_results.0.result'));
+            $this->assertNoOfficialScore();
         }
     }
 
@@ -275,11 +317,37 @@ class StudentHomeworkResultsApiTest extends TestCase
         $this->assertLessThanOrEqual(count($smallQueries) + 2, count($largeQueries));
     }
 
+    public function test_under_manual_release_the_list_reads_topic_releases_in_a_bounded_number_of_queries(): void
+    {
+        $this->release('manual_teacher');
+        $this->releaseTopicOf($this->officialHomeworkWithHistory());
+        [$small, $smallQueries] = $this->recordListQueries();
+        $this->assertCount(2, $small->json('data'));
+        for ($index = 0; $index < 11; $index++) {
+            $this->releaseTopicOf($this->officialHomeworkWithHistory());
+        }
+        // An official Homework whose Topic is not released stays hidden.
+        $this->officialHomeworkWithHistory();
+
+        [$large, $largeQueries] = $this->recordListQueries();
+
+        $this->assertCount(14, $large->json('data'));
+        $this->assertSame(array_fill(0, 12, ['normalized_score' => 50, 'attempt_number' => 1]),
+            array_values(array_filter(array_column($large->json('data'), 'official_score'))));
+        $this->assertLessThanOrEqual(count($smallQueries) + 2, count($largeQueries));
+    }
+
+    private function releaseTopicOf(Assessment $homework): void
+    {
+        TopicResult::factory()->releasedToStudent()->create(['institution_id' => $homework->institution_id, 'topic_id' => $homework->topic_id,
+            'student_id' => $this->student->id]);
+    }
+
     /**
      * Another official Homework of this Student in its own Topic: #1 checked (4 of 8 = 50), #2
      * waiting on a 3-point answer (bound 3 of 8 = 37.5), so the stored score stays confirmed.
      */
-    private function officialHomeworkWithHistory(): void
+    private function officialHomeworkWithHistory(): Assessment
     {
         $assessment = Assessment::factory()->homework()->create(['institution_id' => $this->student->institution_id,
             'total_possible_points' => '8.000000']);
@@ -299,6 +367,30 @@ class StudentHomeworkResultsApiTest extends TestCase
         app(OfficialTaskScoreResolver::class)->resolve($assessment->fresh(), $recipient,
             AssessmentAttempt::query()->where('assessment_student_id', $recipient->id)->get(), now());
         $this->assertSame($checked->id, OfficialTaskScore::query()->where('assessment_id', $assessment->id)->sole()->official_attempt_id);
+
+        return $assessment;
+    }
+
+    private function assertOfficialHomeworkHidden(): void
+    {
+        $attempt = $this->attemptRead($this->attempt)->assertOk();
+        $attempt->assertJsonPath('data.result', self::HIDDEN);
+        $this->assertSame([null, null], array_column($attempt->json('data.answers'), 'feedback'));
+        $this->assertSame(self::HIDDEN, $this->detail()->json('data.attempt_results.0.result'));
+        $this->assertNoOfficialScore();
+    }
+
+    private function assertOfficialHomeworkVisible(): void
+    {
+        $visible = ['visible' => true, 'normalized_score' => 75];
+        $official = ['normalized_score' => 75, 'attempt_number' => 1];
+        $attempt = $this->attemptRead($this->attempt)->assertOk();
+        $attempt->assertJsonPath('data.result', $visible);
+        $this->assertSame([null, 'Well argued.'], array_column($attempt->json('data.answers'), 'feedback'));
+        $detail = $this->detail()->assertOk();
+        $this->assertSame([$visible, true, $official], [$detail->json('data.attempt_results.0.result'),
+            $detail->json('data.score_visible'), $detail->json('data.official_score')]);
+        $this->assertSame([true, $official], [$this->listItem()['score_visible'], $this->listItem()['official_score']]);
     }
 
     private function assertNoOfficialScore(): void

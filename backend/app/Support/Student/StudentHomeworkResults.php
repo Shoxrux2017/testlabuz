@@ -16,10 +16,10 @@ use Illuminate\Database\Eloquent\Collection;
 use LogicException;
 
 /**
- * Stage 9 Student result visibility for Homework (docs/09 §17.1–§17.4). With automatic release a
- * checked eligible Attempt shows its score and its answers' feedback, and the official Homework
- * shows its official score while the stored row is confirmed by a live evaluation. The number of
- * queries does not grow with the number of Homework.
+ * Student result visibility for Homework (docs/09 §17.1–§17.4). Once a Homework's results are
+ * released (StudentResultRelease) a checked eligible Attempt shows its score and its answers'
+ * feedback, and the official Homework shows its official score while the stored row is confirmed by
+ * a live evaluation. The number of queries does not grow with the number of Homework.
  */
 final class StudentHomeworkResults
 {
@@ -28,6 +28,7 @@ final class StudentHomeworkResults
         private readonly OfficialScoreEvaluator $evaluator,
         private readonly OfficialScoreReader $reader,
         private readonly StudentResultVisibility $visibility,
+        private readonly StudentResultRelease $release,
     ) {}
 
     /**
@@ -38,21 +39,20 @@ final class StudentHomeworkResults
     public function apply(User $student, iterable $homework, ?StudentResultReleaseMode $mode): void
     {
         $homework = Collection::make($homework);
-        $released = $this->visibility->released($mode);
+        $released = $this->release->forTasks($student, $homework, $mode);
 
         foreach ($homework as $assessment) {
             $assessment->setAttribute('student_official_score', null);
 
             foreach ($this->attempts($assessment) as $attempt) {
-                $attempt->setAttribute('student_result', $this->result($attempt, $assessment, $released));
+                $attempt->setAttribute('student_result', $this->result($attempt, $assessment, $released[$assessment->id]));
             }
         }
 
-        if (! $released) {
-            return;
-        }
-
-        $officialIds = $this->designation->officialIds($student->institution_id, $homework);
+        $officialIds = $this->designation->officialIds(
+            $student->institution_id,
+            $homework->filter(fn (Assessment $assessment): bool => $released[$assessment->id]),
+        );
         $scores = $officialIds === [] ? Collection::make() : OfficialTaskScore::query()
             ->select(['id', 'institution_id', 'assessment_id', 'student_id', 'official_attempt_id', 'normalized_score'])
             ->where('institution_id', $student->institution_id)

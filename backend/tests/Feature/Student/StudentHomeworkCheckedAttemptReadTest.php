@@ -4,6 +4,7 @@ namespace Tests\Feature\Student;
 
 use App\Models\AssessmentAttempt;
 use App\Models\AttemptAnswer;
+use App\Models\TopicResultPair;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -109,6 +110,8 @@ class StudentHomeworkCheckedAttemptReadTest extends TestCase
         $key = (string) Str::uuid();
         $this->submit($student, $attempt, $key)->assertOk()->assertJsonPath('data.status', 'submitted');
         $this->uncheckFrozenAttempt($attempt);
+        // Official and unreleased, so its result stays hidden (a practice result is visible in every mode, S10-D4).
+        TopicResultPair::factory()->create(['homework_assessment_id' => $attempt->assessment_id]);
 
         return [$student, $attempt->fresh(), $key];
     }
@@ -141,7 +144,7 @@ class StudentHomeworkCheckedAttemptReadTest extends TestCase
     /** @param array<string, mixed> $data */
     private function assertNoCheckingFields(array $data): void
     {
-        // Stage 9: results are not released here, so the result is hidden and every feedback is null.
+        // The official Homework's results are not released here, so the result is hidden and every feedback is null.
         $this->assertSame(['visible' => false, 'normalized_score' => null], $data['result']);
         $this->assertSame(array_fill(0, count($data['answers']), null), array_column($data['answers'], 'feedback'));
         unset($data['result']);

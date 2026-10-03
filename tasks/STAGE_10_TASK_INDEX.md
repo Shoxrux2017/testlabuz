@@ -128,8 +128,8 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 |---|---|---|---|---|---|---|---|
 | `0` | `S10-DOC-001` | Documentation | `docs/01-09` aligned to `S10-D*`/`S10-T*`; this index | Plan approved | `Approved` (on `main` `ccab413`) | Accepted — delivered (PR #316, `main` `cc7a05f`) | `tasks/S10-DOC-001-stage-10-topic-results-contract-alignment.md` |
 | `1` | `S10-BE-001` | Backend | Result foundation: `PH2-4` consolidation, `CL9-11` hardening, `topic_results`, calculator, live cohort evaluator (no API) | `DOC-001` | `Approved` (on `main` `cc7a05f`) | Accepted — delivered (PR #317, `main` `f720b8a`) | `tasks/backend/stage-10/S10-BE-001-topic-result-foundation.md` |
-| `2` | `S10-BE-002` | Backend | Teacher result list and detail with the visibility state (the Student/Parent visibility rule), Teacher comment | `BE-001` | `Approved` (on `main` `f720b8a`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-002-teacher-topic-results.md` |
-| `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Draft` | Not started | written before implementation |
+| `2` | `S10-BE-002` | Backend | Teacher result list and detail with the visibility state (the Student/Parent visibility rule), Teacher comment | `BE-001` | `Approved` (on `main` `f720b8a`) | Accepted — delivered (PR #318, `main` `b096f18`) | `tasks/backend/stage-10/S10-BE-002-teacher-topic-results.md` |
+| `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Approved` (on `main` `b096f18`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-003-release-and-student-parent-reads.md` |
 | `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Draft` | Not started | written before implementation |
 | `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | `Draft` | Not started | executed record |
 | — | Frontend plan | Frontend | Planned after the owner reviews the backend report | Owner review | — | — | — |
@@ -193,6 +193,13 @@ Only a row whose readiness is `Approved` may be implemented.
   review #2 `NOT ACCEPTED` (P2 = 2: the JIT-off test could not fail, the first linear trim hit the
   backtracking limit; P3 = 4); review #3 `PASS`. Focused suites (`Unit`, `Results`, `Teacher`, error
   contract, `Authorization`): 1022 passed; the changed test files rerun after the last fixes: 53 passed.
+- 2026-10-03: `S10-BE-003` implemented (TDD; mutation check 14/14 killed). `S10-D4` made practice results
+  visible in every mode: Stage 7-9 fixtures with `checked` Attempts lacking a normalized score were made
+  valid, and tests that must keep a result hidden now designate the task official (deliberate updates).
+  Review #1 `PASS` (P3 = 4: role-gate test passed for the wrong reason and two broad selects, fixed; one
+  extra constant pair query and the static modes lookup, accepted). Focused suites (`Unit`, `Results`,
+  `Teacher`, `Student`, `Parent`, error contract, `Authorization`): 2341 passed; the files changed by the
+  review fixes rerun: 21 passed. Flutter: Student DTO tests, analyze and format clean.
 
 ## 12. Change Log
 

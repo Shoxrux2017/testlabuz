@@ -11,6 +11,8 @@ use App\Models\BlitzTask;
 use App\Models\Institution;
 use App\Models\InstitutionSetting;
 use App\Models\Question;
+use App\Models\TopicResult;
+use App\Models\TopicResultPair;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,7 +25,8 @@ use Tests\TestCase;
 
 /**
  * S09-BE-007C: a Student lists the finished Blitz tasks with the counting Attempt's result and
- * feedback when results are released automatically (docs/09 §20.6).
+ * feedback once its results are released (docs/09 §20.6); S10-BE-003: the Topic release under
+ * manual release and practice results in every mode (S10-D4).
  */
 class StudentFinishedBlitzApiTest extends TestCase
 {
@@ -229,16 +232,62 @@ class StudentFinishedBlitzApiTest extends TestCase
             array_intersect_key($this->item($blitz), ['attempt_exception' => true, 'result' => true]));
     }
 
-    public function test_nothing_is_visible_unless_results_are_released_automatically(): void
+    public function test_an_official_blitz_shows_nothing_until_its_results_are_released(): void
     {
         $blitz = $this->blitz('closed');
-        $this->reviewedAnswer($this->attempt($blitz, 1, 'checked'), $this->question($blitz, 1), 'Hidden remark.');
+        $this->designate($blitz);
+        $question = $this->question($blitz, 1);
+        $this->reviewedAnswer($this->attempt($blitz, 1, 'checked'), $question, 'Hidden remark.');
 
         foreach (['manual_teacher', null] as $mode) {
-            InstitutionSetting::query()->whereKey($this->institution->id)->update(['student_result_release_mode' => $mode]);
+            $this->releaseMode($mode);
 
             $this->assertSame(['attempt_number' => 1] + self::HIDDEN, $this->item($blitz)['result'], (string) $mode);
         }
+
+        // Under manual release the Teacher's Topic release opens the result; it stays when the mode changes (S10-D6).
+        TopicResult::factory()->releasedToStudent()->create(['institution_id' => $this->institution->id, 'topic_id' => $blitz->topic_id,
+            'student_id' => $this->student->id]);
+
+        foreach (['manual_teacher', null] as $mode) {
+            $this->releaseMode($mode);
+
+            $this->assertSame(['attempt_number' => 1, 'visible' => true, 'normalized_score' => 75,
+                'feedback' => [['question_id' => $question->id, 'position' => 1, 'text' => 'Hidden remark.']]], $this->item($blitz)['result'], (string) $mode);
+        }
+    }
+
+    public function test_a_practice_blitz_shows_its_result_and_feedback_in_every_release_mode(): void
+    {
+        $blitz = $this->blitz('closed');
+        $question = $this->question($blitz, 1);
+        $this->reviewedAnswer($this->attempt($blitz, 1, 'checked'), $question, 'Practice remark.');
+
+        foreach (['manual_teacher', null] as $mode) {
+            $this->releaseMode($mode);
+
+            $this->assertSame(['attempt_number' => 1, 'visible' => true, 'normalized_score' => 75,
+                'feedback' => [['question_id' => $question->id, 'position' => 1, 'text' => 'Practice remark.']]], $this->item($blitz)['result'], (string) $mode);
+        }
+    }
+
+    public function test_under_manual_release_the_list_reads_topic_releases_in_a_bounded_number_of_queries(): void
+    {
+        $this->releaseMode('manual_teacher');
+        $this->releasedOfficialBlitzWithFeedback();
+        DB::enableQueryLog();
+        $this->finished()->assertOk()->assertJsonCount(1, 'data');
+        $small = count(DB::getQueryLog());
+        for ($index = 0; $index < 11; $index++) {
+            $this->releasedOfficialBlitzWithFeedback();
+        }
+        DB::flushQueryLog();
+
+        $large = $this->finished()->assertOk()->assertJsonCount(12, 'data');
+
+        $this->assertLessThanOrEqual($small + 2, count(DB::getQueryLog()));
+        $this->assertSame(array_fill(0, 12, true), array_column(array_column($large->json('data'), 'result'), 'visible'));
+        DB::disableQueryLog();
     }
 
     public function test_the_list_query_count_stays_bounded_as_rows_grow(): void
@@ -263,6 +312,28 @@ class StudentFinishedBlitzApiTest extends TestCase
     {
         $blitz = $this->blitz('closed');
         $this->reviewedAnswer($this->attempt($blitz, 1, 'checked'), $this->question($blitz, 1), 'Remark.');
+    }
+
+    private function releasedOfficialBlitzWithFeedback(): void
+    {
+        $blitz = $this->blitz('closed');
+        $this->designate($blitz);
+        $this->reviewedAnswer($this->attempt($blitz, 1, 'checked'), $this->question($blitz, 1), 'Remark.');
+        TopicResult::factory()->releasedToStudent()->create(['institution_id' => $this->institution->id, 'topic_id' => $blitz->topic_id,
+            'student_id' => $this->student->id]);
+    }
+
+    private function releaseMode(?string $mode): void
+    {
+        InstitutionSetting::query()->whereKey($this->institution->id)->update(['student_result_release_mode' => $mode]);
+    }
+
+    /** Makes the Blitz the official Blitz of its Topic, paired with a Homework of the same Topic. */
+    private function designate(Assessment $blitz): void
+    {
+        $homework = Assessment::factory()->homework()->groupAssignment()->create(['institution_id' => $blitz->institution_id,
+            'topic_id' => $blitz->topic_id]);
+        TopicResultPair::factory()->create(['homework_assessment_id' => $homework->id, 'blitz_assessment_id' => $blitz->id]);
     }
 
     private function studentUser(): User
