@@ -78,6 +78,32 @@ class TeacherTopicResultDetailController
     return _startLoad(retainDetail: state.detail != null);
   }
 
+  /// Shows the detail an action of [owner]'s session returned; a read in
+  /// flight may predate the action, so it is dropped.
+  void acceptAuthoritativeDetail(
+    TeacherTopicResultDetail detail,
+    TeacherSessionKey owner,
+  ) {
+    if (!_matchesSession(owner) ||
+        detail.result.studentId.toLowerCase() != target.studentId) {
+      return;
+    }
+    _cancelActiveRequest();
+    state = TeacherTopicResultDetailState(
+      status: TeacherTopicResultDetailStatus.data,
+      detail: detail,
+    );
+  }
+
+  /// Reloads after an action of [owner]'s session whose effect is not known.
+  Future<void> refreshAfterAction(TeacherSessionKey owner) {
+    if (!_matchesSession(owner)) {
+      return Future<void>.value();
+    }
+    _cancelActiveRequest();
+    return _startLoad(retainDetail: state.detail != null);
+  }
+
   Future<void> _startLoad({required bool retainDetail}) {
     final sessionKey = _activeSessionKey;
     if (sessionKey == null || _requestActive || !_matchesSession(sessionKey)) {
@@ -190,6 +216,10 @@ class TeacherTopicResultDetailController
 
   void _clearOwnership() {
     _activeSessionKey = null;
+    _cancelActiveRequest();
+  }
+
+  void _cancelActiveRequest() {
     _requestActive = false;
     _generation += 1;
   }

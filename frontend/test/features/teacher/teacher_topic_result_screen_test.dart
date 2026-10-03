@@ -441,6 +441,7 @@ void main() {
   });
 
   group('Topic result detail screen', () {
+    // On mobile the comment is read-only text; desktop edits it (S10-FE-003).
     testWidgets('a calculated result shows every section', (tester) async {
       await _pumpDetail(
         tester,
@@ -459,6 +460,7 @@ void main() {
           commentUpdatedBy: teacherResultActorJson(),
           studentReleasedBy: teacherResultActorJson(fullName: 'Second Teacher'),
         ),
+        surface: AppDeviceSurface.mobile,
       );
 
       final text = _screenText(tester);
@@ -553,6 +555,7 @@ void main() {
             blitzState: 'waiting_for_teacher_review',
           ),
         ),
+        surface: AppDeviceSurface.mobile,
       );
 
       final text = _screenText(tester);
