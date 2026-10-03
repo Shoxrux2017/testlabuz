@@ -27,6 +27,7 @@ import 'package:testlabuz_client/features/teacher/data/teacher_submission_reposi
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_official_score.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_submission_detail.dart';
@@ -34,6 +35,7 @@ import 'package:testlabuz_client/features/teacher/presentation/teacher_review_fo
 
 import 'teacher_submission_test_support.dart';
 import 'teacher_test_support.dart';
+import 'teacher_topic_result_test_support.dart';
 
 final _detailPath = '/teacher/reviews/$submissionId';
 
@@ -1123,6 +1125,9 @@ Future<_Pumped> _pumpApp(
         ),
         teacherTopicRepositoryProvider.overrideWithValue(
           FakeTeacherTopicRepository(),
+        ),
+        teacherTopicResultRepositoryProvider.overrideWithValue(
+          FakeTeacherTopicResultRepository(),
         ),
         teacherLearningMaterialRepositoryProvider.overrideWithValue(
           FakeTeacherLearningMaterialRepository(),

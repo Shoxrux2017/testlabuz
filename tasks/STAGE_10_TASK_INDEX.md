@@ -136,8 +136,8 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 | `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Approved` (on `main` `48a607a`) | Accepted — delivered (PR #320, `main` `4356179`) | `tasks/backend/stage-10/S10-BE-004-closure-and-work-order.md` |
 | `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | Executed on `main` `4356179` | `PASS` — reported to the owner | `tasks/backend/stage-10/S10-BE-PHASE-2-backend-block-review.md` |
 | `5a` | `S10-BE-PHASE-2-FIX-001` | Backend tests | The seven test-hardening P3 of `S10-BE-PHASE-2`; no production change | `S10-BE-PH2-D1` | `Approved` (on `main` `aaaad32`) | Accepted — delivered (PR #322, `main` `15c9a71`) | `tasks/backend/stage-10/S10-BE-PHASE-2-FIX-001-test-hardening.md` |
-| `6` | `S10-FE-001` | Frontend (Student) | The seven Stage 10 error codes; the Student Topic result card; `homework_not_submitted` and `result_closed` Start messages | Backend delivered | `Approved` (on `main` `15c9a71`) | Review `PASS`; PR open | `tasks/frontend/stage-10/S10-FE-001-student-topic-result-and-codes.md` |
-| `7` | `S10-FE-002` | Frontend (Teacher) | Results entry on the Topic detail, results list (filters, counts, pages) and result detail on desktop and mobile | `FE-001` | `Draft` | Not started | written before implementation |
+| `6` | `S10-FE-001` | Frontend (Student) | The seven Stage 10 error codes; the Student Topic result card; `homework_not_submitted` and `result_closed` Start messages | Backend delivered | `Approved` (on `main` `15c9a71`) | Accepted — delivered (PR #323, `main` `e979a46`) | `tasks/frontend/stage-10/S10-FE-001-student-topic-result-and-codes.md` |
+| `7` | `S10-FE-002` | Frontend (Teacher) | Results entry on the Topic detail, results list (filters, counts, pages) and result detail on desktop and mobile | `FE-001` | `Approved` (on `main` `e979a46`) | Review `PASS`; PR open | `tasks/frontend/stage-10/S10-FE-002-teacher-topic-results-read.md` |
 | `8` | `S10-FE-003` | Frontend (Teacher) | Release single/bulk (desktop and mobile), comment and close single/bulk (desktop), confirmations, skip report, error mapping; docs aligned to `S10-FE-D1` | `FE-002` | `Draft` | Not started | written before implementation |
 | `9` | `S10-FE-004` | Frontend (cross-feature) | `S10-D8` activation warning, archive warning, review `result_closed`, review-queue Topic/group/Student filters (`CL9-5`), related-view refresh | `FE-003` | `Draft` | Not started | written before implementation |
 | `10` | `S10-FE-005` | Frontend (polish) | Carried `FE-PH2` items: the deferred upload during the leave confirmation, `B-2`, `B-4`, `C-3`, `A-2`, `B-3`, `D-3`, `B-5` (`C-4`, `D-4` stay carried) | `FE-004` | `Draft` | Not started | written before implementation |
@@ -237,6 +237,10 @@ Only a row whose readiness is `Approved` may be implemented.
   failed first load showed "no result" while in flight; P3 = 4: ownership pattern, test gaps, button label, bookkeeping),
   all fixed with a `loaded` flag and the Homework-detail ownership pattern; review #2 `PASS` (P3 = 3, applied). Student,
   router and core tests: 1630 passed; analyze and format clean.
+- 2026-10-04: `S10-FE-002` implemented (TDD; mutation check 25/25 killed). Review #1 `PASS` (P3 = 8: card stale cue
+  and no Retry on `404`, `isNotCompleted` reuse, test gaps, contract wording; all applied). Teacher and router tests:
+  1346 passed; full frontend suite 3903 passed before the P3 fixes; analyze and format clean. Carried note: a Teacher
+  who owns a Topic but no longer teaches its Group sees "not available" on the results card (`S10-FE-004` may revisit).
 
 ## 12. Change Log
 

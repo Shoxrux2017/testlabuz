@@ -18,6 +18,7 @@ import 'teacher_blitz_section.dart';
 import 'teacher_homework_section.dart';
 import 'teacher_learning_material_section.dart';
 import 'teacher_topic_formatters.dart';
+import 'teacher_topic_results_card.dart';
 
 class TeacherTopicDetailScreen extends ConsumerWidget {
   const TeacherTopicDetailScreen({required this.topicId, super.key});
@@ -254,6 +255,8 @@ class _TopicDetailContent extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              TeacherTopicResultsCard(topicId: topic.id),
               const SizedBox(height: 12),
               _DetailCard(
                 title: 'Topic information',
