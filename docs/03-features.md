@@ -252,7 +252,7 @@ The teacher should be able to monitor Blitz execution during class: assigned/not
 
 The teacher should be able to review student submissions. Some assignment types are checked automatically by the system: tests, true / false questions, matching tasks, ordering tasks, fill-in-the-blank tasks, and short written answers checked against accepted answers.
 
-Other answers require manual checking by the teacher: open written answers, file-based assignments, and short written answers the teacher sets to manual checking. On desktop, the teacher works from a review queue that can be filtered by task, Topic, group, Student, state, official or practice work, and overdue work, with official work listed first. The teacher opens a submission with every question, the Student's answer, and the correct-answer configuration, downloads submitted answer files, awards 0 up to the question's points, and adds feedback of at most 2000 characters if needed. The teacher may save only some manual answers of a submission (partial review) and may correct a reviewed score later; the system then recalculates the attempt and re-selects the official task score. On mobile, the teacher sees only read-only counts of submissions waiting for review and overdue review. The teacher may set an optional Homework review deadline as a reminder; it never changes scores, statuses, or official selection.
+Other answers require manual checking by the teacher: open written answers, file-based assignments, and short written answers the teacher sets to manual checking. On desktop, the teacher works from a review queue that can be filtered by state, Homework or Blitz, official or practice work, and overdue work, with official work listed first; each Homework and Blitz detail opens the queue for that task. The teacher opens a submission with every question, the Student's answer, and the correct-answer configuration, downloads submitted answer files, awards 0 up to the question's points, and adds feedback of at most 2000 characters if needed. The teacher may save only some manual answers of a submission (partial review) and may correct a reviewed score later; the system then recalculates the attempt and re-selects the official task score. On mobile, the teacher sees only read-only counts of submissions waiting for review (Homework and Blitz) and overdue (Homework only). The teacher may set an optional Homework review deadline as a reminder; it never changes scores, statuses, or official selection.
 
 After students complete homework and blitz tasks, the teacher should be able to view both results together. The system should show the homework score, blitz score, final calculated result, and understanding category.
 
@@ -1709,7 +1709,7 @@ The Teacher mobile interface may include:
 - View students who submitted
 - View students who did not submit
 - View basic student results
-- View read-only counts of submissions waiting for review and overdue review (answer review is desktop-only)
+- View read-only counts of submissions waiting for review (Homework and Blitz) and overdue (Homework only); answer review is desktop-only
 - View students who need revision or teacher support
 
 The **Student** should have both desktop and mobile access.

@@ -403,9 +403,8 @@ Responsible for use cases such as:
 - FinalizeTimedOutBlitzAttempt
 - FinalizeAttemptsOnTaskClose
 - GrantBlitzAttemptException
-- ReviewSubmission
-- ResolveOfficialHomeworkScore
-- ResolveOfficialBlitzScore
+- ReviewTeacherSubmission
+- RepairOfficialTaskScores
 - CalculateTopicResult
 - CloseTopicResult
 - ReleaseStudentTopicResult
@@ -1307,7 +1306,7 @@ Use a dedicated policy/resolver boundary such as:
 
 ```text
 HomeworkAttemptPolicy
-OfficialHomeworkScoreResolver
+OfficialTaskScoreResolver + OfficialScoreEvaluator
 ```
 
 Rules:
@@ -1318,7 +1317,7 @@ Rules:
 - Start returns the existing `in_progress` Attempt without consuming capacity, or atomically allocates `max(attempt_number) + 1` when no current Attempt exists and capacity/lifecycle/deadline rules pass.
 - Each attempt is stored independently.
 - A Stage 7 finalized Attempt is stored as `submitted` and is immutable to the Student.
-- Stage 9 chooses the official Homework score as the **highest valid completed score** among eligible Homework attempts and waits only for an Attempt that could still overtake it (`S09-D2`). `OfficialHomeworkScoreResolver` applies this rule to the Student's Attempts of this Homework with `official_score_eligible = true`; `in_progress` Attempts are not considered:
+- Stage 9 chooses the official Homework score as the **highest valid completed score** among eligible Homework attempts and waits only for an Attempt that could still overtake it (`S09-D2`). `OfficialTaskScoreResolver` (through `OfficialScoreEvaluator`) applies this rule to the Student's Attempts of this Homework with `official_score_eligible = true`; `in_progress` Attempts are not considered:
   1. `best` is the `checked` eligible Attempt with the highest stored `normalized_score`; ties go to the lowest `attempt_number`. With no `checked` Attempt the official score is not ready.
   2. Every eligible terminal Attempt that is not `checked` is **pending**. Its upper bound is `(awarded points of its checked answers + full points of its waiting answers) × 100 / possible_points`, rounded as in §16.6; an Attempt not yet automatically checked has upper bound 100.
   3. The official score is not ready while any pending Attempt has an upper bound greater than `best`, or equal to `best` with a lower `attempt_number` than `best`.
@@ -1337,14 +1336,14 @@ Use a dedicated policy/resolver boundary such as:
 
 ```text
 BlitzAttemptPolicy
-OfficialBlitzScoreResolver
+OfficialTaskScoreResolver + OfficialScoreEvaluator
 ```
 
 Rules:
 
 - The normal Blitz attempt is attempt #1.
 - Under normal conditions, no second attempt is available.
-- Without an exception, `OfficialBlitzScoreResolver` makes the official Blitz score ready when Attempt #1 is `checked` (`selection_policy_code = valid_normal_blitz`). The exception case is in §14.5.
+- Without an exception, `OfficialTaskScoreResolver` (through `OfficialScoreEvaluator`) makes the official Blitz score ready when Attempt #1 is `checked` (`selection_policy_code = valid_normal_blitz`). The exception case is in §14.5.
 - The client cannot request or create an extra attempt by itself.
 
 One Student Start route requires a strict mandatory body with exactly `intent = start_normal`, `intent = resume` plus canonical `attempt_id`, or `intent = start_replacement`. Both Start intents forbid `attempt_id`; missing/empty/malformed bodies, unknown keys/intents and malformed Resume UUIDs return `422 validation_failed`; no query parameters are accepted. The server never reinterprets an intent. Resume targets one exact own Attempt and never creates, switches, or selects a newer Attempt.
@@ -1588,7 +1587,7 @@ It may display:
 - Started timestamp
 - Remaining time or effective deadline
 - Attempt number
-- Frozen work awaiting later Stage 9 review, without a Stage 8 checking-state transition
+- Work waiting for Teacher review, without a monitoring-made checking-state transition
 - Technical exception state
 
 Stage 8 monitoring distinguishes not-started, in-progress, explicit submitted, timeout-finalized and task-close-finalized work. It cannot answer for a Student, rewrite answers, award points, perform checking, create Attempts, extend deadlines, change mode, or expose another Institution. Any required timeout reconciliation reuses the same finalizer.
@@ -1707,7 +1706,7 @@ Freezing points: Homework Submit, Homework deadline reconciliation and Homework 
 
 `S09-T3` fixes the scoring arithmetic:
 
-- No binary floating point is used in any scoring calculation. The backend uses `brick/math` (`BigDecimal`), declared as a direct dependency of `backend/composer.json` at the already locked version (`0.18.0`, today only transitive through `laravel/framework`). `bcmath` must not be used, because the Docker image does not install it.
+- No binary floating point is used in any scoring calculation. The backend uses `brick/math` (`BigDecimal`), declared as a direct dependency of `backend/composer.json` (locked at `0.18.0`). `bcmath` must not be used, because the Docker image does not install it.
 - Text normalization (§13.2) uses `Normalizer` from `symfony/polyfill-intl-normalizer` for NFC, also declared as a direct dependency at its locked version, and `mb_convert_case(..., MB_CASE_FOLD)` for case folding.
 - A partial-credit Question is computed in one step, `points × correct / total`, rounded half-up to 8 decimal places for `attempt_answers.awarded_points`. A fully correct answer always stores exactly `points`, so `earned_points ≤ possible_points` always holds.
 - `earned_points` is the exact sum of the stored `awarded_points` of the Attempt.
@@ -1736,15 +1735,15 @@ Topic (shared) → Assessment (shared) → Homework/Blitz task row (shared)
 
 ## 16.8 Official-Score Resolver and Live Evaluation
 
-`OfficialHomeworkScoreResolver` (§14.3) and `OfficialBlitzScoreResolver` (§14.4, §14.5) run inside every automatic checking run, review save, correction and exception grant for an official task, and in the sweep (§16.5). They create, replace or delete the `official_task_scores` row so that a row exists exactly while the official score is ready.
+`OfficialTaskScoreResolver`, with `OfficialScoreEvaluator` applying the Homework rule (§14.3) and the Blitz rules (§14.4, §14.5), runs inside every automatic checking run, review save, correction and exception grant for an official task, and in the sweep (§16.5). It creates, replaces or deletes the `official_task_scores` row so that a row exists exactly while the official score is ready. Reads go through `OfficialScoreReader`.
 
-Between a freeze and its checking run, the row can still show the previous result. Therefore no read trusts the row alone: the official-score read's `ready` status and the Student `score_visible` flag (§18.6) require the row **and** a live evaluation of the Homework rule (§14.3, steps 1-3) or the Blitz rules that yields the same Attempt. The Teacher official-score read (`09-api-contracts.md`) derives its status from the row and the same live evaluation. Stage 10 result closure must use the same live evaluation.
+Between a freeze and its checking run, the row can still show the previous result. Therefore no read trusts the row alone: the official-score read's `ready` status and the Student `score_visible` flag (§18.6) require the row **and** a live evaluation of the Homework rule (§14.3, steps 1-3) or the Blitz rules that is ready with the same Attempt and the same normalized score. The Teacher official-score read (`09-api-contracts.md`) derives its status from the row and the same live evaluation. Stage 10 result closure must use the same live evaluation.
 
 ---
 
 ## 16.9 Teacher Review and Correction
 
-`ReviewSubmission` saves Teacher points and feedback for the manual answers of one submission (`S09-D6`, `S09-D7`, `S09-T4`):
+`ReviewTeacherSubmission` saves Teacher points and feedback for the manual answers of one submission (`S09-D6`, `S09-D7`, `S09-T4`):
 
 - **Access.** A submission is a terminal Attempt (`submitted`, `timed_out_finalized`, `waiting_for_teacher_review`, `checked`) of a Homework or Blitz whose Topic is visible to the Teacher (same Institution, `topics.teacher_id`, current Teacher–Group membership) and whose Student is a persisted recipient. Anything else, including an `in_progress` Attempt, is a privacy-safe `404 resource_not_found`. Topic, Homework and Blitz status (active, closed, archived) do not restrict review.
 - **State.** A submission still in `submitted` or `timed_out_finalized` returns `409 automatic_checking_pending`.
@@ -2489,7 +2488,7 @@ Quick classroom/monitoring surface:
 - Blitz activation
 - Blitz monitoring
 - Student-specific Blitz exception grant where authorized (desktop-only in Stage 8, `S08-FE-006` §4; not yet delivered on mobile)
-- Read-only "waiting for review" and "overdue" counts on Homework/Blitz details; Stage 9 submission review and correction are not available on mobile (`S09-D7`)
+- Read-only review counts (waiting counts on Homework and Blitz details; overdue counts on Homework details); Stage 9 submission review and correction are not available on mobile (`S09-D7`)
 - Basic result review
 - Student/Parent release actions where institution policy requires Teacher action
 
@@ -2643,14 +2642,14 @@ Codex, database design, and API design must implement these decisions as fixed M
 - Homework: exactly 3 normal attempts.
 - Official Homework score: highest valid completed score, waiting only for an Attempt that could still overtake it (§14.3).
 - Blitz: exactly 1 normal attempt.
-- Official Blitz score: the valid completed Blitz attempt, except when an approved exception replaces an interrupted/invalid normal attempt (§14.4, §14.5).
+- Official Blitz score: the checked valid normal attempt #1; an approved exception invalidates #1 and withdraws its official score, and replacement #2 becomes official once it is checked (§14.4, §14.5).
 
 Architecture:
 
 - `HomeworkAttemptPolicy`
-- `OfficialHomeworkScoreResolver`
+- `OfficialTaskScoreResolver` with `OfficialScoreEvaluator` (Homework rule), reads through `OfficialScoreReader`
 - `BlitzAttemptPolicy`
-- `OfficialBlitzScoreResolver`
+- `OfficialTaskScoreResolver` with `OfficialScoreEvaluator` (Blitz rules), reads through `OfficialScoreReader`
 
 ---
 
@@ -3449,6 +3448,21 @@ Conceptually:
 - Optional queue worker only if a later approved feature needs asynchronous job processing; Stage 9 checking uses no queue
 
 MVP core workflows should not require a complex distributed platform.
+
+---
+
+## 36.2 Checking and Scoring Operations (Stage 9)
+
+Deploying Stage 9 requires:
+
+- **Migration.** Run `2026_09_29_000000_create_stage_9_scoring_persistence_foundation`. It creates `official_task_scores` and adds `homework_assignments.review_due_at`; its `down` drops both.
+- **Dependencies.** Run `composer install`: `brick/math` and `symfony/polyfill-intl-normalizer` are direct dependencies of `backend/composer.json` (§16.6). The PHP runtime needs `mbstring` (`MB_CASE_FOLD`); `bcmath` is not needed.
+- **Scheduler.** The Laravel Scheduler must run every minute on exactly one host; the schedule does not use `onOneServer`. `routes/console.php` schedules `homework:reconcile-deadlines`, `blitz:reconcile-timeouts` and `attempts:check-frozen`, each `everyMinute()->withoutOverlapping(5)`. Without the Scheduler a failed checking run is never retried and history frozen before Stage 9 is never checked.
+- **No scheduler in the repository Compose file.** In `docker/docker-compose.yml` the `app` service runs only `php artisan serve`, next to `postgres`; there is no scheduler service. A deployment must add one. This gap predates Stage 9.
+- **No queue worker.** Checking runs in a terminating callback after the response (§16.5), not in a queue. On a SAPI without early response flush this adds latency to the freezing request, never content.
+- **First run over existing history (PH2-2).** When the database holds unchecked Stage 7/8 history, run `php artisan attempts:check-frozen` once to completion before enabling the schedule, because `withoutOverlapping(5)` lets a long first run overlap the next one after 5 minutes.
+- **Databases between S09-BE-003B and S09-BE-004 (PH2-5).** A database that ran `d324716` (S09-BE-003B) without `da53031` (S09-BE-004) may hold Students whose official score was never resolved. The repair step of `attempts:check-frozen` (§16.5) resolves those with no pending eligible Attempt; any other is resolved by the next checking run, review save or correction of that Student's Attempts.
+- **Known deployments.** No production database exists yet. The local demo database (`testlabuz_demo`) is the only known deployment, and it is a demo.
 
 ---
 

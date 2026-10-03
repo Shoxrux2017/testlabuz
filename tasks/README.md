@@ -974,7 +974,7 @@ Workflow v3 governs new Stage 5+ work only.
 | Stage 6 — Homework Assignment Management | `Closed` | `Stage 7 planning/decomposition only` |
 | Stage 7 — Student Homework and Submission Flow | `Closed` | `Stage 8 planning/decomposition only` |
 | Stage 8 — Blitz Task Workflow | `Closed` | Historical |
-| Stage 9 — Checking and Scoring | `Implementation in progress` | `STAGE_09_CLOSURE_REVIEW` |
+| Stage 9 — Checking and Scoring | `Closed` | Dependency-update task (`S09-CL-D3`), then Stage 10 planning |
 
 Current Stage 5 progress:
 
@@ -1203,8 +1203,17 @@ their historical completion handoffs.
   Project Owner performs the Android smoke). Integration assets done; Integration Harness Preflight `PASS`
   (#1 `NOT ACCEPTED` with all findings fixed, #2 `PASS`); PR 1 open.
 - `S09-INT-001`: PR 1 merged (#312, `main` `4224fcf`); Windows real-stack run and Android manual smoke `PASS`; final
-  integration review `PASS`; `PASS / Accepted` (record in `tasks/STAGE_09_TASK_INDEX.md` §14).
-- Next permitted action: `STAGE_09_CLOSURE_REVIEW`.
+  integration review `PASS`; `PASS / Accepted` (record in `tasks/STAGE_09_TASK_INDEX.md` §14). Record PR #313
+  (`main` `38b10f6`).
+- Stage 9 Closure Review (`tasks/STAGE_09_CLOSURE_REVIEW.md`): `PASS — STAGE CLOSED`, 2026-10-03. The read-only audit
+  on `38b10f6` found P1 = 0 and five documentation P2; `S09-CLOSURE-FIX-001` (documentation and the Stage 9
+  deployment notes, no production change) fixed them in the closure PR. P3 fixed, carried with targets or accepted.
+  Owner decisions `S09-CL-D1`…`S09-CL-D3`.
+- Stage 9 — Checking and Scoring: Closed (when the closure PR merges).
+- No product verification rerun is required: Backend Phase 2, Frontend Phase 2 and the integration evidence stay valid.
+- Next permitted action: the dependency-update task (`S09-CL-D3`: the `composer audit` advisories present before
+  Stage 9), then Stage 10 planning; the Project Owner first decides how Stage 10 is run. Stage 10 implementation is
+  not authorized by this closure.
 
 ---
 

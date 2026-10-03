@@ -812,7 +812,7 @@ A teacher works inside one educational institution and can only manage the group
 
 In the MVP version, the Teacher flow should focus on the complete topic-based learning process: topic creation, material upload, homework assignment, blitz verification, result comparison, and understanding assessment.
 
-Teachers should have both desktop and mobile access. The desktop version should be used for larger work such as creating topics, uploading files, building assignments, checking answers, and reviewing detailed reports. The mobile version should support quick actions such as viewing groups, starting blitz tasks, monitoring class progress, and checking basic results.
+Teachers should have both desktop and mobile access. The desktop version should be used for larger work such as creating topics, uploading files, building assignments, checking answers, and reviewing detailed reports. The mobile version should support quick actions such as viewing groups, starting blitz tasks, monitoring class progress, and viewing basic results and read-only review counts (answer review is desktop-only).
 
 ### Main Teacher Flow
 
@@ -946,7 +946,7 @@ The Teacher creates Homework connected to a Topic.
 2. The Teacher clicks **Create Homework Assignment**.
 3. The system opens the Homework builder.
 4. The Teacher enters title, instructions, recipients, questions, answer data, and points.
-5. The Teacher may add an institution-local deadline and an optional review deadline.
+5. The Teacher may add an institution-local deadline. An optional review deadline is set on the Homework detail (desktop).
 6. The system clearly shows the fixed rule: **3 normal attempts per Student**.
 7. The Teacher does not configure the attempt count.
 8. The Teacher saves the Homework as draft or activates it when valid.
@@ -1076,7 +1076,7 @@ During class, the Teacher monitors Student participation.
 
 1. The Teacher opens the active Blitz monitoring screen.
 2. The system shows assigned Students and their current state.
-3. The Teacher can see who has not started, started, is in progress, submitted, was auto-finalized at timeout/close, or has frozen pending work awaiting later Stage 9 review.
+3. The Teacher can see who has not started, started, is in progress, submitted, was auto-finalized at timeout/close, or is waiting for Teacher review; through Stage 9 a checked Attempt shows as finalized.
 4. The system shows timing information based on authoritative server time.
 5. If a Student reports a valid technical or other approved problem, the Teacher reviews the case.
 6. While Blitz remains active and the exception preconditions below pass, the Teacher grants **one replacement Blitz attempt to that specific Student** and enters a required reason; live pre-deadline #1 cannot be invalidated.
@@ -1098,10 +1098,10 @@ The monitoring screen may show:
 Stage 8 monitoring cannot change Student answers, award points, create Attempts, or extend deadlines. Monitoring shows no score through Stage 9; the Teacher reads scores from the review queue and submission detail (Manual Checking Flow below).
 ### Manual Checking Flow
 
-Some Homework and Blitz answers require Teacher review. Stage 9 checks every frozen Attempt automatically right after its freeze commits; an Attempt with a manual answer then waits for Teacher review. Review is desktop-only; on mobile the Teacher sees only read-only counts of submissions waiting for review and overdue review.
+Some Homework and Blitz answers require Teacher review. Stage 9 checks every frozen Attempt automatically right after its freeze commits; an Attempt with a manual answer then waits for Teacher review. Review is desktop-only; on mobile the Teacher sees only read-only counts of submissions waiting for review (Homework and Blitz) and overdue (Homework only).
 
 1. The Teacher opens the review queue. It lists submissions (completed Homework and Blitz Attempts, official and practice) of recipient Students in the Teacher's own Topics while the Teacher is still assigned to the Topic's group. Topic and task status (active, closed, archived) do not restrict review; an `in_progress` Attempt is never a submission.
-2. The Teacher may filter by task, Topic, group, Student, state (waiting for Teacher review, checked, automatic checking pending), Homework or Blitz, official or practice work, and overdue work. By default official work comes first, then overdue work, then the earliest finalized.
+2. The Teacher may filter by state (waiting for Teacher review, checked, automatic checking pending), Homework or Blitz, official or practice work, and overdue work, and may open the queue of one task from its Homework or Blitz detail. By default official work comes first, then overdue work, then the earliest finalized.
 3. The Teacher opens a submission. The system shows every question in position order with its correct-answer configuration and the immutable Student answer; an unanswered question shows no answer. A submitted answer file can be downloaded.
 4. For each manual answer, the Teacher assigns 0 up to the question's points and may add feedback of at most 2000 characters.
 5. The Teacher saves the review. Saving only some of the manual answers is allowed (partial review). A submission still waiting for automatic checking cannot be reviewed yet (`409 automatic_checking_pending`).
@@ -1113,7 +1113,7 @@ Some Homework and Blitz answers require Teacher review. Stage 9 checks every fro
 
 Manual review is required for open written answers, file-based answers, and short written answers the Teacher set to manual checking. An unanswered question scores zero, and a manual question worth zero points is closed automatically with zero points; neither waits for review.
 
-The Teacher may set, change, or clear an optional review deadline on a Homework, also after the Homework is closed, but not once the Homework is archived or its Topic is closed or archived. It is a reminder only and never changes scores, statuses, or official selection. A waiting Homework submission becomes overdue once its review deadline is reached, and the Teacher Homework and Blitz details show counts of waiting and overdue submissions. Blitz has no review deadline, and Students never see it.
+The Teacher may set, change, or clear an optional review deadline on a Homework, also after the Homework is closed, but not once the Homework is archived or its Topic is closed or archived. It is a reminder only and never changes scores, statuses, or official selection. A waiting Homework submission becomes overdue once its review deadline is reached; the Teacher sees waiting counts on Homework and Blitz details and overdue counts on Homework details. Blitz has no review deadline, and Students never see it.
 ### Result Review Flow
 
 After official Homework and Blitz scores are ready, the Teacher reviews the Topic result.
@@ -1434,7 +1434,7 @@ The assignment type answering flow is:
 1. The student opens a question.
 2. The system shows the correct answer interface for that question type.
 3. The student enters or selects an answer.
-4. The system saves the answer during the attempt if supported.
+4. The system saves the answer automatically while the Attempt is editable; a chosen file uploads immediately.
 5. The student continues to the next question.
 6. The student submits the assignment when finished.
 7. The system records the submitted answers.
@@ -1836,7 +1836,7 @@ The homework completion flow is:
 2. The system shows homework assignments connected to the topic.
 3. The parent views the homework completion status.
 4. If the homework is checked and released, the parent may view the homework score.
-5. If teacher feedback is available, the parent may view it.
+5. Whether Parents see Teacher feedback is undecided (Stage 10 planning); in Stage 9 Parents see no feedback.
 
 Homework status may include:
 
@@ -2143,7 +2143,7 @@ A draft topic is useful when the teacher is still preparing materials, assignmen
 
 An active topic is visible to assigned students and can be used for learning.
 
-A closed topic means the main learning-check process is finished.
+A closed topic means the main learning-check process is finished. Teacher review and correction of existing submissions remain allowed.
 
 An archived topic is kept for history and reports but is no longer actively used.
 
@@ -2538,7 +2538,7 @@ The Teacher creates Homework from an assigned Topic.
 2. Click **Create Homework Assignment**.
 3. Enter title, description, Student instructions, recipients, questions, answer data, and points.
 4. The system shows the fixed **3-attempt** rule; the Teacher does not edit this value.
-5. The Teacher may add an institution-local deadline and an optional review deadline (a reminder that never changes scores; see section 4, Manual Checking Flow).
+5. The Teacher may add an institution-local deadline. An optional review deadline (a reminder that never changes scores; see section 4, Manual Checking Flow) is set on the Homework detail (desktop).
 6. The Teacher selects lifecycle status.
 7. If this Homework should drive the Topic result, the Teacher designates it as the official result-bearing Homework before Student attempts begin.
 8. The system validates Topic, institution, group/Student scope, questions, scoring data, and designation.
@@ -2600,7 +2600,7 @@ Flow:
 4. Assigned Students may start attempts while deadline and attempt rules permit.
 5. A pre-deadline Teacher close captures one server close instant and, in the same transaction as closing the Homework, freezes every still-`in_progress` Attempt as `submitted` with `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`.
 6. If the deadline is already reached, close first performs the common deadline reconciliation and preserves `homework_deadline_auto_submit` plus the exact deadline timestamp; repeated close/finalization does not rewrite the committed reason or timestamps.
-7. Closing blocks new Starts and Student answer/file/Submit writes. Existing frozen Attempts may be checked only later in Stage 9.
+7. Closing blocks new Starts and Student answer/file/Submit writes. Stage 9 checks the Attempts frozen by the close right after it commits (or in the minute sweep); review and correction remain allowed.
 8. Archived Homework remains historical and accepts no new activity. Stage 9 checking of its frozen Attempts and Teacher review and correction of its existing submissions remain allowed; its review deadline can no longer change.
 
 For Stage 7 Homework, `submitted` means frozen Student work ready for later checking. `Waiting for Teacher review` and `Checked` are Stage 9 submission/checking states and must not be used as Homework lifecycle statuses.
@@ -3078,7 +3078,7 @@ Student attempt/review states may include:
 - Auto-finalized at timeout
 - Waiting for Teacher review
 - Checked
-- Invalid due to approved exception
+- Invalid due to approved exception (derived from `official_score_eligible = false`; the Attempt is still checked and reviewed like any Attempt)
 - Not completed
 
 Flow:
@@ -3130,7 +3130,7 @@ Because blitz tasks are used during the first 5–10 minutes of class, teachers 
 - Ordering tasks
 - Fill-in-the-blank tasks
 
-Open written answers and file-based assignments may be supported, but they are less suitable for short in-class blitz tasks because they may require more time and manual checking.
+Open written answers and file-based assignments are supported, but they are less suitable for short in-class blitz tasks because they may require more time and their answers wait for Teacher review on desktop unless the Question is worth zero points.
 
 ### Blitz Time Limit Flow
 
@@ -3183,7 +3183,7 @@ Blitz attempts are fixed.
 3. The Teacher reviews the case.
 4. Only while `BlitzTask.status = active`, and with #1 present and no previous exception/#2, the Teacher may grant exactly **1 replacement Blitz attempt** to that persisted recipient. Draft/scheduled/closed/archived return `409 blitz_attempt_exception_not_allowed`; Teacher Close permanently prevents a new grant.
 5. The Teacher must provide a reason.
-6. Locked pre-deadline editable #1 rejects the grant without mutation. Due #1 is first timeout-finalized at exact deadline; already-terminal #1 preserves its reason/timestamps. A successful atomic grant preserves answers/files, sets #1 `official_score_eligible = false`, and records one durable exception without creating #2.
+6. Locked pre-deadline editable #1 rejects the grant without mutation. Due #1 is first timeout-finalized at exact deadline; already-terminal #1 preserves its reason/timestamps. A successful atomic grant preserves answers/files, sets #1 `official_score_eligible = false`, records one durable exception without creating #2, and withdraws (deletes) any official Blitz score already recorded for that Student.
 7. Student explicitly requests `start_replacement`; #2 receives `deadline_at = started_at + duration_seconds` in either timer mode. An elapsed common synchronized end alone does not prevent an otherwise valid active grant/Start. Stage 9 later selects only eligible valid checked history.
 8. The exception is Student-specific and does not affect classmates.
 9. No third Blitz attempt is allowed in the MVP.
@@ -3264,7 +3264,7 @@ The screen may show:
 - Not started / in progress / submitted / auto-finalized
 - Remaining or elapsed time
 - Normal or exception attempt
-- Frozen pending work awaiting later Stage 9 review, where safe; through Stage 9 a checked Attempt shows as finalized and a waiting one as waiting for Teacher review
+- Review state: through Stage 9 a checked Attempt shows as finalized and a waiting one as waiting for Teacher review
 - Technical issue/exception status
 - No score through Stage 9; the Teacher reads scores from the review queue and submission detail
 
@@ -3503,7 +3503,7 @@ The MVP Blitz Task Flow includes:
 15. System applies approved objective/partial-credit scoring.
 16. Teacher checks manual answers on desktop.
 17. System identifies official Blitz attempt and score.
-18. Official score remains full precision internally and displays with one decimal place.
+18. Official score is stored rounded half-up to 8 decimal places, is not rounded again before calculation, and displays with one decimal place.
 19. System compares official Homework and Blitz scores.
 20. Teacher monitors progress and reviews result.
 21. In Stage 9 the Student sees the Blitz result only after the Blitz is closed and only under the automatic release mode, and Parents see nothing new; later Student/Parent visibility follows approved release modes.
@@ -3771,7 +3771,7 @@ Display rounding must never move a Student into a different category.
 
 Do not use Not completed when:
 
-- Teacher review is pending.
+- Review that the official Homework or Blitz score still waits for is pending. Review of a Blitz Attempt #1 invalidated by an approved exception, or of a Homework Attempt that cannot overtake, never counts; a Blitz closed before replacement #2 was taken is Not completed even while #1 waits for review.
 - A valid approved additional Blitz attempt is still available.
 - The result is already calculated but not released.
 ### Result Status Flow
@@ -4946,7 +4946,7 @@ The MVP Homework flow separates these stage boundaries:
 6. Explicit Submit, authoritative deadline, or Teacher close freezes only committed work as immutable `submitted` history; saved answers remain pending and unanswered Questions create no fake rows.
 7. Request-path/Scheduler deadline reconciliation, terminal races, and answer/file write-vs-freeze races preserve one authoritative finalization.
 8. Stage 9 later applies approved objective/partial-credit scoring, missing-answer-zero policy, and Teacher manual review.
-9. Stage 9 selects the highest valid completed Attempt as official and preserves full internal score precision for later display/result use.
+9. Stage 9 selects the highest valid completed Attempt as official; its score is stored rounded half-up to 8 decimal places, is not rounded again before calculation, and displays with one decimal place.
 10. Tenant/Student ownership, file privacy, access, and history remain protected.
 ### MVP Blitz Task Flow Scope
 
@@ -5006,7 +5006,7 @@ MVP result calculation statuses:
 
 Student and Parent visibility are separate state dimensions.
 
-`Not completed` is used only after required work can no longer validly be completed. Waiting for review or hidden/unreleased results must not be treated as Not completed.
+`Not completed` is used only after required work can no longer validly be completed. Pending review that an official score still waits for, or hidden/unreleased results, must not be treated as Not completed.
 ### MVP Reports and Progress Flow Scope
 
 The MVP should include simple and practical progress visibility.
@@ -5679,6 +5679,6 @@ The following flow rules are mandatory in every affected role flow:
 - **Activation:** server recalculates total points and blocks activation when total possible points is zero.
 - **Homework closure:** before deadline, Teacher close atomically freezes existing `in_progress` Attempts as `submitted` from already-committed pending work at captured `closedAt` with `task_closed_auto_finalize`, blocks further writes, and creates no fake Attempt/answer row. At/after deadline it preserves `homework_deadline_auto_submit` and exact `deadline_at`; Stage 9 later checks/scores the frozen work.
 - **Blitz closure:** Stage 8 closes atomically, blocks Starts/writes, timeout-finalizes each due Attempt at exact `deadline_at`, and freezes only pre-deadline Attempts as `submitted` with `task_closed_auto_finalize` at captured close time. Terminal history remains immutable, saved answers remain pending, and no fake rows are created. Stage 9 later owns checking/scoring/zero/review. Closed Blitz cannot grant a new exception.
-- **Result closure:** Teacher may close only a calculated terminal result or a definitive Not completed result. Waiting states, in-progress official attempts, pending Blitz replacement attempts, or incomplete manual review block closure. Release may occur before or after closure according to policy.
+- **Result closure:** Teacher may close only a calculated terminal result or a definitive Not completed result. Waiting states, in-progress official attempts, pending Blitz replacement attempts, or incomplete manual review that an official score still waits for block closure. Release may occur before or after closure according to policy.
 - **Category assignment:** final calculation remains unrounded; the category resolver uses integer `category_score` with `.0`–`.5` down and `>.5` up.
 - **Homework highest-score tie:** earliest tied attempt becomes the official attempt reference.

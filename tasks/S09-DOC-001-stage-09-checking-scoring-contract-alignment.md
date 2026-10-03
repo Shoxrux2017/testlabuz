@@ -223,8 +223,8 @@ all state this one rule.
   official task, and in the sweep (§7).
 - Between a freeze and its checking run the row can still show the previous result. Therefore no read
   trusts the row alone: `ready` (§14) and Student `score_visible` (§12) require the row **and** a live
-  evaluation of steps 1-3 (or the Blitz rules) that yields the same Attempt. Stage 10 closure must use
-  the same live evaluation.
+  evaluation of steps 1-3 (or the Blitz rules) that is ready with the same Attempt and the same
+  normalized score. Stage 10 closure must use the same live evaluation.
 
 ## 9. Stage 7/8 Behavior Preservation (S09-T2, S09-T6)
 
@@ -348,7 +348,8 @@ Evaluation order:
 
 1. **Shape** (`422 validation_failed`): `answers` is a non-empty array; each item has exactly the keys
    `answer_id` (UUID), `awarded_points` (JSON number) and `feedback` (string or null); `answer_id` values
-   are unique. `feedback` is trimmed; empty becomes null; at most 2000 characters.
+   are unique. `feedback` is trimmed of ASCII whitespace (space, tab, CR, LF, NUL, vertical tab);
+   empty becomes null; at most 2000 characters.
 2. **Access** (§10.1): otherwise `404 resource_not_found`.
 3. **State**: a submission in `submitted`/`timed_out_finalized` returns `409 automatic_checking_pending`.
 4. **Items** (`422` on `answers.N.<field>`): each `answer_id` belongs to this submission and is a
@@ -413,7 +414,7 @@ through result release. An invalidated Blitz #1 never shows a score; the Student
 
 Homework:
 
-- The Student Attempt resource (`GET /student/attempts/{attempt}` and Submit responses) gains
+- The Student Attempt resource (`GET /student/attempts/{attempt}`, Start/Resume and Submit responses) gains
   `result: { "visible": bool, "normalized_score": number|null }`; the score is null unless visible.
 - Each Student answer state gains `feedback: string|null`, non-null only when the result is visible and
   the Teacher wrote feedback.
@@ -482,11 +483,11 @@ exception) while it is not `checked`.
 | # | Condition | `status` |
 |---|---|---|
 | 1 | The Assessment is not the pair's Homework or Blitz | `not_applicable` |
-| 2 | Official row exists and the §8 live evaluation yields the same Attempt | `ready` |
+| 2 | Official row exists and the §8 live evaluation is ready with the same Attempt and the same `normalized_score` | `ready` |
 | 3 | Blitz with an exception, no terminal #2, Blitz active | `waiting_for_replacement` |
 | 4 | Some blocking Attempt is `submitted`/`timed_out_finalized` | `automatic_checking_pending` |
 | 5 | Some blocking Attempt is `waiting_for_teacher_review` | `waiting_for_teacher_review` |
-| 6 | The live evaluation yields ready but the row is missing or differs (repaired by the next sweep) | `automatic_checking_pending` |
+| 6 | The live evaluation is ready but the official row is missing or differs from it (a state that should not exist). The sweep repairs it only when the Student has no pending eligible Attempt; otherwise the next checking run, review save or correction of that Student's Attempts re-resolves it | `automatic_checking_pending` |
 | 7 | Anything else (never started, only `in_progress`, Blitz closed without a replacement) | `no_completed_attempt` |
 
 ## 15. Planning-Audit Items Settled Here

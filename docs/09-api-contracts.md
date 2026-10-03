@@ -3580,7 +3580,7 @@ Student reads and Submit replays of terminal Homework Attempts use the historica
 
 ### Stage 9 Result Fields
 
-The Student Homework Attempt resource (this read and the Section 17.13 Submit response) includes:
+The Student Homework Attempt resource (this read, the Section 17.3 Start/Resume responses and the Section 17.13 Submit response) includes:
 
 ```json
 {
@@ -3792,7 +3792,7 @@ Missing or malformed keys return `422 validation_failed`. This operation uses du
 }
 ```
 
-`result` follows Section 17.4. Stage 9 checks the Attempt only after the Submit transaction commits (Section 23), so a fresh Submit response still shows `status = submitted`.
+`result` follows Section 17.4. Stage 9 checks the Attempt only after the Submit transaction commits (Section 23), so a fresh Submit response normally shows `status = submitted`; because the response re-reads the Attempt after the commit, a sweep that checks it in between can return `waiting_for_teacher_review` or `checked` (same shape, as a replay does).
 
 ### Rules
 
@@ -4240,7 +4240,7 @@ GET /api/v1/teacher/blitz/{blitz}/monitoring
 
 ### Rule
 
-Monitoring exposes authorized execution state: not started, in progress, explicit Submit, timeout-finalized, task-close-finalized, Attempt number/timing and exception state. `submitted` with `student_submit` differs from `submitted` with `task_closed_auto_finalize`; timeout is `timed_out_finalized` with `timeout_auto_submit`. It exposes no score or checking result. Any later-review-pending projection does not persist a review-state transition.
+Monitoring exposes authorized execution state: not started, in progress, explicit Submit, timeout-finalized, task-close-finalized, Attempt number/timing and exception state. `submitted` with `student_submit` differs from `submitted` with `task_closed_auto_finalize`; timeout is `timed_out_finalized` with `timeout_auto_submit`. It exposes no score, awarded points or answer checking status; its only Stage 9 projection is the `waiting_for_teacher_review` row status and summary bucket below. Any later-review-pending projection does not persist a review-state transition.
 
 The wire format is unchanged by Stage 9. A Student row `status` and the summary buckets project the Attempt: `submitted`, `timed_out_finalized` and `checked` count as `finalized`; `waiting_for_teacher_review` counts as `waiting_for_teacher_review`. `finalization_reason` still tells explicit Submit, task close and timeout apart.
 
@@ -4506,7 +4506,7 @@ submitted_at = finalized_at = locked_at = submittedAt
 finalization_reason = student_submit
 ```
 
-The committed answers/files become immutable; no Attempt is created and no checking/scoring occurs. Success returns `200` frozen execution state without final-score/checking metadata.
+The committed answers/files become immutable; no Attempt is created, and the Submit transaction itself performs no checking or scoring; Stage 9 checks the Attempt after it commits (Section 23). Success returns `200` frozen execution state without final-score/checking metadata.
 
 ### Replay and Terminal Submit Matrix
 
@@ -5046,7 +5046,7 @@ Strict JSON body; no query parameters; no `Idempotency-Key`.
 
 ### Evaluation Order
 
-1. **Shape** (`422 validation_failed`): `answers` is a non-empty array; each item has exactly the keys `answer_id` (UUID), `awarded_points` (JSON number) and `feedback` (string or `null`); `answer_id` values are unique. `feedback` is trimmed, an empty value becomes `null`, and it has at most 2000 characters.
+1. **Shape** (`422 validation_failed`): `answers` is a non-empty array; each item has exactly the keys `answer_id` (UUID), `awarded_points` (JSON number) and `feedback` (string or `null`); `answer_id` values are unique. `feedback` is trimmed of ASCII whitespace (space, tab, CR, LF, NUL, vertical tab), an empty value becomes `null`, and it has at most 2000 characters.
 2. **Access** (Section 21 Review Access): otherwise `404 resource_not_found`.
 3. **State**: a submission still `submitted` or `timed_out_finalized` returns `409 automatic_checking_pending`.
 4. **Items** (`422 validation_failed` on `answers.N.<field>`): each `answer_id` belongs to this submission and is a manual-review answer (`waiting_for_teacher_review` or `teacher_checked`); `awarded_points` is `0` to the Question `points` and follows the Question `points` number rule (Section 2.13).
@@ -5098,7 +5098,7 @@ Stage 9 has no result-closure guard: until Stage 10 exists, a correction is alwa
 
 Official task score is server-authoritative.
 
-Stage 9 owns official-score selection and persistence (`official_task_scores`, `08-database.md`). Stage 7 and Stage 8 execution resources expose no completed Homework or Blitz score.
+Stage 9 owns official-score selection and persistence (`official_task_scores`, `08-database.md`). Stage 8 Blitz execution resources expose no score; Student Homework resources expose scores only through the Stage 9 visibility fields of Sections 17.1, 17.2 and 17.4.
 
 An official score exists only for the Homework and the Blitz referenced by the Topic result pair; practice tasks never get one. A persisted official score exists exactly while it is ready. `selected_at` is set when it is created or when its `official_attempt_id` or `normalized_score` changes.
 
@@ -5210,7 +5210,7 @@ When Attempt #1 has been excluded by the approved exception and valid replacemen
 
 The resolver runs inside every automatic checking run, review save, correction and exception grant for an official task, each under the scoring locks of Section 34.7. The scheduled checking sweep (Section 23) also re-runs it for official-task Students that have a `checked` eligible Attempt and no pending eligible Attempt but whose persisted official score is missing or differs from the live evaluation.
 
-Between a freeze and its checking run the persisted official score can still show the previous result, so no read trusts it alone. `status = ready` here and Student `score_visible` (Section 17.1) require the persisted official score **and** a live evaluation of Homework steps 1–3 (or the Blitz rules) that yields the same Attempt. Stage 10 closure must use the same live evaluation.
+Between a freeze and its checking run the persisted official score can still show the previous result, so no read trusts it alone. `status = ready` here and Student `score_visible` (Section 17.1) require the persisted official score **and** a live evaluation of Homework steps 1–3 (or the Blitz rules) that is ready with the same Attempt and the same normalized score. Stage 10 closure must use the same live evaluation.
 
 ### Status
 
@@ -5221,11 +5221,11 @@ Between a freeze and its checking run the persisted official score can still sho
 | # | Condition | `status` |
 |---|---|---|
 | 1 | The Assessment is not the pair's Homework or Blitz | `not_applicable` |
-| 2 | A persisted official score exists and the live evaluation yields the same Attempt | `ready` |
+| 2 | A persisted official score exists and the live evaluation is ready with the same Attempt and the same `normalized_score` | `ready` |
 | 3 | Blitz with an exception, no terminal #2, Blitz active | `waiting_for_replacement` |
 | 4 | Some blocking Attempt is `submitted`/`timed_out_finalized` | `automatic_checking_pending` |
 | 5 | Some blocking Attempt is `waiting_for_teacher_review` | `waiting_for_teacher_review` |
-| 6 | The live evaluation yields ready but the persisted official score is missing or differs (repaired by the next sweep) | `automatic_checking_pending` |
+| 6 | The live evaluation is ready but the persisted official score is missing or differs from it (a state that should not exist). The sweep repairs it only when the Student has no pending eligible Attempt; otherwise the next checking run, review save or correction of that Student's Attempts re-resolves it | `automatic_checking_pending` |
 | 7 | Anything else (never started, only `in_progress`, Blitz closed without a replacement) | `no_completed_attempt` |
 
 ### Rules
