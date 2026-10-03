@@ -19,10 +19,14 @@ import 'package:testlabuz_client/features/teacher/application/teacher_submission
 import 'package:testlabuz_client/features/teacher/application/teacher_submission_detail_state.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_submission_review_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_submission_review_state.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_topic_result_detail_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_topic_result_list_controller.dart';
+import 'package:testlabuz_client/features/teacher/application/teacher_topic_result_target.dart';
 import 'package:testlabuz_client/features/teacher/data/dto/teacher_submission_detail_dto.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_submission_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_official_score.dart';
@@ -33,6 +37,7 @@ import 'package:testlabuz_client/features/teacher/domain/teacher_submission_revi
 
 import 'teacher_submission_test_support.dart';
 import 'teacher_test_support.dart';
+import 'teacher_topic_result_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
 const _assessmentId = '50000000-0000-0000-0000-000000000001';
@@ -226,6 +231,15 @@ void main() {
         ),
         (_, _) {},
       );
+      harness.container.listen(
+        teacherReviewQueueControllerProvider(
+          TeacherReviewQueueScope.student(
+            topicId: _topicId,
+            studentId: officialStudentId,
+          ),
+        ),
+        (_, _) {},
+      );
       final homework = TeacherHomeworkRouteTarget(
         topicId: _topicId,
         homeworkId: _assessmentId,
@@ -245,7 +259,7 @@ void main() {
         (_, _) {},
       );
       await harness.loaded();
-      expect(harness.submissions.queries, hasLength(2));
+      expect(harness.submissions.queries, hasLength(3));
       expect(harness.homework.fetchIds, [_assessmentId]);
       expect(harness.submissions.officialTargets, hasLength(1));
       harness.review.editPoints(_waitingId, '2');
@@ -254,7 +268,7 @@ void main() {
       await harness.review.save();
       await flushTeacherControllers();
 
-      expect(harness.submissions.queries, hasLength(4));
+      expect(harness.submissions.queries, hasLength(6));
       expect(harness.homework.fetchIds, [_assessmentId, _assessmentId]);
       expect(harness.submissions.officialTargets, hasLength(2));
     });
@@ -589,6 +603,73 @@ void main() {
       );
     });
 
+    test(
+      'a saved review reloads the open Topic results of the Student',
+      () async {
+        final harness = _Harness(
+          onSaveReview: (_, _) async => _detail(reviewedDetailJson()),
+        );
+        final state = await harness.loaded();
+        final submission = harness.detailState.detail!.submission;
+        final resultTarget = TeacherTopicResultTarget(
+          topicId: submission.topicId,
+          studentId: submission.studentId,
+        );
+        for (final subscription in [
+          harness.container.listen(
+            teacherTopicResultListControllerProvider(
+              submission.topicId.toLowerCase(),
+            ),
+            (_, _) {},
+          ),
+          harness.container.listen(
+            teacherTopicResultDetailControllerProvider(resultTarget),
+            (_, _) {},
+          ),
+        ]) {
+          addTearDown(subscription.close);
+        }
+        await flushTeacherControllers();
+        final lists = harness.results.listRequests.length;
+        final details = harness.results.detailRequests.length;
+        harness.review
+          ..editPoints(_waitingId, '2')
+          ..editFeedback(_waitingId, 'Clear report.');
+
+        await harness.review.save();
+        await flushTeacherControllers();
+
+        expect(state.read().successFeedback, 'Review saved.');
+        expect(harness.results.listRequests.length, lists + 1);
+        expect(harness.results.detailRequests.length, details + 1);
+      },
+    );
+
+    test('a closed result keeps the drafts and reloads the results', () async {
+      final harness = _Harness(
+        onSaveReview: (_, _) =>
+            Future.error(_failure(409, ApiErrorCodes.resultClosed)),
+      );
+      final state = await harness.loaded();
+      final submission = harness.detailState.detail!.submission;
+      final listener = harness.container.listen(
+        teacherTopicResultListControllerProvider(
+          submission.topicId.toLowerCase(),
+        ),
+        (_, _) {},
+      );
+      addTearDown(listener.close);
+      await flushTeacherControllers();
+      final lists = harness.results.listRequests.length;
+      harness.review.editPoints(_reviewedId, '3');
+
+      await harness.review.save();
+      await flushTeacherControllers();
+
+      expect(state.read().drafts.keys, [_reviewedId]);
+      expect(harness.results.listRequests.length, lists + 1);
+    });
+
     test('a returned detail that does not match is reconciled', () async {
       var fetches = 0;
       final harness = _Harness(
@@ -694,6 +775,10 @@ void main() {
             'Too many requests. Wait before trying again.',
         _failure(409, ApiErrorCodes.businessConflict):
             'The review could not be saved. Try again.',
+        _failure(409, ApiErrorCodes.resultClosed):
+            "This Student's Topic result is closed, so reviewed answers can "
+            'no longer be corrected. Answers still waiting for review can be '
+            'reviewed.',
       };
 
       for (final MapEntry(key: failure, value: message) in cases.entries) {
@@ -920,7 +1005,8 @@ class _Harness {
          ..onFetchDetail = onFetchDetail
          ..onSaveReview = onSaveReview,
        homework = FakeTeacherHomeworkRepository(),
-       blitz = FakeTeacherBlitzRepository() {
+       blitz = FakeTeacherBlitzRepository(),
+       results = FakeTeacherTopicResultRepository() {
     container = ProviderContainer(
       overrides: [
         authSessionControllerProvider.overrideWith(() => auth),
@@ -928,6 +1014,7 @@ class _Harness {
         teacherSubmissionRepositoryProvider.overrideWithValue(submissions),
         teacherHomeworkRepositoryProvider.overrideWithValue(homework),
         teacherBlitzRepositoryProvider.overrideWithValue(blitz),
+        teacherTopicResultRepositoryProvider.overrideWithValue(results),
       ],
     );
     addTearDown(container.dispose);
@@ -937,6 +1024,7 @@ class _Harness {
   final FakeTeacherSubmissionRepository submissions;
   final FakeTeacherHomeworkRepository homework;
   final FakeTeacherBlitzRepository blitz;
+  final FakeTeacherTopicResultRepository results;
   late final ProviderContainer container;
 
   ProviderSubscription<TeacherSubmissionDetailState> listenDetail() =>

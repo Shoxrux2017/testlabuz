@@ -40,6 +40,7 @@ abstract final class AppRouteNames {
   static const teacherBlitzReviews = 'teacher-blitz-reviews';
   static const teacherTopicResults = 'teacher-topic-results';
   static const teacherTopicResultDetail = 'teacher-topic-result-detail';
+  static const teacherTopicResultReviews = 'teacher-topic-result-reviews';
   static const student = 'student';
   static const studentTopicDetail = 'student-topic-detail';
   static const studentHomeworkDetail = 'student-homework-detail';
@@ -162,6 +163,10 @@ abstract final class AppRoutePaths {
       '$teacherTopicDetail/$teacherResultsSegment';
   static const teacherTopicResultDetail =
       '$teacherTopicResults/:$teacherStudentIdParameter';
+
+  /// One Student's submissions of the Topic, desktop only (`CL9-5`).
+  static const teacherTopicResultReviews =
+      '$teacherTopicResultDetail/$teacherReviewsSegment';
   static const student = '/student';
   static const studentTopicsSegment = 'topics';
   static const studentTopicIdParameter = 'topicId';
@@ -557,6 +562,24 @@ abstract final class AppRoutePaths {
         _teacherStudentIdPattern.hasMatch(segments[2]);
   }
 
+  static bool isTeacherTopicResultReviewsPath(String path) {
+    final segments = _teacherTopicChildSegments(path);
+    return segments != null &&
+        segments.length == 4 &&
+        segments[1] == teacherResultsSegment &&
+        _teacherStudentIdPattern.hasMatch(segments[2]) &&
+        segments[3] == teacherReviewsSegment;
+  }
+
+  /// The Student id of a result detail or result submissions path.
+  static String? teacherResultStudentIdFromPath(String path) {
+    if (!isTeacherTopicResultDetailPath(path) &&
+        !isTeacherTopicResultReviewsPath(path)) {
+      return null;
+    }
+    return _teacherTopicChildSegments(path)![2];
+  }
+
   /// The segments after `/teacher/topics/` when the first is a Topic id.
   static List<String>? _teacherTopicChildSegments(String path) {
     const prefix = '$teacher/$teacherTopicsSegment/';
@@ -601,7 +624,8 @@ abstract final class AppRoutePaths {
         isTeacherHomeworkReviewsPath(path) ||
         isTeacherBlitzReviewsPath(path) ||
         isTeacherTopicResultsPath(path) ||
-        isTeacherTopicResultDetailPath(path);
+        isTeacherTopicResultDetailPath(path) ||
+        isTeacherTopicResultReviewsPath(path);
   }
 
   static String? teacherTopicIdFromPath(String path) {
@@ -659,7 +683,9 @@ abstract final class AppRoutePaths {
         _teacherHomeworkIdPattern.hasMatch(segments[2]) &&
         segments[3] == teacherReviewsSegment;
     final isResults =
-        isTeacherTopicResultsPath(path) || isTeacherTopicResultDetailPath(path);
+        isTeacherTopicResultsPath(path) ||
+        isTeacherTopicResultDetailPath(path) ||
+        isTeacherTopicResultReviewsPath(path);
 
     return isDetail ||
             isResults ||
@@ -827,6 +853,14 @@ abstract final class AppRoutePaths {
 
     return '${teacherTopicResultsLocation(topicId)}/'
         '${Uri.encodeComponent(studentId)}';
+  }
+
+  static String teacherTopicResultReviewsLocation(
+    String topicId,
+    String studentId,
+  ) {
+    return '${teacherTopicResultDetailLocation(topicId, studentId)}/'
+        '$teacherReviewsSegment';
   }
 
   static bool isStudentSegment(String path) {

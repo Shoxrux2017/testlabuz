@@ -256,6 +256,7 @@ void main() {
         ApiErrorCodes.assessmentHasNoScoreablePoints,
         ApiErrorCodes.assessmentNotAssigned,
         ApiErrorCodes.officialCohortMismatch,
+        ApiErrorCodes.officialHomeworkNotActivated,
         ApiErrorCodes.businessConflict,
       ]) {
         await expectDefinite(

@@ -35,6 +35,8 @@ class TeacherSubmissionListQuery {
   const TeacherSubmissionListQuery._({
     required this.topicId,
     required this.assessmentId,
+    required this.groupId,
+    required this.studentId,
     required this.checkingStatus,
     required this.type,
     required this.official,
@@ -48,11 +50,15 @@ class TeacherSubmissionListQuery {
   const TeacherSubmissionListQuery.initial({
     String? topicId,
     String? assessmentId,
+    String? studentId,
+    TeacherSubmissionCheckingFilter? checkingStatus =
+        TeacherSubmissionCheckingFilter.waitingForTeacherReview,
   }) : this._(
          topicId: topicId,
          assessmentId: assessmentId,
-         checkingStatus:
-             TeacherSubmissionCheckingFilter.waitingForTeacherReview,
+         groupId: null,
+         studentId: studentId,
+         checkingStatus: checkingStatus,
          type: null,
          official: null,
          overdueOnly: false,
@@ -65,9 +71,15 @@ class TeacherSubmissionListQuery {
   static const initialPage = 1;
   static const defaultPerPage = 25;
 
-  /// Set for a task-scoped queue; they never change with the filters.
+  /// Fixed by a task-scoped queue; the global queue may filter by Topic.
   final String? topicId;
+
+  /// Fixed by a task-scoped queue.
   final String? assessmentId;
+
+  /// Row filters (`CL9-5`); a Student-scoped queue fixes [studentId].
+  final String? groupId;
+  final String? studentId;
 
   /// Null lists every terminal status.
   final TeacherSubmissionCheckingFilter? checkingStatus;
@@ -87,6 +99,8 @@ class TeacherSubmissionListQuery {
     return Map<String, Object>.unmodifiable(<String, Object>{
       'topic_id': ?topicId,
       'assessment_id': ?assessmentId,
+      'group_id': ?groupId,
+      'student_id': ?studentId,
       if (checkingStatus case final status?) 'checking_status': status.value,
       if (type case final selectedType?) 'type': selectedType.value,
       if (official case final selectedOfficial?)
@@ -99,6 +113,13 @@ class TeacherSubmissionListQuery {
       'per_page': perPage,
     });
   }
+
+  TeacherSubmissionListQuery withTopic(String? value) => _copy(topicId: value);
+
+  TeacherSubmissionListQuery withGroup(String? value) => _copy(groupId: value);
+
+  TeacherSubmissionListQuery withStudent(String? value) =>
+      _copy(studentId: value);
 
   TeacherSubmissionListQuery withCheckingStatus(
     TeacherSubmissionCheckingFilter? value,
@@ -134,6 +155,9 @@ class TeacherSubmissionListQuery {
   }
 
   TeacherSubmissionListQuery _copy({
+    Object? topicId = _sentinel,
+    Object? groupId = _sentinel,
+    Object? studentId = _sentinel,
     Object? checkingStatus = _sentinel,
     Object? type = _sentinel,
     Object? official = _sentinel,
@@ -143,8 +167,16 @@ class TeacherSubmissionListQuery {
     int? page,
   }) {
     return TeacherSubmissionListQuery._(
-      topicId: topicId,
+      topicId: identical(topicId, _sentinel)
+          ? this.topicId
+          : topicId as String?,
       assessmentId: assessmentId,
+      groupId: identical(groupId, _sentinel)
+          ? this.groupId
+          : groupId as String?,
+      studentId: identical(studentId, _sentinel)
+          ? this.studentId
+          : studentId as String?,
       checkingStatus: identical(checkingStatus, _sentinel)
           ? this.checkingStatus
           : checkingStatus as TeacherSubmissionCheckingFilter?,
@@ -169,6 +201,8 @@ class TeacherSubmissionListQuery {
         other is TeacherSubmissionListQuery &&
             other.topicId == topicId &&
             other.assessmentId == assessmentId &&
+            other.groupId == groupId &&
+            other.studentId == studentId &&
             other.checkingStatus == checkingStatus &&
             other.type == type &&
             other.official == official &&
@@ -183,6 +217,8 @@ class TeacherSubmissionListQuery {
   int get hashCode => Object.hash(
     topicId,
     assessmentId,
+    groupId,
+    studentId,
     checkingStatus,
     type,
     official,

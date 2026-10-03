@@ -11,6 +11,7 @@ import '../data/teacher_submission_repository_impl.dart';
 import '../domain/teacher_submission.dart';
 import '../domain/teacher_submission_list.dart';
 import '../domain/teacher_submission_list_query.dart';
+import 'teacher_review_queue_filter.dart';
 import 'teacher_review_queue_scope.dart';
 import 'teacher_review_queue_state.dart';
 import 'teacher_session_key.dart';
@@ -30,6 +31,7 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
   final TeacherReviewQueueScope scope;
   TeacherSessionKey? _activeSessionKey;
   TeacherSubmissionListQuery? _inFlightQuery;
+  Map<TeacherReviewQueueFilterKind, String> _filterLabels = const {};
   int _generation = 0;
   var _isDisposed = false;
   var _disposeRegistered = false;
@@ -112,8 +114,33 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
   void clearFilters() {
     final query = scope.initialQuery;
     if (query != state.query) {
+      _filterLabels = const {};
       _startLoad(query, retainResult: false);
     }
+  }
+
+  /// Narrows the queue to [filter]'s Topic, group or Student (`CL9-5`); a
+  /// value the scope fixes never changes.
+  void filterByRow(TeacherReviewQueueRowFilter filter) {
+    if (scope.fixes(filter.kind) || _activeSessionKey == null) {
+      return;
+    }
+    final query = _withRowFilter(state.query, filter.kind, filter.id);
+    if (query == state.query) {
+      return;
+    }
+    _filterLabels = {..._filterLabels, filter.kind: filter.label};
+    _startLoad(query, retainResult: false);
+  }
+
+  void removeRowFilter(TeacherReviewQueueFilterKind kind) {
+    if (scope.fixes(kind) ||
+        _activeSessionKey == null ||
+        !_filterLabels.containsKey(kind)) {
+      return;
+    }
+    _filterLabels = {..._filterLabels}..remove(kind);
+    _startLoad(_withRowFilter(state.query, kind, null), retainResult: false);
   }
 
   void previousPage() {
@@ -178,6 +205,7 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
           : TeacherReviewQueueStatus.refreshing,
       query: query,
       result: retainedResult,
+      filterLabels: _filterLabels,
     );
     unawaited(
       _load(
@@ -206,6 +234,7 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
         status: TeacherReviewQueueStatus.data,
         query: query,
         result: result,
+        filterLabels: _filterLabels,
       );
     } on ApiRequestException catch (exception) {
       if (!_canPublish(generation, sessionKey, query)) {
@@ -244,6 +273,7 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
       result: retainedResult,
       failure: failure,
       isStale: retainedResult != null,
+      filterLabels: _filterLabels,
     );
   }
 
@@ -291,6 +321,19 @@ class TeacherReviewQueueController extends Notifier<TeacherReviewQueueState> {
   void _clearOwnership() {
     _activeSessionKey = null;
     _inFlightQuery = null;
+    _filterLabels = const {};
     _generation += 1;
   }
+}
+
+TeacherSubmissionListQuery _withRowFilter(
+  TeacherSubmissionListQuery query,
+  TeacherReviewQueueFilterKind kind,
+  String? id,
+) {
+  return switch (kind) {
+    TeacherReviewQueueFilterKind.topic => query.withTopic(id),
+    TeacherReviewQueueFilterKind.group => query.withGroup(id),
+    TeacherReviewQueueFilterKind.student => query.withStudent(id),
+  };
 }

@@ -143,7 +143,10 @@ class TeacherSubmissionRemoteDataSource {
         }
         return TeacherSubmissionDetailDto.fromJson(envelope['data']);
       },
-      conflictCodes: const {ApiErrorCodes.automaticCheckingPending},
+      conflictCodes: const {
+        ApiErrorCodes.automaticCheckingPending,
+        ApiErrorCodes.resultClosed,
+      },
       failureMapper: failureMapper,
       outcomeUnknown: () =>
           const TeacherSubmissionReviewOutcomeUnknownException(),

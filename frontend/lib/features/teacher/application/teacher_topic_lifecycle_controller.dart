@@ -17,6 +17,7 @@ import 'teacher_material_mutation_activity.dart';
 import 'teacher_topic_detail_controller.dart';
 import 'teacher_topic_lifecycle_state.dart';
 import 'teacher_topic_list_controller.dart';
+import 'teacher_topic_result_list_controller.dart';
 
 final teacherTopicLifecycleControllerProvider = NotifierProvider.autoDispose
     .family<
@@ -161,6 +162,15 @@ class TeacherTopicLifecycleController
     );
   }
 
+  /// Archiving closes every terminal Topic result (`S10-D7`), also when the
+  /// Topic turns out to have been archived elsewhere.
+  void _refreshResultsIfArchived(TeacherTopic topic, TeacherSessionKey key) {
+    final results = teacherTopicResultListControllerProvider(topicId);
+    if (topic.status == TeacherTopicStatus.archived && ref.exists(results)) {
+      ref.read(results.notifier).refreshAfterAction(key);
+    }
+  }
+
   // Open Homework or Blitz blocked the Topic; show the lists' server truth.
   void _refreshOpenAssessmentLists(TeacherSessionKey key) {
     final homework = teacherHomeworkListControllerProvider(topicId);
@@ -223,6 +233,7 @@ class TeacherTopicLifecycleController
           .acceptAuthoritativeTopic(current);
       _activeAction = null;
       if (topicNotEditable) {
+        _refreshResultsIfArchived(current, key);
         _pendingTopicNotEditable = false;
         state = TeacherTopicLifecycleState(
           status: TeacherTopicLifecycleStatus.notAvailable,
@@ -232,6 +243,7 @@ class TeacherTopicLifecycleController
       } else if (current.status == action.expectedStatus) {
         _publishSuccess(current, key, action);
       } else {
+        _refreshResultsIfArchived(current, key);
         _pendingTopicNotEditable = false;
         state = TeacherTopicLifecycleState(
           status: TeacherTopicLifecycleStatus.unconfirmedCurrentState,
@@ -295,6 +307,7 @@ class TeacherTopicLifecycleController
     if (ref.exists(teacherTopicListControllerProvider)) {
       ref.invalidate(teacherTopicListControllerProvider);
     }
+    _refreshResultsIfArchived(topic, key);
     state = TeacherTopicLifecycleState(
       status: TeacherTopicLifecycleStatus.confirmedSuccess,
       action: action,

@@ -497,7 +497,9 @@ String _lifecycleExplanation(
   TeacherTopicLifecycleAction.close =>
     'The Topic leaves active use and metadata editing becomes unavailable according to server lifecycle rules.',
   TeacherTopicLifecycleAction.archive =>
-    'The Topic content is retained as historical read-only data.',
+    'The Topic content is retained as historical read-only data. Archiving '
+        'also closes every calculated or Not completed Topic result for good; '
+        'results still waiting stay open.',
 };
 
 IconData _lifecycleIcon(TeacherTopicLifecycleAction action) => switch (action) {

@@ -23,6 +23,9 @@ import 'teacher_session_key.dart';
 import 'teacher_submission_detail_controller.dart';
 import 'teacher_submission_detail_state.dart';
 import 'teacher_submission_review_state.dart';
+import 'teacher_topic_result_detail_controller.dart';
+import 'teacher_topic_result_list_controller.dart';
+import 'teacher_topic_result_target.dart';
 
 final teacherSubmissionReviewControllerProvider = NotifierProvider.autoDispose
     .family<
@@ -271,9 +274,17 @@ class TeacherSubmissionReviewController
       );
       return;
     }
+    if (failure.serverCode == ApiErrorCodes.resultClosed) {
+      // Nothing was saved, but the Topic result views may predate closure.
+      _refreshRelatedViews(submission, sessionKey);
+    }
     _publishFailure(switch (failure.serverCode) {
       ApiErrorCodes.automaticCheckingPending =>
         'This submission is still waiting for automatic checking. Try again later.',
+      ApiErrorCodes.resultClosed =>
+        "This Student's Topic result is closed, so reviewed answers can no "
+            'longer be corrected. Answers still waiting for review can be '
+            'reviewed.',
       ApiErrorCodes.forbidden =>
         'You do not have permission to review this submission.',
       ApiErrorCodes.rateLimited =>
@@ -347,6 +358,10 @@ class TeacherSubmissionReviewController
         assessmentId: submission.assessmentId,
         type: submission.taskType,
       ),
+      TeacherReviewQueueScope.student(
+        topicId: submission.topicId,
+        studentId: submission.studentId,
+      ),
     ];
     for (final scope in queues) {
       final provider = teacherReviewQueueControllerProvider(scope);
@@ -359,6 +374,22 @@ class TeacherSubmissionReviewController
     );
     if (ref.exists(officialScore)) {
       ref.read(officialScore.notifier).refresh();
+    }
+    // An official score feeds the Student's Topic result.
+    final results = teacherTopicResultListControllerProvider(
+      submission.topicId.toLowerCase(),
+    );
+    if (ref.exists(results)) {
+      ref.read(results.notifier).refreshAfterAction(sessionKey);
+    }
+    final result = teacherTopicResultDetailControllerProvider(
+      TeacherTopicResultTarget(
+        topicId: submission.topicId,
+        studentId: submission.studentId,
+      ),
+    );
+    if (ref.exists(result)) {
+      unawaited(ref.read(result.notifier).refreshAfterAction(sessionKey));
     }
     switch (submission.taskType) {
       case TeacherSubmissionTaskType.homework:

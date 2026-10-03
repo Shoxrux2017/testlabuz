@@ -9,6 +9,7 @@ import 'package:testlabuz_client/core/network/api_failure.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_question.dart';
@@ -539,6 +540,10 @@ void main() {
         appDeviceSurfaceProvider.overrideWithValue(AppDeviceSurface.desktop),
         teacherBlitzRepositoryProvider.overrideWithValue(repository),
         teacherTopicResultPairRepositoryProvider.overrideWithValue(pairs),
+        // An official Blitz reads its official Homework (S10-FE-004).
+        teacherHomeworkRepositoryProvider.overrideWithValue(
+          FakeTeacherHomeworkRepository(),
+        ),
       ],
       child: MaterialApp(home: TeacherBlitzDetailScreen(target: target)),
     );
@@ -662,6 +667,10 @@ Future<void> _pumpDetail(
         teacherBlitzRepositoryProvider.overrideWithValue(repository),
         teacherTopicResultPairRepositoryProvider.overrideWithValue(
           pairs ?? FakeTeacherTopicResultPairRepository(),
+        ),
+        // An official Blitz reads its official Homework (S10-FE-004).
+        teacherHomeworkRepositoryProvider.overrideWithValue(
+          FakeTeacherHomeworkRepository(),
         ),
       ],
       child: MaterialApp(
