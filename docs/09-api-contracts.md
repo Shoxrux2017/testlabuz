@@ -455,9 +455,11 @@ in the public API contract.
 
 API score values use JSON numbers.
 
-The backend stores and calculates scores with higher internal precision and never uses binary floating point in a scoring calculation. Stage 9 stores `awarded_points` and `normalized_score` rounded half-up to 8 decimal places (Section 23). Homework official-score selection and ties, Homework–Blitz difference calculation, threshold comparison, and final-score calculation use these stored **unrounded internal values**; in this document “unrounded” means not rounded for display. Any bound compared with a stored `normalized_score` is rounded the same way first. Understanding-category assignment uses a separate integer `category_score` derived from the final internal score (`.0`–`.5` down, `>.5` up).
+The backend stores and calculates scores with higher internal precision and never uses binary floating point in a scoring calculation. Stage 9 stores `awarded_points` and `normalized_score` rounded half-up to 8 decimal places (Section 23). Homework official-score selection and ties, Homework–Blitz difference calculation, threshold comparison, and final-score calculation use these stored **unrounded internal values**; in this document “unrounded” means not rounded for display. Any bound compared with a stored `normalized_score` is rounded the same way first. Understanding-category assignment uses a separate integer `category_score` derived from the exact final score (`.0`–`.5` down, `>.5` up).
 
-Stage 9 score fields (awarded points, earned points, possible points, normalized and official scores) are JSON numbers converted from the stored decimal value. Clients display them rounded to **one decimal place** using standard half-up rounding and never calculate with them. Stage 10 Topic-result display fields follow Section 25.
+Stage 9 score fields (awarded points, earned points, possible points, normalized and official scores) are JSON numbers converted from the stored decimal value. Clients display them rounded to **one decimal place** using standard half-up rounding and never calculate with them.
+
+Stage 10 Topic-result scores (Homework and Blitz scores, difference, threshold and final score; Sections 25, 29.5 and 30.5) follow the same rule (`S10-T5`): exact decimal arithmetic; the exact final score (which can need nine decimals) is stored and serialized half-up to 8 decimals; the API returns JSON numbers of the stored 8-decimal values and the client rounds them to one decimal for display. `category_score` comes from the exact final score, so display rounding never changes the category.
 
 Example:
 
@@ -483,7 +485,7 @@ Example:
 ```json
 {
   "final_score": null,
-  "calculated_at": null
+  "closed_at": null
 }
 ```
 
@@ -765,6 +767,8 @@ result_pair_not_configured
 blitz_attempt_exception_not_allowed
 blitz_attempt_exception_already_granted
 blitz_normal_attempt_required
+official_homework_not_activated
+homework_not_submitted
 ```
 
 `submission_locked` remains an existing non-Blitz code; Blitz Submit uses the exact `blitz_time_expired` / `attempt_not_editable` matrix in Section 20.5.
@@ -777,13 +781,25 @@ result_not_ready
 result_closed
 result_not_ready_for_closure
 official_cohort_mismatch
-result_not_visible
 student_result_not_released
 manual_release_not_allowed
-category_configuration_invalid
 ```
 
-`automatic_checking_pending` (`409`) is returned by the Stage 9 review save (Section 23.1) for a submission not yet automatically checked. `result_not_ready` and `result_closed` belong to Stage 10; Stage 9 has no result-closure guard (Section 23.2).
+`automatic_checking_pending` (`409`) is returned by the Stage 9 review save (Section 23.1) for a submission not yet automatically checked.
+
+Stage 10 codes (all `409`):
+
+| Code | Used by |
+|---|---|
+| `result_closed` | A review correction on an official Homework or Blitz Attempt, a comment edit, and the official Homework Start, each for a Student whose Topic result is closed (Section 25.11) |
+| `result_not_ready` | Single Student release when the result is neither terminal nor closed, or the Student's work is not finished (Section 27.3) |
+| `result_not_ready_for_closure` | Single close when the result is not closable (Section 25.8) |
+| `student_result_not_released` | Parent release while the values are hidden from the Student (Section 27.4) |
+| `manual_release_not_allowed` | Single or bulk release when the current mode is not `manual_teacher` (Sections 27.3–27.5) |
+| `official_homework_not_activated` | Official Blitz activation while the official Homework is a draft (Section 19.1) |
+| `homework_not_submitted` | Official Blitz Start without a submitted Homework Attempt (Section 20.3) |
+
+Missing Institution settings never produce a Topic-result error: a result whose Homework and Blitz scores are both ready has status `waiting_for_settings` (Section 25.3). Category-set validation keeps its `422` rules (Section 26.2).
 
 ### Files
 
@@ -1942,9 +1958,10 @@ student_submission_max_mb between 1 and 15
 - For API validation, **1 MB = 1,048,576 bytes**.
 - Changing `blitz_timer_start_mode` affects future Blitz activations only. An active Blitz uses its activation-time snapshot.
 - Changing the timezone affects future local date/time interpretation and display but must not rewrite already-stored absolute instants.
-- Changing release settings must not silently rewrite the numeric content of already-calculated results.
+- Changing `acceptable_score_difference` applies to every open Topic result on its next read; closed results never change (Section 25.3, `S10-D6`).
+- Changing a release mode acts on every Topic result immediately and never changes a result value; Teacher releases already made stay (Section 27.6).
 - Fixed Homework/Blitz attempt counts are not accepted in this request.
-- A dependent operation that needs an unconfigured educational-policy field returns `409 institution_settings_incomplete` with `meta.missing_fields`; unrelated institution management/draft authoring remains available.
+- A dependent operation that needs an unconfigured educational-policy field returns `409 institution_settings_incomplete` with `meta.missing_fields`; unrelated institution management/draft authoring remains available. Topic results are not such an operation: a missing threshold gives status `waiting_for_settings` (Section 25.3), and while a release mode is unconfigured no result values are visible and a release returns `409 manual_release_not_allowed` (Section 27).
 
 ### Success — 200
 
@@ -2363,6 +2380,7 @@ Rules:
 - Closing preserves Topic metadata, materials, and all historical learning data.
 - Connected assessment behavior, once implemented, follows the assessment/task
   close contracts; Topic closure does not hard-delete or rewrite history.
+- Closing a Topic closes no Topic result (Section 25.10).
 - Repeating `close` on an already `closed` Topic is idempotent `200`, performs
   no write, and preserves `closed_at` and `updated_at`.
 - `draft` or `archived` → `closed` is rejected with
@@ -2417,6 +2435,9 @@ Rules:
   closing or archiving it.` and writes nothing. The idempotent repeat and the
   `topic_not_editable` status check are decided first.
 - Archiving preserves materials, later tasks, submissions, results, and reports.
+- Stage 10: inside its transaction a real archive closes every terminal Topic
+  result of the cohort with `closure_reason = topic_archived`; waiting results
+  stay open (Section 25.10). The request, response and conflicts are unchanged.
 
 A real archive sets:
 
@@ -2783,6 +2804,8 @@ POST /api/v1/teacher/topics/{topic}/homework
 }
 ```
 
+Blank Teacher text follows Section 16 (`CL9-11`).
+
 ### Assignment Mode
 
 ```text
@@ -2916,6 +2939,8 @@ Scoring-relevant fields are locked after Student activity begins.
 
 Stage 9: the optional `review_due_at` (Section 15.2) follows the usual Homework editability (`draft`, `active`). It is not a fairness field, so existing Attempts do not block it. To set it on a closed Homework, use Section 15.8.
 
+Blank Teacher text follows Section 16 (`CL9-11`).
+
 ---
 
 ## 15.5 Activate Homework
@@ -2931,7 +2956,7 @@ POST /api/v1/teacher/homework/{homework}/activate
 - For ordinary/practice Homework, resolves/snapshots eligible recipients normally.
 - If the designated official Homework activates while `blitz_assessment_id` is null, creates its normal eligible whole-group recipient snapshot and uses that persisted snapshot to establish the official Topic cohort and set `cohort_snapshotted_at`. It does not create a fake Blitz or Blitz recipient rows.
 - If `cohort_snapshotted_at` is already non-null, either later official task must use exactly that established persisted cohort.
-- If both official tasks exist, `cohort_snapshotted_at` is null, and both tasks are still pre-activation, the first official task to activate—Homework or Blitz—establishes one common cohort from its authoritative first-activation recipient set. Stage 8 activation integration persists or reuses that exact cohort for both official assessments. It must not recalculate the cohort from later/current Group membership, and incompatible existing recipient snapshots are rejected rather than silently rewritten.
+- If both official tasks exist, `cohort_snapshotted_at` is null, and both tasks are still pre-activation, the first official task to activate establishes one common cohort from its authoritative first-activation recipient set. Before Stage 10 the official Blitz could activate first; since `S10-D8` (Section 19.1) a draft official Homework blocks the official Blitz activation, so the official Homework establishes the cohort. Stage 8 activation integration persists or reuses that exact cohort for both official assessments. It must not recalculate the cohort from later/current Group membership, and incompatible existing recipient snapshots are rejected rather than silently rewritten.
 - Sets lifecycle active.
 
 ---
@@ -2956,6 +2981,8 @@ finalization_reason = task_closed_auto_finalize
 The Homework close and all Attempt transitions commit or roll back together. New Starts and Student answer/file writes are blocked, unused normal-attempt capacity becomes unavailable, no Attempt or unanswered answer row is fabricated, saved answers remain pending, and Stage 7 performs no checking/scoring.
 
 At or after the deadline, Teacher close first invokes the shared deadline reconciliation. Attempts finalized by the deadline retain `homework_deadline_auto_submit` and the exact `deadline_at`; close may use `task_closed_auto_finalize` only for an Attempt still `in_progress` under a valid pre-deadline close. Repeated close or delayed Scheduler work never rewrites a frozen reason/timestamp.
+
+Stage 10 (`S10-D8`): activating the official Blitz closes an `active` official Homework the same way inside the activation transaction (Section 19.1).
 
 ---
 
@@ -3022,6 +3049,8 @@ PUT /api/v1/teacher/topics/{topic}/result-pair
 ```
 
 These endpoints are internal authoring conveniences and apply equally to Homework and Blitz.
+
+**Blank Teacher text (Stage 10, `CL9-11`).** A Teacher text value that is empty after trimming the Unicode whitespace set (U+0009–U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF — the Student-answer set of Section 16.5) is rejected with the error the request already returns for an ASCII-blank value, for: Question `prompt`, choice `options[].text`, short-written `accepted_answers[]`, matching `pairs[].left`/`right`, ordering `items[].text`, fill-in-blank `blanks[].accepted_answers[]`, Homework/Blitz `title` and `student_instructions`, and the Blitz exception `reason`. Stored values are never rewritten; answer-feedback trimming (Section 23.1) is unchanged.
 
 ---
 
@@ -3349,7 +3378,7 @@ A blank is correct when its normalized value equals any normalized accepted answ
 
 # 17. Student Homework Attempt APIs
 
-Stage 7 owns Student Homework execution, saved typed/file answers, and immutable finalization. Every Homework Attempt freezes as `submitted`. Homework checking, awarded points, Teacher review, Attempt scoring, and official Homework score selection belong to Stage 9 (Sections 21, 23 and 24), after which a frozen Attempt reads as `waiting_for_teacher_review` or `checked`. Stage 9 Student result visibility is defined in Sections 17.1, 17.2 and 17.4.
+Stage 7 owns Student Homework execution, saved typed/file answers, and immutable finalization. Every Homework Attempt freezes as `submitted`. Homework checking, awarded points, Teacher review, Attempt scoring, and official Homework score selection belong to Stage 9 (Sections 21, 23 and 24), after which a frozen Attempt reads as `waiting_for_teacher_review` or `checked`. Student result visibility (Stage 9, with the Stage 10 release condition) is defined in Sections 17.1, 17.2 and 17.4.
 
 All endpoints require:
 
@@ -3407,7 +3436,7 @@ Student's latest Attempt (`submitted`, `waiting_for_teacher_review` or `checked`
 there is none. Stage 9 checking moves a terminal Attempt from `submitted` to `waiting_for_teacher_review` or
 `checked`; the value never reveals a score.
 
-### Official Score Visibility (Stage 9)
+### Official Score Visibility (Stages 9–10)
 
 The Student Homework summary and detail keep `score_visible` and add `official_score`:
 
@@ -3426,10 +3455,10 @@ The Student Homework summary and detail keep `score_visible` and add `official_s
 ```text
 this Homework is the official Homework of the Topic result pair
 + its official score for this Student is ready by the live rule of Section 24.1
-+ institution student_result_release_mode = automatic
++ (institution student_result_release_mode = automatic  or  the Student's Topic result has student_released_at)
 ```
 
-`official_score` is non-null exactly when `score_visible` is `true`. With `manual_teacher` or an unconfigured release mode, nothing is visible in Stage 9; Stage 10 adds visibility through result release.
+`official_score` is non-null exactly when `score_visible` is `true`. Stage 10 adds the release condition (`S10-D4`, Section 27.1): with `manual_teacher` the score becomes visible when the Teacher releases the Student's Topic result (Section 27.3); with an unconfigured release mode nothing is visible. The shape is unchanged.
 
 ---
 
@@ -3538,6 +3567,7 @@ If one `in_progress` Attempt already exists for this Student/Homework, return th
 - `409 task_not_active`
 - `409 attempts_exhausted`
 - `409 deadline_passed`
+- `409 result_closed` (Stage 10): Start of the official Homework by a Student whose Topic result is closed, checked after the conflicts above (Section 25.11). It is reachable only in history from before `S10-D8`: a Homework with no Attempt at all whose deadline a Teacher moved later. An idempotent replay of an earlier successful Start keeps returning its stored response.
 
 ### Fixed Attempt Rules
 
@@ -3547,7 +3577,7 @@ If one `in_progress` Attempt already exists for this Student/Homework, return th
 - With no `in_progress` Attempt, the backend atomically allocates `max(existing attempt_number) + 1`; if Attempts 1, 2, and 3 already exist, it returns `409 attempts_exhausted`.
 - Concurrent same-key Starts return one logical result. Concurrent different-key Starts still create at most one `in_progress` Attempt; a later valid Start resumes it. Attempt numbers cannot duplicate or skip because of a race.
 - Each attempt is a separate immutable historical resource after final submission.
-- Stage 9 resolves the official Homework score under Section 24.1: the `checked` eligible Attempt with the highest `normalized_score`, ready only when no other eligible terminal Attempt that is not yet `checked` could still overtake it. A later Attempt that could overtake makes a ready score not ready until it is checked. Stage 10 recalculates any open dependent Topic result.
+- Stage 9 resolves the official Homework score under Section 24.1: the `checked` eligible Attempt with the highest `normalized_score`, ready only when no other eligible terminal Attempt that is not yet `checked` could still overtake it. A later Attempt that could overtake makes a ready score not ready until it is checked. An open Stage 10 Topic result is computed live, so it reflects the change on its next read (Section 25.3).
 - In Stage 9, if multiple attempts tie exactly for the highest normalized score, the attempt with the **lowest `attempt_number`** is the official attempt reference; Flutter must not choose it.
 
 ### First Official Homework Activity Lock
@@ -3596,11 +3626,13 @@ An Attempt result is visible to its Student when all hold:
 ```text
 attempt.status = checked
 + attempt.official_score_eligible = true
-+ institution student_result_release_mode = automatic
 + (Homework) or (Blitz with status closed or archived)
++ (practice task) or (institution student_result_release_mode = automatic) or (the Student's Topic result has student_released_at)
 ```
 
-`normalized_score` is `null` unless `visible` is `true`. Each item of the Attempt's `answers` also gains `feedback` (string or `null`): the Teacher's feedback on that answer, non-null only when the result is visible and the Teacher wrote feedback. With `manual_teacher` or an unconfigured release mode nothing is visible in Stage 9; Stage 10 adds visibility through result release. An invalidated Blitz Attempt #1 never shows a score. Parents see nothing new in Stage 9.
+This rule replaces the Stage 9 rule (`S10-D4`, Section 27.1): a manual Topic release makes that Student's official Homework and Blitz Attempt results and answer feedback visible, and a practice (non-official) task's result is visible after checking in every release mode (a practice Blitz after it closes). Only which values are visible changes; the shape is unchanged.
+
+`normalized_score` is `null` unless `visible` is `true`. Each item of the Attempt's `answers` also gains `feedback` (string or `null`): the Teacher's feedback on that answer, non-null only when the result is visible and the Teacher wrote feedback. The Attempt status `checked` stays visible without a score while the result is hidden. An invalidated Blitz Attempt #1 never shows a score. Parents receive no Attempt results or answer feedback; they see H and B only inside the Topic result (Section 30.5).
 
 ---
 
@@ -3814,7 +3846,7 @@ Submit locks and re-reads the Attempt, Homework lifecycle, assignment/ownership,
 
 Teacher endpoints require authorized Teacher scope.
 
-Stage 8 owns Blitz execution and immutable finalization. Stage 9 owns automatic/manual checking, Teacher review, awarded points, Attempt scoring and official task-score selection. Stage 10 owns Homework–Blitz comparison, final Topic result, category and release. Stage 8 finalization never performs those later-stage transitions.
+Stage 8 owns Blitz execution and immutable finalization. Stage 9 owns automatic/manual checking, Teacher review, awarded points, Attempt scoring and official task-score selection. Stage 10 owns Homework–Blitz comparison, final Topic result, category, release and the Homework-before-Blitz rule of Sections 19.1 and 20.3 (`S10-D8`). Stage 8 finalization never performs those later-stage transitions.
 
 Blitz task statuses are exactly `draft / scheduled / active / closed / archived`, separate from Attempt/checking state. Draft and scheduled tasks are not Student-executable; only Teacher activation makes an eligible task active.
 
@@ -3888,6 +3920,7 @@ POST /api/v1/teacher/topics/{topic}/blitz
 - `scheduled_at`, when supplied, follows the institution-timezone input contract.
 - `assignment_mode = selected_students` is allowed only for practice/supplementary Blitz; only `group` Blitz may be result-bearing.
 - Scheduling does not itself activate the Blitz.
+- Blank Teacher text follows Section 16 (`CL9-11`).
 
 ### Success — 201
 
@@ -3961,6 +3994,8 @@ synchronized_ends_at
 ```
 
 as Teacher-configurable fields.
+
+Blank Teacher text follows Section 16 (`CL9-11`).
 
 ## 18.5 Schedule Blitz
 
@@ -4052,10 +4087,11 @@ The Teacher-configured duration already exists on the Blitz. The Institution Adm
 
 - First activation requires eligible `draft`/`scheduled` lifecycle, valid title/Topic/Teacher/assignment/instructions, at least one valid Question, positive `duration_seconds`, and the required recipient/cohort rules.
 - If `blitz_timer_start_mode` is null at first activation, return `409 institution_settings_incomplete`.
+- Homework before Blitz (Stage 10, `S10-D8`), only when this Blitz is the pair's official Blitz: if the official Homework is a `draft`, return `409 official_homework_not_activated` and change nothing. This check runs immediately after the timer-mode settings check above and before the cohort is locked.
 - Recalculate current Question points and return `409 assessment_has_no_scoreable_points` when `total_possible_points = 0`.
 - If the Blitz belongs to the official pair, it must have `assignment_mode = group`.
 - If `cohort_snapshotted_at` is already non-null, the Blitz recipient snapshot must use exactly that established persisted cohort.
-- If `cohort_snapshotted_at` is null, the first activated official whole-group Assessment may be Homework or Blitz. If Blitz activates first, resolve the authorized Topic/Group and persist its eligible whole-group recipient snapshot as the common cohort; set `cohort_snapshotted_at` to the same `activatedAt`, preserve the official Homework ID, and create no Homework Attempts. Later Homework activation uses this exact cohort. Later/current Group membership must not redefine it, and incompatible existing recipient snapshots are rejected rather than silently rewritten.
+- If `cohort_snapshotted_at` is null, the first activated official whole-group Assessment establishes the cohort. Before Stage 10 the official Blitz could activate first; since `S10-D8` (Homework before Blitz above) a draft official Homework blocks the official Blitz activation, so the official Homework establishes the cohort. For that history: if Blitz activates first, resolve the authorized Topic/Group and persist its eligible whole-group recipient snapshot as the common cohort; set `cohort_snapshotted_at` to the same `activatedAt`, preserve the official Homework ID, and create no Homework Attempts. Later Homework activation uses this exact cohort. Later/current Group membership must not redefine it, and incompatible existing recipient snapshots are rejected rather than silently rewritten.
 - `timer_start_mode_snapshot` is copied from the institution setting at activation.
 - Capture `activatedAt = truncate_to_utc_second(server_now)` once, persist `status = active` and `activated_at = activatedAt`, and use that same instant for all activation timing arithmetic.
 - **Synchronized:** `synchronized_ends_at = activated_at + duration_seconds`.
@@ -4063,6 +4099,15 @@ The Teacher-configured duration already exists on the Blitz. The Institution Adm
 - The backend clock is authoritative.
 - Changing the institution setting after activation does not change the active Blitz.
 - Activation creates no Student Attempt. The authoritative Blitz response field is exactly `timer_start_mode_snapshot`, separate from the current Institution setting.
+
+### Official Homework Close at Activation (Stage 10)
+
+When this Blitz is the pair's official Blitz (`S10-D8`):
+
+- If the official Homework is `active`, the activation closes it inside the same transaction exactly like a Teacher Homework close (Section 15.6). After all locks the activation captures one untruncated `closedAt = server_now`; the Blitz `activated_at` is `closedAt` truncated to the UTC second (the timing rule above); the Homework close uses `closedAt` itself, so it never precedes the Homework's own sub-second `activated_at` or an Attempt's `started_at`. The deadline is reconciled first when it has passed; every still-`in_progress` Attempt is frozen as `submitted` with `submitted_at = null`, `finalized_at = locked_at = closedAt` and `finalization_reason = task_closed_auto_finalize`; the Homework gets `status = closed` and `closed_at = closedAt` (a Homework close records no actor); frozen Attempts are checked after the activation response is built, like every other freeze (Section 23; no queued job). Only the Homework's own Attempts are passed to the Homework finalizer.
+- A `closed` or `archived` official Homework is left unchanged; a `draft` one is rejected above.
+- Locks: the close reuses the Homework Assessment, Homework row and Attempts that the cohort step of the activation already locks; it takes no lock in another order. Every other writer of these Attempts takes the Topic first or locks the Homework Assessment first, so no cycle exists.
+- The response, idempotency and every other conflict of the activation are unchanged; a replay never closes anything.
 
 ### Activation Replay and Fresh-Request Matrix
 
@@ -4132,9 +4177,9 @@ The backend verifies:
 - Attempt #1 is the attempt being excluded because of the approved exception.
 - No previous exception exists for this Student/Blitz.
 - Attempt #2 does not already exist.
-- A non-empty valid reason within the existing API limits records technical/fairness grounds, never score improvement.
+- A non-empty valid reason (not blank under the Section 16 `CL9-11` rule) within the existing API limits records technical/fairness grounds, never score improvement.
 
-The existing Stage 10 result-closure protection remains separate: once that Student's Topic result is closed, a new exception grant is blocked with `409 result_closed` under Section 25.6, even if the class-wide Blitz remains active. This preserves later-stage historical-result integrity without making Stage 10 result implementation part of Stage 8.
+Stage 10 adds no `result_closed` guard to the grant: closure needs finished work (`S10-D9`) — the official Blitz is closed — or the Topic is archived (Section 25.11), so the official Blitz is closed or archived and already rejects every grant with `409 blitz_attempt_exception_not_allowed`.
 
 An elapsed `synchronized_ends_at` alone does not block an otherwise valid grant while Blitz remains active: replacement #2 receives its own full compensating duration.
 
@@ -4181,12 +4226,9 @@ Possible stable codes:
 blitz_attempt_exception_not_allowed
 blitz_attempt_exception_already_granted
 blitz_normal_attempt_required
-result_closed
 ```
 
 No normal #1 returns `409 blitz_normal_attempt_required`; an existing exception returns `409 blitz_attempt_exception_already_granted`; a disallowed grant returns `409 blitz_attempt_exception_not_allowed` under the lifecycle/locked-state rules above.
-
-A closed Student Topic Result returns `409 result_closed` under the existing result-closure protection.
 
 ## 19.4 Blitz Monitoring
 
@@ -4380,6 +4422,7 @@ Observable responses are exactly those of Stage 8.
 
 | Intent | Current own state/capacity | Exact result |
 |---|---|---|
+| `start_normal` | No #1, the Blitz is the pair's official Blitz, and the Student has no terminal Attempt of the official Homework (Homework Before Blitz below) | `409 homework_not_submitted`. No Attempt. |
 | `start_normal` | No #1 and all preconditions pass | Create #1; `201`. |
 | `start_normal` | #1 is in progress and editable | Same #1; `200`, no new Attempt or timer reset. |
 | `start_normal` | In-progress #1 is due | Authoritative timeout reconciliation when the owning finalization contract is available; then `409 blitz_time_expired`, never stale editable state. |
@@ -4399,6 +4442,10 @@ Observable responses are exactly those of Stage 8.
 | `start_replacement` | Existing exception graph/capacity is invalid for replacement | `409 blitz_attempt_exception_not_allowed`, preserving the invariant/public-error split. |
 
 Successful Start, Resume and replacement Attempt resources expose `timing.mode = blitz_tasks.timer_start_mode_snapshot`, derived only from the authoritative persisted snapshot, never the current Institution setting. They do not expose a top-level `timer_start_mode_snapshot`.
+
+### Homework Before Blitz (Stage 10)
+
+For the pair's official Blitz (`S10-D8`): when a `start_normal` request would create a new Attempt #1 — after the existing executability checks, including the synchronized common-end `409 blitz_time_expired`, and only when the Student has no Attempt #1 — the Student must have at least one terminal (`submitted`, `waiting_for_teacher_review` or `checked`) Attempt of the official Homework; otherwise `409 homework_not_submitted` and no Attempt is created. A `start_normal` that returns an existing Attempt #1, an idempotent replay, `resume` and `start_replacement` are unaffected, and a practice Blitz is never affected. A barred Student is Not completed at once when the activation closed the Homework (Homework and Blitz sides `missing`, `missing_component = both`, Section 25.3); in history from before `S10-D8` with a still-open Homework the result waits for the Homework instead. The Student Blitz read (Section 20.2) does not announce the bar; the client learns it from the `409`.
 
 ### Synchronized Mode Success
 
@@ -4949,7 +4996,7 @@ revealing internal storage paths or provider details.
 
 Automatic checking is internal server behavior owned by Stage 9. For Homework, it consumes the immutable `submitted` history produced by Stage 7; for Blitz, Stage 8's immutable `submitted`/`timed_out_finalized` execution history.
 
-The freezing points are Homework Submit, deadline reconciliation and Teacher close, and Blitz Submit, timeout reconciliation, Teacher close and the timeout performed during an exception grant. The freeze itself does no checking; it freezes committed pending work only. Stage 9 checks each frozen Attempt right after the freezing transaction commits, outside it: for an HTTP request after its response is built, for a console reconciliation command after its transaction commits. A scheduled sweep every minute also checks every Attempt still `submitted` or `timed_out_finalized`, including history frozen before Stage 9. Each Attempt is checked in its own transaction; a checking failure is logged and never rolls back or alters the freeze and never changes the freeze response. Checking acts only on `submitted`/`timed_out_finalized` Attempts, so it is idempotent. `07-architecture.md` defines the mechanism.
+The freezing points are Homework Submit, deadline reconciliation, Teacher close and (Stage 10) the official Homework close inside the official Blitz activation (Section 19.1), and Blitz Submit, timeout reconciliation, Teacher close and the timeout performed during an exception grant. The freeze itself does no checking; it freezes committed pending work only. Stage 9 checks each frozen Attempt right after the freezing transaction commits, outside it: for an HTTP request after its response is built, for a console reconciliation command after its transaction commits. A scheduled sweep every minute also checks every Attempt still `submitted` or `timed_out_finalized`, including history frozen before Stage 9. Each Attempt is checked in its own transaction; a checking failure is logged and never rolls back or alters the freeze and never changes the freeze response. Checking acts only on `submitted`/`timed_out_finalized` Attempts, so it is idempotent. `07-architecture.md` defines the mechanism.
 
 There is no public endpoint such as:
 
@@ -5051,14 +5098,14 @@ Strict JSON body; no query parameters; no `Idempotency-Key`.
 3. **State**: a submission still `submitted` or `timed_out_finalized` returns `409 automatic_checking_pending`.
 4. **Items** (`422 validation_failed` on `answers.N.<field>`): each `answer_id` belongs to this submission and is a manual-review answer (`waiting_for_teacher_review` or `teacher_checked`); `awarded_points` is `0` to the Question `points` and follows the Question `points` number rule (Section 2.13).
 
-Then, in one transaction with the scoring locks of Section 34.7, steps 2–4 are evaluated again under the locks, and only then, for each item: write `awarded_points`, `feedback` (`null` clears it), `checking_status = teacher_checked`, the reviewing Teacher as `checked_by_user_id`, and `checked_at = server now`; recalculate the Attempt (Section 23 Checking States); run the official-score resolver (Section 24.1).
+Then, in one transaction with the scoring locks of Section 34.7, steps 2–3 are evaluated again under the locks; then (Stage 10) when the submission is an Attempt of its Topic's official Homework or Blitz and the Student's Topic result is closed, any item naming an answer of this submission that is `teacher_checked` (a correction) fails the whole request with `409 result_closed` (Section 23.2) and nothing is written; then step 4 is evaluated again, and only then, for each item: write `awarded_points`, `feedback` (`null` clears it), `checking_status = teacher_checked`, the reviewing Teacher as `checked_by_user_id`, and `checked_at = server now`; recalculate the Attempt (Section 23 Checking States); run the official-score resolver (Section 24.1).
 
 ### Rules
 
 - A subset of the manual answers may be saved (partial review); the Attempt becomes `checked` when its last waiting answer is reviewed.
 - The Teacher cannot modify Student answer content.
 - Concurrent reviews of one submission serialize on the locks; each answer keeps the last committed value.
-- Stage 10 recalculates any dependent open Topic result.
+- An open Stage 10 Topic result is computed live, so it reflects the review on its next read (Section 25.3).
 
 ### Success — 200
 
@@ -5086,11 +5133,13 @@ Returns the full submission detail of Section 21.2:
 
 A correction uses the same endpoint (Section 23.1) on `teacher_checked` answers. The Attempt stays `checked` and is recalculated; the official score is re-resolved and may move to another Attempt (Section 24.1).
 
-Stage 9 has no result-closure guard: until Stage 10 exists, a correction is always allowed. Stage 10 adds, for a correction after the Student's Topic result is closed:
+Stage 9 has no result-closure guard. Stage 10 (`S10-T7`): for a Student whose Topic result is closed, a request on an Attempt of the Topic's official Homework or Blitz in which any item names an answer that is `teacher_checked` (a correction) fails as a whole with:
 
 ```text
 409 result_closed
 ```
+
+The check runs inside the scoring-lock transaction, after the re-checked `automatic_checking_pending` and before the item re-validation and any write; a request with an invalid item still gets the existing pre-transaction `422` first (Section 23.1). A first review of a still-waiting answer stays allowed after closure and never changes the closed snapshot (Section 25.11). Practice tasks are never affected.
 
 ---
 
@@ -5210,7 +5259,7 @@ When Attempt #1 has been excluded by the approved exception and valid replacemen
 
 The resolver runs inside every automatic checking run, review save, correction and exception grant for an official task, each under the scoring locks of Section 34.7. The scheduled checking sweep (Section 23) also re-runs it for official-task Students that have a `checked` eligible Attempt and no pending eligible Attempt but whose persisted official score is missing or differs from the live evaluation.
 
-Between a freeze and its checking run the persisted official score can still show the previous result, so no read trusts it alone. `status = ready` here and Student `score_visible` (Section 17.1) require the persisted official score **and** a live evaluation of Homework steps 1–3 (or the Blitz rules) that is ready with the same Attempt and the same normalized score. Stage 10 closure must use the same live evaluation.
+Between a freeze and its checking run the persisted official score can still show the previous result, so no read trusts it alone. `status = ready` here and Student `score_visible` (Section 17.1) require the persisted official score **and** a live evaluation of Homework steps 1–3 (or the Blitz rules) that is ready with the same Attempt and the same normalized score. Stage 10 Topic results (every read and closure) use the same live evaluation (Section 25.3).
 
 ### Status
 
@@ -5239,7 +5288,7 @@ Between a freeze and its checking run the persisted official score can still sho
 
 ## 24.2 Student Read Own Official Task Score
 
-The Student receives own scores only through Student task resources and only when visibility rules allow: the official Homework score through `score_visible`/`official_score` (Section 17.1), Homework Attempt results through `result` (Sections 17.2 and 17.4), and Blitz results through the finished Blitz list (Section 20.6). Stage 10 adds Topic result and progress visibility. Parents see nothing new in Stage 9.
+The Student receives own scores only through Student task resources and only when visibility rules allow: the official Homework score through `score_visible`/`official_score` (Section 17.1), Homework Attempt results through `result` (Sections 17.2 and 17.4), and Blitz results through the finished Blitz list (Section 20.6). Stage 10 adds the release condition of Sections 17.1 and 17.4 and the Student Topic result (Section 29.5); the Parent reads only the Topic result (Section 30.5). Progress resources are Stage 11.
 
 No generic arbitrary Student official-score lookup is required.
 
@@ -5255,9 +5304,9 @@ The Teacher may correct an underlying manual Question score through Section 23.2
 
 ---
 
-# 25. Topic Result Pair and Result Calculation APIs
+# 25. Topic Result Pair and Topic Result APIs
 
-Stage 10 recalculates Topic results automatically when official required scores become available or valid underlying scores change. The pair designation/completion contract below belongs to Stages 6/8 and does not itself calculate a score/result.
+The pair designation/completion contract (Sections 25.1–25.2) belongs to Stages 6/8 and does not itself calculate a score or result. Stage 10 adds the Topic result (Sections 25.3–25.11). An open result is computed live on every read from the current state and is never stored or recalculated by a job; only the Teacher comment, the Teacher release facts and the closure snapshot are stored (`S10-T1`, `08-database.md` `topic_results`).
 
 Flutter must not send final score/category values.
 
@@ -5362,7 +5411,7 @@ For Blitz-only null-to-Blitz completion (locked or unlocked) or unlocked pre-act
 
 ### Shared Official Cohort and First Activity
 
-When `cohort_snapshotted_at` is non-null, official Blitz activation uses exactly the established persisted official cohort; later joins/leaves never resnapshot, remove or add members. Normal account-active/security middleware still applies. When null, the first activated official whole-group Homework or Blitz establishes the cohort from its valid persisted activation recipient snapshot at the same authoritative activation instant. If Blitz activates first, preserve Homework identity and create no Homework Attempts; later Homework activation uses that exact cohort.
+When `cohort_snapshotted_at` is non-null, official Blitz activation uses exactly the established persisted official cohort; later joins/leaves never resnapshot, remove or add members. Normal account-active/security middleware still applies. When null, the first activated official whole-group Homework or Blitz establishes the cohort from its valid persisted activation recipient snapshot at the same authoritative activation instant. Before Stage 10 the official Blitz could activate first; since `S10-D8` (Section 19.1) a draft official Homework blocks the official Blitz activation, so the official Homework establishes the cohort. For that history: if Blitz activates first, preserve Homework identity and create no Homework Attempts; later Homework activation uses that exact cohort.
 
 The existing first official Homework Attempt pair-lock rule is unchanged. Before the first official Blitz Attempt, require the matching locked/resolved official pair and cohort membership; set a null pair `locked_at` to the Attempt's exact `startedAt`, preserving a non-null lock. Student Start changes no pair/cohort identity.
 
@@ -5376,7 +5425,139 @@ A designated result-bearing task must not be replaced after Student attempts hav
 
 Stage 8 completion of a locked pair's previously null Blitz side is the narrow permitted completion case above, never replacement of locked official meaning. Result-pair PUT gains no `Idempotency-Key` requirement.
 
-## 25.3 Topic Results List — Teacher
+Stage 10 adds no `result_closed` guard here: closure needs finished work (`S10-D9`) — the official Blitz is closed — or the Topic is archived, so a pair change already returns `409 result_pair_locked` or `409 topic_not_editable` (Section 25.11).
+
+## 25.3 Topic Result Model (Stage 10)
+
+### Cohort
+
+A Topic has Topic results only after its official cohort is established (`cohort_snapshotted_at` is set, Section 25.2): one result for each persisted recipient (`assessment_students`) of the official Homework and the official Blitz, which share one cohort. Before that the Topic has no results. Group membership changes after the snapshot never change the cohort.
+
+### Side States
+
+Each side (Homework, Blitz) of one cohort Student has exactly one `state`. The official-score status is the live status of Section 24.1: `ready` only while the persisted official score matches the live evaluation.
+
+Homework side — first match:
+
+| # | Condition | `state` |
+|---|---|---|
+| 1 | Official score status `ready` | `ready` (value H, official Attempt) |
+| 2 | Status `waiting_for_teacher_review` | `waiting_for_teacher_review` |
+| 3 | Status `automatic_checking_pending` | `checking` |
+| 4 | The official Homework was never activated | `not_activated` |
+| 5 | The Student has an `in_progress` Attempt | `open` |
+| 6 | The Homework is active, has no deadline or `server_now < deadline_at`, and the Student has fewer than three Attempts | `open` |
+| 7 | Otherwise (closed or archived, deadline passed, no checked or pending Attempt) | `missing` |
+
+Blitz side — first match:
+
+| # | Condition | `state` |
+|---|---|---|
+| 1 | The pair has no Blitz | `not_designated` |
+| 2 | Official score status `ready` | `ready` (value B, official Attempt) |
+| 3 | Status `waiting_for_teacher_review` | `waiting_for_teacher_review` |
+| 4 | Status `automatic_checking_pending` | `checking` |
+| 5 | Status `waiting_for_replacement` | `open` |
+| 6 | The official Blitz was never activated (draft, scheduled, or archived before activation) | `not_activated` |
+| 7 | The Blitz is active, the Student has no Blitz Attempt and the Homework side is `missing` (the Student can no longer get the submitted Homework Attempt that Section 20.3 requires to start) | `missing` |
+| 8 | The Blitz is active | `open` |
+| 9 | Otherwise (closed or archived after activation; never started, or an exception without a taken replacement — even while #1 waits for review) | `missing` |
+
+A side the Teacher never designated or never activated is never `missing`: the result waits (`S10-T3`).
+
+### Result Status
+
+`result_status` has seven values: `waiting_for_homework`, `waiting_for_blitz`, `waiting_for_teacher_review`, `waiting_for_settings`, `calculated`, `not_completed` and `closed`.
+
+Open results — first match:
+
+| # | Condition | `result_status` |
+|---|---|---|
+| 1 | Some side is `missing` | `not_completed`; `missing_component` = `homework`, `blitz` or `both` (the sides that are `missing` now) |
+| 2 | Both sides `ready`, and the Institution has a threshold T and a valid complete category set | `calculated` |
+| 3 | Both sides `ready`, threshold or category set missing | `waiting_for_settings` |
+| 4 | Homework side `not_activated`, `open` or `checking` | `waiting_for_homework` |
+| 5 | Blitz side `not_designated`, `not_activated`, `open` or `checking` | `waiting_for_blitz` |
+| 6 | Otherwise (a side `waiting_for_teacher_review`) | `waiting_for_teacher_review` |
+
+- `missing_component` is null for every other status. A `not_completed` result can still change its `missing_component` (for example `homework` → `both`) until it is closed.
+- A side that waits for checking or Teacher review is never `missing`, so review alone never makes a result Not completed; a result is Not completed only because some side is `missing`, even while the other side still waits for review (`S10-T3`). Waiting for settings and not being released are never Not completed either.
+- A closed result has `result_status = closed` and `closed_outcome` = `calculated` or `not_completed` (`closed_outcome` is null for open results). All its values, including both side states, come from the closure snapshot (Section 25.8).
+
+### Terms
+
+- **Terminal**: open `calculated` or open `not_completed`.
+- **Work finished** (per Student; the visibility window of `S10-D3`): the official Blitz was activated and is `closed` or `archived`; the official Homework is `closed` or `archived`, or has `deadline_at <= server_now`, or the Student has used all three Attempts; and the Student has no `in_progress` Attempt on either official task. A Topic without an official Blitz never has finished work. A deadline moved later or removed (allowed only while the Homework has no Attempts, so only in history from before `S10-D8`) closes the window again for an open result. A result closed by the Teacher (`closure_reason = teacher`) always counts as finished (its work was finished at closure); a result closed at Topic archive counts as finished by the rule above (at archive no Attempt is in progress and every task is closed or archived, so only a Topic without an activated official Blitz stays unfinished, and its values stay hidden, Section 27.1).
+- **Closable** (`S10-D9`): terminal, and either the Student's work is finished or the Topic is being archived (Section 25.10). At archive every task is closed or archived and the Topic can no longer change, so no further work is possible even without an official Blitz.
+
+With Section 19.1 (the official Blitz activation closes the official Homework), work is finished for every Student right after the official Blitz closes.
+
+### Calculation (`S10-T5`, `S10-D6`)
+
+For a `calculated` result, with H and B the stored 8-decimal official scores and T the Institution's current `acceptable_score_difference`:
+
+```text
+D = |H - B|                        (exact)
+D <= T  ->  final = (H + B) / 2,  calculation_method = average,  consistency = consistent
+D >  T  ->  final = B,            calculation_method = blitz,    consistency = inconsistent
+```
+
+- The comparison uses exact values; `final` is exact (it can need nine decimals) and is stored and serialized half-up to 8 decimals.
+- `category_score` is an integer from the exact final score: fractional part `.0` through `.5` rounds down, above `.5` rounds up (85.5 → 85, 85.50000001 → 86).
+- The category is the numeric category whose inclusive range contains `category_score`, from the Institution's current category set (Section 26). A stored set that fails the Section 26.2 validator counts as missing (`waiting_for_settings`).
+- `calculation_method` has exactly two values, `average` and `blitz`; waiting and Not completed live in `result_status`, never in the method.
+- The same rule applies whichever score is higher; an inconsistent result is never presented as an accusation.
+- An open result always uses the current T and the current category ranges, so a settings change (Sections 12.2 and 26.2) applies on its next read; a closed result never changes and never reads current settings again (`S10-D6`).
+
+## 25.4 Teacher Result Access and Item
+
+### Access
+
+Every Teacher result endpoint (Sections 25.5–25.9 and 27.3–27.5) requires the Teacher who owns the Topic and is a current Teacher of its Group (the review access rule of Section 21); otherwise `404 resource_not_found`. A `{student}` outside the cohort returns `404 resource_not_found`. Topic and task status never restrict these endpoints (`S10-T6`).
+
+### Item
+
+Used by the list, the detail and every single-Student action response:
+
+```json
+{
+  "student": { "id": "uuid", "full_name": "Student Name" },
+  "result_status": "calculated",
+  "closed_outcome": null,
+  "closed_at": null,
+  "missing_component": null,
+  "homework": { "assessment_id": "uuid", "state": "ready", "official_attempt_id": "uuid", "attempt_number": 2, "score": 88.0 },
+  "blitz": { "assessment_id": "uuid", "state": "ready", "official_attempt_id": "uuid", "attempt_number": 1, "score": 84.0 },
+  "score_difference": 4.0,
+  "acceptable_difference": 10.0,
+  "consistency": "consistent",
+  "calculation_method": "average",
+  "final_score": 86.0,
+  "category_score": 86,
+  "category": { "code": "understood_well", "label": "Understood well" },
+  "teacher_comment": null,
+  "visibility": {
+    "student_release_mode": "manual_teacher",
+    "student_visible": false,
+    "student_released_at": null,
+    "can_release_to_student": true,
+    "parent_release_mode": "with_student",
+    "parent_visible": false,
+    "parent_released_at": null,
+    "can_release_to_parent": false
+  },
+  "can_close": true
+}
+```
+
+- `state` is the Section 25.3 side state (`blitz.assessment_id` is null when not designated); the Attempt id, number and score are non-null only for `ready`.
+- `score_difference` (D), `acceptable_difference` (T), `consistency`, `calculation_method`, `final_score` and `category_score` are non-null only for `calculated` (open, or closed with `closed_outcome = calculated`). `category` is the numeric category for `calculated`, `{"code": "not_completed", "label": "Not completed"}` for Not completed, and null otherwise.
+- Closed results take every value, including both side states, from the closure snapshot.
+- `student_release_mode` and `parent_release_mode` are the current Institution modes (null while unconfigured). `student_visible` and `parent_visible` tell whether the values are visible now (Sections 27.1 and 27.2). `can_release_to_student`, `can_release_to_parent` and `can_close` are true exactly when the single-Student action would change state now (an already-done action returns `200` without a change and shows `false`).
+- The Teacher sees the consistency label; D and T are displayed with one decimal like every score, so equal-looking D and T with `inconsistent` are possible and correct (T allows 8 decimals).
+- Scores are JSON numbers of the stored 8-decimal values; clients round them for display (Section 2.13, `S10-T5`).
+
+## 25.5 Topic Results List — Teacher
 
 ```text
 GET /api/v1/teacher/topics/{topic}/results
@@ -5385,173 +5566,150 @@ GET /api/v1/teacher/topics/{topic}/results
 ### Query
 
 ```text
-result_status
-category
-consistency
-search
+result_status   one of the seven Section 25.3 values
+category        a category code (Section 26)
 page
-per_page
-sort
-direction
+per_page        default 25, maximum 100
 ```
 
-### Success Item
+An unknown parameter or an invalid value returns `422 validation_failed`.
 
-Public score fields are server-rounded to one decimal place for display.
+### Success — 200
+
+Items are the Section 25.4 items of the cohort Students, ordered by full name, then `id`. `meta` holds the pagination and `counts`: the number of cohort results per `result_status`, before filtering. A Topic without an established cohort returns an empty list.
 
 ```json
 {
-  "id": "result-uuid",
-  "student": {
-    "id": "uuid",
-    "full_name": "Student Name"
-  },
-  "result_pair": {
-    "id": "pair-uuid",
-    "homework_assessment_id": "uuid",
-    "blitz_assessment_id": "uuid"
-  },
-  "homework": {
-    "official_attempt_id": "uuid",
-    "official_score": 88.0
-  },
-  "blitz": {
-    "official_attempt_id": "uuid",
-    "official_score": 84.0
-  },
-  "score_difference": 4.0,
-  "acceptable_difference_used": 10.0,
-  "calculation_method": "average",
-  "final_score": 86.0,
-  "display_precision": 1,
-  "consistency": "consistent",
-  "category": {
-    "code": "understood_well",
-    "label": "Understood well"
-  },
-  "result_status": "calculated",
-  "missing_component": null,
-  "visibility": {
-    "student_release_mode_used": "manual_teacher",
-    "student_visible": false,
-    "student_visible_at": null,
-    "parent_release_mode_used": "with_student",
-    "parent_visible": false,
-    "parent_visible_at": null
+  "data": [
+    { "...": "Section 25.4 item" }
+  ],
+  "meta": {
+    "pagination": {
+      "page": 1,
+      "per_page": 25,
+      "total": 28,
+      "last_page": 2
+    },
+    "counts": {
+      "waiting_for_homework": 0,
+      "waiting_for_blitz": 0,
+      "waiting_for_teacher_review": 2,
+      "waiting_for_settings": 0,
+      "calculated": 21,
+      "not_completed": 2,
+      "closed": 3
+    }
   }
 }
 ```
 
-### Calculation Rule
-
-Internally, using unrounded values:
-
-```text
-H = official Homework score
-B = official Blitz score
-D = abs(H - B)
-T = institution acceptable difference
-```
-
-If:
-
-```text
-D <= T
-```
-
-then:
-
-```text
-final = (H + B) / 2
-consistency = consistent
-calculation_method = average
-```
-
-If:
-
-```text
-D > T
-```
-
-then:
-
-```text
-final = B
-consistency = inconsistent
-calculation_method = blitz
-```
-
-The backend derives integer `category_score` from the unrounded final value: fractional part `.0` through `.5` rounds down; fractional part greater than `.5` rounds up. Understanding category is resolved from that integer score.
-
-## 25.4 Topic Result Detail — Teacher
+## 25.6 Topic Result Detail — Teacher
 
 ```text
 GET /api/v1/teacher/topics/{topic}/results/{student}
 ```
 
-Returns the full explainable result snapshot, including relevant official-attempt references, result-pair identity, release policy snapshots, and Teacher feedback where available.
-
-## 25.5 Recalculate Open Result
-
-```text
-POST /api/v1/teacher/topics/{topic}/results/{student}/recalculate
-```
-
-### Allowed
-
-Authorized Teacher only.
-
-### Request
+Returns the Section 25.4 item plus `teacher_comment_updated_at`, `teacher_comment_updated_by`, `student_released_by`, `parent_released_by`, `closed_by` (each actor `{id, full_name}` or null) and `closure_reason` (`teacher`, `topic_archived`, or null for an open result):
 
 ```json
-{}
+{
+  "data": {
+    "...": "all Section 25.4 item fields",
+    "teacher_comment_updated_at": "2026-10-05T09:00:00Z",
+    "teacher_comment_updated_by": { "id": "uuid", "full_name": "Teacher Name" },
+    "student_released_by": null,
+    "parent_released_by": null,
+    "closed_by": null,
+    "closure_reason": null
+  }
+}
 ```
 
-### Rule
-
-Client cannot supply:
+## 25.7 Teacher Comment
 
 ```text
-official_homework_score
-official_blitz_score
-score_difference
-final_score
-category
-consistency
-calculation_method
+PUT /api/v1/teacher/topics/{topic}/results/{student}/comment
 ```
 
-The backend recalculates from the current eligible underlying scoring state and approved result pair.
+One optional Teacher comment per Topic result (`S10-D1`). Body exactly:
 
-### Conflict
-
-```text
-409 result_closed
+```json
+{
+  "teacher_comment": "Well done; revise question 4."
+}
 ```
 
-## 25.6 Close Result
+- `teacher_comment` is a string or `null`. Leading and trailing Unicode whitespace (including non-breaking spaces) is trimmed; an empty result is `null`; at most 2000 characters after trimming. Any other body returns `422 validation_failed`.
+- Allowed in every result status until closure. On a closed result every request, even with an unchanged value, returns `409 result_closed`; this check runs before the no-op check. Otherwise an unchanged value is a no-op.
+- Returns `200` with the Section 25.6 detail.
+- Stored rows of Students who are no longer in the cohort (a pair re-designated before any Attempt) are ignored.
+- The comment is visible to the Student and the Parent only together with the visible result values (Section 27); answer feedback (Section 23.1) stays Student-only.
+
+## 25.8 Close Result — Single Student
 
 ```text
 POST /api/v1/teacher/topics/{topic}/results/{student}/close
 ```
 
-### Preconditions
+Request body: `{}`. First match:
 
-The result must be terminal for this Student+Topic:
+1. Already closed → `200` with the closed detail (no change).
+2. Not closable (Section 25.3: not terminal, or the Student's work is not finished) → `409 result_not_ready_for_closure`.
+3. Otherwise write the closure snapshot with `closure_reason = teacher` and the Teacher as `closed_by` → `200` with the detail.
 
-- `calculated` with both official task scores, all required manual review complete, no relevant in-progress official Attempt, and no approved replacement Blitz Attempt still pending; **or**
-- definitive `not_completed` because required work can no longer validly be completed.
+Closure does not require Topic closure and does not require Student or Parent visibility; release stays a separate action (Section 27), also after closure.
 
-`waiting_for_homework`, `waiting_for_blitz`, and `waiting_for_teacher_review` are rejected with `409 result_not_ready_for_closure`. Closure does not require class-wide task closure and does not require Student/Parent visibility.
+### Closure Snapshot
 
-After closure:
+Closing computes the result live inside the closure transaction (Section 34.8) and writes `closed_at`, `closed_by`, `closure_reason`, `closed_outcome`, `missing_component`, the pair's Homework and Blitz assessment ids, both side states, the official Attempt ids and scores of the `ready` sides, and for `calculated` D, T, method, consistency, final score, `category_score`, the category and the range used. After closure the snapshot and the comment never change (`S10-T7`, `S10-D6`); the release facts can still be set.
 
-- Normal scoring correction is blocked.
-- New Blitz exception grants for this Student/result are blocked.
-- Result-pair/cohort replacement is blocked.
-- Recalculation and official-score replacement are blocked.
-- Numeric result/category data is read-only in the MVP.
-- Visibility/release remains a separate controlled concern.
+## 25.9 Bulk Close
+
+```text
+POST /api/v1/teacher/topics/{topic}/results/close
+```
+
+Request body: `{}`. Applies the Section 25.8 rule to every cohort Student in one transaction (`S10-D7`).
+
+### Success — 200
+
+```json
+{
+  "data": {
+    "processed": 21,
+    "skipped": {
+      "already_done": 3,
+      "not_ready": 6
+    }
+  }
+}
+```
+
+- `processed` counts the results this call closed.
+- `skipped.already_done` counts results that were already closed.
+- `skipped.not_ready` counts results for which the single action would return `409 result_not_ready_for_closure`.
+
+The bulk release endpoints (Section 27.5) return the same shape.
+
+## 25.10 Automatic Closure on Topic Archive
+
+`POST /api/v1/teacher/topics/{topic}/archive` (Section 13.9) keeps its request, response and conflicts. Inside its transaction a real archive closes every terminal result of the cohort (Section 25.3 Closable) with `closure_reason = topic_archived` and the archiving Teacher as `closed_by` (`S10-D7`). Waiting results stay open. Closing a Topic (Section 13.8) closes no result. This is a deliberate change to the Stage 5 archive behavior.
+
+## 25.11 Closure Effects
+
+### What Closure Blocks — `409 result_closed`
+
+For a Student whose Topic result is closed (`S10-T7`):
+
+- `PUT /api/v1/teacher/submissions/{submission}/review` on an Attempt of the Topic's official Homework or Blitz: any item naming an answer that is `teacher_checked` (a correction) fails the whole request with `409 result_closed`, inside the scoring-lock transaction, after the re-checked `automatic_checking_pending` and before the item re-validation and any write (invalid items still get the existing pre-transaction `422` first; Sections 23.1–23.2);
+- the comment `PUT` (Section 25.7), before the no-op check;
+- `POST /api/v1/student/homework/{homework}/attempts` (Start) of the official Homework, after the existing lifecycle, deadline and attempt-count conflicts (Section 17.3). It is reachable only in history from before `S10-D8`: a Homework with no Attempt at all whose deadline a Teacher moved later.
+
+Closure needs finished work (`S10-D9`) — the official Blitz is closed — or the Topic is archived, so a Blitz Start, an exception grant and a pair change (`result_pair_locked` / `topic_not_editable` already apply) cannot happen after closure; they get no `result_closed` guard. Idempotent replays of an earlier successful request keep returning the stored response. Practice tasks are never affected.
+
+### Still Allowed After Closure
+
+A first review of a still-waiting answer. For a `calculated` closure no pending Attempt could overtake, so the review cannot change the official score. For a `not_completed` closure the snapshot holds only the sides that were `ready`; a later first review may still complete the other side's official score in `official_task_scores` (Stage 9 views show it), but it never changes the closed snapshot. Automatic checking and the sweep keep running unchanged; nothing they do can change a closed result's snapshot.
 
 ---
 
@@ -5663,159 +5821,107 @@ Backend validates entire set transactionally:
 - Logical ordering
 - Not completed remains non-numeric
 
-Historical closed results are not silently recalculated. Range values are inclusive integers covering every integer 0–100 exactly once. Category assignment first derives `category_score` from the internal final score (`.0`–`.5` down, `>.5` up) and then applies these ranges. The first successful `PUT` creates the complete configured category set transactionally. Topic result calculation is blocked with `409 category_configuration_invalid` until a valid complete set exists.
+Range values are inclusive integers covering every integer 0–100 exactly once. Category assignment first derives `category_score` from the exact final score (`.0`–`.5` down, `>.5` up) and then applies these ranges. The first successful `PUT` creates the complete configured category set transactionally. Every open Topic result uses the current ranges on its next read; closed results keep their snapshot and never change (`S10-D6`). Until a valid complete set exists (a stored set that fails this validation counts as missing), a result whose Homework and Blitz scores are both ready has status `waiting_for_settings` (Section 25.3); no endpoint returns a category-configuration conflict.
 
 ---
 
 # 27. Result Release and Visibility APIs
 
-Calculation and release are separate.
+Calculation and release are separate. A release changes only who may see the values; it never changes the Homework score, Blitz score, difference, threshold, consistency, calculation method, final score, category or result status.
 
-Institution settings:
+Institution settings (Section 12):
 
 ```text
 student_result_release_mode = automatic | manual_teacher
 parent_result_release_mode = with_student | manual_teacher | hidden
 ```
 
-A Parent must never receive a result before the Student result is released.
+The current modes always apply: no result keeps a copy of the mode (`S10-D6`). A Parent never sees result values that the Student cannot see.
 
-## 27.1 Read Visibility
+## 27.1 Topic Result Visibility — Student
 
-Teacher result endpoints include:
-
-```json
-{
-  "visibility": {
-    "student_release_mode_used": "manual_teacher",
-    "student_visible": false,
-    "student_visible_at": null,
-    "parent_release_mode_used": "with_student",
-    "parent_visible": false,
-    "parent_visible_at": null
-  }
-}
-```
-
-Release actions change visibility only.
-
-They must not change:
-
-- Homework score
-- Blitz score
-- Difference
-- Calculation method
-- Final score
-- Category
-- Consistency
-- Result calculation status
-
-## 27.2 Automatic Student Release
-
-When the result snapshot uses:
+The result values (H, B, final score, calculation method, category and Teacher comment) are visible to the Student when all hold (`S10-D3`):
 
 ```text
-student_result_release_mode = automatic
+result is terminal or closed
++ the Student's work is finished (Section 25.3)
++ (student_result_release_mode = automatic  or  the result's student_released_at is set)
 ```
 
-the backend sets Student visibility when:
+- Automatic mode: the values become visible by themselves at that moment; no Teacher call exists.
+- `manual_teacher`: the Teacher's release (Section 27.3) becomes available at that moment.
+- An unconfigured mode shows no values. A Student who finishes the Blitz early never sees a score before the Blitz closes.
+- The status (`result_status`, `closed_outcome`, `missing_component`) is always visible to the Student.
+- The Student and the Parent see H, B, the final score, the category, the status, the Teacher comment and the calculation method (one neutral line on how the final score was formed). They never see `consistency`, the difference D, the threshold T or `category_score` (`S10-D2`). The Teacher sees everything (Section 25.4).
+- A released result stays released (`S10-D5`). After a Teacher correction the Student and the Parent see the new values at once; if the result falls back to a waiting status they see that status without values, then the new result without a new release.
 
-- Required Homework official score exists.
-- Required Blitz official score exists.
-- All required Teacher review is complete.
-- Final result is calculated.
+Official Attempt results and the official Homework score follow the same release condition (Sections 17.1 and 17.4, `S10-D4`): a manual Topic release also makes that Student's official Homework and Blitz Attempt results and answer feedback visible. Practice task results are visible after checking in every mode (a practice Blitz after it closes).
 
-No Teacher release call is required.
+## 27.2 Topic Result Visibility — Parent
 
-If Parent mode is `with_student`, Parent visibility begins at the same release event.
-
-## 27.3 Manual Student Release
-
-When the result snapshot uses:
+A Parent sees result information only for a Student with a current Parent–Student relationship. With `parent_result_release_mode = hidden` (or unconfigured) the Parent receives no result information at all, not even the status (`S10-T8`). Otherwise the status is visible, and the values (as in Section 27.1, including the Teacher comment) are visible when:
 
 ```text
-student_result_release_mode = manual_teacher
+the values are visible to the Student (Section 27.1)
++ (parent mode = with_student  or  (parent mode = manual_teacher and the result's parent_released_at is set))
 ```
 
-the authorized Teacher uses:
+- With `with_student` no Parent release call exists: Parent visibility follows Student visibility.
+- The Parent sees the Teacher comment only together with visible values and never sees answer feedback (`S10-D1`).
+- Parent release is one fact per result: every currently connected Parent of that Student sees the same.
+- Stage 11 Parent progress resources follow the same rule.
+
+## 27.3 Release to Student — Single
 
 ```text
 POST /api/v1/teacher/topics/{topic}/results/{student}/release/student
 ```
 
-### Request
+Access: Section 25.4. Request body: `{}`. First match:
 
-```json
-{}
-```
+1. The current Student mode is not `manual_teacher` → `409 manual_release_not_allowed`.
+2. Already released to the Student → `200` (no change).
+3. The result is neither terminal nor closed, or the Student's work is not finished → `409 result_not_ready`.
+4. Otherwise set `student_released_at` and the releasing Teacher → `200`.
 
-### Preconditions
+Returns the Section 25.6 detail. A closed result is released like an open one.
 
-- Result is calculated.
-- Teacher is authorized.
-- Student is not already visible, unless handled idempotently.
-
-### Success
-
-Returns updated Topic result visibility.
-
-If Parent mode is `with_student`, Parent visibility is also activated by this same Student release.
-
-## 27.4 Manual Parent Release
-
-Only when the result snapshot uses:
-
-```text
-parent_result_release_mode = manual_teacher
-```
-
-the authorized Teacher uses:
+## 27.4 Release to Parents — Single
 
 ```text
 POST /api/v1/teacher/topics/{topic}/results/{student}/release/parent
 ```
 
-### Preconditions
+Access: Section 25.4. Request body: `{}`. First match:
 
-- Student result is already visible.
-- Parent mode is `manual_teacher`.
-- Teacher is authorized.
+1. The current Parent mode is not `manual_teacher` → `409 manual_release_not_allowed`.
+2. Already released to Parents → `200` (no change).
+3. The values are not visible to the Student now (Section 27.1) → `409 student_result_not_released`.
+4. Otherwise set `parent_released_at` and the releasing Teacher → `200`.
 
-### Rule
+Returns the Section 25.6 detail.
 
-If Student visibility does not yet exist:
-
-```text
-409 business_conflict
-```
-
-with a specific code such as:
+## 27.5 Bulk Release
 
 ```text
-student_result_not_released
+POST /api/v1/teacher/topics/{topic}/results/release/student
+POST /api/v1/teacher/topics/{topic}/results/release/parent
 ```
 
-If Parent mode is `hidden`, manual Parent release is not allowed.
+Access: Section 25.4. Request body: `{}`. Each endpoint applies its single-Student rule (Section 27.3 or 27.4) to every cohort Student in one transaction (`S10-D7`): “release all ready to Students” and “release to Parents all results visible to Students”. The response has the Section 25.9 shape:
 
-When Parent visibility is active, the result is visible to all currently authorized Parents connected to that Student; the result row does not create a separate release state per Parent.
+- `skipped.already_done`: already released to the Student (Student release) or to Parents (Parent release);
+- `skipped.not_ready`: the single action would return `409 result_not_ready` or `409 student_result_not_released`.
 
-## 27.5 Parent Mode `with_student`
+A closed result is released like any other. A mode that forbids the release (rule 1) fails the whole call with `409 manual_release_not_allowed` and changes nothing.
 
-No separate Parent release endpoint call is required.
+## 27.6 Release-Mode Changes
 
-Parent visibility begins when Student visibility begins.
-
-## 27.6 Parent Mode `hidden`
-
-`parent_visible_at` remains null.
-
-Parent progress APIs may still show non-result progress information allowed by the product, but must not expose the hidden Topic score/category.
+A release-mode change (Section 12.2) acts on every result immediately, closed results included; Teacher releases already made stay. Example: `automatic` → `manual_teacher` hides values the Student saw only through the automatic mode until the Teacher releases them.
 
 ## 27.7 No Unrelease Endpoint
 
-The MVP does not define reversing a released result.
-
-Do **not** implement an unrelease/hide-after-release endpoint unless a later approved business rule introduces it.
+The MVP has no unrelease or hide action: a released result stays released (`S10-D5`).
 
 ---
 
@@ -5982,6 +6088,8 @@ GET /api/v1/student/topics/{topic}
 
 No correct answer keys.
 
+`result_status` is the Student's Topic result status of Section 29.5 (Stage 10), or `null` when the Student has no Topic result (outside the cohort, or no established cohort); it replaces the earlier fixed `waiting_for_homework`. The shape is unchanged; `homework` and `blitz_status` stay Stage 11 placeholders. The Student parser change ships in the same pull request as this backend change (`S10-T9`).
+
 ---
 
 ## 29.4 Student Progress
@@ -6007,52 +6115,63 @@ per_page
 GET /api/v1/student/topics/{topic}/result
 ```
 
-### If Not Released
+Stage 10.
 
-The API returns allowed progress/calculation status while withholding all unreleased score/category data.
+### Access
+
+The Stage 9 recipient rule: the Topic is in the Student's Institution and is `active`, `closed` or `archived`, and the Student is a current member of its Group or a cohort member (a persisted recipient of an official task keeps access after leaving the Group); otherwise `404 resource_not_found`. A Student outside the cohort, or a Topic without an established cohort, gets:
 
 ```json
 {
-  "data": {
-    "topic_id": "uuid",
-    "result_status": "calculated",
-    "visible": false,
-    "homework_score": null,
-    "blitz_score": null,
-    "final_score": null,
-    "category": null
-  }
+  "data": null
 }
 ```
 
-### If Released
+### Success — 200
 
 ```json
 {
   "data": {
     "topic_id": "uuid",
     "result_status": "calculated",
+    "closed_outcome": null,
+    "missing_component": null,
     "visible": true,
     "homework_score": 88.0,
     "blitz_score": 84.0,
     "final_score": 86.0,
-    "display_precision": 1,
-    "consistency": "consistent",
-    "category": {
-      "code": "understood_well",
-      "label": "Understood well"
-    }
+    "calculation_method": "average",
+    "category": { "code": "understood_well", "label": "Understood well" },
+    "teacher_comment": "Well done; revise question 4."
   }
 }
 ```
 
-Scores are presentation-rounded to one decimal place. The client must not recalculate category/consistency from these display values.
+Values not yet visible:
 
-The backend applies the institution's Student release mode.
+```json
+{
+  "data": {
+    "topic_id": "uuid",
+    "result_status": "calculated",
+    "closed_outcome": null,
+    "missing_component": null,
+    "visible": false,
+    "homework_score": null,
+    "blitz_score": null,
+    "final_score": null,
+    "calculation_method": null,
+    "category": null,
+    "teacher_comment": null
+  }
+}
+```
 
-Normative behavior:
-
-> Return allowed progress/status without unreleased score data. Hidden scores/categories must not be serialized to the Student.
+- `result_status`, `closed_outcome` and `missing_component` are always present (Section 25.3).
+- `visible` follows Section 27.1. When `visible` is false every value field is null.
+- When `visible` is true the fields hold what exists: a Not completed result shows the ready side, the Not completed category, the comment, and null `final_score` and `calculation_method`.
+- `calculation_method` (`average` or `blitz`) lets the client show one neutral line on how the final score was formed. The response never contains `consistency`, the difference, the threshold or `category_score` (`S10-D2`).
+- Scores are JSON numbers of the stored 8-decimal values; the client displays one decimal and never recalculates the category (Section 2.13).
 
 ---
 
@@ -6062,9 +6181,11 @@ Require Parent.
 
 All Student references must be active Parent-child relationships.
 
+Stage 10 adds the `parent` route group (role Parent, same Institution) with one read, the Child Topic Result of Section 30.5 (`S10-T8`). Sections 30.1–30.4 and every Parent screen are Stage 11.
+
 ---
 
-## 30.1 Connected Children
+## 30.1 Connected Children (Stage 11)
 
 ```text
 GET /api/v1/parent/children
@@ -6085,7 +6206,7 @@ GET /api/v1/parent/children
 
 ---
 
-## 30.2 Child Dashboard
+## 30.2 Child Dashboard (Stage 11)
 
 ```text
 GET /api/v1/parent/children/{student}/dashboard
@@ -6095,7 +6216,7 @@ Shows only allowed progress.
 
 ---
 
-## 30.3 Child Progress
+## 30.3 Child Progress (Stage 11)
 
 ```text
 GET /api/v1/parent/children/{student}/progress
@@ -6112,7 +6233,7 @@ per_page
 
 ---
 
-## 30.4 Child Topic Progress
+## 30.4 Child Topic Progress (Stage 11)
 
 ```text
 GET /api/v1/parent/children/{student}/topics/{topic}
@@ -6123,12 +6244,10 @@ Returns:
 - Topic title
 - Homework completion
 - Blitz completion
-- Allowed released scores
-- Final result only when Parent visibility is active
-- Category only when Parent visibility is active
-- Teacher feedback only when visible/available
+- The Topic result of Section 30.5: the status, and the scores, final score, calculation method, category and Teacher comment only when visible to the Parent
+- Never answer feedback
 
-The backend enforces the result's Parent release-mode snapshot:
+The backend applies the current Parent release mode (Section 27.2):
 
 ```text
 with_student
@@ -6136,9 +6255,47 @@ manual_teacher
 hidden
 ```
 
-A Parent must never receive the Topic result before the Student result is released.
+With `hidden` (or unconfigured) the Parent receives no result information at all. A Parent never sees result values that the Student cannot see.
 
 Parent must never receive Student-edit controls.
+
+---
+
+## 30.5 Child Topic Result (Stage 10)
+
+```text
+GET /api/v1/parent/children/{student}/topics/{topic}/result
+```
+
+### Access
+
+A current Parent–Student relationship with `{student}`, and that Student has the Section 29.5 access to the Topic; otherwise `404 resource_not_found`.
+
+### Success — 200
+
+`{"data": null}` when the Student has no Topic result (outside the cohort, or no established cohort) or the current Parent mode is `hidden` or unconfigured.
+
+Otherwise the Section 29.5 shape, with values only when visible to the Parent (Section 27.2):
+
+```json
+{
+  "data": {
+    "topic_id": "uuid",
+    "result_status": "calculated",
+    "closed_outcome": null,
+    "missing_component": null,
+    "visible": false,
+    "homework_score": null,
+    "blitz_score": null,
+    "final_score": null,
+    "calculation_method": null,
+    "category": null,
+    "teacher_comment": null
+  }
+}
+```
+
+`visible` follows Section 27.2; when it is false every value field is null. The status is visible whenever the Parent mode is `with_student` or `manual_teacher`.
 
 ---
 
@@ -6377,7 +6534,7 @@ Idempotency-Key: <client-generated-uuid>
 - Blitz Activate
 - Blitz attempt exception grant
 
-Missing header → `422 validation_failed`. For protected Stage 7 Homework Start/Submit, a malformed/non-UUID header also returns `422 validation_failed`. For every listed operation, the same key and same request identity returns the same logical result without a second mutation; materially different reuse returns `409 idempotency_key_reused`. Stage 8 uses the exact Start, Submit, activation and exception rules in Sections 19–20. Manual review, result-pair updates, result calculation, ordinary answer/file mutations, Teacher Close, schedule, archive and release use their documented transactional/state guards and do not gain this header requirement.
+Missing header → `422 validation_failed`. For protected Stage 7 Homework Start/Submit, a malformed/non-UUID header also returns `422 validation_failed`. For every listed operation, the same key and same request identity returns the same logical result without a second mutation; materially different reuse returns `409 idempotency_key_reused`. Stage 8 uses the exact Start, Submit, activation and exception rules in Sections 19–20. Manual review, result-pair updates, Topic result comment, close and release (single and bulk), ordinary answer/file mutations, Teacher Close, schedule and archive use their documented transactional/state guards and do not gain this header requirement.
 
 For protected Homework Start/Submit, use durable PostgreSQL `idempotency_records`, never process/request/Flutter/cache-only/timing state. Operation codes are:
 
@@ -6436,7 +6593,7 @@ For Homework only, a new request that first discovers the authoritative Homework
 
 ## 34.3 Double Blitz Activation
 
-Apply the exact Section 19.1 matrix after authorization. Completed same-key activation with valid evidence/result metadata returns `200` current resource for active/closed/archived, but current draft/scheduled is an internal integrity inconsistency. Fresh/new-key active returns `200` without mutation; fresh closed/archived returns `409 task_closed`/`409 task_archived` without successful result. Eligible first draft/scheduled activation retains its normal rules. Replay/fresh active success never restarts timing, resnapshots recipients/cohort, changes pair identity/lock or reopens a task.
+Apply the exact Section 19.1 matrix after authorization. Completed same-key activation with valid evidence/result metadata returns `200` current resource for active/closed/archived, but current draft/scheduled is an internal integrity inconsistency. Fresh/new-key active returns `200` without mutation; fresh closed/archived returns `409 task_closed`/`409 task_archived` without successful result. Eligible first draft/scheduled activation retains its normal rules. Replay/fresh active success never restarts timing, resnapshots recipients/cohort, changes pair identity/lock or reopens a task, and never closes the official Homework (Section 19.1).
 
 ---
 
@@ -6458,11 +6615,11 @@ For Blitz, serialize Start against capacity/exception history and the relevant p
 
 ## 34.5 Homework Terminal Transition Race
 
-Student Submit, `FinalizeHomeworkAttemptsAtDeadline` from request/Scheduler, and Teacher close acquire deterministic relevant row locks, re-read state and authoritative time, and transition only from `in_progress`. Exactly one result is committed:
+Student Submit, `FinalizeHomeworkAttemptsAtDeadline` from request/Scheduler, Teacher close and the official Homework close inside the official Blitz activation (Stage 10, Section 19.1) acquire deterministic relevant row locks, re-read state and authoritative time, and transition only from `in_progress`. Exactly one result is committed:
 
 - a valid Submit committed first before deadline/close preserves `student_submit`;
 - a reached deadline when locked state is evaluated preserves `homework_deadline_auto_submit` with exact `deadline_at`; or
-- a valid pre-deadline Teacher close committed first preserves `task_closed_auto_finalize` with captured close instant.
+- a valid pre-deadline Teacher close or official Blitz activation close committed first preserves `task_closed_auto_finalize` with captured close instant.
 
 Repeated reconciliation/close is a no-op after finalization and never rewrites frozen timestamps/reason.
 
@@ -6492,6 +6649,18 @@ Topic (shared) → Assessment (shared) → Homework/Blitz task row (shared)
 The official-score resolver reads the Student's Attempts only under the recipient lock, so two writers for one Student and Assessment never decide concurrently.
 
 A review save or correction re-evaluates access, state and items under these locks (Section 23.1) and returns the documented codes of that evaluation. Concurrent reviews of one submission serialize on the locks; each answer keeps the last committed value.
+
+---
+
+## 34.8 Topic Result Concurrency
+
+Stage 10 (`S10-T6`, `07-architecture.md`):
+
+- Every Teacher result action (comment, release, close, the bulk actions and the closure inside Topic archive) locks Group → Teacher membership → Topic `FOR UPDATE` first (the Topic lifecycle order), then the `topic_results` rows it writes. Scoring takes the Topic `FOR SHARE` first (Section 34.7), Student Starts and the exception grant take it `FOR UPDATE` first, and Submit and answer saves take it shared, so every result action serializes with them.
+- The Homework deadline and Blitz timeout finalizers lock the Assessment and then the Attempts, never the Topic. Closure (single, bulk and on archive) therefore also locks the official Attempt rows of every affected Student `FOR SHARE` in one query ordered by Attempt id (one global order, also across Students in a bulk close), after the Topic and before evaluating; terminal state, finished work and the snapshot then come from one consistent view.
+- No path locks the Topic and then a Group or a Teacher membership (the activation snapshot locks Student memberships after the Topic, which no Teacher result action locks), so no lock cycle exists.
+- Reads take no locks and compute inside one `REPEATABLE READ READ ONLY` snapshot.
+- Close and release are idempotent: repeating them returns `200` without a change.
 
 ---
 
@@ -6589,7 +6758,7 @@ Public display score fields use:
 1 decimal place
 ```
 
-Category assignment uses integer `category_score` derived from the unrounded final score (`.0`–`.5` down, `>.5` up).
+Category assignment uses integer `category_score` derived from the exact final score (`.0`–`.5` down, `>.5` up). Stage 10 Topic-result scores are serialized as the stored 8-decimal values and rounded to one decimal by the client (Section 2.13, `S10-T5`).
 
 ## DEC-07 — Result Release
 
@@ -6608,7 +6777,7 @@ manual_teacher
 hidden
 ```
 
-Parent visibility never precedes Student visibility.
+Parent visibility never precedes Student visibility. Section 27 defines the visibility rules and the release endpoints.
 
 ## DEC-08 — Upload Limits
 
@@ -6656,7 +6825,7 @@ Once Student activity locks the pair, replacement is rejected; filling a previou
 - Homework deadline auto-finalizes in-progress Homework Attempts with `homework_deadline_auto_submit`.
 - Stage 7 Homework finalization always freezes as `submitted`; Stage 9 later owns checking/review/scoring and official-score selection.
 - Stage 8 Blitz finalization freezes as `submitted` or `timed_out_finalized` with pending answers; Stage 9 owns checking/review/scoring and official-score selection, and Stage 10 owns final Topic results/release.
-- Topic Result close enforces terminal-state preconditions.
+- Topic result close requires a terminal result and the Student's finished work (Section 25.8).
 - Institution activate/deactivate are idempotent and do not use already-active/inactive conflicts.
 - High-risk idempotency headers are required exactly where Section 34.1 specifies.
 
@@ -6697,7 +6866,7 @@ MVP includes API support for:
 27. Manual Teacher checking
 28. Official task scores
 29. Topic result-pair designation
-30. Topic result calculation
+30. Topic result calculation, Teacher comment and closure
 31. Topic result status
 32. Student and Parent result visibility/release
 33. Teacher dashboard/progress
@@ -6787,7 +6956,7 @@ The public API has one deterministic Homework deadline contract shared by releva
 32. Understanding-category API uses inclusive integer ranges without gaps/overlaps.
 33. Student release modes are implemented.
 34. Parent visibility modes are implemented.
-35. Parent cannot receive a result before Student release.
+35. A Parent never sees result values that the Student cannot see.
 36. Teacher progress APIs are approved.
 37. Student progress APIs are approved.
 38. Parent progress APIs are approved.
@@ -6978,11 +7147,14 @@ PUT /api/v1/teacher/topics/{topic}/result-pair
 
 GET  /api/v1/teacher/topics/{topic}/results
 GET  /api/v1/teacher/topics/{topic}/results/{student}
-POST /api/v1/teacher/topics/{topic}/results/{student}/recalculate
+PUT  /api/v1/teacher/topics/{topic}/results/{student}/comment
 POST /api/v1/teacher/topics/{topic}/results/{student}/close
-
 POST /api/v1/teacher/topics/{topic}/results/{student}/release/student
 POST /api/v1/teacher/topics/{topic}/results/{student}/release/parent
+
+POST /api/v1/teacher/topics/{topic}/results/close
+POST /api/v1/teacher/topics/{topic}/results/release/student
+POST /api/v1/teacher/topics/{topic}/results/release/parent
 ```
 
 ## Teacher Reports
@@ -7010,7 +7182,10 @@ GET /api/v1/parent/children
 GET /api/v1/parent/children/{student}/dashboard
 GET /api/v1/parent/children/{student}/progress
 GET /api/v1/parent/children/{student}/topics/{topic}
+GET /api/v1/parent/children/{student}/topics/{topic}/result
 ```
+
+Stage 10 delivers only the Topic result read; the other Parent endpoints are Stage 11.
 
 ## Protected Files
 
@@ -7032,7 +7207,7 @@ student_id
 attempt_number
 normalized_score
 result_status
-student_visible_at
+student_released_at
 ```
 
 Use plural resource collections:
@@ -7055,7 +7230,6 @@ Use explicit action endpoints for lifecycle transitions:
 /deactivate
 /close
 /archive
-/recalculate
 /release/student
 /release/parent
 /attempt-exception
@@ -7083,16 +7257,19 @@ institution_id
 role
 is_authorized
 official_attempt_id as a client-selected authority
-official_homework_score
-official_blitz_score
+homework_score
+blitz_score
 score_difference
+acceptable_difference
+calculation_method
 final_score
 consistency
+category_score
 category_code
 result_status
-calculated_at
-student_visible_at
-parent_visible_at
+student_released_at
+parent_released_at
+closed_at
 server timer validity
 ```
 

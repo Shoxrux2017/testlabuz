@@ -31,7 +31,7 @@ The main Topic-based learning-check flow is:
 7. The system records all valid Homework attempts and uses the **highest valid completed score** as the official Homework score, waiting only for an unchecked attempt that could still overtake the best checked attempt.
 8. The Teacher creates one or more Blitz tasks.
 9. The Teacher designates exactly one **whole-group Blitz** as the official result-bearing Blitz. When the first official task activates, the current eligible Topic-group cohort is snapshotted and reused for both official tasks.
-10. During class, the Teacher activates the Blitz.
+10. During class, the Teacher activates the Blitz. Activating the official Blitz closes the official Homework for the whole group; only Students with a submitted official Homework Attempt may start the official Blitz (Homework before Blitz, `S10-D8`).
 11. Blitz timing follows the institution's configured start mode: **synchronized** or **individual**.
 12. The Student normally receives exactly **1 Blitz attempt**.
 13. If a valid technical or other approved problem prevents proper completion, the Teacher may grant that Student exactly **1 additional Blitz attempt** and must record a reason.
@@ -42,10 +42,11 @@ The main Topic-based learning-check flow is:
 18. If `D > T`, the system uses the Blitz score.
 19. The system assigns an understanding category using the derived integer `category_score`.
 20. User-facing scores are displayed with one decimal place.
-21. The Teacher reviews the result.
-22. The Student sees the result according to the institution's Student release mode.
+21. The Teacher reviews the result and may add one comment to it.
+22. Once the Student's work is finished (the official Blitz was activated and is closed or archived, the official Homework can no longer be submitted, and the Student has no Attempt in progress, `S10-D3`), the Student sees the result according to the institution's Student release mode.
 23. The Parent sees the result according to the institution's Parent visibility mode.
-24. The Topic may later be closed or archived while historical attempts and results remain preserved.
+24. The Teacher closes the result once the Student's work is finished; a closed result never changes again.
+25. The Topic may later be closed or archived while historical attempts and results remain preserved. Archiving the Topic closes every calculated or Not completed result automatically.
 
 The approved partial-credit behavior is:
 
@@ -635,8 +636,10 @@ The flow is:
 3. The Institution Admin edits the ranges.
 4. The system validates that the ranges cover the full 0–100 scale without gaps or overlaps.
 5. If valid, the system saves the institution settings.
-6. New or explicitly recalculated open results use the applicable ranges.
-7. Historical closed results retain the category-rule snapshot used when they were calculated.
+6. Every open (not closed) Topic result uses the new ranges immediately, on its next read (`S10-D6`).
+7. Closed results never change: each keeps the category and the range stored in its closure snapshot.
+
+Until a valid complete category set exists, a result whose official Homework and Blitz scores are both ready has the status **Waiting for settings**.
 
 Category assignment uses the derived integer `category_score`, not the one-decimal display value.
 ### Institution Learning Settings Flow
@@ -659,6 +662,7 @@ The Institution Admin configures institution-level learning settings. Attempt co
 4. The system saves the institution setting.
 5. Final-result calculation later uses `D = |H - B|`.
 6. `D <= T` means consistent; `D > T` means inconsistent.
+7. Every open Topic result uses the new `T` immediately, on its next read; a closed result keeps the `T` stored in its closure snapshot. Until `T` is configured, a result whose two official scores are both ready has the status **Waiting for settings**.
 
 #### Blitz Timer-Start Mode Setting
 
@@ -673,12 +677,16 @@ The Teacher still chooses the duration of each Blitz.
 
 The Institution Admin selects:
 
-- **Automatic** — a fully calculated result becomes visible to the Student automatically.
-- **Manual Teacher release** — a fully calculated result remains hidden until the Teacher releases it.
+- **Automatic** — a calculated or Not completed result becomes visible to the Student by itself as soon as the Student's work is finished (`S10-D3`).
+- **Manual Teacher release** — such a result remains hidden until the Teacher releases it; the release becomes available at that same moment.
+
+The Student's work is finished when the official Blitz was activated and is closed or archived, the official Homework can no longer be submitted (closed, archived, deadline passed, or all three attempts used), and the Student has no Attempt in progress on either official task. A Topic without an activated official Blitz never has finished work. A result the Teacher closed always counts as finished; a result closed at Topic archive counts as finished by this same rule. A Student who finishes the Blitz early never sees a score before the Blitz closes.
 
 Calculation status and visibility remain separate.
 
-Before Topic results exist (Stage 9), the same setting governs a Student's own attempt results: with **Automatic**, a checked Homework attempt, and the counting Blitz attempt after the Teacher closes the Blitz, become visible to the Student; with **Manual Teacher release** or no configured mode, nothing is visible until Stage 10 adds result release.
+The same setting governs a Student's own official attempt results (`S10-D4`): a checked official Homework attempt, and the counting official Blitz attempt after the Teacher closes the Blitz, become visible under **Automatic**, or under **Manual Teacher release** once the Teacher has released that Student's Topic result. Practice task results become visible once checked in every mode (a practice Blitz after it closes). Stage 9 showed attempt results only under **Automatic**.
+
+A change of this setting applies to every result immediately; releases a Teacher already made stay (`S10-D6`). For example, switching from **Automatic** to **Manual Teacher release** hides values that the Student saw only through the automatic mode until the Teacher releases them.
 
 #### Parent Result-Visibility Setting
 
@@ -686,9 +694,9 @@ The Institution Admin selects:
 
 - **With Student** — Parent visibility begins after Student release.
 - **Manual Teacher release** — Parent visibility requires a separate Teacher release after Student release.
-- **Hidden** — the result remains unavailable to Parents.
+- **Hidden** — Parents receive no result information at all, not even the result status. An unconfigured Parent mode behaves as Hidden.
 
-A Parent must never receive the result before the Student result has been released.
+A Parent must never receive the result before the Student result has been released. A change of this setting applies to every result immediately; Parent releases a Teacher already made stay.
 
 #### Institution Timezone Setting
 
@@ -829,7 +837,7 @@ Teachers should have both desktop and mobile access. The desktop version should 
 11. The Teacher creates one or more Blitz tasks for the same Topic.
 12. Before activation or Student attempts, the Teacher designates exactly one eligible draft/scheduled whole-group Blitz as official for the Topic.
 13. The Teacher configures the whole-Blitz duration.
-14. During class, the Teacher activates the Blitz.
+14. During class, the Teacher activates the Blitz. Activating the official Blitz closes the official Homework for the whole group; only Students with a submitted official Homework Attempt may start the official Blitz.
 15. The system applies the institution's synchronized or individual timer-start mode.
 16. Students normally receive one Blitz attempt.
 17. The Teacher monitors Blitz progress and may grant one Student-specific additional Blitz attempt for a valid reason when required.
@@ -838,9 +846,10 @@ Teachers should have both desktop and mobile access. The desktop version should 
 20. The system records official Homework and Blitz scores.
 21. The system compares both official scores using unrounded values and calculates the final Topic result.
 22. The system assigns the understanding category using the derived integer `category_score`.
-23. The Teacher reviews results and identifies Students needing revision or support.
-24. When institution policy requires it, the Teacher releases the result to the Student and/or Parent according to the approved release hierarchy.
-25. The Teacher logs out after completing teaching work.
+23. The Teacher reviews results, may add one comment to each Student's result, and identifies Students needing revision or support.
+24. When institution policy requires it, the Teacher releases the result to the Student and/or Parent according to the approved release hierarchy, once the Student's work is finished.
+25. The Teacher closes results whose Student work is finished, one by one or all ready results at once; archiving the Topic closes them automatically.
+26. The Teacher logs out after completing teaching work.
 ### Teacher Dashboard Flow
 
 After login, the teacher should see the Teacher dashboard.
@@ -1025,7 +1034,7 @@ Homework statuses may include:
 - Not completed
 - Closed
 
-This flow helps the teacher understand whether students are completing homework before the blitz task.
+This flow helps the teacher understand whether students are completing homework before the blitz task. Activating the official Blitz closes the official Homework, so a Student who has no official Homework Attempt at all when the official Blitz is activated (an Attempt still in progress is submitted with its saved work) can no longer complete the Topic and is Not completed for Homework and Blitz.
 
 ### Blitz Task Creation Flow
 
@@ -1052,11 +1061,12 @@ The Teacher activates the prepared Blitz during class.
 
 1. The Teacher opens the Blitz.
 2. The system shows the Topic, recipients, questions, duration, fixed normal-attempt rule, and institution timer-start mode.
-3. The Teacher clicks **Start / Activate**.
-4. The system validates permissions and task state.
-5. The Teacher confirms if required.
-6. The system records canonical UTC whole-second activation time, snapshots `timer_start_mode_snapshot` and authorized recipients/cohort, and changes the Blitz lifecycle to Active without creating Attempts.
-7. Assigned Students may now access the Blitz.
+3. For the official Blitz while the official Homework is still active, the system warns that activation will close the official Homework for the whole group, that Attempts still in progress will be submitted with their saved work, and that Students without a submitted Homework Attempt will not be able to take the official Blitz.
+4. The Teacher clicks **Start / Activate**.
+5. The system validates permissions and task state. The official Blitz cannot be activated while the official Homework is still a draft (`409 official_homework_not_activated`); nothing changes.
+6. The Teacher confirms if required.
+7. The system records canonical UTC whole-second activation time, snapshots `timer_start_mode_snapshot` and authorized recipients/cohort, and changes the Blitz lifecycle to Active without creating Attempts. For the official Blitz, the same transaction closes an active official Homework exactly like a Teacher Homework close; a closed or archived official Homework is left unchanged.
+8. Assigned Students may now access the Blitz. Only Students with a submitted official Homework Attempt may start the official Blitz.
 
 If the institution uses **synchronized start**:
 
@@ -1107,7 +1117,7 @@ Some Homework and Blitz answers require Teacher review. Stage 9 checks every fro
 5. The Teacher saves the review. Saving only some of the manual answers is allowed (partial review). A submission still waiting for automatic checking cannot be reviewed yet (`409 automatic_checking_pending`).
 6. For each saved answer the system records points, feedback, reviewer, and time, then recalculates the Attempt and re-selects the official task score.
 7. When the last waiting manual answer is reviewed, the Attempt becomes checked and its score becomes valid for official-score selection.
-8. The Teacher may later correct a reviewed answer with the same action. The Attempt stays checked and is recalculated; the official task score is re-selected and may move to another Attempt. Stage 9 allows every correction; Stage 10 blocks corrections after the Topic result is closed and recalculates the Topic result after an allowed correction.
+8. The Teacher may later correct a reviewed answer with the same action. The Attempt stays checked and is recalculated; the official task score is re-selected and may move to another Attempt. Stage 9 allows every correction. From Stage 10, once a Student's Topic result is closed, a correction of an already reviewed answer on that Student's official Homework or Blitz Attempt fails the whole request with `409 result_closed`; a first review of an answer that is still waiting stays allowed and never changes the closed result. An open Topic result is computed live, so an allowed correction is reflected in it at once.
 9. Concurrent reviews of one submission apply one after another; each answer keeps the last saved value.
 10. The Teacher may not directly override the final Topic formula or choose which Attempt is official.
 
@@ -1116,24 +1126,29 @@ Manual review is required for open written answers, file-based answers, and shor
 The Teacher may set, change, or clear an optional review deadline on a Homework, also after the Homework is closed, but not once the Homework is archived or its Topic is closed or archived. It is a reminder only and never changes scores, statuses, or official selection. A waiting Homework submission becomes overdue once its review deadline is reached; the Teacher sees waiting counts on Homework and Blitz details and overdue counts on Homework details. Blitz has no review deadline, and Students never see it.
 ### Result Review Flow
 
-After official Homework and Blitz scores are ready, the Teacher reviews the Topic result.
+After official Homework and Blitz scores are ready, the Teacher reviews the Topic result. Results exist once the Topic's official cohort is established; the Teacher of the Topic (its owner and a current Teacher of its group) sees one result per cohort Student.
 
-1. The system identifies the designated official Homework and Blitz for the Topic.
-2. The system identifies the official Homework score as the highest valid completed score from the Student's three Homework attempts.
-3. The system identifies the official valid Blitz attempt, including the approved exception attempt when one exists.
-4. The system calculates `D = |H - B|` using unrounded values.
-5. The system compares `D` with the institution threshold `T`.
-6. If `D <= T`, the final score is `(H + B) / 2`.
-7. If `D > T`, the final score is `B`.
-8. The system assigns the understanding category from the derived integer `category_score`.
-9. The UI displays scores with one decimal place.
-10. The Teacher reviews the result, consistency state, manual-review state, attempts, and feedback.
-11. If Student release mode is `manual_teacher`, the Teacher may release the fully calculated result to the Student.
-12. If Parent mode is `manual_teacher`, the Teacher may release it to the Parent only after Student release.
-13. If Parent mode is `with_student`, Parent visibility follows Student release automatically.
-14. If Parent mode is `hidden`, the Parent does not receive the result.
+1. The Teacher opens the Topic result list. It shows every cohort Student with the result status, and counts of results per status. The Teacher may filter by status or category.
+2. The system identifies the designated official Homework and Blitz for the Topic.
+3. The system identifies the official Homework score as the highest valid completed score from the Student's three Homework attempts.
+4. The system identifies the official valid Blitz attempt, including the approved exception attempt when one exists.
+5. The system calculates `D = |H - B|` using unrounded values.
+6. The system compares `D` with the institution's current threshold `T`.
+7. If `D <= T`, the final score is `(H + B) / 2` (method: average).
+8. If `D > T`, the final score is `B` (method: Blitz score).
+9. The system assigns the understanding category from the derived integer `category_score` and the institution's current category ranges.
+10. The UI displays scores with one decimal place; `D` and `T` are displayed with one decimal like every score, so an `inconsistent` label next to equal-looking `D` and `T` is possible and correct.
+11. The Teacher reviews the result, consistency state, manual-review state, attempts, and visibility to the Student and to Parents.
+12. The Teacher may add, change, or clear one comment (at most 2000 characters) on the result in any status until the result is closed (`S10-D1`).
+13. If Student release mode is `manual_teacher`, the Teacher may release the result to the Student once it is calculated, Not completed, or closed and the Student's work is finished (`S10-D3`); a closed result is released like any other. The release also unlocks that Student's official Homework and Blitz attempt results and answer feedback (`S10-D4`).
+14. If Parent mode is `manual_teacher`, the Teacher may release it to the Parent only after the values are visible to the Student.
+15. If Parent mode is `with_student`, Parent visibility follows Student release automatically.
+16. If Parent mode is `hidden` or not configured, the Parent receives no result information.
+17. Once the result is calculated or Not completed and the Student's work is finished, the Teacher may close it (`S10-D9`). Closing stores a permanent snapshot; the closed result never reads current settings again.
+18. The Teacher may also act on all results of the Topic at once: close all ready results, release all ready results to Students, and release to Parents all results visible to Students (`S10-D7`). A bulk action acts only on eligible results and reports how many it processed and how many it skipped because they were already done or not ready.
+19. Archiving the Topic closes every calculated or Not completed result automatically; waiting results stay open. Closing the Topic closes no result.
 
-The Teacher cannot use the release action to change the calculated score or category.
+The Teacher cannot use the release action to change the calculated score, status, or category. A released result stays released; there is no hide or unrelease action (`S10-D5`). A closed result cannot be reopened.
 ### Understanding Category Flow
 
 The teacher should be able to view students by understanding category.
@@ -1254,6 +1269,9 @@ Teachers must not:
 - Directly override the final Topic score or category outside the approved calculation.
 - Choose which Homework or Blitz Attempt is official; the system selects it.
 - Release a Parent result before Student release.
+- Release or close a result before the Student's work is finished.
+- Reopen a closed result.
+- Change the comment of a closed result or correct reviewed official answers of a Student whose result is closed.
 
 Teachers may set Homework deadlines and whole-Blitz duration because those are task-level responsibilities explicitly allowed by the MVP.
 ### MVP Teacher Flow Summary
@@ -1284,10 +1302,12 @@ The MVP Teacher flow includes:
 22. View understanding categories.
 23. Release Student results when `manual_teacher` mode requires it.
 24. Release Parent results when `manual_teacher` mode requires it and Student release already occurred.
-25. View Topic, group, and Student progress.
-26. Identify Students needing revision or Teacher support.
-27. Use desktop for detailed work and mobile for quick classroom actions.
-28. Remain inside assigned institution/group scope.
+25. Comment on each Student's Topic result until it is closed.
+26. Close results whose Student work is finished, singly or in bulk; archiving the Topic closes them automatically.
+27. View Topic, group, and Student progress.
+28. Identify Students needing revision or Teacher support.
+29. Use desktop for detailed work and mobile for quick classroom actions.
+30. Remain inside assigned institution/group scope.
 
 ## 5. Student Flow
 
@@ -1312,16 +1332,16 @@ Students should have both desktop and mobile access. The desktop version should 
 7. The Student starts the next Attempt or resumes the existing `in_progress` Attempt; typed and private file answers are saved automatically while it remains editable.
 8. Explicit Submit or deadline/Teacher close freezes already-committed work as a separate immutable `submitted` Attempt; Stage 7 performs no checking/scoring.
 9. Stage 9 later checks the frozen history and uses the **highest valid completed Homework score** as official.
-10. During class, the Student can access the Blitz only after Teacher activation.
+10. During class, the Student can access the Blitz only after Teacher activation. Activating the official Blitz closes the official Homework, and the Student may start the official Blitz only with a submitted official Homework Attempt.
 11. In synchronized mode, the Student receives the time remaining from Teacher activation.
 12. In individual mode, the Student receives the full duration starting when that Student starts.
 13. The Student normally has **1 Blitz attempt**.
 14. The Student answers while the authoritative timer is running.
 15. If time reaches zero first, Stage 8 freezes committed pending answers; Stage 9 later checks/scores them and applies unanswered zero.
 16. If a valid technical or other approved issue prevented proper completion, the Teacher may grant exactly one additional Blitz attempt.
-17. Stage 9 checks each frozen Attempt right after the freeze commits, and the Teacher reviews manual answers. Under the automatic Student release mode, the Student then sees own checked Attempt results; a Blitz result appears only after the Teacher closes the Blitz.
+17. Stage 9 checks each frozen Attempt right after the freeze commits, and the Teacher reviews manual answers. The Student then sees own checked practice Attempt results in every release mode, and own checked official Attempt results under the automatic Student release mode or after the Teacher releases the Student's Topic result; a Blitz result appears only after the Teacher closes the Blitz.
 18. The system calculates the Topic result.
-19. The Student sees the result only after release according to institution policy.
+19. The Student always sees the result status, and sees the result values only after the Student's work is finished and the result is released according to institution policy.
 20. The Student logs out after learning work is complete.
 ### Student Dashboard Flow
 
@@ -1406,7 +1426,7 @@ The Student completes assigned Homework using the fixed MVP attempt model.
 5. Starting resumes the Student's existing `in_progress` Attempt without consuming another attempt, or creates the next numbered Attempt when no such Attempt exists and the rules still permit it.
 6. The Student's typed answers are saved automatically, and for file-based questions one private supported file within the effective **15 MB** limit uploads as soon as it is chosen.
 7. Saved answers remain pending and editable only while the Attempt remains `in_progress`; an unanswered Question needs no fabricated answer row.
-8. The Student explicitly submits, or the authoritative deadline/Teacher close freezes the already-committed work.
+8. The Student explicitly submits, or the authoritative deadline/Teacher close freezes the already-committed work. For the official Homework, the Teacher's activation of the official Blitz closes it in the same way.
 9. Stage 7 stores the immutable Attempt as `submitted`; it does not check answers, award points, or create Teacher-review metadata.
 10. If attempts remain and the Homework is still active and before deadline, the Student may start another attempt.
 11. After three normal attempts, no fourth normal attempt is allowed.
@@ -1471,14 +1491,14 @@ The Student attempt flow is fixed by task type.
 1. The Student opens assigned active Homework and sees the server-authoritative deadline plus **3 total normal attempts**.
 2. Start resumes the existing `in_progress` Attempt without consuming capacity or creates the next numbered Attempt, up to attempt 3; at most one current Attempt exists per Student/Homework.
 3. Typed and private file answers are saved automatically while that Attempt remains editable.
-4. Explicit Submit or deadline/Teacher close freezes already-committed work as immutable `submitted` history without Stage 7 checking/scoring or fabricated answer rows.
+4. Explicit Submit or deadline/Teacher close freezes already-committed work as immutable `submitted` history without Stage 7 checking/scoring or fabricated answer rows. Activation of the official Blitz closes the official Homework the same way.
 5. If another normal attempt remains and deadline/status rules allow it, the Student may start it as a separate record.
 6. After attempt 3, the system blocks a fourth normal Homework attempt.
 7. Stage 9 later checks the frozen history and selects the highest valid completed score as official.
 
 #### Blitz
 
-1. The Student normally has exactly **1 Blitz attempt**.
+1. The Student normally has exactly **1 Blitz attempt**. For the official Blitz, the Student can start normal Attempt #1 only with a submitted official Homework Attempt.
 2. The Student can create #2 only through an explicit replacement Start after an authorized Teacher grants the exception.
 3. If a valid technical or other approved issue prevents proper completion, an authorized Teacher may grant exactly **1 additional Blitz attempt**.
 4. The Teacher must record a reason.
@@ -1498,7 +1518,8 @@ The Student may access a Blitz only after Teacher activation and only if assigne
 6. The system shows instructions, whole-Blitz duration/remaining time, and normal attempt availability.
 7. In **synchronized mode**, normal #1 uses the shared `synchronized_ends_at`; approved replacement #2 uses its own Start plus the configured duration.
 8. In **individual mode**, the Student presses Start and receives the full duration from the server-recorded attempt start time.
-9. The Student begins answering.
+9. For the official Blitz, Start of normal #1 requires a submitted official Homework Attempt (`S10-D8`). Without one, the Start is refused with `409 homework_not_submitted`, the Student sees that the official Blitz cannot be taken without the submitted Homework, and the Student's Topic result is Not completed for Homework and Blitz; in history from before `S10-D8` with a still-open official Homework the result waits for the Homework instead. The Blitz screen does not announce this in advance; the Student learns it when pressing Start.
+10. The Student begins answering.
 
 Draft, scheduled-before-activation, closed, archived, or unrelated Blitz tasks cannot be answered. An Attempt at/after its persisted deadline cannot be edited; an elapsed common synchronized end does not prevent an otherwise valid active replacement #2.
 ### Blitz Answering Flow
@@ -1535,19 +1556,21 @@ For Homework, this checking flow begins only in Stage 9 and consumes immutable S
 10. The Teacher assigns allowed points and feedback where manual review is required.
 11. The Teacher cannot rewrite the Student's submitted answer.
 12. The attempt score becomes complete only after all required review is finished.
-13. The Student sees the score and feedback only under the Stage 9 visibility rule (Student Homework Result Flow and Student Blitz Result Flow), and the Topic result only after release.
+13. The Student sees the score and feedback only under the attempt-result visibility rule (Student Homework Result Flow and Student Blitz Result Flow), and the Topic result values only after the Student's work is finished and the result is released.
 ### Result Viewing Flow
 
 A calculated result is not automatically visible in every institution.
 
 1. The Student opens the Topic or personal progress page.
-2. The system checks the Topic result calculation state.
-3. The system separately checks Student visibility.
-4. If Student release mode is **automatic**, a fully calculated result becomes visible automatically.
+2. The system computes the Topic result status from the current state; the status is always visible to the Student.
+3. The system separately checks Student visibility. Values can become visible only when the result is calculated or Not completed (or closed) and the Student's work is finished: the official Blitz was activated and is closed or archived, the official Homework can no longer be submitted, and the Student has no Attempt in progress (`S10-D3`). A Topic without an activated official Blitz never shows values.
+4. If Student release mode is **automatic**, such a result becomes visible automatically.
 5. If Student release mode is **manual Teacher release**, the result remains hidden until the Teacher releases it.
-6. When visible, the Student sees the official Homework score, official Blitz score, final Topic score, understanding category, completion status, and allowed feedback.
-7. User-facing numeric scores are shown with **one decimal place**.
-8. A calculated but unreleased result is not incomplete; it is simply hidden from the Student.
+6. When visible, the Student sees the official Homework score, official Blitz score, final Topic score, one neutral line on how the final score was formed (the average of both scores, or the Blitz score), understanding category, completion status, and the Teacher's comment on the result. A Not completed result shows the score of the side that is ready, the Not completed category, and the comment, with no final score.
+7. The Student never sees the score difference, the threshold, the word "inconsistent", or the integer `category_score` (`S10-D2`).
+8. User-facing numeric scores are shown with **one decimal place**.
+9. A calculated but unreleased result is not incomplete; it is simply hidden from the Student.
+10. A released result stays released. If a Teacher correction changes it, the Student sees the new values at once; if it falls back to a waiting status, the Student sees that status without values and later the new result without a new release (`S10-D5`).
 
 The Student can view only their own result.
 ### Understanding Category Flow
@@ -1692,6 +1715,8 @@ Students cannot:
 - View correct answers, answer keys, per-question points, per-answer checking status, the reviewer's identity, or the Homework review deadline.
 - Check answers, assign manual scores, or change categories.
 - Release results.
+- See result values before their own work is finished, or see the score difference, threshold, or consistency label.
+- Start the official Blitz without a submitted official Homework Attempt.
 - Access another institution's data.
 
 The backend must enforce these restrictions even when the interface hides the related actions.
@@ -1707,7 +1732,7 @@ The MVP Student flow includes:
 6. Submit each Homework attempt separately.
 7. Upload supported submission files up to the effective 15 MB limit.
 8. Have the highest valid completed Homework score selected as official after checking.
-9. Access Blitz only after Teacher activation.
+9. Access Blitz only after Teacher activation; start the official Blitz only with a submitted official Homework Attempt.
 10. Follow synchronized or individual timer-start behavior.
 11. Receive exactly 1 normal Blitz attempt.
 12. Receive at most 1 additional Teacher-approved Blitz attempt for a valid reason.
@@ -1716,10 +1741,10 @@ The MVP Student flow includes:
 15. At timeout, retain frozen pending work for Stage 9 checking/scoring and unanswered-zero rules.
 16. Wait for Teacher review where required.
 17. Receive approved partial credit for supported objective question types.
-18. View task/review status.
-19. View personal result only after Student release.
+18. View task/review status and the Topic result status.
+19. View personal result values only after the Student's work is finished and the result is released.
 20. See released scores with one decimal place.
-21. View understanding category and allowed feedback.
+21. View understanding category, the neutral calculation-method line, the Teacher's comment on the result, and feedback on own answers.
 22. View personal progress.
 23. Use desktop and mobile according to task needs.
 24. Remain inside own institution/task scope.
@@ -1734,9 +1759,11 @@ The main purpose of the Parent flow is to give parents a simple and clear way to
 
 A parent belongs to one educational institution and is connected to one or more students inside that institution. A parent should only see information about their own child or children.
 
-In the MVP version, the Parent flow should focus on viewing child progress, topic status, homework completion, blitz results, final scores, understanding categories, and teacher feedback if available.
+In the MVP version, the Parent flow should focus on viewing child progress, topic status, homework completion, blitz results, final scores, understanding categories, and the Teacher's comment on a visible Topic result.
 
-Stage 9 shows Parents nothing new: attempt scores and Teacher feedback are not visible to Parents, and Parent result visibility arrives with Stage 10 result release. Whether any Teacher feedback is Parent-visible is undecided (see Teacher Feedback Viewing Flow); every mention of allowed feedback for Parents in this section depends on that Stage 10 decision.
+Stage 9 shows Parents nothing new: attempt scores and Teacher feedback are not visible to Parents, and Parent result visibility arrives with Stage 10 result release. From Stage 10 (`S10-D1`), the only Teacher text a Parent can see is the Teacher's comment on the Topic result, and only when that result is visible to the Parent (see Teacher Feedback Viewing Flow). Parents never see Attempt results or the Teacher's feedback on individual answers. Every mention of Teacher feedback for Parents in this section means that Topic-result comment.
+
+Stage 10 provides one Parent read of a child's Topic result. The Parent screens, the children list, and dashboards in this section arrive in Stage 11.
 
 Parents should use the mobile version of the platform in the MVP. Their interface should be simple, fast, and focused on progress monitoring.
 
@@ -1749,10 +1776,10 @@ Parents should use the mobile version of the platform in the MVP. Their interfac
 5. The Parent views allowed progress and task-completion information.
 6. The Parent opens a Topic.
 7. The system checks the institution's Parent result-visibility mode.
-8. If the mode is **with Student**, the Parent sees the result only after Student release.
-9. If the mode is **manual Teacher release**, the Parent sees the result only after Student release and a separate Teacher release.
-10. If the mode is **hidden**, the Parent does not receive the Topic result.
-11. The Parent may view released scores, understanding category, completion information, and allowed Teacher feedback.
+8. If the mode is **with Student**, the Parent sees the result values only after Student release.
+9. If the mode is **manual Teacher release**, the Parent sees the result values only after Student release and a separate Teacher release.
+10. If the mode is **hidden** (or not configured), the Parent receives no Topic result information at all, not even the status.
+11. Outside the hidden mode, the Parent sees the result status; when the values are visible, the Parent may view released scores, understanding category, completion information, the neutral calculation-method line, and the Teacher's comment on the result.
 12. The Parent identifies Topics where the child may need revision or Teacher support.
 13. The Parent logs out.
 
@@ -1775,7 +1802,7 @@ The dashboard may show:
 - Understanding categories
 - Topics that need revision
 - Topics that need teacher support
-- Teacher feedback if available
+- The Teacher's comment on a Topic result visible to the Parent
 - General learning progress
 
 The dashboard should not show teacher management tools, student task submission tools, admin settings, or data from other students.
@@ -1822,7 +1849,7 @@ Topic progress information may include:
 - Blitz completion status
 - Final result status
 - Understanding category
-- Teacher feedback if available
+- The Teacher's comment on a Topic result visible to the Parent
 
 The parent should use this flow to understand what the child is currently studying and whether the child is progressing normally.
 
@@ -1835,8 +1862,8 @@ The homework completion flow is:
 1. The parent opens a child’s topic or progress page.
 2. The system shows homework assignments connected to the topic.
 3. The parent views the homework completion status.
-4. If the homework is checked and released, the parent may view the homework score.
-5. Whether Parents see Teacher feedback is undecided (Stage 10 planning); in Stage 9 Parents see no feedback.
+4. When the child's Topic result is visible to the Parent, the parent may view the official homework score as part of that result.
+5. Parents never see Homework attempt results or the Teacher's feedback on answers; that feedback is for the Student only.
 
 Homework status may include:
 
@@ -1855,14 +1882,14 @@ The parent should not be able to complete homework for the child, upload files, 
 The Parent may view the child's Blitz progress/result only when visibility rules allow it.
 
 1. The Parent opens a connected child's Topic.
-2. The system may show non-sensitive completion/review status that institution policy allows.
-3. The system checks whether the Student result has been released.
-4. If Student release has not occurred, result values remain hidden from the Parent.
+2. The system may show non-sensitive completion/review status that institution policy allows; in the `hidden` (or unconfigured) mode it shows no result information.
+3. The system checks whether the Topic result values are visible to the Student.
+4. If they are not, result values remain hidden from the Parent.
 5. After Student release:
    - `with_student`: the Parent receives result access automatically.
    - `manual_teacher`: the Parent waits for a separate Teacher release.
    - `hidden`: the Parent does not receive the result.
-6. When visible, the Parent may see the official Blitz score and final Topic result information.
+6. When visible, the Parent may see the official Blitz score and final Topic result information. The Parent never sees Blitz attempt results or the Teacher's feedback on answers.
 7. The Parent cannot open the live Blitz as a Student or interact with Student answers.
 
 The Blitz result is monitoring information for the Parent, not an editable assessment record.
@@ -1871,17 +1898,18 @@ The Blitz result is monitoring information for the Parent, not an editable asses
 The Parent can view a child's final Topic result only according to the approved Parent visibility mode.
 
 1. The Parent opens a connected child's Topic result.
-2. The system verifies the Parent–Student relationship.
-3. The system checks that the Student result has been released.
-4. The system evaluates the institution's Parent visibility mode:
+2. The system verifies a current Parent–Student relationship and the child's access to the Topic.
+3. If the Parent mode is **Hidden** or not configured, the system returns no result information at all, not even the status (`S10-T8`).
+4. Otherwise the system shows the result status and checks that the values are visible to the Student (the Student's work is finished and the result is released to the Student).
+5. The system evaluates the institution's Parent visibility mode:
    - **With Student** — visible after Student release.
    - **Manual Teacher release** — visible only after a separate Teacher release.
-   - **Hidden** — not visible.
-5. If visible, the system shows official Homework score, official Blitz score, final score, understanding category, completion status, and allowed feedback.
-6. Numeric scores are displayed with one decimal place.
-7. If hidden, the system does not expose result values.
+6. If visible, the system shows official Homework score, official Blitz score, final score, one neutral line on how the final score was formed, understanding category, completion status, and the Teacher's comment on the result.
+7. The Parent never sees the score difference, the threshold, the word "inconsistent", Attempt results, or the Teacher's feedback on answers (`S10-D2`).
+8. Numeric scores are displayed with one decimal place.
+9. If the values are not visible, the system does not expose them.
 
-The Parent cannot edit scores, categories, feedback, submissions, release status, or other learning data.
+The Parent cannot edit scores, categories, comments, submissions, release status, or other learning data.
 ### Understanding Category Flow
 
 The parent should be able to understand the child’s learning level through clear categories.
@@ -1913,9 +1941,14 @@ For example:
 
 ### Teacher Feedback Viewing Flow
 
-This flow is undecided and belongs to Stage 10 planning. In Stage 9, Teacher feedback exists only on individual answers and is never shown to Parents. Whether Parents may see any Teacher feedback (for example through a Parent-visible feedback flag), and whether feedback on the Topic result exists, are open Stage 10 decisions.
+Decided for Stage 10 (`S10-D1`). Teacher feedback on individual answers stays Student-only and is never shown to Parents. Each Topic result carries one optional Teacher comment, and that comment is the only Teacher text a Parent can see.
 
-If Stage 10 allows Parent-visible feedback, it must remain subject to the institution's Parent result-visibility policy and the Parent–Student relationship, and the Parent can read it only. Messaging, replies, and editing are outside the MVP.
+1. The Parent opens a connected child's Topic result.
+2. The system applies the Final Result Viewing Flow above.
+3. When the result values are visible to the Parent, the Parent also sees the Teacher's comment on the result, if any.
+4. When the values are not visible to the Parent (including the `hidden` mode), the comment is not shown either.
+
+There is no separate Parent flag for the comment. The comment remains subject to the institution's Parent result-visibility policy and the Parent–Student relationship, and the Parent can read it only. Messaging, replies, and editing are outside the MVP.
 ### Child Progress Overview Flow
 
 The parent should be able to view a simple progress overview for the child.
@@ -1973,7 +2006,7 @@ The parent mobile flow may include:
 6. The parent checks homework completion.
 7. The parent checks blitz results.
 8. The parent views final results and understanding categories.
-9. The parent reads teacher feedback if available.
+9. The parent reads the Teacher's comment on a Topic result visible to the Parent.
 10. The parent identifies topics that need revision or teacher support.
 
 The parent mobile interface should be focused on quick progress monitoring. It should not include complex desktop management tools.
@@ -1996,7 +2029,8 @@ Example messages:
 - “You cannot access another child’s progress.”
 - “You cannot change learning results.”
 - “You cannot access data from another institution.”
-- “This result is not available yet.”
+
+A Topic result whose values are not visible yet is not an access denial: outside the `hidden` mode the Parent sees its status without values; in the `hidden` (or unconfigured) mode the Parent receives no result information at all.
 
 This protects student privacy and prevents parents from accessing unrelated data.
 
@@ -2014,6 +2048,7 @@ Parents cannot:
 - Release results.
 - View a result before Student release.
 - Bypass the institution's Parent visibility mode.
+- See Attempt results, the Teacher's feedback on answers, the score difference, the threshold, or the consistency label.
 - View unrelated Students or other Parents' data.
 - Manage users, groups, or institution settings.
 - Access another institution's data.
@@ -2032,12 +2067,12 @@ The MVP Parent flow includes:
 7. Respect Student result release as the prerequisite for Parent result visibility.
 8. Support Parent visibility mode `with_student`.
 9. Support Parent visibility mode `manual_teacher`.
-10. Support Parent visibility mode `hidden`.
+10. Support Parent visibility mode `hidden` (no result information at all).
 11. View released official Homework score.
 12. View released official Blitz score.
 13. View released final Topic score.
 14. View released understanding category.
-15. View allowed Teacher feedback.
+15. View the Teacher's comment on a Topic result visible to the Parent.
 16. Identify Topics needing revision or Teacher support.
 17. Remain read-only.
 18. Block access to unrelated children and institutions.
@@ -2069,9 +2104,9 @@ The main Topic Learning Flow is:
 11. The Teacher creates one or more Blitz tasks for the same Topic.
 12. Before activation or Student attempts, exactly one eligible draft/scheduled whole-group Blitz is designated as official.
 13. The Teacher sets the whole-Blitz duration.
-14. During class, the Teacher activates the Blitz.
+14. During class, the Teacher activates the Blitz. Activating the official Blitz closes the official Homework for the whole group.
 15. The system applies synchronized or individual timer-start mode.
-16. Each Student normally receives one Blitz attempt.
+16. Each Student with a submitted official Homework Attempt normally receives one Blitz attempt; a Student without one cannot start the official Blitz and is Not completed.
 17. If a valid technical/approved issue occurs, the Teacher may grant one additional Student-specific Blitz attempt with a reason.
 18. The Student submits before timeout or the system auto-finalizes saved work at timeout.
 19. The system and Teacher complete required checking.
@@ -2079,10 +2114,11 @@ The main Topic Learning Flow is:
 21. The system compares official Homework and Blitz scores using unrounded values.
 22. The system calculates the final Topic result using the approved threshold formula.
 23. The system assigns an understanding category using the derived integer `category_score`.
-24. The Teacher reviews progress.
-25. The Student receives the result according to Student release mode.
+24. The Teacher reviews progress and may comment on each result.
+25. Once the Student's work is finished, the Student receives the result according to Student release mode.
 26. The Parent receives the result according to Parent visibility mode.
-27. The Teacher closes or archives the Topic when appropriate.
+27. The Teacher closes results whose Student work is finished.
+28. The Teacher closes or archives the Topic when appropriate; archiving closes every calculated or Not completed result.
 
 A Topic may contain multiple supplementary Homework and Blitz tasks, but only the designated official pair contributes to the final Topic result.
 ### Topic Creation Flow
@@ -2135,15 +2171,15 @@ The topic status flow is:
 3. The teacher adds learning materials and homework assignment.
 4. When the topic is ready, the teacher changes the topic status to active.
 5. Students assigned to the group can now access the topic.
-6. After the homework and blitz process is finished, the teacher may close the topic.
+6. After the homework and blitz process is finished, the teacher may close the topic. Closing the topic closes no Topic result.
 7. A closed topic no longer accepts new homework or blitz submissions according to rules.
-8. Later, the teacher may archive the topic for history.
+8. Later, the teacher may archive the topic for history. From Stage 10, archiving also closes, in the same step, every Topic result that is calculated or Not completed, with the archiving Teacher recorded as the closer; results that still wait stay open (a deliberate change to the Stage 5 archive behavior).
 
 A draft topic is useful when the teacher is still preparing materials, assignments, or blitz tasks.
 
 An active topic is visible to assigned students and can be used for learning.
 
-A closed topic means the main learning-check process is finished. Teacher review and correction of existing submissions remain allowed.
+A closed topic means the main learning-check process is finished. Teacher review and correction of existing submissions remain allowed; from Stage 10, corrections of a Student's official answers stop once that Student's Topic result is closed.
 
 An archived topic is kept for history and reports but is no longer actively used.
 
@@ -2185,7 +2221,7 @@ After the Topic becomes active, the Student can study it.
 3. The Student opens or downloads learning materials.
 4. The Student studies independently.
 5. The Student sees the official Homework instructions, deadline if any, and the fixed **3 normal attempts**.
-6. The Student understands that a Blitz verification task will be used later.
+6. The Student understands that a Blitz verification task will be used later, that the official Homework closes when the Teacher activates the official Blitz, and that the official Blitz can be taken only with a submitted official Homework Attempt.
 
 The Student never sees Topics or private task data outside their authorized scope.
 ### Homework Completion Inside Topic Flow
@@ -2196,7 +2232,7 @@ After studying the materials, the Student completes the official Homework.
 2. The system shows instructions, server-authoritative deadline/availability, current attempt, and remaining attempts.
 3. Start resumes the existing `in_progress` Attempt or creates the next of 3 normal Attempts; the first official Attempt atomically locks the persisted result-pair/cohort meaning.
 4. Typed and private file answers are saved or replaced automatically while the Attempt remains editable.
-5. Explicit Submit or deadline/Teacher close freezes already-committed work as a separate immutable `submitted` Attempt; Stage 7 leaves answers pending and creates no row for an unanswered Question.
+5. Explicit Submit or deadline/Teacher close freezes already-committed work as a separate immutable `submitted` Attempt; Stage 7 leaves answers pending and creates no row for an unanswered Question. Activation of the official Blitz closes the official Homework the same way.
 6. If attempts remain and the task/deadline still allow it, the Student may start another Attempt.
 7. No fourth normal Homework Attempt is allowed.
 8. Stage 9 later checks the frozen answers, treats missing answers as zero, performs required Teacher review, and compares valid completed Attempt scores.
@@ -2212,7 +2248,7 @@ The Topic may contain multiple Blitz tasks.
 3. Before activation or Student attempts, the Teacher designates exactly one eligible draft/scheduled whole-group Blitz as official for the Topic result.
 4. The system validates that the official Blitz and official Homework belong to the same Topic.
 5. Other Blitz tasks remain supplementary.
-6. The Teacher activates the official Blitz during class.
+6. The Teacher activates the official Blitz during class; this requires a non-draft official Homework and closes an active official Homework.
 7. Once Student attempts begin, the official designation cannot be replaced in a way that changes existing result meaning.
 
 The official Blitz provides the `B` score used in the Topic result formula.
@@ -2221,45 +2257,47 @@ The official Blitz provides the `B` score used in the Topic result formula.
 The official Blitz is used during class, usually in the first 5–10 minutes.
 
 1. The Teacher opens the prepared official Blitz.
-2. The system shows recipients, duration, fixed one-normal-attempt rule, and institution timer-start mode.
-3. The Teacher activates it.
-4. In synchronized mode, the server starts the countdown for all assigned Students at activation.
-5. In individual mode, the task becomes available and each Student receives the full duration from that Student's server-recorded start time.
-6. The Student answers while time remains.
-7. The Student may submit before timeout.
-8. If time reaches zero, the backend auto-finalizes saved answers and rejects further writes.
-9. Stage 8 freezes saved answers pending without fabricated unanswered rows; Stage 9 later applies zero.
-10. Manual answers remain pending until Stage 9 identifies/reviews them.
-11. While Blitz remains active, an eligible technical exception may authorize #2 after normal #1 is terminal or canonically timeout-finalized; live pre-deadline #1 rejects the grant.
-12. The original invalid/interrupted attempt remains in history.
-13. Stage 9 completes automatic/manual checking/scoring and identifies the eligible official Blitz score; Stage 10 owns the final Topic result.
+2. The system shows recipients, duration, fixed one-normal-attempt rule, and institution timer-start mode, and warns that activation closes the official Homework.
+3. The Teacher activates it. The official Homework closes for the whole group in the same step; Attempts still in progress are submitted with their saved work.
+4. Only Students with a submitted official Homework Attempt may start the official Blitz; the others are Not completed for Homework and Blitz.
+5. In synchronized mode, the server starts the countdown for all assigned Students at activation.
+6. In individual mode, the task becomes available and each Student receives the full duration from that Student's server-recorded start time.
+7. The Student answers while time remains.
+8. The Student may submit before timeout.
+9. If time reaches zero, the backend auto-finalizes saved answers and rejects further writes.
+10. Stage 8 freezes saved answers pending without fabricated unanswered rows; Stage 9 later applies zero.
+11. Manual answers remain pending until Stage 9 identifies/reviews them.
+12. While Blitz remains active, an eligible technical exception may authorize #2 after normal #1 is terminal or canonically timeout-finalized; live pre-deadline #1 rejects the grant.
+13. The original invalid/interrupted attempt remains in history.
+14. Stage 9 completes automatic/manual checking/scoring and identifies the eligible official Blitz score; Stage 10 owns the final Topic result.
 
 The server clock is authoritative.
 ### Topic Result Calculation Flow
 
-After the official Homework and Blitz scores are ready, the system calculates the Topic result.
+After the official Homework and Blitz scores are ready, the system calculates the Topic result. An open result is computed live from the current state on every read; it is not stored and never recalculated by a background job (`S10-T1`).
 
 Let:
 
 - `H` = official Homework score
 - `B` = official Blitz score
 - `D = |H - B|`
-- `T` = institution acceptable difference threshold
+- `T` = institution acceptable difference threshold (the current value)
 
 Flow:
 
 1. Confirm the designated official Homework and Blitz belong to the same Topic/Student context.
 2. Confirm all required manual review is complete.
-3. Use unrounded `H` and `B`.
-4. Calculate `D`.
-5. Compare `D` to `T`.
-6. If `D <= T`, calculate `(H + B) / 2`.
-7. If `D > T`, use `B`.
-8. Assign the understanding category using the derived integer `category_score`.
-9. Store the calculation method, threshold snapshot, category-rule snapshot, and relevant official attempt references.
+3. Confirm the institution has a threshold `T` and a valid complete category set; otherwise the status is **Waiting for settings**.
+4. Use unrounded `H` and `B`.
+5. Calculate `D`.
+6. Compare `D` to `T`.
+7. If `D <= T`, calculate `(H + B) / 2` (method: average).
+8. If `D > T`, use `B` (method: Blitz score).
+9. Assign the understanding category using the derived integer `category_score` and the current category ranges.
 10. Display scores to users with **one decimal place**.
 11. Keep calculation state separate from Student/Parent visibility.
 12. Apply the institution's release modes.
+13. When the Teacher closes the result (or the Topic is archived), store the closure snapshot: the official attempt references and scores, `D`, `T`, the calculation method, consistency, the final score, `category_score`, the category, and the range used. A closed result never reads current settings again.
 
 Changing display rounding must never change the formula or category.
 ### Understanding Category Flow Inside Topic
@@ -2313,28 +2351,29 @@ The topic progress page may show:
 - Score difference
 - Final result
 - Understanding category
+- Result status
 - Manual review status
 - Attempt information
-- Teacher feedback if available
+- Teacher comment on the result
 
 This helps the teacher understand how the whole group performed on one topic.
 
 ### Student Topic Result Flow
 
-The Student views their own Topic result only after Student release.
+The Student views their own Topic result values only after the Student's work is finished and the result is released.
 
 1. The Student opens the Topic.
-2. The system checks result calculation status.
-3. The system separately checks Student visibility.
-4. If Student mode is `automatic`, a fully calculated result is released automatically.
+2. The system checks result calculation status; the status is always shown to the Student.
+3. The system separately checks Student visibility: the result must be calculated, Not completed, or closed, and the Student's work must be finished: the official Blitz was activated and is closed or archived, the official Homework can no longer be submitted, and the Student has no Attempt in progress (`S10-D3`).
+4. If Student mode is `automatic`, such a result is released automatically.
 5. If Student mode is `manual_teacher`, the result remains hidden until Teacher release.
-6. When visible, the Student sees official Homework score, official Blitz score, final score, category, completion status, and allowed feedback.
+6. When visible, the Student sees official Homework score, official Blitz score, final score, the neutral calculation-method line, category, completion status, and the Teacher's comment on the result. The Student never sees `D`, `T`, or the consistency label.
 7. Scores are displayed with one decimal place.
 
 A calculated but unreleased result is not incomplete.
 ### Parent Topic Progress Flow
 
-The Parent views Topic result information only for a connected child and only after Student release.
+The Parent views Topic result information only for a connected child: outside the `hidden` (or unconfigured) Parent mode the status always, and the values only after Student release.
 
 1. The Parent opens the mobile app and selects a connected child.
 2. The Parent opens Topic progress.
@@ -2343,8 +2382,8 @@ The Parent views Topic result information only for a connected child and only af
 5. The system applies Parent visibility mode:
    - `with_student`: visible after Student release.
    - `manual_teacher`: visible after Student release plus separate Teacher release.
-   - `hidden`: result values remain hidden.
-6. When visible, the Parent may see official Homework/Blitz scores, final score, category, completion status, and allowed feedback (whether any feedback is Parent-visible is undecided; Stage 10 planning).
+   - `hidden` (or not configured): no result information at all, not even the status.
+6. When visible, the Parent may see official Homework/Blitz scores, final score, the neutral calculation-method line, category, completion status, and the Teacher's comment on the result; never answer feedback, `D`, `T`, or the consistency label.
 7. The Parent remains read-only.
 ### Incomplete Topic Flow
 
@@ -2353,14 +2392,16 @@ The system distinguishes waiting, not completed, calculated, and visibility stat
 A Topic result may be waiting when:
 
 - Official Homework score is not yet available.
-- Official Blitz score is not yet available.
+- Official Blitz score is not yet available, or the official Blitz is not yet designated or activated.
 - Required manual review is still pending.
+- Both scores are ready but the institution's threshold or valid category set is missing (**Waiting for settings**).
 
-A result becomes **Not completed** only when required work can no longer validly be completed after the applicable Homework attempts/deadline or Blitz availability/attempt rules end.
+A result becomes **Not completed** only when required work can no longer validly be completed after the applicable Homework attempts/deadline or Blitz availability/attempt rules end. It becomes Not completed as soon as one side can no longer be completed, even while the other side is still open or waiting for review, and it records which side is missing: Homework, Blitz, or both. A Student who has no official Homework Attempt at all when the official Blitz is activated (an Attempt still in progress is submitted with its saved work) is Not completed for Homework and Blitz.
 
 Important distinctions:
 
 - Waiting for Teacher review is **not** Not completed.
+- A task the Teacher never designated or never activated is never missing; the result waits.
 - A calculated result hidden from Student/Parent is **not** incomplete.
 - An approved extra Blitz attempt may keep the Blitz requirement open until that opportunity is completed or no longer valid.
 
@@ -2369,10 +2410,10 @@ Flow:
 1. Check official Homework readiness.
 2. Check official Blitz readiness.
 3. Check manual review.
-4. Determine waiting/calculated/not-completed state.
+4. Determine waiting/calculated/not-completed state (Result Status Flow).
 5. Separately determine Student visibility.
 6. Separately determine Parent visibility.
-7. Recalculate an open result when an allowed underlying score correction changes an input.
+7. An open result is computed live, so an allowed underlying score correction changes it at once; a closed result never changes.
 ### Topic Access and Data Separation Flow
 
 Topic access must follow role, institution, group, and user relationship rules.
@@ -2469,9 +2510,9 @@ The MVP Topic Learning Flow includes:
 7. Create multiple Blitz tasks if needed.
 8. Designate one eligible draft/scheduled whole-group official Blitz before activation or attempts.
 9. Set whole-Blitz duration.
-10. Activate Blitz in class.
+10. Activate Blitz in class; activating the official Blitz closes the official Homework.
 11. Apply synchronized or individual timer-start mode.
-12. Give one normal Blitz attempt.
+12. Give one normal Blitz attempt to each Student who may start it (for the official Blitz, only with a submitted official Homework Attempt).
 13. Permit one Student-specific Teacher-approved extra Blitz attempt for a valid reason.
 14. Stage 8 freezes committed pending Blitz work at timeout; Stage 9 later applies unanswered zero.
 15. Complete automatic/manual checking with approved partial-credit rules.
@@ -2479,10 +2520,11 @@ The MVP Topic Learning Flow includes:
 17. Apply the threshold formula using unrounded values, then derive `category_score` for the category.
 18. Display scores with one decimal place.
 19. Keep calculation and visibility separate.
-20. Apply Student and Parent release modes.
-21. Review progress and support needs.
-22. Preserve historical attempts/results when Topic is closed or archived.
-23. Protect all access by institution, role, group, Student, and Parent relationship.
+20. Apply Student and Parent release modes once the Student's work is finished.
+21. Review progress and support needs, and comment on results.
+22. Close results whose Student work is finished; archiving the Topic closes every calculated or Not completed result.
+23. Preserve historical attempts/results when Topic is closed or archived.
+24. Protect all access by institution, role, group, Student, and Parent relationship.
 
 ## 8. Homework Assignment Flow
 
@@ -2490,7 +2532,7 @@ The **Homework Assignment Flow** explains how homework assignments are created, 
 
 Homework assignments are an important part of the topic-based learning-check process. They help the teacher check how well students understood the topic after studying the uploaded learning materials independently.
 
-In **TestLabUz**, homework is not used alone as the final proof of understanding. The homework result is later compared with the blitz task result for the same topic. This helps the teacher understand whether the student’s homework result reflects real understanding or may have been completed with outside help.
+In **TestLabUz**, homework is not used alone as the final proof of understanding. The homework result is later compared with the blitz task result for the same topic. This helps the teacher understand whether the student’s homework result reflects the understanding the student shows in class.
 
 In the MVP version, homework assignments should stay practical and focused. The goal is to let teachers create structured tasks, let students complete them, record homework results, and prepare the system for comparison with the blitz task result.
 
@@ -2522,7 +2564,7 @@ The main Homework flow is:
 7. Start resumes the existing `in_progress` Attempt or atomically creates the next numbered Attempt, up to attempt 3; at most one such Attempt may exist for the Student/Homework.
 8. Creation of the first official Homework Attempt atomically locks the staged official result-pair/cohort meaning as described above.
 9. Typed answers and one private file answer where required are saved automatically. Saved answers remain pending, and an unanswered Question needs no fabricated answer row.
-10. Explicit Submit freezes the already-committed work, or the authoritative deadline/Teacher close freezes it first.
+10. Explicit Submit freezes the already-committed work, or the authoritative deadline/Teacher close freezes it first. For the official Homework, activation of the official Blitz is such a close.
 11. Every Stage 7 finalization stores an immutable `submitted` Attempt. Stage 7 does not check answers, award points, create review metadata, or select an official score.
 12. The Student may use the remaining normal attempts only while Homework lifecycle and server deadline rules still allow it.
 13. Stage 9 later checks the frozen Homework history, applies the approved missing-answer-zero policy without fabricating rows, performs required Teacher review, and chooses the **highest valid completed attempt score** as official.
@@ -2600,8 +2642,9 @@ Flow:
 4. Assigned Students may start attempts while deadline and attempt rules permit.
 5. A pre-deadline Teacher close captures one server close instant and, in the same transaction as closing the Homework, freezes every still-`in_progress` Attempt as `submitted` with `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`.
 6. If the deadline is already reached, close first performs the common deadline reconciliation and preserves `homework_deadline_auto_submit` plus the exact deadline timestamp; repeated close/finalization does not rewrite the committed reason or timestamps.
-7. Closing blocks new Starts and Student answer/file/Submit writes. Stage 9 checks the Attempts frozen by the close right after it commits (or in the minute sweep); review and correction remain allowed.
-8. Archived Homework remains historical and accepts no new activity. Stage 9 checking of its frozen Attempts and Teacher review and correction of its existing submissions remain allowed; its review deadline can no longer change.
+7. Closing blocks new Starts and Student answer/file/Submit writes. Stage 9 checks the Attempts frozen by the close right after it commits (or in the minute sweep); review and correction remain allowed (from Stage 10, corrections on the official Homework stop once that Student's Topic result is closed).
+8. From Stage 10, the Teacher's activation of the official Blitz closes an active official Homework inside the activation transaction exactly like this Teacher close: one captured `closedAt`, deadline reconciliation first when the deadline has passed, every still-`in_progress` Attempt frozen as `submitted` with `task_closed_auto_finalize`, no actor recorded for the close, and the frozen Attempts checked after the activation response is built, like every other freeze (no queued job). A closed or archived official Homework is left unchanged, and the official Blitz cannot be activated while the official Homework is still Draft (`S10-D8`).
+9. Archived Homework remains historical and accepts no new activity. Stage 9 checking of its frozen Attempts and Teacher review and correction of its existing submissions remain allowed (subject to the Stage 10 closure guard in step 7); its review deadline can no longer change.
 
 For Stage 7 Homework, `submitted` means frozen Student work ready for later checking. `Waiting for Teacher review` and `Checked` are Stage 9 submission/checking states and must not be used as Homework lifecycle statuses.
 ### Assignment Type Flow
@@ -2812,7 +2855,7 @@ In Stage 9, some frozen Homework answers require Teacher review. Review follows 
 5. The Teacher may add feedback of at most 2000 characters.
 6. The Teacher saves the review, possibly for only some of the manual answers.
 7. When every waiting answer is reviewed, the Attempt becomes checked and its score is complete.
-8. A correction recalculates the Attempt and re-selects the official Homework score. Stage 9 allows every correction; Stage 10 blocks corrections after Topic result closure and recalculates the Topic result after an allowed correction.
+8. A correction recalculates the Attempt and re-selects the official Homework score. Stage 9 allows every correction; Stage 10 blocks corrections of the official Homework after that Student's Topic result is closed (`409 result_closed`), and an open Topic result reflects an allowed correction at once because it is computed live.
 9. The Teacher cannot rewrite the Student answer, choose the official Attempt, or directly override the final Topic formula.
 
 Open written and file-based answers require manual review, and so do short written answers the Teacher set to manual checking.
@@ -2851,30 +2894,30 @@ The progress view may show:
 The Teacher uses this information to prepare for the Blitz and identify Students needing help. The Teacher does not change the 3-attempt limit.
 ### Student Homework Result Flow
 
-The Student sees Homework result information only under the Stage 9 visibility rule. An Attempt result is visible to its Student only when the Attempt is checked, it is eligible for official scoring, and the institution's Student release mode is `automatic`.
+The Student sees Homework result information only under the attempt-result visibility rule, which Stage 10 extends from the Stage 9 rule (`S10-D4`). An Attempt result is visible to its Student only when the Attempt is checked, it is eligible for official scoring, and either the Homework is a practice Homework, or the institution's Student release mode is `automatic`, or the Teacher has released the Student's Topic result.
 
 1. The Student opens the Homework/Topic.
 2. The system shows attempt/completion status, including an Attempt waiting for Teacher review, while work is ongoing.
-3. For each completed Attempt, in attempt-number order, the system shows its status and, when visible, its score.
+3. For each completed Attempt, in attempt-number order, the system shows its status and, when visible, its score. Under `manual_teacher` before the release, a checked Attempt shows as checked without a score.
 4. When the Attempt result is visible, the Student also sees the Teacher's feedback on each answer that has feedback.
-5. When this Homework is the official Homework, its official score is ready, and the release mode is `automatic`, the Student also sees the official Homework score and which attempt it came from.
-6. With `manual_teacher` or an unconfigured release mode, no score or feedback is visible in Stage 9; Stage 10 adds visibility through result release.
+5. When this Homework is the official Homework and its official score is ready, the Student also sees the official Homework score and which attempt it came from, under the same release condition (`automatic` mode or the Teacher's release of the Student's Topic result).
+6. A practice Homework result is visible once checked in every release mode. For the official Homework under `manual_teacher`, no score or feedback is visible until the Teacher releases the Student's Topic result; under an unconfigured release mode none is visible (Stage 9 showed nothing under these modes).
 7. The Student never sees correct answers, answer keys, per-question points, per-answer checking status, the reviewer's identity, or the review deadline.
 8. The score is displayed with one decimal place.
 
-A calculated official Homework score can exist internally before the full Topic result is released. Parents see nothing new in Stage 9.
+A calculated official Homework score can exist internally before the full Topic result is released. Parents never see Homework Attempt results or feedback on answers.
 ### Parent Homework Progress Flow
 
-Parent Homework progress is read-only and subject to Parent visibility policy. Stage 9 shows Parents nothing new; this flow applies from Stage 10 result release, and whether Parents see any feedback is undecided (Stage 10 planning).
+Parent Homework progress is read-only and subject to Parent visibility policy. Stage 9 shows Parents nothing new; this flow applies from Stage 10 result release. Parents never see Homework Attempt results or the Teacher's feedback on answers.
 
 1. The Parent opens a connected child's Topic.
-2. The system may show allowed Homework completion/review status.
+2. The system may show allowed Homework completion/review status; in the `hidden` (or unconfigured) mode it shows no result information.
 3. Score visibility requires Student release first.
 4. Parent mode is evaluated:
    - `with_student`: visible after Student release.
    - `manual_teacher`: visible after Student release plus Teacher release.
    - `hidden`: score remains hidden.
-5. When visible, the Parent may see the official Homework score and allowed feedback.
+5. When visible, the Parent may see the official Homework score as part of the Topic result, together with the Teacher's comment on that result.
 6. The Parent cannot submit, upload, edit, score, or change status.
 ### Institution Admin Homework Overview Flow
 
@@ -2956,7 +2999,7 @@ The Stage 7 Homework execution boundary supports:
 - Historical attempt preservation
 - Access protection
 
-Stage 9 later provides automatic/manual checking, approved partial credit, Teacher review and correction, the optional Homework review deadline, official Homework score selection, and Student visibility of own Attempt results under the automatic release mode (Student Homework Result Flow). Parents see nothing new in Stage 9; result release and Parent visibility belong to Stage 10. The later Topic result uses the official score.
+Stage 9 later provides automatic/manual checking, approved partial credit, Teacher review and correction, the optional Homework review deadline, official Homework score selection, and Student visibility of own Attempt results under the automatic release mode (Student Homework Result Flow). Parents see nothing new in Stage 9; result release and Parent visibility belong to Stage 10, which also makes official Attempt results visible after a manual Teacher release and practice Attempt results visible in every mode, and closes the official Homework when the official Blitz is activated. The later Topic result uses the official score.
 
 It does not include configurable attempt counts, advanced late-penalty workflows, AI grading, question banks, plagiarism detection, peer review, or complex grading workflows.
 ### MVP Homework Assignment Flow Summary
@@ -2973,8 +3016,9 @@ The MVP Homework Assignment Flow includes:
 8. Explicit Submit or deadline/Teacher close freezes already-committed work as immutable `submitted` history; unanswered Questions create no fake rows.
 9. Stage 7 leaves saved answers pending and performs no checking, points, review metadata, or official-score selection.
 10. Stage 9 later applies approved checking/partial-credit rules, treats missing answers as zero, completes required Teacher review, and selects the highest valid completed Homework attempt as official.
-11. In Stage 9 the Student sees own checked Attempt results only under the automatic release mode, and Parents see nothing new; Stage 10 adds result release. The official Homework score becomes the `H` input to Topic result calculation.
-12. Access, tenant isolation, private files, and historical attempts remain protected.
+11. In Stage 9 the Student sees own checked Attempt results only under the automatic release mode, and Parents see nothing new; Stage 10 adds result release, after which official Attempt results are also visible once the Teacher releases the Student's Topic result, and practice Attempt results are visible in every mode. The official Homework score becomes the `H` input to Topic result calculation.
+12. From Stage 10, the Teacher's activation of the official Blitz closes the official Homework.
+13. Access, tenant isolation, private files, and historical attempts remain protected.
 
 ## 9. Blitz Task Flow
 
@@ -2995,9 +3039,9 @@ Stage 8 owns Blitz execution and immutable finalization of committed pending wor
 3. For result-bearing work, designate one eligible draft/scheduled whole-group Blitz before activation, completing or creating the one official pair with a valid official Homework.
 4. The Teacher saves the Blitz as Draft or Scheduled.
 5. During class, the Teacher opens the prepared Blitz.
-6. The system shows the institution timer-start mode and fixed one-normal-attempt rule.
-7. The Teacher activates the Blitz.
-8. Assigned Students gain access.
+6. The system shows the institution timer-start mode and fixed one-normal-attempt rule; for the official Blitz it warns that activation closes the official Homework.
+7. The Teacher activates the Blitz. Activating the official Blitz closes the official Homework for the whole group in the same transaction; it is refused while the official Homework is still a draft.
+8. Assigned Students gain access. Only Students with a submitted official Homework Attempt may start official Blitz Attempt #1.
 9. In synchronized mode, the server starts the countdown for all assigned Students at activation.
 10. In individual mode, each Student receives the full duration from their own server-recorded start.
 11. Each Student normally uses one Blitz attempt.
@@ -3010,7 +3054,7 @@ Stage 8 owns Blitz execution and immutable finalization of committed pending wor
 18. Stage 9 identifies the eligible official Blitz score.
 19. Stage 10 compares it with the official Homework score for the same Topic/Student.
 20. Stage 10 calculates and categorizes the Topic result.
-21. Teacher, Student, and Parent visibility follow their approved roles and release settings.
+21. Teacher, Student, and Parent visibility follow their approved roles and release settings; a Topic result becomes visible to the Student only after the official Blitz is closed.
 ### Blitz Task Connection Flow
 
 Each Blitz belongs to the correct institution, Teacher, Topic, group/Student assignment, questions, attempts, and results.
@@ -3172,7 +3216,7 @@ Blitz attempts are fixed.
 #### Normal flow
 
 1. Each assigned Student receives exactly **1 normal Blitz attempt**.
-2. The Student explicitly requests `start_normal` when timing/access rules allow, then saves answers on that Attempt.
+2. The Student explicitly requests `start_normal` when timing/access rules allow, then saves answers on that Attempt. For the official Blitz, creating a new Attempt #1 additionally requires at least one terminal (`submitted`, `waiting_for_teacher_review`, or `checked`) Attempt of the official Homework; otherwise the Start returns `409 homework_not_submitted` and the Student is Not completed for Homework and Blitz (`S10-D8`); in history from before `S10-D8` with a still-open official Homework the result waits for the Homework instead.
 3. The attempt is preserved after submit or timeout.
 4. No automatic second normal attempt exists.
 
@@ -3196,11 +3240,11 @@ After mandatory authorization, valid completed same-key/same-fingerprint replay 
 
 | Fresh intent | Exact result after required authorization/lifecycle/timing checks |
 |---|---|
-| `start_normal` | Unused #1 and all preconditions pass: create #1, `201`. Own editable `in_progress` #1: same #1, `200`. Due `in_progress` #1: authoritative timeout reconciliation when the owning finalization contract is available, then `409 blitz_time_expired`. Terminal #1 with `finalization_reason = timeout_auto_submit`, whatever its later checking status, and no approved exception: `409 blitz_time_expired`. Otherwise terminal #1, or an approved exception exists: `409 attempts_exhausted`, regardless of separate replacement capacity. Never creates #2. |
+| `start_normal` | Unused #1 and all preconditions pass: create #1, `201`; for the official Blitz, a Student without a terminal official Homework Attempt instead gets `409 homework_not_submitted` and no #1 is created. Own editable `in_progress` #1: same #1, `200`. Due `in_progress` #1: authoritative timeout reconciliation when the owning finalization contract is available, then `409 blitz_time_expired`. Terminal #1 with `finalization_reason = timeout_auto_submit`, whatever its later checking status, and no approved exception: `409 blitz_time_expired`. Otherwise terminal #1, or an approved exception exists: `409 attempts_exhausted`, regardless of separate replacement capacity. Never creates #2. |
 | `resume` | Exact own editable `in_progress` target: only that target, `200`. Due exact `in_progress` target: canonical timeout reconciliation then `409 blitz_time_expired`. Terminal target with `finalization_reason = timeout_auto_submit`, whatever its later checking status: `409 blitz_time_expired`. Otherwise terminal target, including valid later checking history: `409 attempt_not_editable`. Foreign/out-of-scope Student/Blitz/Institution target: privacy-safe `404 resource_not_found`. Never creates or switches Attempts or selects a newer one. |
 | `start_replacement` | Valid unused approved capacity with all preconditions passing: create #2, `201`. Own editable `in_progress` #2: same #2, `200`. Due `in_progress` #2: canonical timeout reconciliation then `409 blitz_time_expired`. Terminal #2 with `finalization_reason = timeout_auto_submit`, whatever its later checking status: `409 blitz_time_expired`. Consumed, otherwise terminal #2, or structurally valid history without approved exception/available capacity: `409 attempts_exhausted`. Invalid existing exception graph/capacity: `409 blitz_attempt_exception_not_allowed` under the invariant/public-error split. Never creates #3. |
 
-Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`). Amended for Stage 9 (`S09-DOC-001`): the timeout rows are keyed on `finalization_reason = timeout_auto_submit` rather than on the Attempt status, so a timed-out Attempt that later becomes `waiting_for_teacher_review` or `checked` keeps the same responses as in Stage 8.
+Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`). Amended for Stage 9 (`S09-DOC-001`): the timeout rows are keyed on `finalization_reason = timeout_auto_submit` rather than on the Attempt status, so a timed-out Attempt that later becomes `waiting_for_teacher_review` or `checked` keeps the same responses as in Stage 8. Amended for Stage 10 (`S10-DOC-001`, owner decision `S10-D8`): the `homework_not_submitted` check applies only when `start_normal` would create a new Attempt #1 of the official Blitz, after the existing executability checks; a `start_normal` that returns an existing #1, an idempotent replay, `resume`, and `start_replacement` are unaffected.
 
 Every existing-Attempt return preserves its `started_at`, `deadline_at`, and number. Only a new logical `start_replacement` request/key can create #2.
 ### Blitz Activation Flow
@@ -3208,19 +3252,20 @@ Every existing-Attempt return preserves its `started_at`, `deadline_at`, and num
 The Teacher activates the Blitz during class.
 
 1. Open the prepared Blitz.
-2. Review Topic, recipients, duration, one-normal-attempt rule, and institution timer-start mode.
+2. Review Topic, recipients, duration, one-normal-attempt rule, and institution timer-start mode. For the official Blitz while the official Homework is active, the screen warns that activation will close the official Homework for the whole group and that Students without a submitted Homework Attempt will not be able to take the official Blitz.
 3. Click **Start / Activate**.
-4. The backend validates Teacher scope and task state.
+4. The backend validates Teacher scope and task state. For the official Blitz, if the official Homework is still a draft, activation fails with `409 official_homework_not_activated` and nothing changes; this check runs immediately after the existing timer-mode settings check and before the cohort is locked.
 5. Confirm if required.
 6. After readiness checks, the backend records one canonical activation instant, snapshots `timer_start_mode_snapshot` and recipients/official cohort, and marks the Blitz Active without creating Attempts.
-7. Assigned Students gain access.
-8. For synchronized mode, countdown begins immediately for all assigned Students.
-9. For individual mode, each Student's countdown begins when that Student starts.
-10. The Teacher opens monitoring.
+7. For the official Blitz, the same transaction closes an active official Homework exactly like a Teacher Homework close (`S10-D8`): after all locks it captures one untruncated `closedAt = server_now`; the Blitz `activated_at` is `closedAt` truncated to the UTC second; the Homework close uses `closedAt` itself, reconciles a passed deadline first, freezes every still-`in_progress` Attempt as `submitted` with `task_closed_auto_finalize`, sets the Homework `status = closed` and `closed_at = closedAt` (recording no actor); the frozen Attempts are checked automatically after the activation response is built, like every other freeze (no queued job). A closed or archived official Homework is left unchanged. The close reuses the locks the activation's cohort step already holds.
+8. Assigned Students gain access. Only Students with a submitted official Homework Attempt may start official Blitz Attempt #1.
+9. For synchronized mode, countdown begins immediately for all assigned Students.
+10. For individual mode, each Student's countdown begins when that Student starts.
+11. The Teacher opens monitoring.
 
-Teacher activation is required even if a planned/scheduled time exists.
+Teacher activation is required even if a planned/scheduled time exists. Practice Blitz activation never closes a Homework.
 
-Activation requires `Idempotency-Key`. After authorization, completed same-key/same-fingerprint replay with valid persisted activation evidence and idempotency result metadata returns `200` current authorized Blitz for active/closed/archived, never reopening or restarting it. Completed-success history pointing to draft/scheduled, or invalid evidence/metadata, fails closed as an internal integrity inconsistency. A fresh/new valid key against active returns `200` and may complete to that same Blitz. Both successes preserve activation time, snapshot, common end, recipients, official cohort, and pair identity/lock with zero activation-domain mutation. Fresh closed/archived activation returns `409 task_closed`/`409 task_archived` with no successful activation result left for the failed request. Eligible first draft/scheduled activation retains the required content/positive points/duration, cohort, and configured-setting rules. Different fingerprint reuse returns `409 idempotency_key_reused`.
+Activation requires `Idempotency-Key`. After authorization, completed same-key/same-fingerprint replay with valid persisted activation evidence and idempotency result metadata returns `200` current authorized Blitz for active/closed/archived, never reopening or restarting it. Completed-success history pointing to draft/scheduled, or invalid evidence/metadata, fails closed as an internal integrity inconsistency. A fresh/new valid key against active returns `200` and may complete to that same Blitz. Both successes preserve activation time, snapshot, common end, recipients, official cohort, and pair identity/lock with zero activation-domain mutation; a replay never closes a Homework. Fresh closed/archived activation returns `409 task_closed`/`409 task_archived` with no successful activation result left for the failed request. Eligible first draft/scheduled activation retains the required content/positive points/duration, cohort, and configured-setting rules. Different fingerprint reuse returns `409 idempotency_key_reused`.
 ### Student Blitz Access Flow
 
 The Student accesses only an assigned Teacher-activated Blitz.
@@ -3231,10 +3276,11 @@ The Student accesses only an assigned Teacher-activated Blitz.
 4. If active, system checks immutable `timer_start_mode_snapshot` and exact Start intent/target.
 5. In synchronized mode, normal #1 uses the common end; approved #2 uses its own persisted compensating deadline.
 6. In individual mode, an explicit normal/replacement Start creates the permitted Attempt with its own deadline; exact Resume only returns its existing target.
-7. System shows instructions, whole-Blitz remaining time, and attempt state.
-8. Student begins answering.
+7. For the official Blitz, a normal Start that would create #1 requires a submitted official Homework Attempt. Without one, the Start is refused (`409 homework_not_submitted`) and the Student sees that the official Blitz cannot be taken without a submitted Homework; the Student's Topic result is Not completed for Homework and Blitz; in history from before `S10-D8` with a still-open official Homework the result waits for the Homework instead. The Blitz read does not announce this in advance.
+8. System shows instructions, whole-Blitz remaining time, and attempt state.
+9. Student begins answering.
 
-Students cannot access another institution/group/Student's Blitz, bypass closure, or create extra attempts.
+Students cannot access another institution/group/Student's Blitz, bypass closure, bypass the Homework-before-Blitz rule, or create extra attempts.
 ### Student Blitz Answering Flow
 
 The Student answers within the authoritative whole-Blitz window.
@@ -3341,7 +3387,7 @@ Stage 9 identifies and reviews frozen pending Blitz answers requiring judgment; 
 6. Teacher saves review, possibly for only some of the manual answers.
 7. When every waiting answer is reviewed, the Attempt becomes checked and its score is complete.
 8. If this is the official Blitz and the Attempt that counts (#1 without an exception, or replacement #2), the score becomes the official Blitz score and is available for Topic result calculation; a practice Blitz never has an official score.
-9. A correction recalculates the Attempt and re-selects the official Blitz score; Stage 10 blocks corrections after Topic result closure.
+9. A correction recalculates the Attempt and re-selects the official Blitz score; Stage 10 blocks corrections of the official Blitz after that Student's Topic result is closed (`409 result_closed`).
 10. Teacher cannot rewrite the Student answer, choose the official Attempt, or directly override the final Topic formula.
 ### Blitz Score Flow
 
@@ -3364,10 +3410,10 @@ After official Homework and Blitz scores are ready:
 1. Verify they belong to the same institution, Student, Topic, and designated official task pair.
 2. Use full-precision `H` and `B`.
 3. Calculate `D = |H - B|`.
-4. Load institution threshold `T`.
-5. If `D <= T`, mark consistent and calculate `(H + B) / 2`.
-6. If `D > T`, mark inconsistent and use `B`.
-7. Do not accuse the Student of cheating based on inconsistency.
+4. Load the institution's current threshold `T`.
+5. If `D <= T`, mark consistent and calculate `(H + B) / 2` (method: average).
+6. If `D > T`, mark inconsistent and use `B` (method: Blitz score).
+7. Do not accuse the Student of cheating based on inconsistency. Only the Teacher sees consistency, `D`, and `T`; the Student and the Parent see one neutral line on how the final score was formed.
 8. Assign the category from the derived integer `category_score`.
 9. Display scores with one decimal place.
 
@@ -3389,23 +3435,24 @@ The view may include:
 - Understanding category
 - Manual review state
 - Consistency state
-- Feedback
+- Result status
+- Feedback and the Teacher's comment on the result
 
-The Teacher uses this information to identify Students needing revision/support and to release results when institution policy requires manual release.
+The Teacher uses this information to identify Students needing revision/support, to release results when institution policy requires manual release, and to close results once the Student's work is finished.
 ### Student Blitz Result Flow
 
-The Student may view a Blitz result only under the Stage 9 visibility rule: the Blitz is closed or archived, the Attempt that counts is checked and eligible for official scoring, and the institution's Student release mode is `automatic`. An active Blitz never shows a score.
+The Student may view a Blitz result only under the attempt-result visibility rule, which Stage 10 extends from the Stage 9 rule (`S10-D4`): the Blitz is closed or archived, the Attempt that counts is checked and eligible for official scoring, and either the Blitz is a practice Blitz, or the institution's Student release mode is `automatic`, or the Teacher has released the Student's Topic result. An active Blitz never shows a score.
 
 1. System completes required checking of the Student's Blitz Attempts.
 2. The Student cannot open a closed Blitz itself; the Student's list of finished Blitz tasks shows every Blitz the Student received that was activated and is now closed or archived, most recently closed first.
 3. Each item describes the Attempt that counts: replacement #2 when an exception exists, otherwise #1; it shows no result when there is no such Attempt.
 4. When visible, the item shows that Attempt's score and the Teacher's feedback per question; otherwise the score is hidden and no feedback is shown.
 5. When an exception exists, the item tells the Student that the first Attempt was invalidated; an invalidated Attempt never shows a score.
-6. With `manual_teacher` or an unconfigured release mode, no Blitz score or feedback is visible in Stage 9; Stage 10 adds visibility through result release.
+6. A practice Blitz result is visible once checked after the Blitz closes, in every release mode. For the official Blitz under `manual_teacher`, no Blitz score or feedback is visible until the Teacher releases the Student's Topic result; under an unconfigured release mode none is visible (Stage 9 showed nothing under these modes).
 7. The Student never sees correct answers, answer keys, per-question points, per-answer checking status, or the reviewer's identity.
-8. Scores display with one decimal place. Topic result visibility later follows Student release (Stage 10).
+8. Scores display with one decimal place. Topic result visibility follows the Student's finished work and Student release (Stage 10).
 
-The Student never sees another Student's Blitz data. Parents see nothing new in Stage 9.
+The Student never sees another Student's Blitz data. Parents never see Blitz Attempt results or feedback on answers.
 ### Parent Blitz Result Flow
 
 Parent Blitz result visibility requires an explicit Parent–Student relationship and Student release first. Stage 9 shows Parents nothing new; this flow applies from Stage 10 result release.
@@ -3414,9 +3461,9 @@ After Student release:
 
 - `with_student` → Parent result visibility begins automatically.
 - `manual_teacher` → Parent waits for separate Teacher release.
-- `hidden` → Parent does not receive the result.
+- `hidden` → Parent receives no result information at all.
 
-When visible, the Parent may view allowed Blitz completion/result information. The Parent cannot interact with the Blitz attempt or modify any assessment data.
+When visible, the Parent may view allowed Blitz completion information and the official Blitz score as part of the Topic result; never Blitz Attempt results or the Teacher's feedback on answers. The Parent cannot interact with the Blitz attempt or modify any assessment data.
 ### Institution Admin Blitz Overview Flow
 
 Institution Admins may view basic blitz activity inside their own institution.
@@ -3492,7 +3539,7 @@ The MVP Blitz Task Flow includes:
 4. Set whole-Blitz duration.
 5. Apply fixed one-normal-attempt rule.
 6. Use institution synchronized or individual timer-start mode.
-7. Teacher activates Blitz in class.
+7. Teacher activates Blitz in class; activating the official Blitz closes the official Homework, and only Students with a submitted official Homework Attempt may start it.
 8. Student sees authoritative remaining time.
 9. Student explicitly submits or is auto-finalized at timeout.
 10. Stage 9 later applies zero to unanswered timeout questions; Stage 8 only freezes committed pending work.
@@ -3506,7 +3553,7 @@ The MVP Blitz Task Flow includes:
 18. Official score is stored rounded half-up to 8 decimal places, is not rounded again before calculation, and displays with one decimal place.
 19. System compares official Homework and Blitz scores.
 20. Teacher monitors progress and reviews result.
-21. In Stage 9 the Student sees the Blitz result only after the Blitz is closed and only under the automatic release mode, and Parents see nothing new; later Student/Parent visibility follows approved release modes.
+21. In Stage 9 the Student sees the Blitz result only after the Blitz is closed and only under the automatic release mode, and Parents see nothing new; from Stage 10 the official Blitz result is also visible after the Teacher releases the Student's Topic result, a practice Blitz result is visible in every mode, and Student/Parent Topic result visibility follows approved release modes.
 22. Access remains protected by institution, role, group, Student, and relationship.
 
 ## 10. Result Calculation Flow
@@ -3528,7 +3575,9 @@ If `D <= T`, final score = `(H + B) / 2`.
 
 If `D > T`, final score = `B`.
 
-Comparison and final-score formula use **unrounded internal values**. Category assignment uses the derived integer `category_score`. User-facing scores are displayed with **one decimal place**.
+Comparison and final-score formula use **unrounded internal values** (exact decimal arithmetic). The final score is serialized, and stored at closure, rounded half-up to 8 decimal places. Category assignment uses the derived integer `category_score`. User-facing scores are displayed with **one decimal place**.
+
+A Topic has results once its official cohort is established; each cohort Student has one result. While a result is open (not closed), it is computed live from the current state on every read, using the current official scores, threshold, and category ranges; it is not stored and never recalculated by a background job (`S10-T1`). The system stores only what cannot be derived: the Teacher's comment, the Teacher's release facts, and the closure snapshot.
 
 Result calculation and result visibility are separate. A result may be fully calculated but still hidden from Student and Parent.
 
@@ -3541,15 +3590,15 @@ Result calculation and result visibility are separate. A result may be fully cal
 5. The system confirms both scores belong to the same institution, Student, Topic, and official task pair.
 6. The system uses full-precision `H` and `B`.
 7. The system calculates `D = |H - B|`.
-8. The system loads threshold `T`.
-9. If `D <= T`, final score = `(H + B) / 2`.
-10. If `D > T`, final score = `B`.
+8. The system loads the institution's current threshold `T` and category ranges; if either is missing or the category set is invalid, the result is **Waiting for settings**.
+9. If `D <= T`, final score = `(H + B) / 2` (calculation method: average).
+10. If `D > T`, final score = `B` (calculation method: Blitz score).
 11. The system marks consistency/inconsistency.
 12. The system assigns understanding category from the derived integer `category_score`.
-13. The system saves the result with calculation/rule snapshots and official attempt references.
+13. The system shows the result as computed; nothing is saved while the result is open. The closure snapshot (Final Result Saving Flow) stores the values when the result is closed.
 14. The UI displays numeric scores with one decimal place.
 15. The Teacher can review the result immediately within authorized scope.
-16. Student visibility follows `automatic` or `manual_teacher`.
+16. Student visibility follows `automatic` or `manual_teacher`, and only after the Student's work is finished.
 17. Parent visibility follows `with_student`, `manual_teacher`, or `hidden`, and can never precede Student release.
 18. The Institution Admin may view permitted summaries.
 19. Access remains institution/role/relationship scoped.
@@ -3572,8 +3621,9 @@ Flow:
 3. Verify official Homework score readiness.
 4. Verify official Blitz score readiness.
 5. Verify manual review completion.
-6. If all are ready, calculate.
-7. Otherwise use an appropriate waiting/not-completed state.
+6. Verify that the institution has a threshold `T` and a valid complete category set.
+7. If all are ready, calculate.
+8. Otherwise use the status given by the Result Status Flow: Not completed when some required work can no longer be completed, Waiting for settings when only the threshold or category set is missing, or the matching waiting status.
 
 Missing required work never creates an invented numeric score.
 ### Homework Score Flow
@@ -3660,6 +3710,7 @@ The acceptable score difference rule flow is:
 4. During result calculation, the system checks this rule.
 5. If the homework/blitz difference is within the allowed range, the system treats the scores as close.
 6. If the difference is bigger than the allowed range, the system treats the scores as very different.
+7. A changed rule applies to every open result on its next read; a closed result keeps the rule stored in its closure snapshot (`S10-D6`).
 
 This rule should be configurable because educational institutions may use different grading systems and different assessment approaches.
 
@@ -3669,9 +3720,9 @@ When `D <= T`:
 
 1. Confirm official full-precision `H` and `B`.
 2. Calculate `(H + B) / 2` without rounding inputs first.
-3. Store the full-precision final value.
-4. Mark the result consistent.
-5. Derive integer `category_score` from the unrounded final value for understanding-category assignment.
+3. Keep the exact final value; it is serialized (and stored at closure) rounded half-up to 8 decimal places.
+4. Mark the result consistent, with calculation method average.
+5. Derive integer `category_score` from the exact final value for understanding-category assignment.
 6. Display the numeric result with one decimal place.
 
 Example display may show `85.0` even though internal precision rules are preserved.
@@ -3680,11 +3731,11 @@ Example display may show `85.0` even though internal precision rules are preserv
 When `D > T`:
 
 1. Confirm full-precision `H` and `B`.
-2. Mark the result inconsistent.
+2. Mark the result inconsistent, with calculation method Blitz score.
 3. Use full-precision `B` as the final Topic score.
 4. Assign the category from the derived integer `category_score`.
 5. Display with one decimal place.
-6. Show the Teacher the large Homework–Blitz difference without accusing the Student of cheating.
+6. Show the Teacher the large Homework–Blitz difference without accusing the Student of cheating. The Student and the Parent see only the neutral line that the final score is the Blitz score.
 
 The same rule applies whether `B` is lower or higher than `H`.
 ### Low Homework and High Blitz Flow
@@ -3712,45 +3763,41 @@ The teacher can review the case and decide whether feedback or additional suppor
 
 ### Final Result Saving Flow
 
-When the result can be calculated, the system saves enough information to preserve its meaning.
+An open result is not saved; it is computed live (`S10-T1`). The system saves one record per Topic and Student only when something that cannot be derived is written:
 
-At minimum, save:
+- the Teacher's comment on the result (with who changed it and when);
+- the Teacher's release to the Student and the Teacher's release to Parents (with who released and when);
+- the closure snapshot.
 
-- Institution
-- Student
-- Topic
+The Teacher closes a result (single Student or all ready results), or the Topic archive closes it automatically, only when it is closable (`S10-D9`): the result is calculated or Not completed, and the Student's work is finished or the Topic is being archived. Closing an already closed result changes nothing; closing a result that is not closable is refused (`409 result_not_ready_for_closure`).
+
+Inside the closure transaction, the system computes the result live once more and saves, at minimum:
+
+- Who closed it, when, and why (Teacher close or Topic archive)
+- Closed outcome: calculated or Not completed, and for Not completed the missing part (Homework, Blitz, or both)
 - Designated official Homework
 - Designated official Blitz
-- Official Homework attempt reference
-- Official Blitz attempt reference
-- Official `H`
-- Official `B`
-- `D`
-- Threshold `T` used
-- Consistency status
-- Calculation method
-- Full-precision final score
-- Understanding category
-- Category-range snapshot
-- Result calculation status
-- Separate Student visibility state
-- Separate Parent visibility state
-- Relevant release timestamps
-- Teacher feedback where applicable
+- The Homework and Blitz side states at closure
+- Official Homework attempt reference and official `H`, when the Homework side was ready
+- Official Blitz attempt reference and official `B`, when the Blitz side was ready
+- For a calculated outcome: `D`, threshold `T` used, consistency, calculation method, final score, `category_score`, understanding category, and the category range used
+- For a Not completed outcome: the Not completed category
 
-Historical closed results must not silently change because institution settings change later.
+After closure, the snapshot and the comment never change. A later first review of an answer that was still waiting may complete an official score, but it never changes the closed result. Releases remain possible after closure, because release is separate from closure.
+
+Historical closed results must not silently change because institution settings change later: a closed result never reads current settings again.
 ### Understanding Category Assignment Flow
 
 After the final score is calculated:
 
 1. Use the **unrounded** final score.
-2. Load the institution's current/applicable category ranges.
+2. Load the institution's current category ranges (an open result always uses the current ranges; a stored set that fails validation counts as missing, and the result is Waiting for settings).
 3. Resolve exactly one of the four numeric categories:
    - Understood well
    - Partially understood
    - Needs revision
    - Needs teacher support
-4. Save the category and rule snapshot.
+4. At closure, save the category and the range used in the closure snapshot.
 5. Show it to the Teacher.
 6. Show it to Student/Parent only according to release policy.
 
@@ -3759,47 +3806,53 @@ After the final score is calculated:
 Display rounding must never move a Student into a different category.
 ### Not Completed Category Flow
 
-**Not completed** is used only when required work can no longer validly be completed.
+**Not completed** is used only when required work can no longer validly be completed. It applies as soon as one side (Homework or Blitz) can no longer be completed, even while the other side is still open or waiting for review (`S10-T3`).
 
 1. Check official Homework requirement.
 2. Check official Blitz requirement.
 3. Check whether required manual review is still pending.
-4. Check whether Homework attempts/deadline still allow completion.
-5. Check whether Blitz normal/approved exception opportunity is still open.
+4. Check whether Homework attempts/deadline still allow completion. The Homework side is missing when the official Homework is closed or archived, or its deadline has passed, or all three attempts are used, and the Student has no checked or pending Attempt and none in progress. Activation of the official Blitz closes the official Homework, so a Student who has no official Homework Attempt at all at that moment (an Attempt still in progress is submitted with its saved work) is missing the Homework.
+5. Check whether Blitz normal/approved exception opportunity is still open. The Blitz side is missing when the official Blitz is active but the Student has no Blitz Attempt and the Homework side is missing (the Student can no longer get the submitted Homework required to start), or when the official Blitz was activated and is now closed or archived and the Student never started it or has an approved exception without a taken replacement.
 6. If required work is permanently missing after applicable opportunities end, assign Not completed.
-7. Identify whether Homework, Blitz, or both are missing.
+7. Identify whether Homework, Blitz, or both are missing; this can still change (for example Homework → both) until the result is closed.
 
-Do not use Not completed when:
+Do not use Not completed because of a side (Homework or Blitz) when:
 
-- Review that the official Homework or Blitz score still waits for is pending. Review of a Blitz Attempt #1 invalidated by an approved exception, or of a Homework Attempt that cannot overtake, never counts; a Blitz closed before replacement #2 was taken is Not completed even while #1 waits for review.
-- A valid approved additional Blitz attempt is still available.
-- The result is already calculated but not released.
+- That side's official score still waits for automatic checking or Teacher review. Review of a Blitz Attempt #1 invalidated by an approved exception, or of a Homework Attempt that cannot overtake, never counts; a Blitz closed before replacement #2 was taken is missing even while #1 waits for review.
+- For the Blitz side, a valid approved additional Blitz attempt is still available.
+- The official Blitz was never designated or never activated; that side waits.
+- The official Homework was never activated; that side waits.
+
+The result is still Not completed when the other side is missing (`S10-T3`). A result is never Not completed because it waits for institution settings or is calculated but not released.
 ### Result Status Flow
 
 Result calculation status and visibility are separate.
 
-MVP result calculation statuses:
+MVP result calculation statuses (exactly seven):
 
-- Waiting for Homework
-- Waiting for Blitz task
-- Waiting for Teacher review
-- Calculated
-- Not completed
-- Closed
+- Waiting for Homework (`waiting_for_homework`)
+- Waiting for Blitz task (`waiting_for_blitz`)
+- Waiting for Teacher review (`waiting_for_teacher_review`)
+- Waiting for settings (`waiting_for_settings`)
+- Calculated (`calculated`)
+- Not completed (`not_completed`, with the missing part: Homework, Blitz, or both)
+- Closed (`closed`, with its outcome: calculated or Not completed)
 
-Flow:
+Flow for an open result — the first matching rule wins (precedence: Homework, then Blitz, then Teacher review, `S10-T3`):
 
-1. Missing-but-still-completable Homework → Waiting for Homework.
-2. Missing-but-still-completable Blitz → Waiting for Blitz task.
-3. Required manual scoring pending → Waiting for Teacher review.
-4. Inputs ready and formula/category applied → Calculated.
-5. Required work permanently missing → Not completed.
-6. Finalized historical result → Closed.
+1. Some required work can no longer be completed (Homework side or Blitz side missing) → Not completed.
+2. Both official scores ready, and the institution has a threshold and a valid complete category set → Calculated.
+3. Both official scores ready, but the threshold or the category set is missing → Waiting for settings.
+4. The official Homework is not yet activated, still open for the Student, or its official score still waits for automatic checking → Waiting for Homework.
+5. The official Blitz is not yet designated or activated, still open for the Student (including an approved replacement not yet taken), or its official score still waits for automatic checking → Waiting for Blitz task.
+6. Otherwise (an official score waits for Teacher review) → Waiting for Teacher review.
 
-Student and Parent release/visibility must not be encoded by changing these calculation statuses.
+A closed result has the status Closed; all its values come from the closure snapshot. Calculated and Not completed are the terminal open statuses: only a terminal result can be closed, and only a terminal or closed result can be released (both once the Student's work is finished; archiving the Topic also closes terminal results). Waiting for Teacher review, Waiting for settings, and not released are never Not completed.
+
+Student and Parent release/visibility must not be encoded by changing these calculation statuses. The status is always visible to the Student, and to the Parent unless the Parent mode is hidden or not configured.
 ### Result Consistency Flow
 
-The system should show whether homework and blitz results are consistent.
+The system should show the Teacher whether homework and blitz results are consistent.
 
 The consistency flow is:
 
@@ -3814,11 +3867,11 @@ Possible consistency cases:
 
 - High homework score + high blitz score = strong consistency
 - Medium homework score + medium blitz score = normal consistency
-- High homework score + low blitz score = possible outside help or weak real understanding
-- Low homework score + high blitz score = possible improvement or homework problem
+- High homework score + low blitz score = the in-class result is well below the homework result; the Blitz score is used, and the teacher may review the case and offer revision or support
+- Low homework score + high blitz score = the in-class result is well above the homework result; the Blitz score is used
 - Missing homework or missing blitz = incomplete learning-check process
 
-The system should show consistency as helpful information, not as an accusation.
+The system should show consistency as helpful information, not as an accusation. Consistency, the score difference, and the threshold are shown only to the Teacher (`S10-D2`). The Student and the Parent see one neutral line on how the final score was formed: the average of both scores, or the Blitz score.
 
 ### Teacher Result Review Flow
 
@@ -3840,36 +3893,38 @@ The page may show:
 - Parent visibility
 - Manual review status
 - Feedback
+- The Teacher's comment on the result
+- Closure information (who closed it, when, and whether by Teacher close or Topic archive)
 
-If an underlying manual scoring error is corrected before closure, the system recalculates the dependent result. The Teacher cannot directly type a replacement final result.
+If an underlying manual scoring error is corrected before closure, the open result reflects the correction at once, because it is computed live. After closure, corrections of that Student's reviewed official answers are refused (`409 result_closed`). The Teacher cannot directly type a replacement final result.
 
-The Teacher also performs manual release actions where institution policy requires them.
+The Teacher also writes the result comment, performs manual release actions where institution policy requires them, and closes results (Result Review Flow in section 4).
 ### Student Result Viewing Flow
 
-Student result visibility follows institution policy.
+Student result visibility follows institution policy and the Student's finished work (`S10-D3`).
 
 1. System completes result calculation.
-2. Calculation status becomes Calculated.
-3. Student visibility is evaluated separately.
-4. If Student mode is `automatic`, release occurs automatically.
-5. If Student mode is `manual_teacher`, the result remains hidden until the authorized Teacher releases it.
-6. When visible, Student sees own official Homework score, official Blitz score, final score, category, completion state, and allowed feedback.
+2. Calculation status becomes Calculated or Not completed; the status is always visible to the Student.
+3. Student visibility is evaluated separately. Values can become visible only when the Student's work is finished: the official Blitz was activated and is closed or archived, the official Homework is closed, archived, past its deadline, or all three attempts are used, and the Student has no Attempt in progress on either official task.
+4. If Student mode is `automatic`, release occurs automatically at that moment.
+5. If Student mode is `manual_teacher`, the result remains hidden until the authorized Teacher releases it; the release is available from that moment.
+6. When visible, Student sees own official Homework score, official Blitz score, final score, the neutral calculation-method line, category, completion state, and the Teacher's comment on the result. The Student never sees `D`, `T`, consistency, or `category_score`.
 7. Scores display with one decimal place.
 
-Hidden does not mean incomplete.
+Hidden does not mean incomplete. A released result stays released; after a correction the Student sees the new values at once, or a waiting status without values and then the new result without a new release.
 ### Parent Result Viewing Flow
 
-Parent result visibility always requires Student release first.
+Parent visibility of result values always requires Student release first.
 
 1. Parent opens connected child's result.
-2. System verifies the relationship.
-3. System confirms Student result is released.
-4. System evaluates Parent mode:
+2. System verifies a current relationship.
+3. If Parent mode is `hidden` or not configured, the system returns no result information at all, not even the status.
+4. Otherwise the system shows the status and confirms the result values are visible to the Student.
+5. System evaluates Parent mode:
    - `with_student`: release follows Student release automatically.
    - `manual_teacher`: require separate authorized Teacher release.
-   - `hidden`: do not expose the result.
-5. When visible, Parent sees allowed score/category/progress information.
-6. Parent remains read-only.
+6. When visible, Parent sees the same values as the Student, including the Teacher's comment on the result; never answer feedback, `D`, `T`, or consistency.
+7. Parent remains read-only.
 
 The Parent can never receive the result before the Student.
 ### Institution Admin Result Overview Flow
@@ -3916,9 +3971,9 @@ This keeps learning results under the correct institution and teacher control.
 
 Result access requires institution, role, group/Student relationship, and visibility checks.
 
-- Teacher: assigned Student results, including calculated-but-unreleased results.
-- Student: only own results after Student release.
-- Parent: only connected child results after Student release and Parent visibility approval.
+- Teacher: results of the Teacher's own Topics while a current Teacher of the Topic's group, including calculated-but-unreleased results.
+- Student: only own results; the status always, the values after the Student's work is finished and Student release.
+- Parent: only connected child results; outside the `hidden` (or unconfigured) mode the status always, the values after Student release and Parent visibility approval; nothing at all in the `hidden` mode.
 - Institution Admin: permitted summaries inside own institution.
 - Super Admin: platform-level statistics/support boundary, not routine educational result editing.
 - Cross-institution access: always blocked.
@@ -3956,9 +4011,10 @@ The MVP result engine supports only the approved rule:
 - Separate calculation and visibility
 - Student release modes: automatic/manual Teacher
 - Parent modes: with Student/manual Teacher/hidden
-- Historical rule snapshots
+- Live open results using current settings
+- Closure snapshots for closed results
 
-The MVP does not include custom formulas, direct Teacher final-score overrides, AI predictions, appeals, or formal grading approval chains.
+The MVP does not include custom formulas, direct Teacher final-score overrides, AI predictions, appeals, post-closure revision, reopening a closed result, hiding a released result, custom category names, or formal grading approval chains.
 ### MVP Result Calculation Flow Summary
 
 The MVP Result Calculation Flow includes:
@@ -3973,17 +4029,19 @@ The MVP Result Calculation Flow includes:
 8. Apply institution threshold.
 9. Average when `D <= T`.
 10. Use Blitz when `D > T`.
-11. Record consistency without automatic cheating accusation.
+11. Record consistency without automatic cheating accusation; show it to the Teacher only.
 12. Assign category using derived integer `category_score`.
 13. Display scores with one decimal place.
-14. Store calculation method and rule snapshots.
+14. Compute open results live and store the calculation method and the rules used only in the closure snapshot.
 15. Keep result calculation status separate from visibility.
-16. Support automatic/manual Student release.
+16. Support automatic/manual Student release once the Student's work is finished.
 17. Support with-Student/manual/hidden Parent visibility.
 18. Never release Parent result before Student release.
-19. Support waiting and Not completed correctly.
-20. Protect result access by institution/role/relationship.
-21. Preserve closed historical results.
+19. Support the seven result statuses, including waiting for settings and Not completed, correctly.
+20. Support the Teacher's result comment.
+21. Close results singly, in bulk, and on Topic archive, only when closable.
+22. Protect result access by institution/role/relationship.
+23. Preserve closed historical results.
 
 ## 11. Access and Permission Flow
 
@@ -4194,8 +4252,10 @@ Authorized Teacher actions include:
 - Review and correct manual answers of submissions: completed Attempts of recipient Students in the Teacher's own Topics while the Teacher is still assigned to the Topic's group, whatever the Topic or task status. Stage 10 blocks corrections after result closure.
 - Download submitted answer files of those submissions.
 - Set an optional Homework review deadline.
-- Review calculated results.
+- Review calculated results of the Teacher's own Topics while a current Teacher of the Topic's group.
+- Comment on a Topic result until it is closed.
 - Release Student/Parent results when institution policy requires Teacher action.
+- Close results whose Student work is finished, singly or in bulk.
 
 Before each action, the backend checks institution, group assignment, task ownership, Student scope, lifecycle, and specific permission. A submission outside this scope, or an Attempt still in progress, is a privacy-safe `404 resource_not_found`.
 
@@ -4251,7 +4311,7 @@ The Parent can access only permitted progress for explicitly connected children.
 6. Parent mode then applies:
    - `with_student`
    - `manual_teacher`
-   - `hidden`
+   - `hidden` (no result information at all, not even the status)
 7. Parent remains read-only.
 
 Knowing a Student ID or direct URL never grants access.
@@ -4339,7 +4399,7 @@ Homework permission checks protect creation, attempt use, submission, checking, 
 6. Student submits only their own attempt.
 7. A fourth normal attempt is blocked.
 8. Teacher reviews only accessible submissions (section 4, Manual Checking Flow), on desktop.
-9. In Stage 9 the Student sees own checked Attempt results only under the automatic release mode; the later Topic result follows Student release.
+9. In Stage 9 the Student sees own checked Attempt results only under the automatic release mode; from Stage 10, official results also become visible after the Teacher releases the Student's Topic result and practice results in every mode, and the Topic result follows the Student's finished work and Student release.
 10. Parents see nothing new in Stage 9; Parent visibility follows Parent release policy from Stage 10.
 
 Cross-institution, unrelated-group, draft/closed, expired-deadline, and attempt-exhausted writes are blocked.
@@ -4357,7 +4417,8 @@ Blitz permission checks include assignment, lifecycle, timing, and exception-att
 8. No third Blitz attempt is allowed.
 9. At timeout, backend auto-finalizes saved work and blocks late writes.
 10. Teacher reviews only accessible submissions (section 4, Manual Checking Flow), on desktop.
-11. In Stage 9 the Student sees the Blitz result only after the Blitz is closed and only under the automatic release mode; later result viewing follows release rules.
+11. In Stage 9 the Student sees the Blitz result only after the Blitz is closed and only under the automatic release mode; from Stage 10, result viewing follows the attempt-result visibility rule (Student Blitz Result Flow).
+12. From Stage 10, activating the official Blitz closes the official Homework, and a Student may start official Blitz Attempt #1 only with a submitted official Homework Attempt.
 
 Draft, scheduled-before-activation, closed, archived, unrelated, expired-Attempt, or exhausted-capacity writes are blocked. A valid active replacement #2 may still start after the common synchronized end and receives its own full duration. Persisted recipients, own Attempts, same-Assessment Questions/child IDs, private-file authorization, and privacy-safe direct-ID checks remain mandatory; Student responses never reveal correct-answer configuration.
 ### Submission Protection Flow
@@ -4416,13 +4477,13 @@ Scores/results are private educational data.
 
 1. System calculates/stores scores and result state.
 2. Teacher may view assigned results even before Student release.
-3. Student may view only own result after Student release. In Stage 9, own checked Attempt results are visible only under the automatic release mode (a Blitz result only after the Blitz is closed), and never correct answers or per-question points.
-4. Parent may view only connected child result after Student release and according to Parent mode; Stage 9 shows Parents nothing new.
+3. Student may view only own result: the status always, the values after the Student's work is finished and Student release. Own checked Attempt results are visible for practice tasks in every mode, and for official tasks under the automatic release mode or after the Teacher releases the Student's Topic result (a Blitz result only after the Blitz is closed); never correct answers or per-question points.
+4. Parent may view only connected child result: outside the `hidden` (or unconfigured) mode the status always, the values after Student release and according to Parent mode; never Attempt results or answer feedback. Stage 9 shows Parents nothing new.
 5. Institution Admin may view permitted own-institution summaries.
 6. Super Admin remains within platform/support boundary.
 7. Other access is blocked.
 
-Protected data includes official Homework/Blitz attempts, scores, difference, threshold snapshot, final score, category, visibility state, feedback, and consistency.
+Protected data includes official Homework/Blitz attempts, scores, difference, threshold used, final score, category, visibility state, feedback, the Teacher's result comment, consistency, and the closure snapshot.
 ### Report Permission Flow
 
 Reports should use the same access rules as the underlying data.
@@ -4494,9 +4555,11 @@ Important protected actions include:
 - Manual scoring and feedback
 - Teacher download of submitted answer files
 - Setting the Homework review deadline
-- Allowed underlying score correction/recalculation
+- Allowed underlying score correction
+- Topic-result comment
 - Student result release
 - Parent result release
+- Topic-result closure (single, bulk, and on Topic archive)
 - Report access
 - Institution activation/deactivation
 
@@ -4761,9 +4824,9 @@ The end-to-end MVP flow is:
 8. In Stage 7, the Student starts/resumes one current Attempt, saves typed/private file answers, and explicitly submits or has already-committed work frozen by deadline/Teacher close as immutable `submitted` history without checking/scoring.
 9. In Stage 9, the system/Teacher checks frozen Homework attempts, applies the approved missing-answer-zero policy, and selects the highest valid completed Homework score as official.
 10. Teacher creates one or more Blitz tasks. Practice Blitz may target selected Students, but the official result-bearing Blitz must target the whole group and reuse the same official Topic cohort.
-11. Teacher sets whole-Blitz duration and activates the official Blitz during class.
+11. Teacher sets whole-Blitz duration and activates the official Blitz during class; the activation closes the official Homework for the whole group.
 12. Institution synchronized/individual timer-start mode applies.
-13. Student normally receives one Blitz attempt.
+13. Student with a submitted official Homework Attempt normally receives one Blitz attempt; a Student without one is Not completed.
 14. Student submits before timeout or system auto-finalizes saved work at timeout.
 15. Stage 9 later applies zero to unanswered timeout questions; Stage 8 only freezes committed pending work.
 16. Teacher may grant one additional Student-specific Blitz attempt for a valid technical/approved reason.
@@ -4773,11 +4836,12 @@ The end-to-end MVP flow is:
 20. System applies threshold formula.
 21. System derives integer `category_score` and assigns the category from it.
 22. UI displays numeric scores with one decimal place.
-23. Teacher reviews result.
-24. Student result release follows automatic/manual Teacher mode.
+23. Teacher reviews result and may comment on it.
+24. Once the official Blitz is closed and the Student's work is finished, Student result release follows automatic/manual Teacher mode.
 25. Parent result visibility follows with-Student/manual Teacher/hidden mode and never precedes Student release.
-26. Institution Admin views permitted summaries.
-27. System preserves institution separation and historical records.
+26. Teacher closes finished results; archiving the Topic closes every calculated or Not completed result.
+27. Institution Admin views permitted summaries.
+28. System preserves institution separation and historical records.
 
 If this flow works reliably, the MVP proves the core TestLabUz concept.
 ### MVP Platform Owner / Super Admin Flow Scope
@@ -4845,16 +4909,17 @@ The MVP Teacher flow includes:
 9. Create manual Blitz.
 10. Set whole-Blitz duration.
 11. Designate one eligible draft/scheduled whole-group official Blitz before activation or attempts.
-12. Activate Blitz.
+12. Activate Blitz; activating the official Blitz closes the official Homework.
 13. Monitor synchronized/individual timer behavior.
 14. Grant one Student-specific additional Blitz attempt for a valid reason.
 15. Review auto-finalized/explicit Blitz submissions.
 16. Apply manual scoring where needed, on desktop, with partial review, later correction, and an optional Homework review deadline.
-17. Review official Homework/Blitz scores and final results.
+17. Review official Homework/Blitz scores and final results, and comment on each result.
 18. Release Student/Parent results when institution policy requires Teacher action.
-19. View Topic/group/Student progress.
-20. Use desktop for detailed work and mobile for quick classroom actions.
-21. Stay inside assigned scope.
+19. Close results whose Student work is finished, singly or in bulk.
+20. View Topic/group/Student progress.
+21. Use desktop for detailed work and mobile for quick classroom actions.
+22. Stay inside assigned scope.
 
 Teacher cannot configure arbitrary attempt counts, choose the official Attempt, or directly override final Topic formula.
 ### MVP Student Flow Scope
@@ -4869,7 +4934,7 @@ The MVP Student flow includes:
 6. Save supported typed answers and private answer files within the effective 15 MB limit while the Attempt is editable.
 7. Explicitly submit, or have already-committed work frozen at deadline/Teacher close as immutable `submitted` history with no fabricated answer/Attempt row and no Stage 7 checking/scoring; unused capacity becomes unavailable after deadline/close.
 8. In Stage 9, have frozen answers checked, missing answers treated as zero, required Teacher review completed, and the highest valid completed Homework score selected as official.
-9. Access Blitz only after Teacher activation.
+9. Access Blitz only after Teacher activation; start the official Blitz only with a submitted official Homework Attempt.
 10. Follow synchronized/individual timer-start behavior.
 11. Receive one normal Blitz attempt.
 12. Receive at most one Teacher-approved extra Blitz attempt for a valid reason.
@@ -4878,9 +4943,9 @@ The MVP Student flow includes:
 15. Receive zero for unanswered timeout questions during later Stage 9 scoring.
 16. Wait for Teacher review where needed.
 17. Receive approved objective partial credit.
-18. In Stage 9, view own checked Attempt results only under the automatic release mode (a Blitz result only after the Blitz is closed), never correct answers or per-question points; view the Topic result only after Student release.
+18. In Stage 9, view own checked Attempt results only under the automatic release mode (a Blitz result only after the Blitz is closed), never correct answers or per-question points. From Stage 10, also view official Attempt results after the Teacher releases the Topic result and practice Attempt results in every mode; view the Topic result status always and its values only after the Student's work is finished and Student release.
 19. See released numeric scores with one decimal place.
-20. View category/progress/feedback when allowed.
+20. View category/progress/feedback and the Teacher's result comment when allowed.
 21. Use desktop/mobile as appropriate.
 22. Remain inside own data scope.
 ### MVP Parent Flow Scope
@@ -4893,11 +4958,11 @@ The MVP Parent flow includes:
 4. Never receive result values before Student release.
 5. Support `with_student` visibility.
 6. Support `manual_teacher` visibility.
-7. Support `hidden` visibility.
+7. Support `hidden` visibility (no result information at all).
 8. View released official Homework score.
 9. View released official Blitz score.
 10. View released final score/category.
-11. View allowed Teacher feedback (undecided; Stage 10 planning).
+11. View the Teacher's comment on a Topic result visible to the Parent; never feedback on answers.
 12. Identify Topics needing revision/support.
 13. Remain read-only and restricted to connected children.
 ### MVP Topic Learning Flow Scope
@@ -4917,7 +4982,7 @@ The MVP Topic flow includes:
 11. Assign category.
 12. Apply Student/Parent visibility policies.
 13. Review progress.
-14. Close/archive while preserving history.
+14. Close/archive while preserving history; archiving closes every calculated or Not completed Topic result.
 15. Protect access.
 ### MVP Learning Material Flow Scope
 
@@ -4956,8 +5021,8 @@ The MVP Blitz flow includes:
 2. Designate one eligible draft/scheduled whole-group official Blitz before activation or attempts.
 3. Set whole-Blitz duration.
 4. Use institution synchronized/individual start mode.
-5. Teacher activates Blitz.
-6. Give each Student one normal attempt.
+5. Teacher activates Blitz; activating the official Blitz closes the official Homework.
+6. Give each Student one normal attempt; the official Blitz requires a submitted official Homework Attempt.
 7. Show authoritative remaining time.
 8. Explicit submit or timeout auto-finalization.
 9. Apply zero for unanswered timeout questions later in Stage 9.
@@ -4984,15 +5049,16 @@ The MVP Result Calculation Flow includes:
 8. Apply institution threshold `T`.
 9. Average when `D <= T`.
 10. Use Blitz when `D > T`.
-11. Mark consistency without automatic cheating accusation.
+11. Mark consistency without automatic cheating accusation; show it to the Teacher only.
 12. Assign category from derived integer `category_score`.
 13. Display scores with one decimal.
-14. Store rule/calculation snapshots.
+14. Compute open results live and store the closure snapshot when a result is closed.
 15. Separate calculation from visibility.
-16. Support Student automatic/manual release.
+16. Support Student automatic/manual release once the Student's work is finished.
 17. Support Parent with-Student/manual/hidden modes.
 18. Prevent Parent release before Student.
-19. Preserve historical closed results.
+19. Support the Teacher's result comment and single/bulk release and closure.
+20. Preserve historical closed results.
 ### MVP Result Status Flow Scope
 
 MVP result calculation statuses:
@@ -5000,13 +5066,14 @@ MVP result calculation statuses:
 - Waiting for Homework
 - Waiting for Blitz task
 - Waiting for Teacher review
+- Waiting for settings
 - Calculated
 - Not completed
 - Closed
 
-Student and Parent visibility are separate state dimensions.
+The first matching status wins in the order given by the Result Status Flow (section 10). Student and Parent visibility are separate state dimensions.
 
-`Not completed` is used only after required work can no longer validly be completed. Pending review that an official score still waits for, or hidden/unreleased results, must not be treated as Not completed.
+`Not completed` is used as soon as some required work can no longer validly be completed. Pending review that an official score still waits for, missing institution settings, or hidden/unreleased results must not be treated as Not completed.
 ### MVP Reports and Progress Flow Scope
 
 The MVP should include simple and practical progress visibility.
@@ -5561,7 +5628,7 @@ Recommended verification before expansion:
 8. Test individual timing.
 9. Test Stage 8 timeout freeze and later Stage 9 unanswered-zero behavior.
 10. Test partial-credit rules.
-11. Test manual review and recalculation.
+11. Test manual review, Attempt score recalculation, and live open Topic results.
 12. Test full-precision threshold/category behavior and one-decimal display.
 13. Test Student automatic/manual release.
 14. Test all three Parent visibility modes and Student-first hierarchy.
@@ -5677,8 +5744,8 @@ The following flow rules are mandatory in every affected role flow:
 - **Multiple-choice:** Student sees `max_selections`; choosing above that limit is blocked by Flutter and rejected by Laravel. Score = correct selections / total correct options; empty answer = zero.
 - **Short Written automatic checking:** both accepted and Student text follow the same deterministic normalization pipeline; no fuzzy or AI interpretation occurs. Fill-in-the-blank blanks use the same pipeline.
 - **Activation:** server recalculates total points and blocks activation when total possible points is zero.
-- **Homework closure:** before deadline, Teacher close atomically freezes existing `in_progress` Attempts as `submitted` from already-committed pending work at captured `closedAt` with `task_closed_auto_finalize`, blocks further writes, and creates no fake Attempt/answer row. At/after deadline it preserves `homework_deadline_auto_submit` and exact `deadline_at`; Stage 9 later checks/scores the frozen work.
+- **Homework closure:** before deadline, Teacher close atomically freezes existing `in_progress` Attempts as `submitted` from already-committed pending work at captured `closedAt` with `task_closed_auto_finalize`, blocks further writes, and creates no fake Attempt/answer row. At/after deadline it preserves `homework_deadline_auto_submit` and exact `deadline_at`; Stage 9 later checks/scores the frozen work. From Stage 10, activation of the official Blitz closes an active official Homework in the same transaction in exactly this way (no actor recorded), the official Blitz cannot be activated while the official Homework is a draft, and only a Student with a terminal official Homework Attempt may start official Blitz Attempt #1.
 - **Blitz closure:** Stage 8 closes atomically, blocks Starts/writes, timeout-finalizes each due Attempt at exact `deadline_at`, and freezes only pre-deadline Attempts as `submitted` with `task_closed_auto_finalize` at captured close time. Terminal history remains immutable, saved answers remain pending, and no fake rows are created. Stage 9 later owns checking/scoring/zero/review. Closed Blitz cannot grant a new exception.
-- **Result closure:** Teacher may close only a calculated terminal result or a definitive Not completed result. Waiting states, in-progress official attempts, pending Blitz replacement attempts, or incomplete manual review that an official score still waits for block closure. Release may occur before or after closure according to policy.
+- **Result closure:** Teacher may close only a terminal result (Calculated, or Not completed) and only when the Student's work is finished (the official Blitz was activated and is closed or archived, the official Homework can no longer be submitted, and no Attempt is in progress). Waiting statuses and in-progress official attempts block closure; a Not completed result can be closed even while its other side still waits for checking or review (the snapshot keeps only the ready sides, and a later first review never changes it). Archiving the Topic closes every terminal result automatically; waiting results stay open. Release may occur before or after closure according to policy.
 - **Category assignment:** final calculation remains unrounded; the category resolver uses integer `category_score` with `.0`–`.5` down and `>.5` up.
 - **Homework highest-score tie:** earliest tied attempt becomes the official attempt reference.
