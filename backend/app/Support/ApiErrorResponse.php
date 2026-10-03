@@ -64,6 +64,8 @@ final class ApiErrorResponse
 
     private const CODE_RESULT_PAIR_LOCKED = 'result_pair_locked';
 
+    private const CODE_RESULT_CLOSED = 'result_closed';
+
     private const CODE_RESOURCE_NOT_FOUND = 'resource_not_found';
 
     private const CODE_SERVER_ERROR = 'server_error';
@@ -342,6 +344,19 @@ final class ApiErrorResponse
         return self::json(
             'The official result pair is locked.',
             self::CODE_RESULT_PAIR_LOCKED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function resultClosed(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'This result is closed and can no longer be changed.',
+            self::CODE_RESULT_CLOSED,
             Response::HTTP_CONFLICT,
         );
     }
