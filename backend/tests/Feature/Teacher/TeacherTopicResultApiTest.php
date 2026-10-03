@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Results\Concerns\AssertsTopicResultSnapshotReads;
 use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\Feature\Teacher\Concerns\BuildsTopicResultContext;
 use Tests\TestCase;
@@ -23,6 +24,7 @@ use Tests\TestCase;
 /** S10-BE-002: the Teacher's Topic results, their visibility state and the Topic-result comment (docs/09 §25.4-25.7). */
 class TeacherTopicResultApiTest extends TestCase
 {
+    use AssertsTopicResultSnapshotReads;
     use BuildsTopicResultContext;
     use UsesBlitzReadSnapshot;
 
@@ -70,20 +72,23 @@ class TeacherTopicResultApiTest extends TestCase
             'calculated' => 1, 'not_completed' => 1, 'closed' => 0,
         ], $response->json('meta.counts'));
 
-        $item = $response->json('data.1');
-        $this->assertSame(['id' => $calculated->id, 'full_name' => 'Beta Student'], $item['student']);
-        $this->assertSame(['calculated', null, null, null], [$item['result_status'], $item['closed_outcome'], $item['closed_at'], $item['missing_component']]);
-        $homeworkAttempt = AssessmentAttempt::query()->where('assessment_id', $this->homework->id)->where('student_id', $calculated->id)->sole();
-        $this->assertSame(['assessment_id' => $this->homework->id, 'state' => 'ready', 'official_attempt_id' => $homeworkAttempt->id,
-            'attempt_number' => 1, 'score' => 88], $item['homework']);
-        $this->assertSame([4, 10, 'consistent', 'average', 86, 86], [$item['score_difference'], $item['acceptable_difference'],
-            $item['consistency'], $item['calculation_method'], $item['final_score'], $item['category_score']]);
-        $this->assertSame(['code' => 'understood_well', 'label' => 'Understood well'], $item['category']);
+        $attempts = AssessmentAttempt::query()->where('student_id', $calculated->id)->get()->keyBy('assessment_id');
         $this->assertSame([
-            'student_release_mode' => 'manual_teacher', 'student_visible' => false, 'student_released_at' => null, 'can_release_to_student' => true,
-            'parent_release_mode' => 'manual_teacher', 'parent_visible' => false, 'parent_released_at' => null, 'can_release_to_parent' => false,
-        ], $item['visibility']);
-        $this->assertTrue($item['can_close']);
+            'student' => ['id' => $calculated->id, 'full_name' => 'Beta Student'],
+            'result_status' => 'calculated', 'closed_outcome' => null, 'closed_at' => null, 'missing_component' => null,
+            'homework' => ['assessment_id' => $this->homework->id, 'state' => 'ready', 'official_attempt_id' => $attempts[$this->homework->id]->id,
+                'attempt_number' => 1, 'score' => 88],
+            'blitz' => ['assessment_id' => $this->blitz->id, 'state' => 'ready', 'official_attempt_id' => $attempts[$this->blitz->id]->id,
+                'attempt_number' => 1, 'score' => 84],
+            'score_difference' => 4, 'acceptable_difference' => 10, 'consistency' => 'consistent', 'calculation_method' => 'average',
+            'final_score' => 86, 'category_score' => 86, 'category' => ['code' => 'understood_well', 'label' => 'Understood well'],
+            'teacher_comment' => null,
+            'visibility' => [
+                'student_release_mode' => 'manual_teacher', 'student_visible' => false, 'student_released_at' => null, 'can_release_to_student' => true,
+                'parent_release_mode' => 'manual_teacher', 'parent_visible' => false, 'parent_released_at' => null, 'can_release_to_parent' => false,
+            ],
+            'can_close' => true,
+        ], $response->json('data.1'));
 
         $notCompleted = $response->json('data.0');
         $this->assertSame(['not_completed', 'both', 'missing', 'missing'], [$notCompleted['result_status'], $notCompleted['missing_component'],
@@ -445,6 +450,14 @@ class TeacherTopicResultApiTest extends TestCase
         }
 
         $this->assertSame($counts[2], $counts[5]);
+    }
+
+    public function test_the_list_and_the_detail_each_read_in_one_snapshot(): void
+    {
+        $student = $this->readyStudent('Alpha Student', '88', '84');
+
+        $this->assertResultReadsInOneSnapshot(fn () => $this->list()->assertOk());
+        $this->assertResultReadsInOneSnapshot(fn () => $this->read($this->teacher, $this->itemUri($student))->assertOk());
     }
 
     /** @return array{bool, bool, bool, bool} */

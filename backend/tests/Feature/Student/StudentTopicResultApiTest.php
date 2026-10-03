@@ -6,11 +6,13 @@ use App\Models\GroupStudentMembership;
 use App\Models\Institution;
 use App\Models\Topic;
 use App\Models\TopicResult;
+use App\Models\TopicResultPair;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Results\Concerns\AssertsTopicResultSnapshotReads;
 use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\Feature\Teacher\Concerns\BuildsTopicResultContext;
 use Tests\TestCase;
@@ -18,6 +20,7 @@ use Tests\TestCase;
 /** S10-BE-003: the Student's own Topic result with values only when visible (docs/09 §29.3, §29.5). */
 class StudentTopicResultApiTest extends TestCase
 {
+    use AssertsTopicResultSnapshotReads;
     use BuildsTopicResultContext;
     use UsesBlitzReadSnapshot;
 
@@ -108,6 +111,40 @@ class StudentTopicResultApiTest extends TestCase
         foreach (['consistency', 'score_difference', 'acceptable_difference', 'category_score'] as $hidden) {
             $this->assertArrayNotHasKey($hidden, $data);
         }
+    }
+
+    public function test_a_closed_result_stays_hidden_until_it_is_released(): void
+    {
+        $student = $this->student($this->readyStudent('Alpha Student', '88', '84'));
+        $this->closedRow($student, []);
+
+        $this->assertSame(['topic_id' => $this->topic->id, 'result_status' => 'closed', 'closed_outcome' => 'calculated',
+            'missing_component' => null, ...self::HIDDEN_VALUES], $this->read($student)->assertOk()->json('data'));
+    }
+
+    public function test_a_result_closed_at_archive_without_an_official_blitz_stays_hidden_under_automatic_release(): void
+    {
+        $this->releaseModes('automatic', 'with_student');
+        TopicResultPair::query()->where('topic_id', $this->topic->id)->update(['blitz_assessment_id' => null]);
+        $student = $this->student($this->cohortStudent('Alpha Student'));
+        // Only the stored row matters here: neither the reader nor the visibility rule reads the Topic status.
+        TopicResult::factory()->create([
+            'institution_id' => $this->institution->id, 'topic_id' => $this->topic->id, 'student_id' => $student->id,
+            'closed_at' => now(), 'closed_by_user_id' => $this->teacher->id, 'closure_reason' => 'topic_archived',
+            'closed_outcome' => 'not_completed', 'missing_component' => 'homework', 'homework_assessment_id' => $this->homework->id,
+            'homework_state' => 'missing', 'blitz_state' => 'not_designated', 'category_code' => 'not_completed',
+        ]);
+
+        $this->assertSame(['topic_id' => $this->topic->id, 'result_status' => 'closed', 'closed_outcome' => 'not_completed',
+            'missing_component' => 'homework', ...self::HIDDEN_VALUES], $this->read($student)->assertOk()->json('data'));
+    }
+
+    public function test_the_result_read_and_the_topic_detail_each_read_in_one_snapshot(): void
+    {
+        $student = $this->student($this->readyStudent('Alpha Student', '88', '84'));
+
+        $this->assertResultReadsInOneSnapshot(fn () => $this->read($student)->assertOk());
+        $this->assertResultReadsInOneSnapshot(fn () => $this->homeworkRaw($student, 'GET', '/api/v1/student/topics/'.$this->topic->id, '')->assertOk());
     }
 
     public function test_a_former_member_still_in_the_cohort_reads_the_result(): void

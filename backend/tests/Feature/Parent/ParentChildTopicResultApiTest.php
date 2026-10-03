@@ -10,6 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Feature\Results\Concerns\AssertsTopicResultSnapshotReads;
 use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\Feature\Teacher\Concerns\BuildsTopicResultContext;
 use Tests\TestCase;
@@ -17,6 +18,7 @@ use Tests\TestCase;
 /** S10-BE-003: a Parent reads a connected child's Topic result, never before the Student (docs/09 §30.5). */
 class ParentChildTopicResultApiTest extends TestCase
 {
+    use AssertsTopicResultSnapshotReads;
     use BuildsTopicResultContext;
     use UsesBlitzReadSnapshot;
 
@@ -80,6 +82,34 @@ class ParentChildTopicResultApiTest extends TestCase
         $this->releaseModes('manual_teacher', 'manual_teacher');
 
         $this->read()->assertOk()->assertJsonPath('data.visible', false)->assertJsonPath('data.homework_score', null);
+    }
+
+    public function test_the_parent_reads_a_closed_result_once_it_is_visible_to_the_parent(): void
+    {
+        $this->releaseModes('manual_teacher', 'with_student');
+        $this->closedRow($this->child, ['student_released_at' => now(), 'student_released_by_user_id' => $this->teacher->id]);
+
+        $this->assertSame(['topic_id' => $this->topic->id, 'result_status' => 'closed', 'closed_outcome' => 'calculated',
+            'missing_component' => null, 'visible' => true, 'homework_score' => 88, 'blitz_score' => 84, 'final_score' => 86,
+            'calculation_method' => 'average', 'category' => ['code' => 'understood_well', 'label' => 'Understood well'],
+            'teacher_comment' => null], $this->read()->assertOk()->json('data'));
+    }
+
+    public function test_access_is_checked_before_the_hidden_mode(): void
+    {
+        $this->releaseModes('automatic', 'hidden');
+        $outsider = User::factory()->student($this->institution)->create();
+
+        $this->homeworkRaw($this->parent, 'GET', '/api/v1/parent/children/'.$this->child->id.'/topics/not-a-uuid/result', '')->assertNotFound();
+        $this->read($this->parentOf($outsider), $outsider)->assertNotFound();
+        $this->read()->assertOk()->assertExactJson(['data' => null]);
+    }
+
+    public function test_the_parent_read_uses_one_snapshot(): void
+    {
+        $this->releaseModes('manual_teacher', 'with_student');
+
+        $this->assertResultReadsInOneSnapshot(fn () => $this->read()->assertOk());
     }
 
     public function test_hidden_and_unconfigured_parent_modes_give_no_result_information(): void

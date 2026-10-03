@@ -7,6 +7,7 @@ use App\Enums\AssessmentAssignmentSource;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
+use App\Models\GroupStudentMembership;
 use App\Models\GroupTeacherMembership;
 use App\Models\TopicResultPair;
 use App\Models\User;
@@ -69,11 +70,17 @@ class StudentOfficialBlitzAttemptStartTest extends TestCase
         $pair->forceFill(['locked_at' => $prior->started_at, 'updated_at' => $prior->started_at])->save();
         $before = $pair->fresh()->getAttributes();
         $priorBefore = $prior->fresh()->getAttributes();
+        $recipients = fn (): array => AssessmentStudent::query()->whereIn('assessment_id', [$assessment->id, $pair->homework_assessment_id])
+            ->orderBy('id')->get()->map->getAttributes()->all();
+        $recipientsBefore = $recipients();
+        // The Student starts from the persisted cohort, not from a current group membership.
+        $this->assertFalse(GroupStudentMembership::query()->where('student_id', $student->id)->exists());
 
         $this->startStudentBlitz($student, $assessment)->assertCreated()->assertJsonPath('data.attempt_number', 1);
 
         $this->assertSame($before, $pair->fresh()->getAttributes());
         $this->assertSame($priorBefore, $prior->fresh()->getAttributes());
+        $this->assertSame($recipientsBefore, $recipients());
         $this->assertDatabaseCount('assessment_attempts', 2);
     }
 
