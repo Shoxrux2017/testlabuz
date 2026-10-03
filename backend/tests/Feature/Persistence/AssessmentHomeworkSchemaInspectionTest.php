@@ -96,9 +96,7 @@ class AssessmentHomeworkSchemaInspectionTest extends TestCase
 
         $this->assertFalse(Schema::hasColumn('homework_assignments', 'attempt_limit'));
         $this->assertTrue(Schema::hasTable('questions'));
-
-        // official_task_scores arrives with Stage 9 (ScoringPersistenceSchemaTest); topic_results is Stage 10.
-        $this->assertFalse(Schema::hasTable('topic_results'), 'Table topic_results is outside this persistence foundation.');
+        // official_task_scores (Stage 9) and topic_results (Stage 10) have their own schema tests.
     }
 
     public function test_columns_have_exact_types_nullability_lengths_precision_and_defaults(): void

@@ -43,13 +43,44 @@ final class OfficialScoreReader
             ->where('institution_id', $assessment->institution_id)
             ->where('assessment_student_id', $recipient->id)
             ->get();
-        $evaluation = $this->evaluator->evaluate($assessment, $recipient, $attempts);
-        $official = $evaluation->official;
         $score = OfficialTaskScore::query()
             ->where('institution_id', $assessment->institution_id)
             ->where('assessment_id', $assessment->id)
             ->where('student_id', $recipient->student_id)
             ->first();
+        [$exception, $blitzStatus] = $assessment->type === AssessmentType::Blitz ? [
+            BlitzAttemptException::query()
+                ->where('institution_id', $assessment->institution_id)
+                ->where('assessment_id', $assessment->id)
+                ->where('assessment_student_id', $recipient->id)
+                ->first(),
+            BlitzTask::query()
+                ->select(['assessment_id', 'institution_id', 'status'])
+                ->where('institution_id', $assessment->institution_id)
+                ->whereKey($assessment->id)
+                ->first()?->status,
+        ] : [null, null];
+
+        return $this->readLoaded($assessment, $recipient, $attempts, $score, $exception, $blitzStatus);
+    }
+
+    /**
+     * The same read from preloaded data, for readers of many recipients of an official task: the
+     * recipient's Attempts (with the answers of waiting Attempts loaded), official row, Blitz
+     * exception and Blitz status.
+     *
+     * @param  Collection<int, AssessmentAttempt>  $attempts
+     */
+    public function readLoaded(
+        Assessment $assessment,
+        AssessmentStudent $recipient,
+        Collection $attempts,
+        ?OfficialTaskScore $score,
+        ?BlitzAttemptException $exception,
+        ?BlitzStatus $blitzStatus,
+    ): OfficialScoreReading {
+        $evaluation = $this->evaluator->evaluateLoaded($assessment, $recipient, $attempts, $exception);
+        $official = $evaluation->official;
 
         if ($official !== null && $this->confirms($score, $evaluation)) {
             return OfficialScoreReading::ready($assessment, $recipient, $score, $official);
@@ -57,7 +88,7 @@ final class OfficialScoreReader
 
         $blocking = collect($evaluation->blocking);
         $status = match (true) {
-            $assessment->type === AssessmentType::Blitz && $this->waitsForReplacement($assessment, $recipient, $attempts) => OfficialScoreStatus::WaitingForReplacement,
+            $assessment->type === AssessmentType::Blitz && $this->waitsForReplacement($attempts, $exception, $blitzStatus) => OfficialScoreStatus::WaitingForReplacement,
             $blocking->contains(fn (AssessmentAttempt $attempt): bool => in_array($attempt->status, self::AWAITING_AUTOMATIC_CHECKING, true)) => OfficialScoreStatus::AutomaticCheckingPending,
             $blocking->contains(fn (AssessmentAttempt $attempt): bool => $attempt->status === AssessmentAttemptStatus::WaitingForTeacherReview) => OfficialScoreStatus::WaitingForTeacherReview,
             // Ready by the live rule, but the row is missing or stale until the sweep repairs it.
@@ -86,7 +117,7 @@ final class OfficialScoreReader
      *
      * @param  Collection<int, AssessmentAttempt>  $attempts
      */
-    private function waitsForReplacement(Assessment $assessment, AssessmentStudent $recipient, Collection $attempts): bool
+    private function waitsForReplacement(Collection $attempts, ?BlitzAttemptException $exception, ?BlitzStatus $blitzStatus): bool
     {
         $replacement = $attempts->firstWhere('attempt_number', 2);
 
@@ -94,15 +125,6 @@ final class OfficialScoreReader
             return false;
         }
 
-        return BlitzAttemptException::query()
-            ->where('institution_id', $assessment->institution_id)
-            ->where('assessment_id', $assessment->id)
-            ->where('assessment_student_id', $recipient->id)
-            ->exists()
-            && BlitzTask::query()
-                ->where('institution_id', $assessment->institution_id)
-                ->whereKey($assessment->id)
-                ->where('status', BlitzStatus::Active->value)
-                ->exists();
+        return $exception !== null && $blitzStatus === BlitzStatus::Active;
     }
 }

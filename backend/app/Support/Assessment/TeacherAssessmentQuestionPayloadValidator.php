@@ -6,6 +6,7 @@ use App\Domain\Assessment\AssessmentPointMath;
 use App\Domain\Assessment\QuestionAuthoringLimits;
 use App\Domain\Assessment\QuestionConfigurationValidator;
 use App\Domain\Assessment\QuestionPositionSetValidator;
+use App\Domain\Text\UnicodeWhitespace;
 use App\Enums\QuestionCheckingMode;
 use App\Enums\QuestionType;
 use Illuminate\Validation\Validator;
@@ -49,7 +50,7 @@ final class TeacherAssessmentQuestionPayloadValidator
             $checkingMode = is_string($rawQuestion->checking_mode)
                 ? QuestionCheckingMode::tryFrom($rawQuestion->checking_mode)
                 : null;
-            $prompt = is_string($rawQuestion->prompt) ? trim($rawQuestion->prompt) : null;
+            $prompt = is_string($rawQuestion->prompt) ? UnicodeWhitespace::blankAsEmpty(trim($rawQuestion->prompt)) : null;
 
             if (! $type instanceof QuestionType) {
                 $validator->errors()->add($path.'.type', 'The Question type is invalid.');

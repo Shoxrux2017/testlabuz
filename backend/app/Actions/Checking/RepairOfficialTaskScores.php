@@ -5,6 +5,7 @@ namespace App\Actions\Checking;
 use App\Enums\AssessmentAttemptStatus;
 use App\Models\AssessmentAttempt;
 use App\Support\Checking\OfficialScoreEvaluator;
+use App\Support\Checking\OfficialTaskDesignation;
 use App\Support\Checking\OfficialTaskScoreResolver;
 use App\Support\Checking\RecipientScoringLock;
 use Illuminate\Database\Query\Builder;
@@ -22,6 +23,7 @@ final class RepairOfficialTaskScores
     public function __construct(
         private readonly RecipientScoringLock $scoringLock,
         private readonly OfficialTaskScoreResolver $officialScores,
+        private readonly OfficialTaskDesignation $designation,
     ) {}
 
     /** @return array{repaired: int, failures: int} */
@@ -58,12 +60,7 @@ final class RepairOfficialTaskScores
             ->selectRaw('distinct on (assessment_student_id) institution_id, assessment_id, assessment_student_id, student_id, id, normalized_score')
             ->where('official_score_eligible', true)
             ->where('status', AssessmentAttemptStatus::Checked->value)
-            // One uncorrelated set of paired task ids, so the planner can hash it instead of
-            // probing every pair of the Institution for each Attempt.
-            ->whereIn(DB::raw('(assessment_attempts.institution_id, assessment_attempts.assessment_id)'), fn (Builder $query) => $query
-                ->select(['institution_id', 'homework_assessment_id'])->from('topic_result_pairs')
-                ->unionAll(DB::query()->select(['institution_id', 'blitz_assessment_id'])->from('topic_result_pairs')
-                    ->whereNotNull('blitz_assessment_id')))
+            ->whereIn(DB::raw('(assessment_attempts.institution_id, assessment_attempts.assessment_id)'), $this->designation->officialTaskKeys())
             ->whereNotExists(fn (Builder $query) => $query->selectRaw('1')->from('assessment_attempts as pending')
                 ->whereColumn('pending.institution_id', 'assessment_attempts.institution_id')
                 ->whereColumn('pending.assessment_student_id', 'assessment_attempts.assessment_student_id')

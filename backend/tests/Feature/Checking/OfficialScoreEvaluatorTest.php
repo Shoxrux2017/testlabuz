@@ -264,6 +264,53 @@ class OfficialScoreEvaluatorTest extends TestCase
         app(OfficialScoreEvaluator::class)->evaluate($this->assessment(), $this->recipient, $attempts);
     }
 
+    public function test_the_blitz_counting_attempt_is_normal_attempt_one_without_an_exception(): void
+    {
+        $this->blitz();
+        $normal = $this->attempt(1, 'submitted');
+
+        $this->assertSame($normal->id, app(OfficialScoreEvaluator::class)->countingBlitzAttempt($this->attempts(), null)?->id);
+    }
+
+    public function test_the_blitz_counting_attempt_after_an_exception_is_the_replacement_or_none_yet(): void
+    {
+        $this->blitz();
+        $normal = $this->attempt(1, 'checked', '90.00000000', eligible: false);
+        $this->exception($normal, null);
+        $evaluator = app(OfficialScoreEvaluator::class);
+
+        $this->assertNull($evaluator->countingBlitzAttempt($this->attempts(), BlitzAttemptException::query()->sole()));
+
+        $replacement = $this->attempt(2, 'in_progress');
+        BlitzAttemptException::query()->update(['replacement_attempt_id' => $replacement->id]);
+
+        $this->assertSame($replacement->id, $evaluator->countingBlitzAttempt($this->attempts(), BlitzAttemptException::query()->sole())?->id);
+    }
+
+    public function test_the_blitz_counting_attempt_rejects_an_inconsistent_attempt_graph(): void
+    {
+        $this->blitz();
+        $this->attempt(1, 'checked', '90.00000000', eligible: false);
+
+        $this->expectException(LogicException::class);
+        app(OfficialScoreEvaluator::class)->countingBlitzAttempt($this->attempts(), null);
+    }
+
+    public function test_a_preloaded_blitz_evaluation_uses_the_given_exception_without_queries(): void
+    {
+        $this->blitz();
+        $normal = $this->attempt(1, 'checked', '90.00000000', eligible: false);
+        $replacement = $this->attempt(2, 'checked', '70.00000000');
+        $this->exception($normal, $replacement);
+        [$assessment, $attempts, $exception] = [$this->assessment(), $this->attempts(), BlitzAttemptException::query()->sole()];
+
+        DB::enableQueryLog();
+        $evaluation = app(OfficialScoreEvaluator::class)->evaluateLoaded($assessment, $this->recipient, $attempts, $exception);
+
+        $this->assertSame([], DB::getQueryLog());
+        $this->assertReady($evaluation, $replacement, OfficialScoreSelectionPolicy::ApprovedBlitzExceptionReplacement);
+    }
+
     private function homework(): void
     {
         $homework = HomeworkAssignment::factory()->closed()->create();

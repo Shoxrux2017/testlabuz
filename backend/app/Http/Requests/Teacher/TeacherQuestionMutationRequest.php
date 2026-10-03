@@ -4,6 +4,7 @@ namespace App\Http\Requests\Teacher;
 
 use App\Domain\Assessment\AssessmentPointMath;
 use App\Domain\Assessment\QuestionAuthoringLimits;
+use App\Domain\Text\UnicodeWhitespace;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 use InvalidArgumentException;
@@ -38,7 +39,7 @@ abstract class TeacherQuestionMutationRequest extends FormRequest
         $payload = json_decode($this->getContent(), true, flags: JSON_THROW_ON_ERROR);
 
         if (isset($payload['prompt']) && is_string($payload['prompt'])) {
-            $payload['prompt'] = trim($payload['prompt']);
+            $payload['prompt'] = UnicodeWhitespace::blankAsEmpty(trim($payload['prompt']));
         }
 
         return $payload;

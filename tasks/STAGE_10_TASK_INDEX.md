@@ -126,10 +126,10 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 
 | Order | Task ID | Area | Outcome | Depends on | Readiness | Delivery | Contract |
 |---|---|---|---|---|---|---|---|
-| `0` | `S10-DOC-001` | Documentation | `docs/01-09` aligned to `S10-D*`/`S10-T*`; this index | Plan approved | `Approved` (on `main` `ccab413`) | Review `PASS`; PR open | `tasks/S10-DOC-001-stage-10-topic-results-contract-alignment.md` |
-| `1` | `S10-BE-001` | Backend | Result foundation: `PH2-4` consolidation, `CL9-11` hardening, `topic_results`, calculator, live cohort evaluator (no API) | `DOC-001` | `Draft` | Not started | written before implementation |
-| `2` | `S10-BE-002` | Backend | Teacher result list and detail; Teacher comment | `BE-001` | `Draft` | Not started | written before implementation |
-| `3` | `S10-BE-003` | Backend + FE parser | Visibility rules, release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Draft` | Not started | written before implementation |
+| `0` | `S10-DOC-001` | Documentation | `docs/01-09` aligned to `S10-D*`/`S10-T*`; this index | Plan approved | `Approved` (on `main` `ccab413`) | Accepted — delivered (PR #316, `main` `cc7a05f`) | `tasks/S10-DOC-001-stage-10-topic-results-contract-alignment.md` |
+| `1` | `S10-BE-001` | Backend | Result foundation: `PH2-4` consolidation, `CL9-11` hardening, `topic_results`, calculator, live cohort evaluator (no API) | `DOC-001` | `Approved` (on `main` `cc7a05f`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-001-topic-result-foundation.md` |
+| `2` | `S10-BE-002` | Backend | Teacher result list and detail with the visibility state (the Student/Parent visibility rule), Teacher comment | `BE-001` | `Draft` | Not started | written before implementation |
+| `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Draft` | Not started | written before implementation |
 | `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Draft` | Not started | written before implementation |
 | `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | `Draft` | Not started | executed record |
 | — | Frontend plan | Frontend | Planned after the owner reviews the backend report | Owner review | — | — | — |
@@ -184,6 +184,10 @@ Only a row whose readiness is `Approved` may be implemented.
   review #1 (three reviewers: 01-03+05+06, 07-09, 04 + cross-document rules) `NOT ACCEPTED` (P1 = 4,
   P2 = 21); all fixed by three editors. Confirming re-check #2: P1 = 0, P2 = 2 (one wording defect,
   "queued" Homework-close checking, in `docs/04`), P3 = 4; all applied verbatim → `PASS`.
+- 2026-10-03: `S10-BE-001` implemented (TDD; reader mutation check 5/5 killed). Review #1 `NOT ACCEPTED`
+  (P2 = 3: NULL-passing migration checks, Homework PATCH blank title 500 now 422, missing CL9-11 cases;
+  P3 = 6); all fixed. Review #2 `PASS` (one optional P3 applied). Focused suites (`tests/Unit`,
+  `Feature/Results`, `Persistence`, `Checking`, `Teacher`, `Student`, `Seeders`): 2687 passed.
 
 ## 12. Change Log
 

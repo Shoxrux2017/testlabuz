@@ -2,6 +2,7 @@
 
 namespace App\Domain\Assessment;
 
+use App\Domain\Text\UnicodeWhitespace;
 use App\Enums\AssessmentAssignmentMode;
 use App\Enums\QuestionCheckingMode;
 use App\Enums\QuestionType;
@@ -32,10 +33,10 @@ final class AssessmentActivationValidator
         $assignmentMode = AssessmentAssignmentMode::tryFrom((string) $assessment->getRawOriginal('assignment_mode'));
 
         if (! is_string($title)
-            || trim($title) === ''
+            || UnicodeWhitespace::isBlank(trim($title))
             || mb_strlen($title) > 255
             || ! is_string($studentInstructions)
-            || trim($studentInstructions) === ''
+            || UnicodeWhitespace::isBlank(trim($studentInstructions))
             || mb_strlen($studentInstructions) > 10000
             || ! $assignmentMode instanceof AssessmentAssignmentMode) {
             throw new BusinessConflictException;

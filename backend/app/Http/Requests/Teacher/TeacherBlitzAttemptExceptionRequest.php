@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Teacher;
 
+use App\Domain\Text\UnicodeWhitespace;
 use App\Enums\BlitzAttemptExceptionReasonType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -23,7 +24,7 @@ final class TeacherBlitzAttemptExceptionRequest extends FormRequest
         return [
             'idempotency_key' => $this->header('Idempotency-Key'),
             'reason_type' => $body->reason_type ?? null,
-            'reason' => is_string($body->reason ?? null) ? trim($body->reason) : ($body->reason ?? null),
+            'reason' => is_string($body->reason ?? null) ? UnicodeWhitespace::blankAsEmpty(trim($body->reason)) : ($body->reason ?? null),
         ];
     }
 

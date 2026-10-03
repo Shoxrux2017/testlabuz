@@ -27,8 +27,8 @@ class BlitzPersistenceSchemaInspectionTest extends TestCase
             ));
         }
 
-        // official_task_scores arrives with Stage 9 (ScoringPersistenceSchemaTest).
-        foreach (['blitz_attempts', 'blitz_answers', 'topic_results'] as $table) {
+        // official_task_scores (Stage 9) and topic_results (Stage 10) have their own schema tests.
+        foreach (['blitz_attempts', 'blitz_answers'] as $table) {
             $this->assertFalse(Schema::hasTable($table), "Table {$table} is outside this persistence foundation.");
         }
     }

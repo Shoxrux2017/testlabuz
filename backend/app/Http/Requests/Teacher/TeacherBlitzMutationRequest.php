@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Teacher;
 
+use App\Domain\Text\UnicodeWhitespace;
 use App\Enums\AssessmentAssignmentMode;
 use App\Support\Assessment\TeacherAssessmentQuestionPayloadValidator;
 use App\Support\Teacher\InstitutionBlitzScheduledAt;
@@ -52,14 +53,14 @@ abstract class TeacherBlitzMutationRequest extends FormRequest
 
         foreach (['title', 'student_instructions'] as $field) {
             if (isset($payload[$field]) && is_string($payload[$field])) {
-                $payload[$field] = trim($payload[$field]);
+                $payload[$field] = UnicodeWhitespace::blankAsEmpty(trim($payload[$field]));
             }
         }
 
         if (isset($payload['questions']) && is_array($payload['questions'])) {
             foreach ($payload['questions'] as $index => $question) {
                 if (is_array($question) && isset($question['prompt']) && is_string($question['prompt'])) {
-                    $payload['questions'][$index]['prompt'] = trim($question['prompt']);
+                    $payload['questions'][$index]['prompt'] = UnicodeWhitespace::blankAsEmpty(trim($question['prompt']));
                 }
             }
         }
