@@ -15,6 +15,7 @@ use App\Models\HomeworkAssignment;
 use App\Models\Institution;
 use App\Models\OfficialTaskScore;
 use App\Models\Question;
+use App\Models\TopicResult;
 use App\Models\TopicResultPair;
 use App\Models\User;
 use ArrayObject;
@@ -338,6 +339,44 @@ class TeacherSubmissionReviewApiTest extends TestCase
         $this->assertTrue($row->selected_at->equalTo(now()));
     }
 
+    public function test_a_correction_of_an_official_answer_fails_once_the_topic_result_is_closed(): void
+    {
+        TopicResultPair::factory()->create(['homework_assessment_id' => $this->homework->assessment_id]);
+        $this->answerAll($this->attempt);
+        $this->freezeAndCheck($this->attempt);
+        $this->review($this->attempt, [$this->item($this->essay, 3, 'Great.'), $this->item($this->explanation, 4, null)])->assertOk();
+        $this->closeTopicResult();
+        $answersBefore = AttemptAnswer::query()->where('attempt_id', $this->attempt->id)->orderBy('id')->get()->map->getAttributes()->all();
+        $attemptBefore = $this->attempt->fresh()->getAttributes();
+        $scoreBefore = OfficialTaskScore::query()->sole()->getAttributes();
+
+        $this->review($this->attempt, [$this->item($this->essay, 1, 'Corrected.')])
+            ->assertConflict()->assertJsonPath('code', 'result_closed');
+
+        $this->assertSame($answersBefore, AttemptAnswer::query()->where('attempt_id', $this->attempt->id)->orderBy('id')->get()->map->getAttributes()->all());
+        $this->assertSame($attemptBefore, $this->attempt->fresh()->getAttributes());
+        $this->assertSame($scoreBefore, OfficialTaskScore::query()->sole()->getAttributes());
+        // Invalid items still get the 422 that is checked before the transaction.
+        $this->review($this->attempt, [$this->item($this->essay, 9, null)])->assertUnprocessable();
+    }
+
+    public function test_a_first_review_and_a_practice_correction_stay_allowed_after_closure(): void
+    {
+        TopicResultPair::factory()->create(['homework_assessment_id' => $this->homework->assessment_id]);
+        $this->answerAll($this->attempt);
+        $this->freezeAndCheck($this->attempt);
+        $closed = $this->closeTopicResult();
+        $snapshot = $closed->fresh()->getAttributes();
+
+        $this->review($this->attempt, [$this->item($this->essay, 3, 'First review.')])->assertOk();
+        $this->assertSame('teacher_checked', $this->answerTo($this->attempt, $this->essay)->getRawOriginal('checking_status'));
+        $this->assertSame($snapshot, $closed->fresh()->getAttributes());
+
+        // The same Topic's practice task: a correction is not guarded.
+        TopicResultPair::query()->delete();
+        $this->review($this->attempt, [$this->item($this->essay, 1, 'Corrected.')])->assertOk();
+    }
+
     public function test_an_official_review_takes_the_scoring_locks_in_order_with_the_official_row_last(): void
     {
         TopicResultPair::factory()->create(['homework_assessment_id' => $this->homework->assessment_id]);
@@ -581,6 +620,18 @@ class TeacherSubmissionReviewApiTest extends TestCase
         AnswerTextValue::factory()->create(['answer_id' => $answer->id, 'text_value' => 'DNS resolves names.']);
 
         return $attempt;
+    }
+
+    /** The Student's Topic result, closed by the Teacher as Not completed (Homework missing, no official Blitz). */
+    private function closeTopicResult(): TopicResult
+    {
+        return TopicResult::factory()->create([
+            'institution_id' => $this->student->institution_id, 'topic_id' => $this->homework->assessment->topic_id,
+            'student_id' => $this->student->id, 'closed_at' => now(), 'closed_by_user_id' => $this->teacher->id,
+            'closure_reason' => 'teacher', 'closed_outcome' => 'not_completed', 'missing_component' => 'homework',
+            'homework_assessment_id' => $this->homework->assessment_id, 'homework_state' => 'missing', 'blitz_state' => 'not_designated',
+            'category_code' => 'not_completed',
+        ]);
     }
 
     private function answerTo(AssessmentAttempt $attempt, Question $question): AttemptAnswer

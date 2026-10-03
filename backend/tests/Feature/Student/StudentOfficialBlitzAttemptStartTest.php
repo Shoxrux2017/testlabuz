@@ -2,13 +2,17 @@
 
 namespace Tests\Feature\Student;
 
+use App\Actions\Teacher\GrantTeacherBlitzAttemptException;
 use App\Enums\AssessmentAssignmentSource;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
-use App\Models\GroupStudentMembership;
+use App\Models\GroupTeacherMembership;
+use App\Models\TopicResultPair;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Student\Concerns\BuildsStudentBlitzContext;
 use Tests\TestCase;
@@ -23,35 +27,45 @@ class StudentOfficialBlitzAttemptStartTest extends TestCase
         $this->travelTo(Carbon::parse('2026-09-17 12:00:00 UTC'));
     }
 
-    public function test_first_official_blitz_activity_locks_pair_at_exact_attempt_start_without_changing_cohort_or_identities(): void
+    public function test_a_student_without_a_submitted_official_homework_cannot_start_the_official_blitz(): void
     {
         $student = $this->studentBlitzActor();
         [$assessment, $pair] = $this->officialStudentBlitz($student);
         $before = $pair->fresh()->getAttributes();
-        $recipientsBefore = AssessmentStudent::query()->where('assessment_id', $assessment->id)->get()->map->getAttributes()->all();
-        $this->assertFalse(GroupStudentMembership::query()->where('student_id', $student->id)->exists());
-        $this->travelTo(Carbon::parse('2026-09-17T12:00:00.500000Z'));
-        $this->startStudentBlitz($student, $assessment)->assertCreated();
-        $attempt = AssessmentAttempt::query()->sole();
-        $pair->refresh();
-        $this->assertTrue($attempt->started_at->equalTo($pair->locked_at));
-        $this->assertTrue($attempt->started_at->equalTo($pair->updated_at));
-        foreach (['homework_assessment_id', 'blitz_assessment_id', 'cohort_snapshotted_at', 'designated_at', 'designated_by_user_id'] as $field) {
-            $this->assertSame($before[$field], $pair->getRawOriginal($field));
-        }
-        $this->assertSame($recipientsBefore, AssessmentStudent::query()->where('assessment_id', $assessment->id)->get()->map->getAttributes()->all());
-        $this->assertDatabaseCount('assessment_attempts', 1);
+
+        // S10-D8: the Blitz checks the Student's own Homework, so it can no longer be the first official activity.
+        $this->startStudentBlitz($student, $assessment)->assertConflict()->assertJsonPath('code', 'homework_not_submitted');
+        $this->assertSame($before, $pair->fresh()->getAttributes());
+        $this->assertDatabaseCount('assessment_attempts', 0);
+        $this->assertDatabaseCount('idempotency_records', 0);
+
+        // An Attempt still in progress is not a submitted Homework, and a classmate's submitted Homework does not count.
+        $prior = $this->homeworkAttempt($student, $pair, ['started_at' => now()->subMinutes(2)]);
+        $pair->forceFill(['locked_at' => $prior->started_at, 'updated_at' => $prior->started_at])->save();
+        $this->homeworkAttempt($this->studentBlitzActor($student->institution), $pair, ['status' => 'submitted', 'started_at' => now()->subMinutes(2),
+            'submitted_at' => now()->subMinute(), 'finalized_at' => now()->subMinute(), 'locked_at' => now()->subMinute(),
+            'finalization_reason' => 'student_submit']);
+
+        $this->startStudentBlitz($student, $assessment)->assertConflict()->assertJsonPath('code', 'homework_not_submitted');
+        $this->assertDatabaseCount('assessment_attempts', 2);
+        $this->assertDatabaseCount('idempotency_records', 0);
     }
 
-    public function test_prior_homework_activity_justifies_existing_pair_lock_without_timestamp_churn(): void
+    /** @return array<string, array{string}> */
+    public static function terminalHomeworkStatuses(): array
+    {
+        return ['submitted' => ['submitted'], 'waiting for review' => ['waiting_for_teacher_review'], 'checked' => ['checked']];
+    }
+
+    #[DataProvider('terminalHomeworkStatuses')]
+    public function test_a_submitted_official_homework_lets_the_student_start_without_pair_timestamp_churn(string $status): void
     {
         $student = $this->studentBlitzActor();
         [$assessment, $pair] = $this->officialStudentBlitz($student);
-        $homework = Assessment::query()->findOrFail($pair->homework_assessment_id);
-        $recipient = AssessmentStudent::factory()->create(['assessment_id' => $homework->id, 'student_id' => $student->id,
-            'assignment_source' => AssessmentAssignmentSource::Group]);
-        $prior = AssessmentAttempt::factory()->create(['assessment_student_id' => $recipient->id,
-            'started_at' => now()->subMinutes(2), 'possible_points' => $homework->total_possible_points]);
+        $prior = $this->homeworkAttempt($student, $pair, ['status' => $status, 'started_at' => now()->subMinutes(8),
+            'submitted_at' => now()->subMinutes(6), 'finalized_at' => now()->subMinutes(6), 'locked_at' => now()->subMinutes(6),
+            'finalization_reason' => 'student_submit', 'normalized_score' => $status === 'checked' ? '50.00000000' : null,
+            'scoring_completed_at' => $status === 'checked' ? now()->subMinutes(5) : null]);
         $pair->forceFill(['locked_at' => $prior->started_at, 'updated_at' => $prior->started_at])->save();
         $before = $pair->fresh()->getAttributes();
         $priorBefore = $prior->fresh()->getAttributes();
@@ -61,6 +75,30 @@ class StudentOfficialBlitzAttemptStartTest extends TestCase
         $this->assertSame($before, $pair->fresh()->getAttributes());
         $this->assertSame($priorBefore, $prior->fresh()->getAttributes());
         $this->assertDatabaseCount('assessment_attempts', 2);
+    }
+
+    public function test_an_existing_first_attempt_and_a_practice_blitz_are_not_barred(): void
+    {
+        $student = $this->studentBlitzActor();
+        [$assessment, $pair] = $this->officialStudentBlitz($student);
+        // History from before S10-D8: the Student started the official Blitz without a submitted Homework.
+        $existing = $this->studentBlitzAttempt($assessment, $student);
+        $pair->forceFill(['locked_at' => $existing->started_at])->save();
+
+        $this->startStudentBlitz($student, $assessment)->assertOk()->assertJsonPath('data.id', $existing->id);
+        $this->startStudentBlitz($student, $assessment, intent: 'resume', attemptId: $existing->id)->assertOk();
+
+        // The replacement after an approved exception is not a first Attempt either.
+        $this->terminateStudentBlitzAttempt($existing);
+        $teacher = $assessment->teacher;
+        GroupTeacherMembership::factory()->create(['institution_id' => $student->institution_id, 'group_id' => $assessment->topic->group_id,
+            'teacher_id' => $teacher->id, 'assigned_by_user_id' => $teacher->id]);
+        app(GrantTeacherBlitzAttemptException::class)($teacher, $assessment->id, $student->id, (string) Str::uuid(),
+            ['reason_type' => 'technical', 'reason' => 'Device interruption.']);
+        $this->startStudentBlitz($student, $assessment, intent: 'start_replacement')->assertCreated()->assertJsonPath('data.attempt_number', 2);
+
+        $practice = $this->studentBlitz($student);
+        $this->startStudentBlitz($student, $practice)->assertCreated();
     }
 
     #[DataProvider('pairCorruptions')]
@@ -100,6 +138,17 @@ class StudentOfficialBlitzAttemptStartTest extends TestCase
         $this->startStudentBlitz($student, $assessment)->assertCreated();
         $this->assertSame($before, $pair->fresh()->getAttributes());
         $this->assertNull($pair->fresh()->locked_at);
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function homeworkAttempt(User $student, TopicResultPair $pair, array $attributes): AssessmentAttempt
+    {
+        $homework = Assessment::query()->findOrFail($pair->homework_assessment_id);
+        $recipient = AssessmentStudent::factory()->create(['assessment_id' => $homework->id, 'student_id' => $student->id,
+            'assignment_source' => AssessmentAssignmentSource::Group]);
+
+        return AssessmentAttempt::factory()->create(['assessment_student_id' => $recipient->id,
+            'possible_points' => $homework->total_possible_points, ...$attributes]);
     }
 
     public static function pairCorruptions(): array

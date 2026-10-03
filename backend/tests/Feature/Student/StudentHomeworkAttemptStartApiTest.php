@@ -19,6 +19,7 @@ use App\Models\InstitutionSetting;
 use App\Models\Question;
 use App\Models\QuestionChoiceOption;
 use App\Models\Topic;
+use App\Models\TopicResult;
 use App\Models\TopicResultPair;
 use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
@@ -236,6 +237,39 @@ class StudentHomeworkAttemptStartApiTest extends TestCase
         $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
         $this->assertSame($blitzBefore, $blitzAttempt->fresh()->getAttributes());
         $this->assertDatabaseCount('idempotency_records', 3);
+    }
+
+    public function test_the_official_homework_start_is_refused_once_the_topic_result_is_closed(): void
+    {
+        $student = $this->student();
+        $homework = $this->homework($student);
+        $classmate = $this->student($student->institution);
+        AssessmentStudent::factory()->create(['assessment_id' => $homework->assessment_id, 'student_id' => $classmate->id,
+            'assigned_by_user_id' => $homework->assessment->teacher_id]);
+        TopicResultPair::factory()->create(['homework_assessment_id' => $homework->assessment_id,
+            'designated_at' => now()->subMinutes(3), 'cohort_snapshotted_at' => now()->subMinutes(2)]);
+        // History from before S10-D8: the Homework has no Attempt and a later deadline, the result is closed.
+        TopicResult::factory()->create([
+            'institution_id' => $student->institution_id, 'topic_id' => $homework->assessment->topic_id, 'student_id' => $student->id,
+            'closed_at' => now(), 'closed_by_user_id' => $homework->assessment->teacher_id, 'closure_reason' => 'teacher',
+            'closed_outcome' => 'not_completed', 'missing_component' => 'homework', 'homework_assessment_id' => $homework->assessment_id,
+            'homework_state' => 'missing', 'blitz_state' => 'not_designated', 'category_code' => 'not_completed',
+        ]);
+
+        $this->start($student, $homework)->assertConflict()->assertJsonPath('code', 'result_closed');
+
+        $this->assertDatabaseCount('assessment_attempts', 0);
+        $this->assertDatabaseCount('idempotency_records', 0);
+        $this->assertNull(TopicResultPair::query()->sole()->locked_at);
+        // A classmate whose result is open still starts, and a practice Homework of the Topic is unaffected.
+        $this->start($classmate, $homework)->assertCreated();
+        $practice = HomeworkAssignment::factory()->active()->create(['assessment_id' => Assessment::factory()->homework()->create([
+            'institution_id' => $student->institution_id, 'topic_id' => $homework->assessment->topic_id,
+            'teacher_id' => $homework->assessment->teacher_id, 'total_possible_points' => '7.250000',
+        ])->id]);
+        AssessmentStudent::factory()->create(['assessment_id' => $practice->assessment_id, 'student_id' => $student->id,
+            'assigned_by_user_id' => $homework->assessment->teacher_id]);
+        $this->start($student, $practice)->assertCreated();
     }
 
     public static function officialBlitzActivityStudents(): array

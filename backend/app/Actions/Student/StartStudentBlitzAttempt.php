@@ -11,6 +11,7 @@ use App\Enums\BlitzStatus;
 use App\Enums\BlitzTimerStartMode;
 use App\Enums\IdempotencyOperation;
 use App\Enums\TopicStatus;
+use App\Exceptions\HomeworkNotSubmittedException;
 use App\Exceptions\Student\StudentBlitzAttemptNotEditableException;
 use App\Exceptions\Student\StudentBlitzAttemptsExhaustedException;
 use App\Exceptions\Student\StudentBlitzConflictException;
@@ -38,6 +39,12 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class StartStudentBlitzAttempt
 {
+    private const SUBMITTED_HOMEWORK = [
+        AssessmentAttemptStatus::Submitted,
+        AssessmentAttemptStatus::WaitingForTeacherReview,
+        AssessmentAttemptStatus::Checked,
+    ];
+
     public function __construct(
         private readonly StudentBlitzAccess $access,
         private readonly StudentBlitzAttemptAccess $attemptAccess,
@@ -157,12 +164,17 @@ final class StartStudentBlitzAttempt
                 );
             }
 
-            if ($official && $pair->locked_at === null) {
-                $pair->locked_at = $serverNow;
-                $pair->updated_at = $serverNow;
-                $pair->save();
+            // S10-D8: a new Attempt #1 of the official Blitz needs a submitted official Homework Attempt.
+            if ($official && $intent === 'start_normal' && ! $attempts->contains(
+                fn (AssessmentAttempt $attempt): bool => $attempt->assessment_id === $pair->homework_assessment_id
+                    && $attempt->student_id === $student->id
+                    && in_array($attempt->status, self::SUBMITTED_HOMEWORK, true),
+            )) {
+                throw new HomeworkNotSubmittedException;
             }
 
+            // No pair lock is written here: since S10-D8 an official Blitz Attempt always follows a Homework
+            // Attempt, whose Start locked the pair, and assertOfficialPair has already required that lock.
             $attempt = AssessmentAttempt::query()->create([
                 'institution_id' => $student->institution_id,
                 'assessment_id' => $assessment->id,

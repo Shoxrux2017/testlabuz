@@ -2,7 +2,6 @@
 
 namespace App\Actions\Teacher;
 
-use App\Actions\Homework\FinalizeHomeworkAttemptsAtDeadline;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
 use App\Exceptions\Teacher\TaskArchivedException;
@@ -10,7 +9,7 @@ use App\Exceptions\Teacher\TaskNotActiveException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Assessment;
 use App\Models\User;
-use App\Support\Assessment\HomeworkAttemptFinalizer;
+use App\Support\Assessment\LockedHomeworkCloser;
 use App\Support\Teacher\TeacherHomeworkLifecycleAccess;
 use Illuminate\Support\Facades\DB;
 
@@ -19,8 +18,7 @@ final class CloseTeacherHomework
     public function __construct(
         private readonly TeacherHomeworkLifecycleAccess $access,
         private readonly ShowTeacherHomework $showTeacherHomework,
-        private readonly FinalizeHomeworkAttemptsAtDeadline $finalizeAtDeadline,
-        private readonly HomeworkAttemptFinalizer $finalizer,
+        private readonly LockedHomeworkCloser $closer,
     ) {}
 
     public function __invoke(User $teacher, string $homeworkId): Assessment
@@ -52,22 +50,7 @@ final class CloseTeacherHomework
 
             $this->access->lockResultPair($teacher, $topic, $assessment);
             $attempts = $this->access->lockAttempts($teacher, $assessment);
-
-            $transitionedAt = now();
-
-            if ($this->finalizeAtDeadline->finalizeLocked($homework, $attempts, $transitionedAt) === null) {
-                foreach ($attempts as $attempt) {
-                    $this->finalizer->finalizeAtClose($attempt, $transitionedAt);
-                }
-            }
-
-            $homework->status = HomeworkStatus::Closed;
-            $homework->closed_at = $transitionedAt;
-            $homework->updated_at = $transitionedAt;
-            $homework->save();
-
-            $assessment->updated_at = $transitionedAt;
-            $assessment->save();
+            $this->closer->close($assessment, $homework, $attempts, now());
 
             return ($this->showTeacherHomework)($teacher, $assessment->id);
         });

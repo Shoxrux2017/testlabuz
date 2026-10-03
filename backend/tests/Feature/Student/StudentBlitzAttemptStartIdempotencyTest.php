@@ -2,10 +2,14 @@
 
 namespace Tests\Feature\Student;
 
+use App\Enums\AssessmentAttemptFinalizationReason;
+use App\Enums\AssessmentAttemptStatus;
 use App\Enums\IdempotencyOperation;
 use App\Models\AssessmentAttempt;
 use App\Models\AssessmentStudent;
 use App\Models\IdempotencyRecord;
+use App\Models\TopicResultPair;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -29,9 +33,10 @@ class StudentBlitzAttemptStartIdempotencyTest extends TestCase
     {
         $student = $this->studentBlitzActor();
         [$assessment, $pair] = $this->officialStudentBlitz($student);
+        $homeworkAttempt = $this->submittedOfficialHomework($student, $pair);
         $key = (string) Str::uuid();
         $attemptId = $this->startStudentBlitz($student, $assessment, strtoupper($key))->assertCreated()->json('data.id');
-        $attempt = AssessmentAttempt::query()->sole();
+        $attempt = AssessmentAttempt::query()->where('assessment_id', $assessment->id)->sole();
         $record = IdempotencyRecord::query()->sole();
         $this->assertSame('student.blitz.attempt.start', IdempotencyOperation::StudentBlitzAttemptStart->value);
         $this->assertSame(IdempotencyOperation::StudentBlitzAttemptStart, $record->operation);
@@ -45,11 +50,13 @@ class StudentBlitzAttemptStartIdempotencyTest extends TestCase
         $canonical = ['body' => ['intent' => 'start_normal'], 'institution_id' => strtolower($student->institution_id),
             'operation' => 'student.blitz.attempt.start', 'route' => ['blitz_id' => strtolower($assessment->id)], 'user_id' => strtolower($student->id)];
         $this->assertSame(hash('sha256', json_encode($canonical, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION)), $record->request_fingerprint);
-        $before = [$attempt->getAttributes(), $record->getAttributes(), $pair->fresh()->getAttributes()];
+        $before = [$attempt->getAttributes(), $record->getAttributes(), $pair->fresh()->getAttributes(), $homeworkAttempt->fresh()->getAttributes()];
         $this->travel(1)->minutes();
         $this->startStudentBlitz($student, $assessment, $key)->assertCreated()->assertJsonPath('data.id', $attemptId);
-        $this->assertSame($before, [$attempt->fresh()->getAttributes(), $record->fresh()->getAttributes(), $pair->fresh()->getAttributes()]);
-        $this->assertDatabaseCount('assessment_attempts', 1);
+        $this->assertSame($before, [$attempt->fresh()->getAttributes(), $record->fresh()->getAttributes(),
+            $pair->fresh()->getAttributes(), $homeworkAttempt->fresh()->getAttributes()]);
+        // The submitted Homework Attempt and the one Blitz Attempt.
+        $this->assertDatabaseCount('assessment_attempts', 2);
         $this->assertDatabaseCount('idempotency_records', 1);
     }
 
@@ -158,17 +165,20 @@ class StudentBlitzAttemptStartIdempotencyTest extends TestCase
         }
     }
 
-    public function test_failed_completion_rolls_back_pair_lock_attempt_and_claim_atomically(): void
+    public function test_failed_completion_rolls_back_attempt_and_claim_atomically_without_pair_changes(): void
     {
         $student = $this->studentBlitzActor();
         [$assessment, $pair] = $this->officialStudentBlitz($student);
+        // S10-D8: the submitted Homework Attempt already took the pair lock, so the Blitz Start never writes it.
+        $homeworkAttempt = $this->submittedOfficialHomework($student, $pair);
         $pairBefore = $pair->fresh()->getAttributes();
         $observedWrites = false;
         $dispatcher = IdempotencyRecord::getEventDispatcher();
         IdempotencyRecord::setEventDispatcher(clone $dispatcher);
-        IdempotencyRecord::updating(function (IdempotencyRecord $record) use (&$observedWrites, $pair): void {
+        IdempotencyRecord::updating(function (IdempotencyRecord $record) use (&$observedWrites, $assessment): void {
             if ($record->completed_at !== null) {
-                $observedWrites = $pair->fresh()->locked_at !== null && AssessmentAttempt::query()->whereKey($record->result_resource_id)->exists();
+                $observedWrites = AssessmentAttempt::query()->whereKey($record->result_resource_id)
+                    ->where('assessment_id', $assessment->id)->exists();
                 throw new RuntimeException('Injected Blitz completion failure.');
             }
         });
@@ -183,8 +193,27 @@ class StudentBlitzAttemptStartIdempotencyTest extends TestCase
         }
         $this->assertTrue($observedWrites);
         $this->assertSame($pairBefore, $pair->fresh()->getAttributes());
-        $this->assertDatabaseCount('assessment_attempts', 0);
+        $this->assertSame([$homeworkAttempt->id], AssessmentAttempt::query()->pluck('id')->all());
         $this->assertDatabaseCount('idempotency_records', 0);
+    }
+
+    /** S10-D8: the Student submitted the official Homework, whose Attempt took the pair lock. */
+    private function submittedOfficialHomework(User $student, TopicResultPair $pair): AssessmentAttempt
+    {
+        $recipient = AssessmentStudent::factory()->create([
+            'assessment_id' => $pair->homework_assessment_id, 'student_id' => $student->id,
+            'assigned_at' => $pair->cohort_snapshotted_at, 'assigned_by_user_id' => $pair->designated_by_user_id,
+        ]);
+        $submittedAt = Carbon::parse('2026-09-17 11:53:00 UTC');
+        $attempt = AssessmentAttempt::factory()->create([
+            'assessment_student_id' => $recipient->id, 'status' => AssessmentAttemptStatus::Submitted,
+            'started_at' => Carbon::parse('2026-09-17 11:51:00 UTC'), 'submitted_at' => $submittedAt,
+            'finalized_at' => $submittedAt, 'locked_at' => $submittedAt,
+            'finalization_reason' => AssessmentAttemptFinalizationReason::StudentSubmit,
+        ]);
+        $pair->forceFill(['locked_at' => $attempt->started_at, 'updated_at' => $attempt->started_at])->save();
+
+        return $attempt;
     }
 
     public static function replayCorruptions(): array

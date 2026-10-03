@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Exceptions\Files\FileTooLargeException;
 use App\Exceptions\Files\FileUploadFailedException;
 use App\Exceptions\Files\UnsupportedFileTypeException;
+use App\Exceptions\HomeworkNotSubmittedException;
 use App\Exceptions\ManualReleaseNotAllowedException;
+use App\Exceptions\OfficialHomeworkNotActivatedException;
 use App\Exceptions\ResultClosedException;
 use App\Exceptions\ResultNotReadyException;
+use App\Exceptions\ResultNotReadyForClosureException;
 use App\Exceptions\StudentResultNotReleasedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -110,24 +113,28 @@ class ApiErrorContractTest extends TestCase
     }
 
     /** @return array<string, array{class-string<RuntimeException>, string, string}> */
-    public static function releaseConflicts(): array
+    public static function topicResultConflicts(): array
     {
         return [
             'manual release not allowed' => [ManualReleaseNotAllowedException::class, 'manual_release_not_allowed', 'Manual release is not allowed in the current release mode.'],
             'result not ready' => [ResultNotReadyException::class, 'result_not_ready', 'The result is not ready to be released.'],
             'student result not released' => [StudentResultNotReleasedException::class, 'student_result_not_released', 'The result is not visible to the Student yet.'],
+            'result not ready for closure' => [ResultNotReadyForClosureException::class, 'result_not_ready_for_closure', 'The result cannot be closed yet.'],
+            'official homework not activated' => [OfficialHomeworkNotActivatedException::class, 'official_homework_not_activated',
+                'The official Homework must be activated before the official Blitz.'],
+            'homework not submitted' => [HomeworkNotSubmittedException::class, 'homework_not_submitted', 'The Homework must be submitted before the Blitz can be started.'],
         ];
     }
 
     /** @param class-string<RuntimeException> $exception */
-    #[DataProvider('releaseConflicts')]
-    public function test_release_conflicts_return_their_specific_contract(string $exception, string $code, string $message): void
+    #[DataProvider('topicResultConflicts')]
+    public function test_topic_result_conflicts_return_their_specific_contract(string $exception, string $code, string $message): void
     {
-        Route::post('/api/v1/test-release-conflict', function () use ($exception) {
+        Route::post('/api/v1/test-topic-result-conflict', function () use ($exception) {
             throw new $exception;
         });
 
-        $decoded = $this->assertErrorContract($this->postJson('/api/v1/test-release-conflict'), 409, $code);
+        $decoded = $this->assertErrorContract($this->postJson('/api/v1/test-topic-result-conflict'), 409, $code);
         $this->assertSame($message, $decoded->message);
     }
 

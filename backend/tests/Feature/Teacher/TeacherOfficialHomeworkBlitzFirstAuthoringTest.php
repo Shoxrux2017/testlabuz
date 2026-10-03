@@ -3,6 +3,7 @@
 namespace Tests\Feature\Teacher;
 
 use App\Models\Assessment;
+use App\Models\BlitzTask;
 use App\Models\HomeworkAssignment;
 use App\Models\Question;
 use App\Models\Topic;
@@ -91,15 +92,21 @@ class TeacherOfficialHomeworkBlitzFirstAuthoringTest extends TestCase
         $this->blitzJson($teacher, 'PUT', '/api/v1/teacher/topics/'.$topic->id.'/result-pair', [
             'homework_assessment_id' => $homework->id, 'blitz_assessment_id' => $blitz->id,
         ])->assertOk();
-        $this->activateBlitz($teacher, $blitz->id, body: '')->assertOk();
+        $this->blitzFirstActivationHistory($blitz, $teacher, TopicResultPair::query()->where('topic_id', $topic->id)->sole(), [$student]);
 
         return [$teacher, $topic, $student, $blitz, $homework];
     }
 
+    /** Blitz-first history: the official Blitz Start took the first pair lock (S10-D8 now requires a submitted Homework). */
     private function startOfficialBlitz(User $student, Assessment $blitz): void
     {
-        $this->studentPost($student, '/api/v1/student/blitz/'.$blitz->id.'/attempts', '{"intent":"start_normal"}')->assertCreated();
-        $this->assertNotNull(TopicResultPair::query()->where('blitz_assessment_id', $blitz->id)->value('locked_at'));
+        $startedAt = now()->startOfSecond();
+        $this->blitzAttempt($blitz, $student, $blitz->teacher, [
+            'started_at' => $startedAt,
+            'deadline_at' => $startedAt->copy()->addSeconds(BlitzTask::query()->findOrFail($blitz->id)->duration_seconds),
+            'possible_points' => $blitz->fresh()->total_possible_points,
+        ]);
+        TopicResultPair::query()->where('blitz_assessment_id', $blitz->id)->update(['locked_at' => $startedAt, 'updated_at' => $startedAt]);
     }
 
     private function draftOfficialHomework(Topic $topic, User $teacher): Assessment

@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Teacher\Concerns;
 
+use App\Domain\Assessment\AssessmentPointMath;
 use App\Enums\AssessmentAssignmentMode;
 use App\Enums\AssessmentAssignmentSource;
 use App\Enums\BlitzStatus;
+use App\Enums\BlitzTimerStartMode;
 use App\Enums\TopicStatus;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
@@ -143,6 +145,38 @@ trait BuildsTeacherBlitzContext
             'cohort_snapshotted_at' => $locked ? now() : null,
             'locked_at' => $locked ? now() : null,
         ]);
+    }
+
+    /**
+     * Writes the activation of a draft official Blitz as rows. Only history from before S10-D8 has an
+     * official Blitz activated before its Homework; the activation API now rejects that order.
+     *
+     * @param  list<User>  $cohort  The Students the activation snapshotted
+     */
+    protected function blitzFirstActivationHistory(Assessment $assessment, User $teacher, TopicResultPair $pair, array $cohort): BlitzTask
+    {
+        $activatedAt = now()->startOfSecond();
+        $timerMode = InstitutionSetting::query()->whereKey($assessment->institution_id)->firstOrFail()->blitz_timer_start_mode;
+        $blitz = BlitzTask::query()->findOrFail($assessment->id);
+        $blitz->update([
+            'status' => BlitzStatus::Active, 'timer_start_mode_snapshot' => $timerMode,
+            'activated_at' => $activatedAt, 'activated_by_user_id' => $teacher->id,
+            'synchronized_ends_at' => $timerMode === BlitzTimerStartMode::Synchronized
+                ? $activatedAt->copy()->addSeconds($blitz->duration_seconds) : null,
+        ]);
+        $assessment->forceFill(['total_possible_points' => app(AssessmentPointMath::class)->sum(
+            $assessment->questions()->orderBy('position')->pluck('points')->all(),
+        )])->save();
+        foreach ($cohort as $student) {
+            AssessmentStudent::factory()->create([
+                'institution_id' => $assessment->institution_id, 'assessment_id' => $assessment->id,
+                'student_id' => $student->id, 'assignment_source' => AssessmentAssignmentSource::Group,
+                'assigned_at' => $activatedAt, 'assigned_by_user_id' => $teacher->id,
+            ]);
+        }
+        $pair->forceFill(['cohort_snapshotted_at' => $activatedAt])->save();
+
+        return $blitz;
     }
 
     /** @return array<string, mixed> */

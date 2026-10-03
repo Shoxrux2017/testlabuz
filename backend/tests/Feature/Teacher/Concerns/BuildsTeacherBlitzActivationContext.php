@@ -47,12 +47,17 @@ trait BuildsTeacherBlitzActivationContext
         ]);
     }
 
+    /** The official Homework is activated first (S10-D8), which also establishes the Topic cohort. */
     protected function activationPair(Assessment $assessment, User $teacher): TopicResultPair
     {
         $pair = $this->officialBlitzPair($assessment, $teacher);
-        HomeworkAssignment::factory()->draft()->create(['assessment_id' => $pair->homework_assessment_id]);
+        $homework = Assessment::query()->findOrFail($pair->homework_assessment_id);
+        HomeworkAssignment::factory()->draft()->create(['assessment_id' => $homework->id]);
+        $this->activationQuestion($homework);
+        $this->blitzRaw($teacher, 'POST', "/api/v1/teacher/homework/{$homework->id}/activate")
+            ->assertOk()->assertJsonPath('data.status', 'active');
 
-        return $pair;
+        return $pair->fresh();
     }
 
     protected function activateBlitz(
@@ -86,6 +91,10 @@ trait BuildsTeacherBlitzActivationContext
             'recipients' => AssessmentStudent::query()->where('assessment_id', $assessment->id)
                 ->orderBy('student_id')->get()->map->getAttributes()->all(),
             'pair' => $pair?->fresh()->getAttributes(),
+            'homework' => $pair === null ? null : [
+                Assessment::query()->findOrFail($pair->homework_assessment_id)->getAttributes(),
+                HomeworkAssignment::query()->find($pair->homework_assessment_id)?->getAttributes(),
+            ],
         ];
     }
 }
