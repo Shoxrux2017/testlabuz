@@ -74,14 +74,10 @@ class StudentBlitzAttemptStartConcurrencyTest extends TestCase
                 $this->assertSame($secondAttempt->id, $results['second']['attempt_id']);
                 $this->assertSame('2026-09-17 10:00:00', $firstAttempt->started_at->format('Y-m-d H:i:s'));
                 $this->assertSame('2026-09-17 10:01:00', $secondAttempt->started_at->format('Y-m-d H:i:s'));
-                $this->assertSame(1, $results['first']['pair_updates']);
+                // S10-D8: the Homework took the pair lock, so neither Blitz Start writes the pair.
+                $this->assertSame(0, $results['first']['pair_updates']);
                 $this->assertSame(0, $results['second']['pair_updates']);
-                $pair = TopicResultPair::query()->findOrFail($ids['pair']);
-                $this->assertTrue($pair->locked_at->equalTo($firstAttempt->started_at));
-                $this->assertTrue($pair->updated_at->equalTo($firstAttempt->started_at));
-                foreach (['institution_id', 'topic_id', 'homework_assessment_id', 'blitz_assessment_id', 'cohort_snapshotted_at'] as $attribute) {
-                    $this->assertSame($pairBefore[$attribute], $pair->getRawOriginal($attribute));
-                }
+                $this->assertSame($pairBefore, TopicResultPair::query()->findOrFail($ids['pair'])->getAttributes());
             } else {
                 $attempt = $attempts->sole();
                 foreach (['first', 'second'] as $worker) {
@@ -124,7 +120,7 @@ class StudentBlitzAttemptStartConcurrencyTest extends TestCase
             'explicit Resume keys retain exact Attempt' => ['resume', 'resume', 'resume', 200, 'ok', 200, 2],
             'terminalization wins before exact Resume' => ['terminal_first', 'terminalize', 'resume', null, 'attempt_not_editable', null, 0],
             'exact Resume wins before terminalization' => ['resume_before_terminal', 'resume', 'terminalize', 200, 'ok', null, 1],
-            'two Students first-start official pair' => ['official_students', 'start_normal', 'start_normal', 201, 'ok', 201, 2],
+            'two Students with submitted Homework first-start official Blitz' => ['official_students', 'start_normal', 'start_normal', 201, 'ok', 201, 2],
             'Closed lifecycle wins before Start' => ['closed_first', 'close', 'start_normal', null, 'blitz_not_active', null, 0],
             'Start wins before controlled Close' => ['start_before_close', 'start_normal', 'close', 201, 'ok', null, 1],
         ];
@@ -321,16 +317,28 @@ if ($mode === 'setup') {
         $homework = Assessment::factory()->homework()->groupAssignment()->create([
             'institution_id' => $institution->id, 'topic_id' => $topic->id, 'teacher_id' => $teacher->id,
         ]);
-        HomeworkAssignment::factory()->active()->create(['assessment_id' => $homework->id]);
-        foreach ([$student, $otherStudent] as $recipientStudent) {
-            AssessmentStudent::factory()->create([
+        // S10-D8: both Students submitted the official Homework, whose first Attempt took the pair lock,
+        // and the official Blitz activation closed it.
+        $homeworkActivatedAt = Carbon::parse('2026-09-17 09:57:30 UTC');
+        $firstHomeworkStart = Carbon::parse('2026-09-17 09:57:40 UTC');
+        $homeworkSubmittedAt = Carbon::parse('2026-09-17 09:57:50 UTC');
+        HomeworkAssignment::factory()->closed()->create(['assessment_id' => $homework->id, 'activated_at' => $homeworkActivatedAt]);
+        foreach ([$student, $otherStudent] as $index => $recipientStudent) {
+            $homeworkRecipient = AssessmentStudent::factory()->create([
                 'assessment_id' => $homework->id, 'student_id' => $recipientStudent->id,
-                'assigned_by_user_id' => $teacher->id,
+                'assigned_at' => $homeworkActivatedAt, 'assigned_by_user_id' => $teacher->id,
+            ]);
+            AssessmentAttempt::factory()->create([
+                'assessment_student_id' => $homeworkRecipient->id, 'status' => AssessmentAttemptStatus::Submitted,
+                'started_at' => $firstHomeworkStart->copy()->addSeconds($index), 'submitted_at' => $homeworkSubmittedAt,
+                'finalized_at' => $homeworkSubmittedAt, 'locked_at' => $homeworkSubmittedAt,
+                'finalization_reason' => AssessmentAttemptFinalizationReason::StudentSubmit,
             ]);
         }
         $pair = TopicResultPair::factory()->create([
             'homework_assessment_id' => $homework->id, 'blitz_assessment_id' => $assessment->id,
-            'designated_by_user_id' => $teacher->id, 'cohort_snapshotted_at' => now(),
+            'designated_by_user_id' => $teacher->id, 'designated_at' => $homeworkActivatedAt,
+            'cohort_snapshotted_at' => $homeworkActivatedAt, 'locked_at' => $firstHomeworkStart,
         ]);
     }
     echo json_encode([

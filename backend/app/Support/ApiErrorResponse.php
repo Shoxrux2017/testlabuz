@@ -72,6 +72,12 @@ final class ApiErrorResponse
 
     private const CODE_STUDENT_RESULT_NOT_RELEASED = 'student_result_not_released';
 
+    private const CODE_RESULT_NOT_READY_FOR_CLOSURE = 'result_not_ready_for_closure';
+
+    private const CODE_OFFICIAL_HOMEWORK_NOT_ACTIVATED = 'official_homework_not_activated';
+
+    private const CODE_HOMEWORK_NOT_SUBMITTED = 'homework_not_submitted';
+
     private const CODE_RESOURCE_NOT_FOUND = 'resource_not_found';
 
     private const CODE_SERVER_ERROR = 'server_error';
@@ -402,6 +408,45 @@ final class ApiErrorResponse
         return self::json(
             'The result is not visible to the Student yet.',
             self::CODE_STUDENT_RESULT_NOT_RELEASED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function resultNotReadyForClosure(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The result cannot be closed yet.',
+            self::CODE_RESULT_NOT_READY_FOR_CLOSURE,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function officialHomeworkNotActivated(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The official Homework must be activated before the official Blitz.',
+            self::CODE_OFFICIAL_HOMEWORK_NOT_ACTIVATED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function homeworkNotSubmitted(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The Homework must be submitted before the Blitz can be started.',
+            self::CODE_HOMEWORK_NOT_SUBMITTED,
             Response::HTTP_CONFLICT,
         );
     }

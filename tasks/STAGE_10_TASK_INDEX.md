@@ -129,8 +129,8 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 | `0` | `S10-DOC-001` | Documentation | `docs/01-09` aligned to `S10-D*`/`S10-T*`; this index | Plan approved | `Approved` (on `main` `ccab413`) | Accepted — delivered (PR #316, `main` `cc7a05f`) | `tasks/S10-DOC-001-stage-10-topic-results-contract-alignment.md` |
 | `1` | `S10-BE-001` | Backend | Result foundation: `PH2-4` consolidation, `CL9-11` hardening, `topic_results`, calculator, live cohort evaluator (no API) | `DOC-001` | `Approved` (on `main` `cc7a05f`) | Accepted — delivered (PR #317, `main` `f720b8a`) | `tasks/backend/stage-10/S10-BE-001-topic-result-foundation.md` |
 | `2` | `S10-BE-002` | Backend | Teacher result list and detail with the visibility state (the Student/Parent visibility rule), Teacher comment | `BE-001` | `Approved` (on `main` `f720b8a`) | Accepted — delivered (PR #318, `main` `b096f18`) | `tasks/backend/stage-10/S10-BE-002-teacher-topic-results.md` |
-| `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Approved` (on `main` `b096f18`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-003-release-and-student-parent-reads.md` |
-| `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Draft` | Not started | written before implementation |
+| `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Approved` (on `main` `b096f18`) | Accepted — delivered (PR #319, `main` `48a607a`) | `tasks/backend/stage-10/S10-BE-003-release-and-student-parent-reads.md` |
+| `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Approved` (on `main` `48a607a`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-004-closure-and-work-order.md` |
 | `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | `Draft` | Not started | executed record |
 | — | Frontend plan | Frontend | Planned after the owner reviews the backend report | Owner review | — | — | — |
 
@@ -200,6 +200,17 @@ Only a row whose readiness is `Approved` may be implemented.
   extra constant pair query and the static modes lookup, accepted). Focused suites (`Unit`, `Results`,
   `Teacher`, `Student`, `Parent`, error contract, `Authorization`): 2341 passed; the files changed by the
   review fixes rerun: 21 passed. Flutter: Student DTO tests, analyze and format clean.
+- 2026-10-03: `S10-BE-003` delivered (PR #319, `main` `48a607a`).
+- 2026-10-03: `S10-BE-004` implemented (TDD; mutation check 15/15 killed after one added replacement-Start
+  test). Six real-concurrency races (closure vs review correction in both orders, closure vs the Homework
+  deadline finalizer, official Blitz activation vs a Homework Submit, `CL9-9`: exception grant vs checking,
+  sweep vs Homework Submit) on a shared race worker. Deliberate `S10-D8` updates of 23 Stage 8/9 tests:
+  Blitz-first history is now written as rows; one race dataset (Blitz Start winning the first pair lock)
+  was removed because the barred Start holds no lock. Review #1 `PASS` (P3 = 4: closure instant taken after
+  the Attempt lock wait, the unreachable Blitz-Start pair-lock write removed, test details added; one optional
+  dataset not restored). Focused suites (`Unit`, `Results`, `Teacher`, `Student`, `Parent`, `Checking`,
+  `Homework`, `Seeders`, error contract, `Authorization`): 2618 passed; the files changed by the review fixes
+  rerun: 146 passed.
 
 ## 12. Change Log
 

@@ -42,10 +42,12 @@ class TeacherBlitzActivationConcurrencyTest extends TestCase
                     $this->assertNull($final['pair']['locked_at'], $scenario);
                     $this->assertSame($firstOperation === 'replace' ? $ids['candidate'] : $ids['assessment'], $final['pair']['blitz_assessment_id'], $scenario);
 
+                    $this->assertSame('2026-09-17T08:00:00+00:00', $final['pair']['cohort_snapshotted_at'], $scenario.' the Homework activation established the cohort');
+
                     if ($firstOperation === 'replace') {
-                        $this->assertNull($final['pair']['cohort_snapshotted_at'], $scenario.' activation must read the replaced official identity');
+                        $this->assertSame(['status' => 'active', 'closed_at' => null], $final['homework'], $scenario.' activation must read the replaced official identity');
                     } else {
-                        $this->assertSame($final['activated_at'], $final['pair']['cohort_snapshotted_at'], $scenario);
+                        $this->assertSame(['status' => 'closed', 'closed_at' => $final['activated_at']], $final['homework'], $scenario);
                     }
 
                     $expectedInstant = $firstOperation === 'activate'
@@ -259,11 +261,15 @@ if ($mode === 'setup') {
     $homework = Assessment::factory()->homework()->create([
         'institution_id' => $institution->id, 'topic_id' => $topic->id, 'teacher_id' => $teacher->id,
     ]);
-    HomeworkAssignment::factory()->draft()->create(['assessment_id' => $homework->id]);
+    // S10-D8: the official Homework is active before the official Blitz, and its activation established the cohort.
+    HomeworkAssignment::factory()->active()->create(['assessment_id' => $homework->id, 'activated_at' => now()]);
+    AssessmentStudent::factory()->create([
+        'assessment_id' => $homework->id, 'student_id' => $student->id, 'assigned_by_user_id' => $teacher->id,
+    ]);
     $pair = TopicResultPair::factory()->create([
         'institution_id' => $institution->id, 'topic_id' => $topic->id,
         'homework_assessment_id' => $homework->id, 'blitz_assessment_id' => $assessment->id,
-        'designated_by_user_id' => $teacher->id,
+        'designated_by_user_id' => $teacher->id, 'cohort_snapshotted_at' => now(),
     ]);
     echo json_encode([
         'institution' => $institution->id, 'teacher' => $teacher->id, 'admin' => $admin->id,
@@ -340,6 +346,7 @@ try {
 $blitz = BlitzTask::query()->findOrFail($ids['assessment']);
 $assessment = Assessment::query()->findOrFail($ids['assessment']);
 $pair = TopicResultPair::query()->findOrFail($ids['pair']);
+$homework = HomeworkAssignment::query()->findOrFail($ids['homework']);
 $recipients = AssessmentStudent::query()->where('assessment_id', $ids['assessment'])->orderBy('student_id')->get();
 $question = Question::query()->findOrFail($ids['question']);
 $questionSnapshot = $question->getAttributes();
@@ -356,6 +363,7 @@ $result = [
     'pair' => ['blitz_assessment_id' => $pair->blitz_assessment_id,
         'cohort_snapshotted_at' => $pair->cohort_snapshotted_at?->toIso8601String(),
         'locked_at' => $pair->locked_at?->toIso8601String()],
+    'homework' => ['status' => $homework->status->value, 'closed_at' => $homework->closed_at?->toIso8601String()],
     'records' => IdempotencyRecord::query()->where('institution_id', $ids['institution'])->orderBy('id')->get()->map->getAttributes()->all(),
     'activation_snapshot' => [$assessment->getAttributes(), $blitz->getAttributes(), $pair->getAttributes(), $recipients->map->getAttributes()->all()],
 ];

@@ -132,11 +132,12 @@ class StudentHomeworkAttemptStartConcurrencyTest extends TestCase
         ];
     }
 
-    #[DataProvider('officialPairStartRaces')]
-    public function test_official_homework_and_blitz_first_starts_share_one_pair_lock_and_independent_numbering(
-        string $firstOperation,
-        string $secondOperation,
-    ): void {
+    /**
+     * S10-D8: the official Blitz Start needs a submitted Homework, so it can no longer take the first pair
+     * lock. A barred Blitz Start rolls back and keeps no lock, so only the Homework-first order still races.
+     */
+    public function test_official_homework_first_start_takes_the_pair_lock_and_bars_the_waiting_blitz_start(): void
+    {
         $this->assertSame('pgsql', DB::connection()->getDriverName());
         $workerPath = tempnam(sys_get_temp_dir(), 's08_be_005_pair_start_worker_');
         $this->assertIsString($workerPath);
@@ -145,50 +146,32 @@ class StudentHomeworkAttemptStartConcurrencyTest extends TestCase
 
         try {
             $pairBefore = TopicResultPair::query()->findOrFail($ids['pair'])->getAttributes();
-            $results = $this->runRace($workerPath, $ids, 'official_pair', $firstOperation, $secondOperation);
+            $results = $this->runRace($workerPath, $ids, 'official_pair', 'start', 'blitz_start');
 
-            foreach ($results as $result) {
-                $this->assertSame('ok', $result['outcome']);
-                $this->assertSame(201, $result['http_status']);
-            }
-            $this->assertSame(1, $results['first']['pair_updates']);
-            $this->assertSame(0, $results['second']['pair_updates']);
+            $this->assertSame(['ok', 201, 1], [$results['first']['outcome'], $results['first']['http_status'], $results['first']['pair_updates']]);
+            // The in-progress Homework Attempt is not a submitted Homework.
+            $this->assertSame(['homework_not_submitted', null, 0], [$results['second']['outcome'], $results['second']['http_status'], $results['second']['pair_updates']]);
 
             $homeworkAttempt = AssessmentAttempt::query()->where('assessment_id', $ids['assessment'])->sole();
-            $blitzAttempt = AssessmentAttempt::query()->where('assessment_id', $ids['blitz'])->sole();
+            $this->assertFalse(AssessmentAttempt::query()->where('assessment_id', $ids['blitz'])->exists());
+            $this->assertSame($homeworkAttempt->id, $results['first']['attempt_id']);
             $this->assertSame(1, $homeworkAttempt->attempt_number);
-            $this->assertSame(1, $blitzAttempt->attempt_number);
             $this->assertSame(AssessmentAttemptStatus::InProgress, $homeworkAttempt->status);
-            $this->assertSame(AssessmentAttemptStatus::InProgress, $blitzAttempt->status);
             $this->assertNull($homeworkAttempt->deadline_at);
-            $this->assertTrue($blitzAttempt->started_at->copy()->addSeconds(600)->equalTo($blitzAttempt->deadline_at));
-
-            $firstAttempt = $firstOperation === 'start' ? $homeworkAttempt : $blitzAttempt;
-            $secondAttempt = $secondOperation === 'start' ? $homeworkAttempt : $blitzAttempt;
-            $this->assertSame($firstAttempt->id, $results['first']['attempt_id']);
-            $this->assertSame($secondAttempt->id, $results['second']['attempt_id']);
-            $this->assertSame('2026-09-09 10:00:00', $firstAttempt->started_at->format('Y-m-d H:i:s'));
-            $this->assertSame('2026-09-09 10:01:00', $secondAttempt->started_at->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-09-09 10:00:00', $homeworkAttempt->started_at->format('Y-m-d H:i:s'));
 
             $pair = TopicResultPair::query()->findOrFail($ids['pair']);
-            $this->assertTrue($pair->locked_at->equalTo($firstAttempt->started_at));
-            $this->assertTrue($pair->updated_at->equalTo($firstAttempt->started_at));
+            $this->assertTrue($pair->locked_at->equalTo($homeworkAttempt->started_at));
+            $this->assertTrue($pair->updated_at->equalTo($homeworkAttempt->started_at));
             foreach (['institution_id', 'topic_id', 'homework_assessment_id', 'blitz_assessment_id', 'cohort_snapshotted_at'] as $attribute) {
                 $this->assertSame($pairBefore[$attribute], $pair->getRawOriginal($attribute));
             }
-            $this->assertSame(2, IdempotencyRecord::query()->where('institution_id', $ids['institution'])->count());
+            // The barred Blitz claim rolls back with its Start.
+            $this->assertSame(1, IdempotencyRecord::query()->where('institution_id', $ids['institution'])->count());
         } finally {
             $this->runWorker([$workerPath, base_path(), 'cleanup', $ids['institution']]);
             unlink($workerPath);
         }
-    }
-
-    public static function officialPairStartRaces(): array
-    {
-        return [
-            'Homework Start wins before Blitz Start' => ['start', 'blitz_start'],
-            'Blitz Start wins before Homework Start' => ['blitz_start', 'start'],
-        ];
     }
 
     /** @return array{first: array<string, mixed>, second: array<string, mixed>} */
@@ -331,6 +314,7 @@ use App\Actions\Teacher\CloseTeacherHomework;
 use App\Actions\Teacher\UpdateTeacherQuestion;
 use App\Enums\AssessmentAssignmentMode;
 use App\Enums\AssessmentAssignmentSource;
+use App\Exceptions\HomeworkNotSubmittedException;
 use App\Exceptions\Student\StudentHomeworkClosedException;
 use App\Exceptions\Teacher\BusinessConflictException;
 use App\Models\Assessment;
@@ -516,6 +500,8 @@ try {
     $outcome = 'business_conflict';
 } catch (StudentHomeworkClosedException) {
     $outcome = 'task_closed';
+} catch (HomeworkNotSubmittedException) {
+    $outcome = 'homework_not_submitted';
 }
 
 if ($hold === 'hold') {

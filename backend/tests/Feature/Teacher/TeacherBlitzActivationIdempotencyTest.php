@@ -3,10 +3,12 @@
 namespace Tests\Feature\Teacher;
 
 use App\Actions\Teacher\ActivateTeacherBlitz;
+use App\Enums\HomeworkStatus;
 use App\Enums\IdempotencyOperation;
 use App\Models\AssessmentStudent;
 use App\Models\BlitzTask;
 use App\Models\GroupTeacherMembership;
+use App\Models\HomeworkAssignment;
 use App\Models\IdempotencyRecord;
 use App\Models\InstitutionSetting;
 use App\Models\Topic;
@@ -43,6 +45,9 @@ class TeacherBlitzActivationIdempotencyTest extends TestCase
         $pair = $this->activationPair($assessment, $teacher);
         $key = (string) Str::uuid();
         $first = $this->activateBlitz($teacher, $assessment->id, strtoupper($key))->assertOk();
+        $homework = HomeworkAssignment::query()->findOrFail($pair->homework_assessment_id);
+        $this->assertSame(HomeworkStatus::Closed, $homework->status);
+        $this->assertTrue(now()->equalTo($homework->closed_at));
         $record = IdempotencyRecord::query()->sole();
         $this->assertSame(IdempotencyOperation::TeacherBlitzActivate, $record->operation);
         $this->assertSame($teacher->institution_id, $record->institution_id);
@@ -65,7 +70,8 @@ class TeacherBlitzActivationIdempotencyTest extends TestCase
         $this->assertSame($before, $this->activationSnapshot($assessment, $pair));
         $this->assertSame($recordBefore, $record->fresh()->getAttributes());
         $this->assertDatabaseCount('idempotency_records', 1);
-        $this->assertDatabaseCount('assessment_students', 1);
+        // The Homework recipient and its copy on the Blitz.
+        $this->assertDatabaseCount('assessment_students', 2);
     }
 
     public function test_same_actor_key_for_another_authorized_blitz_conflicts_without_new_writes(): void
@@ -220,7 +226,7 @@ class TeacherBlitzActivationIdempotencyTest extends TestCase
             if ($record->completed_at !== null) {
                 $observedActivation = BlitzTask::query()->findOrFail($assessment->id)->status->value === 'active'
                     && AssessmentStudent::query()->where('assessment_id', $assessment->id)->exists()
-                    && $pair->fresh()->cohort_snapshotted_at !== null;
+                    && HomeworkAssignment::query()->findOrFail($pair->homework_assessment_id)->status === HomeworkStatus::Closed;
                 throw new RuntimeException('Injected activation completion failure.');
             }
         });
@@ -237,6 +243,6 @@ class TeacherBlitzActivationIdempotencyTest extends TestCase
         $this->assertDatabaseCount('idempotency_records', 0);
         $this->activateBlitz($teacher, $assessment->id, $key)->assertOk();
         $this->assertDatabaseCount('idempotency_records', 1);
-        $this->assertDatabaseCount('assessment_students', 1);
+        $this->assertDatabaseCount('assessment_students', 2);
     }
 }

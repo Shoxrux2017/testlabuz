@@ -6,13 +6,17 @@ use App\Domain\Assessment\AssessmentPointMath;
 use App\Domain\Assessment\Checking\CheckingScoreMath;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\AttemptAnswerCheckingStatus;
+use App\Exceptions\ResultClosedException;
 use App\Exceptions\Teacher\AutomaticCheckingPendingException;
 use App\Models\AssessmentAttempt;
 use App\Models\AttemptAnswer;
 use App\Models\Question;
 use App\Models\User;
+use App\Support\Checking\LockedRecipientAttempts;
+use App\Support\Checking\OfficialTaskDesignation;
 use App\Support\Checking\OfficialTaskScoreResolver;
 use App\Support\Checking\RecipientScoringLock;
+use App\Support\Results\TopicResultClosures;
 use App\Support\Teacher\TeacherSubmissionAccess;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
@@ -38,6 +42,8 @@ final class ReviewTeacherSubmission
         private readonly OfficialTaskScoreResolver $officialScores,
         private readonly CheckingScoreMath $math,
         private readonly ShowTeacherSubmission $showTeacherSubmission,
+        private readonly OfficialTaskDesignation $designation,
+        private readonly TopicResultClosures $resultClosures,
     ) {}
 
     /**
@@ -63,6 +69,7 @@ final class ReviewTeacherSubmission
             }
 
             $this->assertCheckedAutomatically($attempt);
+            $this->assertNoCorrectionOfAClosedResult($locked, $items, $answers);
             $reviewedPoints = $this->reviewedPoints($items, $answers, $this->questionPoints($attempt));
             $reviewedAt = now();
             $this->writeReviews($teacher, $attempt, $items, $reviewedPoints, $reviewedAt);
@@ -71,6 +78,26 @@ final class ReviewTeacherSubmission
         });
 
         return ($this->showTeacherSubmission)($teacher, $submissionId);
+    }
+
+    /**
+     * A correction of an official answer fails as a whole once the Student's Topic result is closed;
+     * a first review of a waiting answer stays allowed (docs/09 §25.11). The Topic share lock taken by
+     * the scoring lock keeps the closure state stable.
+     *
+     * @param  list<array{answer_id: string, awarded_points: int|float, feedback: ?string}>  $items
+     * @param  Collection<string, AttemptAnswer>  $answers
+     */
+    private function assertNoCorrectionOfAClosedResult(LockedRecipientAttempts $locked, array $items, Collection $answers): void
+    {
+        $corrects = collect($items)->contains(
+            fn (array $item): bool => $answers->get($item['answer_id'])?->checking_status === AttemptAnswerCheckingStatus::TeacherChecked,
+        );
+
+        if ($corrects && $this->designation->isOfficial($locked->assessment)
+            && $this->resultClosures->isClosed($locked->assessment->institution_id, $locked->assessment->topic_id, $locked->recipient->student_id)) {
+            throw new ResultClosedException;
+        }
     }
 
     private function assertCheckedAutomatically(AssessmentAttempt $attempt): void

@@ -4,6 +4,7 @@ namespace Tests\Feature\Teacher;
 
 use App\Enums\AssessmentAssignmentMode;
 use App\Enums\AssessmentAssignmentSource;
+use App\Enums\AssessmentAttemptFinalizationReason;
 use App\Enums\BlitzTimerStartMode;
 use App\Enums\HomeworkStatus;
 use App\Enums\TopicStatus;
@@ -75,6 +76,11 @@ class TeacherBlitzOfficialCohortActivationTest extends TestCase
         $this->assertSame($homeworkRecipients, $this->recipientState($homework));
         $this->assertSame($pairState, $pair->fresh()->getAttributes());
         $this->assertDatabaseCount('assessment_attempts', $locked ? 1 : 0);
+        // S10-D8: the activation closes the official Homework and freezes its in-progress Attempt.
+        $this->assertSame(HomeworkStatus::Closed, $homework->homeworkAssignment()->firstOrFail()->status);
+        if ($locked) {
+            $this->assertSame(AssessmentAttemptFinalizationReason::TaskClosedAutoFinalize, AssessmentAttempt::query()->sole()->finalization_reason);
+        }
     }
 
     #[DataProvider('pairLockStates')]
@@ -83,16 +89,7 @@ class TeacherBlitzOfficialCohortActivationTest extends TestCase
         [$institution, $teacher, $admin, $group, , $homework, $blitz, $pair] = $this->officialContext();
         $retained = $this->eligibleStudent($institution, $admin, $group);
         $former = $this->eligibleStudent($institution, $admin, $group);
-        $identity = $this->pairIdentity($pair);
-
-        $this->activateBlitz($teacher, $blitz)->assertOk();
-
-        $pair->refresh();
-        $this->assertSame($identity, $this->pairIdentity($pair));
-        $this->assertTrue($pair->cohort_snapshotted_at->equalTo($blitz->blitzTask()->firstOrFail()->activated_at));
-        $this->assertSame([], $this->recipientIds($homework));
-        $this->assertSame(HomeworkStatus::Draft, $homework->homeworkAssignment()->firstOrFail()->status);
-        $this->assertDatabaseCount('assessment_attempts', 0);
+        $this->blitzFirstActivationHistory($blitz, $teacher, $pair, [$retained, $former]);
 
         if ($locked) {
             $recipient = $blitz->recipients()->where('student_id', $retained->id)->firstOrFail();
@@ -146,6 +143,8 @@ class TeacherBlitzOfficialCohortActivationTest extends TestCase
         $this->assertSame($recipients, $this->recipientState($blitz));
         $this->assertSame($pairState, $pair->fresh()->getAttributes());
         $this->assertDatabaseCount('assessment_students', 2);
+        // S10-D8: the official Blitz activation closes the active official Homework.
+        $this->assertSame(HomeworkStatus::Closed, $homework->homeworkAssignment()->firstOrFail()->status);
     }
 
     #[DataProvider('cohortMismatches')]
@@ -155,6 +154,9 @@ class TeacherBlitzOfficialCohortActivationTest extends TestCase
         $student = $this->eligibleStudent($institution, $admin, $group);
         $other = $this->eligibleStudent($institution, $admin, $group);
         $pair->forceFill(['cohort_snapshotted_at' => now()])->save();
+        if ($target === 'blitz') {
+            $this->homeworkActivatedFirst($homework);
+        }
 
         if ($mismatch !== 'empty') {
             $recipient = $this->groupRecipient($institution, $teacher, $homework, $student);
@@ -198,6 +200,9 @@ class TeacherBlitzOfficialCohortActivationTest extends TestCase
         $homeworkRecipient = $this->groupRecipient($institution, $teacher, $homework, $student);
         $blitzRecipient = $this->groupRecipient($institution, $teacher, $blitz, $student);
         $pair->forceFill(['cohort_snapshotted_at' => now(), 'locked_at' => $activity === 'none' ? now() : null])->save();
+        if ($target === 'blitz') {
+            $this->homeworkActivatedFirst($homework);
+        }
 
         if ($activity !== 'none') {
             $this->attemptFor($activity === 'homework' ? $homeworkRecipient : $blitzRecipient);
@@ -230,6 +235,7 @@ class TeacherBlitzOfficialCohortActivationTest extends TestCase
     {
         [$institution, $teacher, $admin, $group, , $homework, $blitz, $pair] = $this->officialContext();
         $student = $this->eligibleStudent($institution, $admin, $group);
+        $this->activateHomework($teacher, $homework)->assertOk();
         $blitz->forceFill(['assignment_mode' => AssessmentAssignmentMode::SelectedStudents])->save();
         $this->blitzRecipient($blitz, $student, $teacher);
         $before = $this->cohortState($homework, $blitz, $pair);
@@ -252,6 +258,12 @@ class TeacherBlitzOfficialCohortActivationTest extends TestCase
         $pair = $this->resultPair($institution, $teacher, $topic, $homework, ['blitz_assessment_id' => $blitz->id]);
 
         return [$institution, $teacher, $admin, $group, $topic, $homework, $blitz, $pair];
+    }
+
+    /** S10-D8: the official Blitz is activated only after its Homework; the cohort rows stay as each test sets them. */
+    private function homeworkActivatedFirst(Assessment $homework): void
+    {
+        $homework->homeworkAssignment()->firstOrFail()->update(['status' => HomeworkStatus::Active, 'activated_at' => now()]);
     }
 
     private function activateHomework(User $teacher, Assessment $homework): TestResponse

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\Teacher;
 
+use App\Actions\Teacher\CloseTeacherTopicResult;
+use App\Actions\Teacher\CloseTeacherTopicResults;
 use App\Actions\Teacher\ListTeacherTopicResults;
 use App\Actions\Teacher\ReleaseTeacherTopicResult;
 use App\Actions\Teacher\ReleaseTeacherTopicResults;
@@ -70,6 +72,26 @@ class TeacherTopicResultController extends Controller
     public function releaseAllToParents(TeacherTopicLifecycleRequest $request, string $topic, ReleaseTeacherTopicResults $release): JsonResponse
     {
         return $this->releasedAll($request, $topic, $release, TopicResultReleaseAudience::Parent, 'Topic results released to Parents.');
+    }
+
+    public function close(TeacherTopicLifecycleRequest $request, string $topic, string $student, CloseTeacherTopicResult $close): JsonResponse
+    {
+        /** @var User $teacher */
+        $teacher = $request->user();
+
+        return (new TeacherTopicResultDetailResource($close($teacher, $topic, $student)))
+            ->additional(['message' => 'Topic result closed.'])
+            ->response();
+    }
+
+    public function closeAll(TeacherTopicLifecycleRequest $request, string $topic, CloseTeacherTopicResults $close): JsonResponse
+    {
+        /** @var User $teacher */
+        $teacher = $request->user();
+
+        return (new TeacherTopicResultBulkResource($close($teacher, $topic)))
+            ->additional(['message' => 'Topic results closed.'])
+            ->response();
     }
 
     private function released(

@@ -120,10 +120,12 @@ Route::prefix('teacher')
         Route::get('topics/{topic}/results', [TeacherTopicResultController::class, 'index']);
         Route::get('topics/{topic}/results/{student}', [TeacherTopicResultController::class, 'show']);
         Route::put('topics/{topic}/results/{student}/comment', [TeacherTopicResultController::class, 'updateComment']);
+        Route::post('topics/{topic}/results/close', [TeacherTopicResultController::class, 'closeAll']);
         Route::post('topics/{topic}/results/release/student', [TeacherTopicResultController::class, 'releaseAllToStudents']);
         Route::post('topics/{topic}/results/release/parent', [TeacherTopicResultController::class, 'releaseAllToParents']);
         Route::post('topics/{topic}/results/{student}/release/student', [TeacherTopicResultController::class, 'releaseToStudent']);
         Route::post('topics/{topic}/results/{student}/release/parent', [TeacherTopicResultController::class, 'releaseToParent']);
+        Route::post('topics/{topic}/results/{student}/close', [TeacherTopicResultController::class, 'close']);
         Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
         Route::patch('topics/{topic}', [TeacherTopicController::class, 'update']);
         Route::post('topics/{topic}/activate', [TeacherTopicController::class, 'activate']);

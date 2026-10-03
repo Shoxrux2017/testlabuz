@@ -6,20 +6,28 @@ use App\Domain\Assessment\AssessmentActivationValidator;
 use App\Enums\BlitzStatus;
 use App\Enums\BlitzTimerStartMode;
 use App\Enums\GroupStatus;
+use App\Enums\HomeworkStatus;
 use App\Enums\IdempotencyOperation;
 use App\Enums\TopicStatus;
 use App\Exceptions\InstitutionSettingsIncompleteException;
+use App\Exceptions\OfficialHomeworkNotActivatedException;
 use App\Exceptions\Teacher\TaskArchivedException;
 use App\Exceptions\Teacher\TaskClosedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use App\Models\Assessment;
+use App\Models\AssessmentAttempt;
 use App\Models\BlitzTask;
+use App\Models\HomeworkAssignment;
 use App\Models\IdempotencyRecord;
+use App\Models\TopicResultPair;
 use App\Models\User;
+use App\Support\Assessment\LockedHomeworkCloser;
 use App\Support\Idempotency\IdempotencyGuard;
 use App\Support\Idempotency\IdempotencyRequestFingerprint;
 use App\Support\Teacher\TeacherBlitzLifecycleAccess;
 use App\Support\Teacher\TeacherOfficialAssessmentCohort;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -32,6 +40,7 @@ final class ActivateTeacherBlitz
         private readonly IdempotencyRequestFingerprint $fingerprints,
         private readonly IdempotencyGuard $idempotency,
         private readonly ShowTeacherBlitz $showTeacherBlitz,
+        private readonly LockedHomeworkCloser $homeworkCloser,
     ) {}
 
     public function __invoke(User $teacher, string $blitzId, string $idempotencyKey): Assessment
@@ -83,14 +92,17 @@ final class ActivateTeacherBlitz
                 throw new InstitutionSettingsIncompleteException(['blitz_timer_start_mode']);
             }
 
+            $this->assertOfficialHomeworkActivated($teacher, $pair);
             $lockedCohort = $this->cohort->lock($teacher, $group, $assessment, $assignmentMode, $pair);
             $questions = $this->access->lockQuestions($teacher, $assessment);
             $totalPossiblePoints = $this->activationValidator->validateQuestions($questions);
             $preparedCohort = $this->cohort->validate($teacher, $assessment, $assignmentMode, $lockedCohort);
 
-            // Capture the timer instant only after all locks and validation, truncating rather than rounding.
-            $activatedAt = now()->utc()->startOfSecond();
+            // Capture the instant only after all locks and validation; the timer truncates it rather than rounding.
+            $closedAt = now();
+            $activatedAt = $closedAt->copy()->utc()->startOfSecond();
             $this->cohort->apply($teacher, $assessment, $activatedAt, $preparedCohort);
+            $this->closeOfficialHomework($teacher, $pair, $preparedCohort['attempts'], $closedAt);
 
             $assessment->total_possible_points = $totalPossiblePoints;
             $assessment->updated_at = $activatedAt;
@@ -112,6 +124,63 @@ final class ActivateTeacherBlitz
 
             return ($this->showTeacherBlitz)($teacher, $assessment->id);
         });
+    }
+
+    /**
+     * The official Homework comes before the official Blitz (S10-D8). The status is read without a
+     * row lock: every Homework lifecycle change takes the Topic, which this activation holds.
+     */
+    private function assertOfficialHomeworkActivated(User $teacher, ?TopicResultPair $pair): void
+    {
+        if ($pair === null) {
+            return;
+        }
+
+        $status = HomeworkAssignment::query()
+            ->select(['assessment_id', 'institution_id', 'status'])
+            ->where('institution_id', $teacher->institution_id)
+            ->where('assessment_id', $pair->homework_assessment_id)
+            ->first()?->status;
+
+        if ($status === HomeworkStatus::Draft) {
+            throw new OfficialHomeworkNotActivatedException;
+        }
+    }
+
+    /**
+     * Activating the official Blitz closes the active official Homework like a Teacher close
+     * (S10-D8, docs/09 §19.1). The cohort step already holds the Homework Assessment, its row and
+     * every official Attempt FOR UPDATE, so selecting them again takes no new lock.
+     *
+     * @param  Collection<int, AssessmentAttempt>  $officialAttempts
+     */
+    private function closeOfficialHomework(User $teacher, ?TopicResultPair $pair, Collection $officialAttempts, CarbonInterface $closedAt): void
+    {
+        if ($pair === null) {
+            return;
+        }
+
+        $homeworkAssessment = Assessment::query()
+            ->where('institution_id', $teacher->institution_id)
+            ->whereKey($pair->homework_assessment_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+        $homework = HomeworkAssignment::query()
+            ->where('institution_id', $teacher->institution_id)
+            ->where('assessment_id', $homeworkAssessment->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        if ($homework->status !== HomeworkStatus::Active) {
+            return;
+        }
+
+        $this->homeworkCloser->close(
+            $homeworkAssessment,
+            $homework,
+            $officialAttempts->where('assessment_id', $homeworkAssessment->id)->values(),
+            $closedAt,
+        );
     }
 
     private function replay(User $teacher, Assessment $assessment, BlitzTask $blitz, IdempotencyRecord $record): Assessment

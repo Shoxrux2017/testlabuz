@@ -10,6 +10,7 @@ use App\Enums\AssessmentAttemptStatus;
 use App\Enums\HomeworkStatus;
 use App\Enums\IdempotencyOperation;
 use App\Enums\TopicStatus;
+use App\Exceptions\ResultClosedException;
 use App\Exceptions\Student\AttemptsExhaustedException;
 use App\Exceptions\Student\StudentHomeworkArchivedException;
 use App\Exceptions\Student\StudentHomeworkClosedException;
@@ -27,6 +28,7 @@ use App\Models\TopicResultPair;
 use App\Models\User;
 use App\Support\Idempotency\IdempotencyGuard;
 use App\Support\Idempotency\IdempotencyRequestFingerprint;
+use App\Support\Results\TopicResultClosures;
 use App\Support\Student\StudentHomeworkAccess;
 use App\Support\Student\StudentHomeworkAttemptAccess;
 use App\Support\Student\StudentHomeworkAttemptAnswerStates;
@@ -45,6 +47,7 @@ final class StartStudentHomeworkAttempt
         private readonly IdempotencyGuard $idempotency,
         private readonly FinalizeHomeworkAttemptsAtDeadline $finalizeAtDeadline,
         private readonly StudentHomeworkAttemptAnswerStates $answerStates,
+        private readonly TopicResultClosures $resultClosures,
     ) {}
 
     public function __invoke(User $student, string $homeworkId, string $idempotencyKey): StudentHomeworkAttemptStartResult
@@ -123,6 +126,11 @@ final class StartStudentHomeworkAttempt
 
             if ($lastNumber >= 3) {
                 throw new AttemptsExhaustedException;
+            }
+
+            // Reachable only in history from before S10-D8 (a later deadline, no Attempt); docs/09 §25.11.
+            if ($official && $this->resultClosures->isClosed($student->institution_id, $topic->id, $student->id)) {
+                throw new ResultClosedException;
             }
 
             if ($official && $pair->locked_at === null) {
