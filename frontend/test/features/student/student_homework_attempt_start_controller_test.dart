@@ -178,6 +178,7 @@ void main() {
     ApiErrorCodes.assessmentNotAssigned,
     ApiErrorCodes.resourceNotFound,
     ApiErrorCodes.businessConflict,
+    ApiErrorCodes.resultClosed,
   ]) {
     test('$code reconciles only the required Homework boundaries', () async {
       final harness = _Harness();
@@ -205,7 +206,8 @@ void main() {
       expect(harness.detail.read().status, StudentHomeworkDetailStatus.loading);
       final refreshList =
           code != ApiErrorCodes.deadlinePassed &&
-          code != ApiErrorCodes.businessConflict;
+          code != ApiErrorCodes.businessConflict &&
+          code != ApiErrorCodes.resultClosed;
       expect(list.read().isStale, refreshList);
       expect(otherList.read().isStale, isFalse);
       expect(harness.attempts.starts, hasLength(1));

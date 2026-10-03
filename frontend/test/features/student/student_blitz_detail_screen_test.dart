@@ -444,6 +444,31 @@ void main() {
       await _settle(tester);
       expect(find.text('No Blitz attempts remain.'), findsOneWidget);
     });
+
+    testWidgets('a Start without a submitted Homework says why (S10-D8)', (
+      tester,
+    ) async {
+      final harness = _Harness(detail: individualBlitzDetail());
+      harness.start = studentServerFailure(
+        ApiErrorCodes.homeworkNotSubmitted,
+        statusCode: 409,
+      );
+      await harness.pump(tester);
+      await tester.tap(find.byKey(const Key('studentBlitzStartButton')));
+      await _settle(tester);
+      await tester.tap(find.byKey(const Key('studentBlitzStartConfirmButton')));
+      await _settle(tester);
+      expect(
+        find.text(
+          "This Blitz can only be started after the Topic's Homework was "
+          'submitted.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Raw server failure'), findsNothing);
+      // The server decides each Start; the button stays.
+      expect(find.byKey(const Key('studentBlitzStartButton')), findsOneWidget);
+    });
   });
 
   group('execution shell', () {

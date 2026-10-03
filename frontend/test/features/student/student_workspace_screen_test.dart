@@ -148,6 +148,42 @@ void main() {
     expect(find.text('Remove material'), findsNothing);
   });
 
+  for (final surface in AppDeviceSurface.values.where(
+    (surface) => surface != AppDeviceSurface.unsupported,
+  )) {
+    testWidgets(
+      '${surface.name} detail shows the Topic result right after the header',
+      (tester) async {
+        await _pumpDetailWithRepository(
+          tester,
+          FakeStudentTopicRepository(
+            onFetchTopic: (_) async => studentTopicDetail(),
+            onFetchTopicResult: (_) async => studentTopicResult(),
+          ),
+          surface: surface,
+        );
+        await tester.pumpAndSettle();
+
+        final result = tester
+            .getTopLeft(find.byKey(const Key('studentTopicResultSection')))
+            .dy;
+        expect(
+          result,
+          greaterThan(
+            tester
+                .getTopLeft(find.byKey(const Key('studentTopicDetailTitle')))
+                .dy,
+          ),
+        );
+        expect(
+          result,
+          lessThan(tester.getTopLeft(find.text('Topic information')).dy),
+        );
+        expect(find.text('86.0'), findsOneWidget);
+      },
+    );
+  }
+
   testWidgets('detail supports mobile, empty Materials, and unknown timezone', (
     tester,
   ) async {

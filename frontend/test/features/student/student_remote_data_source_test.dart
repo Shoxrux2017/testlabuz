@@ -12,6 +12,8 @@ import 'package:testlabuz_client/features/student/data/student_topic_repository_
 import 'package:testlabuz_client/features/student/domain/student_topic.dart';
 import 'package:testlabuz_client/features/student/domain/student_topic_list_query.dart';
 
+import 'student_test_support.dart';
+
 void main() {
   test('list uses exact bodyless GET and approved query parameters', () async {
     final adapter = _RecordingAdapter(
@@ -79,6 +81,73 @@ void main() {
       );
     }
   });
+
+  test(
+    'Topic result uses an exact bodyless GET and reads data or null',
+    () async {
+      final adapter = _RecordingAdapter(
+        (_) => _jsonResponse(200, {'data': studentTopicResultJson()}),
+      );
+      final source = StudentTopicRemoteDataSource(
+        dio: _dio(adapter),
+        failureMapper: const DioFailureMapper(),
+      );
+
+      final result = await source.fetchTopicResult(_topicId);
+
+      expect(adapter.request.method, 'GET');
+      expect(adapter.request.path, '/student/topics/$_topicId/result');
+      expect(adapter.request.data, isNull);
+      expect(adapter.request.queryParameters, isEmpty);
+      expect(result?.toDomain().finalScore, 86.0);
+
+      final none = StudentTopicRemoteDataSource(
+        dio: _dio(_RecordingAdapter((_) => _jsonResponse(200, {'data': null}))),
+        failureMapper: const DioFailureMapper(),
+      );
+      expect(await none.fetchTopicResult(_topicId), isNull);
+      expect(() => none.fetchTopicResult('topic-1'), throwsArgumentError);
+    },
+  );
+
+  test(
+    'Topic result requires exactly 200, the envelope and the requested Topic',
+    () async {
+      for (final response in [
+        _jsonResponse(201, {'data': null}),
+        _jsonResponse(200, {'data': null, 'meta': <String, Object?>{}}),
+        _jsonResponse(200, {'data': studentTopicResultJson(status: 'unknown')}),
+      ]) {
+        final source = StudentTopicRemoteDataSource(
+          dio: _dio(_RecordingAdapter((_) => response)),
+          failureMapper: const DioFailureMapper(),
+        );
+        await expectLater(
+          source.fetchTopicResult(_topicId),
+          throwsA(_failureKind(ApiFailureKind.invalidResponse)),
+        );
+      }
+
+      final repository = StudentTopicRepositoryImpl(
+        remoteDataSource: StudentTopicRemoteDataSource(
+          dio: _dio(
+            _RecordingAdapter(
+              (_) => _jsonResponse(200, {
+                'data': studentTopicResultJson(
+                  topicId: '10000000-0000-0000-0000-000000000002',
+                ),
+              }),
+            ),
+          ),
+          failureMapper: const DioFailureMapper(),
+        ),
+      );
+      await expectLater(
+        repository.fetchTopicResult(_topicId),
+        throwsA(_failureKind(ApiFailureKind.invalidResponse)),
+      );
+    },
+  );
 
   test('maps typed Dio failure and repository validates returned ID', () async {
     final failed = StudentTopicRemoteDataSource(

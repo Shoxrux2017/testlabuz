@@ -12,6 +12,7 @@ import '../application/student_topic_detail_state.dart';
 import '../domain/student_topic.dart';
 import 'student_homework_section.dart';
 import 'student_topic_formatters.dart';
+import 'student_topic_result_section.dart';
 
 class StudentTopicDetailScreen extends ConsumerWidget {
   const StudentTopicDetailScreen({required this.topicId, super.key});
@@ -177,6 +178,8 @@ class _StudentTopicDetailContent extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              StudentTopicResultSection(topicId: topic.id),
               const SizedBox(height: 12),
               _StudentDetailCard(
                 title: 'Topic information',
