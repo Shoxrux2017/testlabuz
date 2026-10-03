@@ -297,7 +297,7 @@ An unanswered question scores zero and never needs review. A manual question wor
 
 The Teacher reviews submissions: completed Homework and Blitz attempts, official and practice, of Students who are recipients of the task, in the Teacher's own Topics while the Teacher is still assigned to the Topic's group. An attempt that is still in progress is not a submission. The status of the Topic or task (active, closed, archived) does not restrict review. The Teacher:
 
-- works from a review queue that can be filtered by state, Homework or Blitz, official or practice work, and overdue work, with official work listed first; each Homework and Blitz detail opens the queue for that task;
+- works from a review queue that can be filtered by state, Homework or Blitz, official or practice work, overdue work, and a row's Topic, group or Student, with official work listed first; each Homework and Blitz detail opens the queue for that task, and each Topic result opens that Student's submissions of the Topic;
 - sees every question with the Student's answer and the question's correct-answer configuration;
 - may download a submitted answer file of an accessible submission;
 - awards 0 up to the question's points for each manual answer and may add feedback of at most 2000 characters;

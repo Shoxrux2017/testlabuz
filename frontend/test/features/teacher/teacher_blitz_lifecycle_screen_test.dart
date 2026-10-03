@@ -13,9 +13,11 @@ import 'package:testlabuz_client/core/time/institution_timezone.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_blitz_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_homework_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_blitz_mutation.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_homework.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_pair.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_blitz_detail_screen.dart';
 
@@ -712,11 +714,12 @@ void main() {
 
     for (final (name, pairs, context) in [
       (
+        // The official Homework of this harness is closed (S10-FE-004).
         'the confirmed official Blitz',
         FakeTeacherTopicResultPairRepository(
           onFetch: (_) async => _pair(blitzId: _blitzId),
         ),
-        'Official Blitz',
+        'This is the official Blitz.',
       ),
       (
         'a confirmed practice Blitz',
@@ -882,6 +885,12 @@ Future<void> _pump(
         ),
         teacherTopicResultPairRepositoryProvider.overrideWithValue(
           pairs ?? FakeTeacherTopicResultPairRepository(),
+        ),
+        teacherHomeworkRepositoryProvider.overrideWithValue(
+          FakeTeacherHomeworkRepository(
+            onFetch: (id) async =>
+                teacherHomework(id: id, status: TeacherHomeworkStatus.closed),
+          ),
         ),
         idempotencyKeyGeneratorProvider.overrideWithValue(_FixedKey()),
       ],

@@ -1821,7 +1821,7 @@ Carried from Stage 9 into Stage 10 planning, with their dispositions (`S10-DOC-0
 - `409 result_closed` → corrections of the Student's official answers, comment edits and the official Homework Start after closure (`S10-T7`; Result Closure below).
 - A Blitz closed after an exception before the Student took the replacement → Not completed (the Blitz side is `missing`; Not Completed below).
 - `topic_results` reference rule → `S10-T2`: `topic_results` never references `official_task_scores`; the closure snapshot keeps the official Attempt ids.
-- Review-queue Topic, group and Student filters (owner decision S09-CL-D1) → Stage 10 frontend plan; the API already accepts `topic_id`, `group_id` and `student_id`.
+- Review-queue Topic, group and Student filters (owner decision S09-CL-D1) → Stage 10 frontend plan; delivered by `S10-FE-004` as row filters and a Topic result's link to that Student's submissions.
 - Real-concurrency backend tests of an exception grant racing a checking run and of the `attempts:check-frozen` sweep racing a Homework Submit (`CL9-9`) → `S10-BE-004`.
 - Consolidate the official and visibility rules (`PH2-4`, `tasks/STAGE_09_TASK_INDEX.md` §10) → `S10-BE-001`; one Attempt visibility rule (Result Visibility below).
 - Student result visibility under `manual_teacher` (`CL9-10`) → accepted (`BR-STAT-018`): the Student still sees the Attempt status change from waiting for review to checked while the score stays hidden.

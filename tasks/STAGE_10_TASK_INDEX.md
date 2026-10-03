@@ -138,8 +138,8 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 | `5a` | `S10-BE-PHASE-2-FIX-001` | Backend tests | The seven test-hardening P3 of `S10-BE-PHASE-2`; no production change | `S10-BE-PH2-D1` | `Approved` (on `main` `aaaad32`) | Accepted — delivered (PR #322, `main` `15c9a71`) | `tasks/backend/stage-10/S10-BE-PHASE-2-FIX-001-test-hardening.md` |
 | `6` | `S10-FE-001` | Frontend (Student) | The seven Stage 10 error codes; the Student Topic result card; `homework_not_submitted` and `result_closed` Start messages | Backend delivered | `Approved` (on `main` `15c9a71`) | Accepted — delivered (PR #323, `main` `e979a46`) | `tasks/frontend/stage-10/S10-FE-001-student-topic-result-and-codes.md` |
 | `7` | `S10-FE-002` | Frontend (Teacher) | Results entry on the Topic detail, results list (filters, counts, pages) and result detail on desktop and mobile | `FE-001` | `Approved` (on `main` `e979a46`) | Accepted — delivered (PR #324, `main` `55883ee`) | `tasks/frontend/stage-10/S10-FE-002-teacher-topic-results-read.md` |
-| `8` | `S10-FE-003` | Frontend (Teacher) | Release single/bulk (desktop and mobile), comment and close single/bulk (desktop), confirmations, skip report, error mapping; docs aligned to `S10-FE-D1` | `FE-002` | `Approved` (on `main` `55883ee`) | Review `PASS`; PR open | `tasks/frontend/stage-10/S10-FE-003-teacher-topic-result-actions.md` |
-| `9` | `S10-FE-004` | Frontend (cross-feature) | `S10-D8` activation warning, archive warning, review `result_closed`, review-queue Topic/group/Student filters (`CL9-5`), related-view refresh | `FE-003` | `Draft` | Not started | written before implementation |
+| `8` | `S10-FE-003` | Frontend (Teacher) | Release single/bulk (desktop and mobile), comment and close single/bulk (desktop), confirmations, skip report, error mapping; docs aligned to `S10-FE-D1` | `FE-002` | `Approved` (on `main` `55883ee`) | Accepted — delivered (PR #325, `main` `b204628`) | `tasks/frontend/stage-10/S10-FE-003-teacher-topic-result-actions.md` |
+| `9` | `S10-FE-004` | Frontend (cross-feature) | `S10-D8` activation warning, archive warning, review `result_closed`, review-queue Topic/group/Student filters (`CL9-5`), related-view refresh | `FE-003` | `Approved` (on `main` `b204628`) | Review `PASS`; PR open | `tasks/frontend/stage-10/S10-FE-004-cross-feature-result-integration.md` |
 | `10` | `S10-FE-005` | Frontend (polish) | Carried `FE-PH2` items: the deferred upload during the leave confirmation, `B-2`, `B-4`, `C-3`, `A-2`, `B-3`, `D-3`, `B-5` (`C-4`, `D-4` stay carried) | `FE-004` | `Draft` | Not started | written before implementation |
 | `11` | `S10-FE-PHASE-2` | Frontend checkpoint | Full Flutter suite, analyze, format, Windows and APK builds, fresh review; then report to the owner and wait | `FE-001…005` | `Draft` | Not started | executed record |
 
@@ -246,6 +246,14 @@ Only a row whose readiness is `Approved` may be implemented.
   after leaving a screen, Save hidden while the result is not current, unused action state removed, test gaps, a
   private dialog helper; applied — the server-impossible 422 on non-comment calls keeps the comment text). Teacher and
   router tests: 1398 passed; full frontend suite 3960 passed before the P3 fixes; analyze and format clean.
+- 2026-10-04: `S10-FE-004` implemented (TDD; mutation check 27/27 killed): `S10-D8` activation note from the official
+  Homework status on both surfaces, `official_homework_not_activated`, archive warning, review `result_closed`, results
+  reloads after activation, archive and review saves, `CL9-5` row filters and a result's link to that Student's
+  submissions; docs/02, 03, 04, 06 aligned. Review #1 `NOT ACCEPTED` (P2 = 1: the new Student queue was not reloaded
+  after a review save; P3 = 7), all fixed; review #2 `PASS` (P3 = 5: dead filter button, double reload on one
+  reconcile, Homework list on the conflict applied; request churn on pair refresh and a reused method name noted).
+  Teacher and router tests: 1433 passed; full frontend suite 4003 passed before the review #2 P3; analyze and format
+  clean.
 
 ## 12. Change Log
 

@@ -7,6 +7,9 @@ import '../../auth/application/auth_session_controller.dart';
 import '../application/teacher_blitz_lifecycle_controller.dart';
 import '../application/teacher_blitz_route_mutation_activity.dart';
 import '../application/teacher_blitz_route_target.dart';
+import '../application/teacher_homework_detail_controller.dart';
+import '../application/teacher_homework_detail_state.dart';
+import '../application/teacher_homework_route_target.dart';
 import '../application/teacher_official_blitz_controller.dart';
 import '../application/teacher_question_mutation_activity.dart';
 import '../application/teacher_session_key.dart';
@@ -14,6 +17,7 @@ import '../application/teacher_topic_result_pair_controller.dart';
 import '../domain/teacher_blitz.dart';
 import '../domain/teacher_blitz_form.dart';
 import '../domain/teacher_blitz_lifecycle.dart';
+import '../domain/teacher_homework.dart';
 import 'teacher_blitz_schedule_dialog.dart';
 
 /// Schedule/Official/Activate/Close/Archive controls for a confirmed current
@@ -76,6 +80,39 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
         !questionActivity.isActive &&
         !lifecycle.blocksMutations &&
         !official.hasBlockingOutcome;
+    // Activating the official Blitz closes an active official Homework
+    // (`S10-D8`), so its confirmation reads that Homework's status.
+    final officialHomeworkId =
+        officialKnowledge == TeacherBlitzOfficialKnowledge.official &&
+            actions.contains(TeacherBlitzLifecycleAction.activate)
+        ? pairState.pair?.homeworkAssessmentId
+        : null;
+    final officialHomework = officialHomeworkId == null
+        ? null
+        : teacherHomeworkDetailControllerProvider(
+            TeacherHomeworkRouteTarget(
+              topicId: target.topicId,
+              homeworkId: officialHomeworkId,
+            ),
+          );
+    if (officialHomework != null) {
+      // Keeps the read alive for the confirmation.
+      ref.watch(officialHomework);
+    }
+    // The open confirmation follows the Homework read it starts.
+    String? activationNote(WidgetRef ref) {
+      final homework = officialHomework == null
+          ? null
+          : ref.watch(officialHomework);
+      return _activationNote(
+        official: officialKnowledge,
+        officialHomework: homework?.status == TeacherHomeworkDetailStatus.data
+            ? homework?.homework?.status
+            : null,
+        isDesktop: isDesktop,
+      );
+    }
+
     final isPreparation = isTeacherBlitzAuthoringStatus(blitz.status);
     final isGroup = blitz.assignmentMode == TeacherBlitzAssignmentMode.group;
     // Official designation is desktop-only.
@@ -159,9 +196,13 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
                                   context,
                                   ref,
                                   dialog: _activateDialog,
-                                  note: isDesktop
+                                  note: activationNote,
+                                  // The Homework may have changed elsewhere.
+                                  beforeOpen: officialHomework == null
                                       ? null
-                                      : _mobileOfficialNote(officialKnowledge),
+                                      : ref
+                                            .read(officialHomework.notifier)
+                                            .refresh,
                                   perform: lifecycleController.activate,
                                 )
                               : null,
@@ -320,34 +361,41 @@ class TeacherBlitzLifecycleControls extends ConsumerWidget {
     WidgetRef ref, {
     required _ConfirmationCopy dialog,
     required Future<void> Function() perform,
-    String? note,
+    String? Function(WidgetRef ref)? note,
+    VoidCallback? beforeOpen,
   }) async {
     final owner = _sessionOwner(ref);
     if (owner == null) {
       return;
     }
+    beforeOpen?.call();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         key: const Key('teacherBlitzConfirmDialog'),
         title: Text(dialog.title),
-        content: note == null
-            ? Text(dialog.body)
-            : SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(dialog.body),
-                    const SizedBox(height: 16),
-                    Text(
-                      note,
-                      key: const Key('teacherBlitzActivationOfficialNote'),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+        content: Consumer(
+          builder: (context, ref, _) {
+            final text = note?.call(ref);
+            return text == null
+                ? Text(dialog.body)
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(dialog.body),
+                        const SizedBox(height: 16),
+                        Text(
+                          text,
+                          key: const Key('teacherBlitzActivationOfficialNote'),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  );
+          },
+        ),
         actions: [
           TextButton(
             autofocus: true,
@@ -446,11 +494,35 @@ _ConfirmationCopy _officialDialog(TeacherOfficialBlitzOption option) {
   };
 }
 
-/// Mobile cannot designate, so activation states what the confirmed pair
-/// proves about this Blitz; none of it blocks a practice activation.
-String _mobileOfficialNote(TeacherBlitzOfficialKnowledge knowledge) {
-  return switch (knowledge) {
-    TeacherBlitzOfficialKnowledge.official => 'Official Blitz',
+/// The official Blitz explains what activation does to the official Homework
+/// (`S10-D8`, null [officialHomework] when its status is not confirmed).
+/// Mobile cannot designate, so for any other Blitz it states what the
+/// confirmed pair proves; none of it blocks a practice activation.
+String? _activationNote({
+  required TeacherBlitzOfficialKnowledge official,
+  required TeacherHomeworkStatus? officialHomework,
+  required bool isDesktop,
+}) {
+  return switch (official) {
+    TeacherBlitzOfficialKnowledge.official => switch (officialHomework) {
+      TeacherHomeworkStatus.active =>
+        'This is the official Blitz. Activating it closes the official '
+            'Homework for the whole group. Homework Attempts still in '
+            'progress are submitted with their saved work. Students without '
+            'a submitted Homework Attempt cannot take this Blitz.',
+      TeacherHomeworkStatus.draft =>
+        'The official Homework is still a draft. Activate it first; this '
+            'Blitz cannot be activated before it.',
+      TeacherHomeworkStatus.closed ||
+      TeacherHomeworkStatus.archived => 'This is the official Blitz.',
+      null =>
+        'This is the official Blitz. If the official Homework is still '
+            'active, activating it closes the Homework for the whole group, '
+            'submits Attempts still in progress with their saved work, and '
+            'Students without a submitted Homework Attempt cannot take this '
+            'Blitz.',
+    },
+    _ when isDesktop => null,
     TeacherBlitzOfficialKnowledge.notOfficial =>
       "This Blitz is not currently designated as the Topic's official Blitz."
           '\n\nIf you activate it now, it remains practice/supplementary and '

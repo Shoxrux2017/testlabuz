@@ -1,6 +1,7 @@
 import '../../../core/network/api_failure.dart';
 import '../domain/teacher_submission_list.dart';
 import '../domain/teacher_submission_list_query.dart';
+import 'teacher_review_queue_filter.dart';
 
 enum TeacherReviewQueueStatus { initial, loading, data, refreshing, error }
 
@@ -11,6 +12,7 @@ class TeacherReviewQueueState {
     this.result,
     this.failure,
     this.isStale = false,
+    this.filterLabels = const {},
   });
 
   final TeacherReviewQueueStatus status;
@@ -20,6 +22,9 @@ class TeacherReviewQueueState {
 
   /// True only when [result] is retained after a failed refresh.
   final bool isStale;
+
+  /// The chip labels of the active row filters.
+  final Map<TeacherReviewQueueFilterKind, String> filterLabels;
 
   bool get isRequestInFlight =>
       status == TeacherReviewQueueStatus.loading ||

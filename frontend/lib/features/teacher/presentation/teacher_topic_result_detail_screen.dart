@@ -150,6 +150,15 @@ class TeacherTopicResultDetailScreen extends ConsumerWidget {
                           timezone,
                           target: target,
                           surface: surface,
+                          // The review queue is desktop-only (`S09-D7`).
+                          onOpenSubmissions: surface == AppDeviceSurface.desktop
+                              ? () => context.push(
+                                  AppRoutePaths.teacherTopicResultReviewsLocation(
+                                    topicId,
+                                    studentId,
+                                  ),
+                                )
+                              : null,
                           confirmed:
                               state.status ==
                               TeacherTopicResultDetailStatus.data,
@@ -169,6 +178,7 @@ class TeacherTopicResultDetailScreen extends ConsumerWidget {
     required TeacherTopicResultTarget target,
     required AppDeviceSurface surface,
     required bool confirmed,
+    required VoidCallback? onOpenSubmissions,
   }) {
     final result = detail.result;
     final editsComment =
@@ -227,6 +237,18 @@ class TeacherTopicResultDetailScreen extends ConsumerWidget {
           TeacherTopicResultActionBar.offersAction(result, surface)) ...[
         const SizedBox(height: 12),
         TeacherTopicResultActionBar(target: target, result: result),
+      ],
+      if (onOpenSubmissions != null) ...[
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const Key('teacherTopicResultSubmissionsButton'),
+            onPressed: onOpenSubmissions,
+            icon: const Icon(Icons.fact_check_outlined),
+            label: const Text('Open submissions'),
+          ),
+        ),
       ],
       const SizedBox(height: 12),
       _SideSection(title: 'Homework', side: result.homework),

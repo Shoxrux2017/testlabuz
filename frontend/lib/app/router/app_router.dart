@@ -404,6 +404,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         ),
                       );
                     },
+                    routes: [
+                      GoRoute(
+                        name: AppRouteNames.teacherTopicResultReviews,
+                        path: AppRoutePaths.teacherReviewsSegment,
+                        builder: (context, state) =>
+                            _buildResultReviewQueue(state),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -726,6 +734,29 @@ TeacherBlitzRouteTarget _teacherBlitzRouteTarget(GoRouterState state) {
   );
 }
 
+/// The desktop review queue of one Student's submissions of a Topic
+/// (`CL9-5`); a malformed id never builds it.
+Widget _buildResultReviewQueue(GoRouterState state) {
+  final TeacherReviewQueueScope scope;
+  try {
+    scope = TeacherReviewQueueScope.student(
+      topicId:
+          state.pathParameters[AppRoutePaths.teacherTopicIdParameter] ?? '',
+      studentId:
+          state.pathParameters[AppRoutePaths.teacherStudentIdParameter] ?? '',
+    );
+  } on ArgumentError {
+    return const TechnicalRootScreen();
+  }
+  return _buildTeacherDestination(
+    TeacherReviewQueueScreen(
+      key: ValueKey<TeacherReviewQueueScope>(scope),
+      scope: scope,
+    ),
+    authoring: true,
+  );
+}
+
 /// The desktop review queue of one task; a malformed id never builds it.
 Widget _buildTaskReviewQueue(
   GoRouterState state,
@@ -876,6 +907,9 @@ String? _authRedirect(
       if (AppRoutePaths.isTeacherTopicCreatePath(location)) {
         return AppRoutePaths.teacher;
       }
+      if (AppRoutePaths.isTeacherTopicResultReviewsPath(location)) {
+        return _teacherResultLocation(location);
+      }
     }
     if (_keepsLocationDuringBootstrap(
       location,
@@ -993,6 +1027,9 @@ String? _authRedirect(
             ? AppRoutePaths.teacher
             : AppRoutePaths.teacherTopicDetailLocation(topicId);
       }
+      if (AppRoutePaths.isTeacherTopicResultReviewsPath(location)) {
+        return _teacherResultLocation(location);
+      }
       if (location == AppRoutePaths.teacher) {
         return null;
       }
@@ -1074,6 +1111,7 @@ bool _keepsLocationDuringBootstrap(
               AppRoutePaths.isTeacherSubmissionDetailPath(location) ||
               AppRoutePaths.isTeacherHomeworkReviewsPath(location) ||
               AppRoutePaths.isTeacherBlitzReviewsPath(location) ||
+              AppRoutePaths.isTeacherTopicResultReviewsPath(location) ||
               AppRoutePaths.isTeacherTopicCreatePath(location) ||
               AppRoutePaths.isTeacherTopicEditPath(location) ||
               AppRoutePaths.isTeacherHomeworkCreatePath(location) ||
@@ -1082,6 +1120,14 @@ bool _keepsLocationDuringBootstrap(
               AppRoutePaths.isTeacherBlitzCreatePath(location) ||
               AppRoutePaths.isTeacherBlitzEditPath(location) ||
               AppRoutePaths.isTeacherBlitzQuestionsPath(location)));
+}
+
+/// The result detail of a result submissions [location].
+String _teacherResultLocation(String location) {
+  return AppRoutePaths.teacherTopicResultDetailLocation(
+    AppRoutePaths.teacherTopicIdFromPath(location)!,
+    AppRoutePaths.teacherResultStudentIdFromPath(location)!,
+  );
 }
 
 bool _canUseTeacherDestinations(UserRole role, AppDeviceSurface surface) {

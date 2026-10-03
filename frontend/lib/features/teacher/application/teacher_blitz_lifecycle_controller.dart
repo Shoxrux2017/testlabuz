@@ -19,8 +19,12 @@ import 'teacher_blitz_lifecycle_state.dart';
 import 'teacher_blitz_list_controller.dart';
 import 'teacher_blitz_route_mutation_activity.dart';
 import 'teacher_blitz_route_target.dart';
+import 'teacher_homework_detail_controller.dart';
+import 'teacher_homework_list_controller.dart';
+import 'teacher_homework_route_target.dart';
 import 'teacher_question_mutation_activity.dart';
 import 'teacher_session_key.dart';
+import 'teacher_topic_result_list_controller.dart';
 import 'teacher_topic_result_pair_controller.dart';
 import 'teacher_topic_result_pair_state.dart';
 
@@ -454,6 +458,12 @@ class TeacherBlitzLifecycleController
     if (_refreshesPairOnConflict(operation.action, conflictCode)) {
       _refreshResultPair(operation.lease.sessionKey);
     }
+    if (conflictCode == ApiErrorCodes.officialHomeworkNotActivated) {
+      _refreshOfficialHomeworkViews(
+        operation.lease.sessionKey,
+        provenOfficial: true,
+      );
+    }
     try {
       final current = await ref
           .read(teacherBlitzRepositoryProvider)
@@ -502,6 +512,7 @@ class TeacherBlitzLifecycleController
     _refreshBlitzList(sessionKey);
     if (operation.action == TeacherBlitzLifecycleAction.activate) {
       _pendingActivationKey = null;
+      _refreshOfficialHomeworkViews(sessionKey);
       // Activation may have snapshotted the official cohort.
       _refreshResultPair(sessionKey);
     }
@@ -626,6 +637,43 @@ class TeacherBlitzLifecycleController
       ref.read(provider.notifier).refreshAfterMutation(sessionKey);
     } else {
       ref.invalidate(provider);
+    }
+  }
+
+  /// Activating the official Blitz closes an active official Homework
+  /// (`S10-D8`) and changes the Topic results; their open views reload. A
+  /// draft official Homework conflict is [provenOfficial] even when the
+  /// shown pair does not name this Blitz yet.
+  void _refreshOfficialHomeworkViews(
+    TeacherSessionKey sessionKey, {
+    bool provenOfficial = false,
+  }) {
+    final pairProvider = teacherTopicResultPairControllerProvider(_topicKey);
+    final pair = ref.exists(pairProvider) ? ref.read(pairProvider).pair : null;
+    final namesThisBlitz =
+        pair?.blitzAssessmentId?.toLowerCase() == target.blitzId.toLowerCase();
+    if (!provenOfficial && !namesThisBlitz) {
+      return;
+    }
+    if (pair != null) {
+      final homework = teacherHomeworkDetailControllerProvider(
+        TeacherHomeworkRouteTarget(
+          topicId: target.topicId,
+          homeworkId: pair.homeworkAssessmentId,
+        ),
+      );
+      if (ref.exists(homework)) {
+        // Replaces a read that may predate the activation.
+        ref.read(homework.notifier).refreshAfterReview(sessionKey);
+      }
+    }
+    final homeworkList = teacherHomeworkListControllerProvider(_topicKey);
+    if (ref.exists(homeworkList)) {
+      ref.read(homeworkList.notifier).refreshAfterMutation(sessionKey);
+    }
+    final results = teacherTopicResultListControllerProvider(_topicKey);
+    if (ref.exists(results)) {
+      ref.read(results.notifier).refreshAfterAction(sessionKey);
     }
   }
 
@@ -775,8 +823,11 @@ bool _refreshesPairOnConflict(
   return switch (action) {
     TeacherBlitzLifecycleAction.archive =>
       code == ApiErrorCodes.businessConflict,
+    // A draft official Homework proves this Blitz is official, even when the
+    // shown pair did not.
     TeacherBlitzLifecycleAction.activate =>
       code == ApiErrorCodes.officialCohortMismatch ||
+          code == ApiErrorCodes.officialHomeworkNotActivated ||
           code == ApiErrorCodes.businessConflict,
     _ => false,
   };
@@ -874,6 +925,12 @@ String _conflictMessage(
       "The official Blitz cohort does not match the Topic's established "
           'official cohort.\nRefresh the official pair and Blitz before '
           'continuing.',
+    (
+      TeacherBlitzLifecycleAction.activate,
+      ApiErrorCodes.officialHomeworkNotActivated,
+    ) =>
+      'The official Homework is still a draft. Activate the official '
+          'Homework before this Blitz.',
     (
       TeacherBlitzLifecycleAction.activate,
       ApiErrorCodes.idempotencyKeyReused,

@@ -6,6 +6,7 @@ import '../../../app/device/app_device_surface.dart';
 import '../../../app/router/app_route_paths.dart';
 import '../../auth/application/auth_session_controller.dart';
 import '../application/teacher_review_queue_controller.dart';
+import '../application/teacher_review_queue_filter.dart';
 import '../application/teacher_review_queue_scope.dart';
 import '../application/teacher_review_queue_state.dart';
 import '../application/teacher_session_key.dart';
@@ -13,8 +14,9 @@ import '../domain/teacher_submission.dart';
 import '../domain/teacher_submission_list_query.dart';
 import 'teacher_review_formatters.dart';
 
-/// The desktop review queue (`S09-FE-002A`), for every task or one task
-/// (`S09-FE-002B`); a submission opens in `S09-FE-003`.
+/// The desktop review queue (`S09-FE-002A`), for every task, one task
+/// (`S09-FE-002B`) or one Student of a Topic, with Topic, group and Student
+/// row filters (`CL9-5`); a submission opens in `S09-FE-003`.
 class TeacherReviewQueueScreen extends ConsumerWidget {
   const TeacherReviewQueueScreen({
     this.scope = TeacherReviewQueueScope.all,
@@ -40,6 +42,7 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
         leading: IconButton(
           key: const Key('teacherReviewQueueBackButton'),
           tooltip: switch (scope.type) {
+            null when scope.studentId != null => 'Back to Topic result',
             null => 'Back to Teacher workspace',
             TeacherSubmissionTaskType.homework => 'Back to Homework',
             TeacherSubmissionTaskType.blitz => 'Back to Blitz',
@@ -82,6 +85,13 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
                       key: const Key('teacherReviewQueueScopeLabel'),
                     ),
                   ],
+                  if (scope.studentId != null) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      "This Student's submissions in this Topic",
+                      key: Key('teacherReviewQueueScopeLabel'),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   if (state.status == TeacherReviewQueueStatus.refreshing) ...[
                     const LinearProgressIndicator(
@@ -108,6 +118,7 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
                     state: state,
                     scope: scope,
                     timezone: timezone,
+                    onFilter: controller.filterByRow,
                     onRetry: controller.retry,
                     onPrevious: controller.previousPage,
                     onNext: controller.nextPage,
@@ -124,6 +135,10 @@ class TeacherReviewQueueScreen extends ConsumerWidget {
   String _backLocation() {
     final topicId = scope.topicId;
     final assessmentId = scope.assessmentId;
+    final studentId = scope.studentId;
+    if (topicId != null && studentId != null) {
+      return AppRoutePaths.teacherTopicResultDetailLocation(topicId, studentId);
+    }
     if (topicId == null || assessmentId == null) {
       return AppRoutePaths.teacher;
     }
@@ -185,6 +200,12 @@ enum _OfficialOption {
   static _OfficialOption of(bool? official) =>
       values.firstWhere((option) => option.official == official);
 }
+
+const _rowFilterNames = {
+  TeacherReviewQueueFilterKind.topic: 'Topic',
+  TeacherReviewQueueFilterKind.group: 'Group',
+  TeacherReviewQueueFilterKind.student: 'Student',
+};
 
 const _sortLabels = {
   TeacherSubmissionSort.recommended: 'Recommended order',
@@ -275,6 +296,14 @@ class _QueueFilters extends StatelessWidget {
           icon: const Icon(Icons.filter_alt_off_outlined),
           label: const Text('Clear filters'),
         ),
+        for (final MapEntry(key: kind, value: label)
+            in state.filterLabels.entries)
+          InputChip(
+            key: Key('teacherReviewQueueFilterChip:${kind.name}'),
+            label: Text('${_rowFilterNames[kind]}: $label'),
+            onDeleted: () => controller.removeRowFilter(kind),
+            deleteButtonTooltipMessage: 'Remove filter',
+          ),
       ],
     );
   }
@@ -334,6 +363,7 @@ class _QueueBody extends StatelessWidget {
     required this.state,
     required this.scope,
     required this.timezone,
+    required this.onFilter,
     required this.onRetry,
     required this.onPrevious,
     required this.onNext,
@@ -342,6 +372,7 @@ class _QueueBody extends StatelessWidget {
   final TeacherReviewQueueState state;
   final TeacherReviewQueueScope scope;
   final String? timezone;
+  final ValueChanged<TeacherReviewQueueRowFilter> onFilter;
   final VoidCallback onRetry;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
@@ -388,6 +419,8 @@ class _QueueBody extends StatelessWidget {
             child: Text(
               state.query != scope.initialQuery
                   ? 'No submissions match these filters.'
+                  : scope.studentId != null
+                  ? 'This Student has no submissions in this Topic.'
                   : scope.type == null
                   ? 'No submissions are waiting for review.'
                   : 'No submissions of this task are waiting for review.',
@@ -395,7 +428,12 @@ class _QueueBody extends StatelessWidget {
             ),
           ),
         for (final submission in result.items) ...[
-          _QueueRow(submission: submission, timezone: timezone),
+          _QueueRow(
+            submission: submission,
+            timezone: timezone,
+            scope: scope,
+            onFilter: onFilter,
+          ),
           const SizedBox(height: 8),
         ],
         const SizedBox(height: 8),
@@ -429,31 +467,90 @@ class _QueueBody extends StatelessWidget {
 }
 
 class _QueueRow extends StatelessWidget {
-  const _QueueRow({required this.submission, required this.timezone});
+  const _QueueRow({
+    required this.submission,
+    required this.timezone,
+    required this.scope,
+    required this.onFilter,
+  });
 
   final TeacherSubmission submission;
   final String? timezone;
+  final TeacherReviewQueueScope scope;
+  final ValueChanged<TeacherReviewQueueRowFilter> onFilter;
 
   @override
   Widget build(BuildContext context) {
+    final filters = [
+      if (!scope.fixes(TeacherReviewQueueFilterKind.topic))
+        (
+          'Only this Topic',
+          TeacherReviewQueueRowFilter(
+            kind: TeacherReviewQueueFilterKind.topic,
+            id: submission.topicId,
+            label: submission.topicTitle,
+          ),
+        ),
+      if (!scope.fixes(TeacherReviewQueueFilterKind.group))
+        (
+          'Only this group',
+          TeacherReviewQueueRowFilter(
+            kind: TeacherReviewQueueFilterKind.group,
+            id: submission.groupId,
+            label: submission.groupName,
+          ),
+        ),
+      if (!scope.fixes(TeacherReviewQueueFilterKind.student))
+        (
+          'Only this Student',
+          TeacherReviewQueueRowFilter(
+            kind: TeacherReviewQueueFilterKind.student,
+            id: submission.studentId,
+            label: submission.studentName,
+          ),
+        ),
+    ];
+
     return Card(
       key: Key('teacherReviewQueueRow:${submission.id}'),
       clipBehavior: Clip.antiAlias,
-      child: Semantics(
-        button: true,
-        label: 'Open submission of ${submission.studentName}',
-        child: InkWell(
-          onTap: () => context.push(
-            AppRoutePaths.teacherSubmissionDetailLocation(submission.id),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: TeacherSubmissionSummary(
-              submission: submission,
-              timezone: timezone,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Semantics(
+              button: true,
+              label: 'Open submission of ${submission.studentName}',
+              child: InkWell(
+                onTap: () => context.push(
+                  AppRoutePaths.teacherSubmissionDetailLocation(submission.id),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: TeacherSubmissionSummary(
+                    submission: submission,
+                    timezone: timezone,
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
+          // A Student queue fixes every filter a row could set.
+          if (filters.isNotEmpty)
+            PopupMenuButton<TeacherReviewQueueRowFilter>(
+              key: Key('teacherReviewQueueRowFilter:${submission.id}'),
+              tooltip: 'Filter by',
+              icon: const Icon(Icons.filter_list),
+              onSelected: onFilter,
+              itemBuilder: (_) => [
+                for (final (label, filter) in filters)
+                  PopupMenuItem<TeacherReviewQueueRowFilter>(
+                    value: filter,
+                    child: Text(label),
+                  ),
+              ],
+            ),
+        ],
       ),
     );
   }

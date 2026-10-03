@@ -257,6 +257,7 @@ class TeacherBlitzRemoteDataSource {
         ApiErrorCodes.assessmentHasNoScoreablePoints,
         ApiErrorCodes.assessmentNotAssigned,
         ApiErrorCodes.officialCohortMismatch,
+        ApiErrorCodes.officialHomeworkNotActivated,
         ApiErrorCodes.businessConflict,
       },
     );

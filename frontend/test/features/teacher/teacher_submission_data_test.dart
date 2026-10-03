@@ -503,6 +503,23 @@ void main() {
       }
     });
 
+    test('a closed Topic result is a definite failure', () async {
+      await expectLater(
+        _source(
+          RecordingAdapter(
+            (_) => jsonResponse(409, _error(ApiErrorCodes.resultClosed)),
+          ),
+        ).saveReview(submissionId, request),
+        throwsA(
+          isA<ApiRequestException>().having(
+            (exception) => exception.failure.serverCode,
+            'code',
+            ApiErrorCodes.resultClosed,
+          ),
+        ),
+      );
+    });
+
     test('a non-canonical id is rejected before transport', () {
       final adapter = RecordingAdapter(
         (_) => throw StateError('No transport.'),
