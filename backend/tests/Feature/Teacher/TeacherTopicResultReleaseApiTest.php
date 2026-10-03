@@ -146,6 +146,35 @@ class TeacherTopicResultReleaseApiTest extends TestCase
         $this->assertSame(collect([$ready->id, $released->id, $notCompleted->id])->sort()->values()->all(), $releasedIds);
     }
 
+    public function test_a_released_result_whose_window_reopened_stays_released_without_change(): void
+    {
+        $student = $this->readyStudent('Alpha Student', '88', '84');
+        $this->release($student, 'student')->assertOk();
+        $this->release($student, 'parent')->assertOk();
+        $released = TopicResult::query()->sole()->only(['student_released_at', 'student_released_by_user_id', 'parent_released_at',
+            'parent_released_by_user_id', 'updated_at']);
+        // History from before S10-D8: the Homework deadline moved later reopens the window, so neither audience sees values now.
+        $this->homework->homeworkAssignment->update(['status' => 'active', 'closed_at' => null, 'deadline_at' => null]);
+        $this->travelTo(now()->addHour());
+
+        // "Already released" comes before "not ready" for both audiences (S10-D5).
+        foreach (['student', 'parent'] as $audience) {
+            $this->release($student, $audience)->assertOk()->assertJsonPath('data.visibility.student_visible', false);
+            $this->bulk($audience)->assertOk()->assertJsonPath('data', ['processed' => 0, 'skipped' => ['already_done' => 1, 'not_ready' => 0]]);
+        }
+        $this->assertEquals($released, TopicResult::query()->sole()->only(array_keys($released)));
+    }
+
+    public function test_the_mode_conflict_comes_before_an_earlier_release(): void
+    {
+        $student = $this->readyStudent('Alpha Student', '88', '84');
+        $this->release($student, 'student')->assertOk();
+        $this->releaseModes('automatic', 'manual_teacher');
+
+        $this->release($student, 'student')->assertConflict()->assertJsonPath('code', 'manual_release_not_allowed');
+        $this->bulk('student')->assertConflict()->assertJsonPath('code', 'manual_release_not_allowed');
+    }
+
     public function test_bulk_release_with_a_forbidding_mode_fails_as_a_whole(): void
     {
         $this->readyStudent('Alpha Student', '88', '84');

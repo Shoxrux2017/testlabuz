@@ -78,6 +78,7 @@ allow, and is frozen by closure.
 | `S10-D8` | Contract review: closure could cut off a Student's remaining Homework attempts; the owner's rule “Homework before Blitz” | Activating the official Blitz closes the official Homework; only Students with a submitted Homework Attempt start the official Blitz (others Not completed); no activation while the official Homework is a draft; practice Blitz and #2 unaffected |
 | `S10-D9` | When a result can be closed (`BR-RES-011` allowed closure before the tasks end) | Only when the Student's work is finished (the `S10-D3` moment) |
 | — | Backend plan | Approved as proposed (§7) |
+| `S10-BE-PH2-D1` | Seven optional test-hardening P3 from `S10-BE-PHASE-2` (`A-1`, `A-2`, `B-1`, `B-2`, `C-1`, `C-2`, `D-4`) | **A** — one small test-only task (`S10-BE-PHASE-2-FIX-001`) before the frontend plan |
 
 ## 5. Technical Decisions (approved with the plan)
 
@@ -132,6 +133,7 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 | `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Approved` (on `main` `b096f18`) | Accepted — delivered (PR #319, `main` `48a607a`) | `tasks/backend/stage-10/S10-BE-003-release-and-student-parent-reads.md` |
 | `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Approved` (on `main` `48a607a`) | Accepted — delivered (PR #320, `main` `4356179`) | `tasks/backend/stage-10/S10-BE-004-closure-and-work-order.md` |
 | `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | Executed on `main` `4356179` | `PASS` — reported to the owner | `tasks/backend/stage-10/S10-BE-PHASE-2-backend-block-review.md` |
+| `5a` | `S10-BE-PHASE-2-FIX-001` | Backend tests | The seven test-hardening P3 of `S10-BE-PHASE-2`; no production change | `S10-BE-PH2-D1` | `Approved` (on `main` `aaaad32`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-PHASE-2-FIX-001-test-hardening.md` |
 | — | Frontend plan | Frontend | Planned after the owner reviews the backend report | Owner review | — | — | — |
 
 Only a row whose readiness is `Approved` may be implemented.
@@ -218,6 +220,10 @@ Only a row whose readiness is `Approved` may be implemented.
   3136 passed (exit 0, two known Stage 9 mock notices); Pint clean. Verdict `PASS`. Reported to the owner;
   the owner decides the optional test-hardening items. Record:
   `tasks/backend/stage-10/S10-BE-PHASE-2-backend-block-review.md`.
+- 2026-10-03: owner `S10-BE-PH2-D1` = A. `S10-BE-PHASE-2-FIX-001` added the seven test-hardening items
+  (no production change; a shared snapshot probe `AssertsTopicResultSnapshotReads` for five reads). Every
+  protected behavior was shown by a mutation check (17/17 killed). Review #1 `PASS` (P3 = 6, all applied).
+  The changed test files: 122 passed.
 
 ## 12. Change Log
 

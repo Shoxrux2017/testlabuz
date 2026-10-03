@@ -362,6 +362,68 @@ class TopicResultReaderTest extends TestCase
         $this->assertFalse($result->workFinished);
     }
 
+    public function test_a_closed_not_completed_result_reads_back_its_ready_homework_side(): void
+    {
+        $this->topicWithPair('closed', 'closedIndividual');
+        $student = $this->student();
+        $this->attempt($this->homework, $student, 1, 'checked', '60.00000000');
+        $official = $this->attempt($this->homework, $student, 2, 'checked', '80.00000000');
+        $this->official($official);
+        TopicResult::factory()->create([
+            'institution_id' => $this->topic->institution_id, 'topic_id' => $this->topic->id, 'student_id' => $student->id,
+            'closed_at' => now(), 'closed_by_user_id' => $this->topic->teacher_id, 'closure_reason' => TopicResultClosureReason::Teacher,
+            'closed_outcome' => TopicResultOutcome::NotCompleted, 'missing_component' => TopicResultMissingComponent::Blitz,
+            'homework_assessment_id' => $this->homework->id, 'blitz_assessment_id' => $this->blitz->id,
+            'homework_state' => State::Ready, 'homework_attempt_id' => $official->id, 'homework_score' => '80.00000000',
+            'blitz_state' => State::Missing, 'category_code' => Code::NotCompleted,
+        ]);
+
+        $result = $this->read($student);
+
+        $this->assertSame([TopicResultStatus::Closed, TopicResultOutcome::NotCompleted, TopicResultMissingComponent::Blitz, Code::NotCompleted],
+            [$result->status, $result->closedOutcome, $result->missingComponent, $result->category]);
+        $this->assertSame([State::Ready, $this->homework->id, $official->id, 2, '80.00000000'], [$result->homework->state,
+            $result->homework->assessmentId, $result->homework->attemptId, $result->homework->attemptNumber, $result->homework->score]);
+        $this->assertSame([State::Missing, $this->blitz->id, null, null], [$result->blitz->state, $result->blitz->assessmentId,
+            $result->blitz->attemptId, $result->blitz->score]);
+        $this->assertSame([null, null, null], [$result->finalScore, $result->method, $result->categoryScore]);
+    }
+
+    public function test_an_official_row_naming_another_attempt_or_score_leaves_the_side_unready(): void
+    {
+        $this->topicWithPair('closed', 'closedIndividual');
+        [$rowNamingAnotherAttempt, $rowWithAnOldScore] = [$this->student(), $this->student()];
+        foreach ([$rowNamingAnotherAttempt, $rowWithAnOldScore] as $student) {
+            $this->official($this->attempt($this->blitz, $student, 1, 'checked', '84.00000000'));
+        }
+        // The live evaluation selects #2 (88); one row names #1 with the same score, the other names #2 with an old score.
+        $first = $this->attempt($this->homework, $rowNamingAnotherAttempt, 1, 'checked', '60.00000000');
+        $this->attempt($this->homework, $rowNamingAnotherAttempt, 2, 'checked', '88.00000000');
+        OfficialTaskScore::factory()->create(['official_attempt_id' => $first->id, 'normalized_score' => '88.00000000']);
+        $this->attempt($this->homework, $rowWithAnOldScore, 1, 'checked', '60.00000000');
+        $best = $this->attempt($this->homework, $rowWithAnOldScore, 2, 'checked', '88.00000000');
+        OfficialTaskScore::factory()->create(['official_attempt_id' => $best->id, 'normalized_score' => '60.00000000']);
+
+        foreach ([$rowNamingAnotherAttempt, $rowWithAnOldScore] as $student) {
+            $result = $this->read($student);
+            $this->assertSame([State::Checking, null, null], [$result->homework->state, $result->homework->attemptId, $result->homework->score]);
+            $this->assertSame(TopicResultStatus::WaitingForHomework, $result->status);
+        }
+    }
+
+    public function test_ready_scores_wait_for_a_missing_acceptable_difference(): void
+    {
+        $this->topicWithPair('closed', 'closedIndividual');
+        $student = $this->readyStudent('88', '84');
+        $this->assertSame(TopicResultStatus::Calculated, $this->read($student)->status);
+
+        InstitutionSetting::query()->update(['acceptable_score_difference' => null]);
+
+        $result = $this->read($student);
+        $this->assertSame([TopicResultStatus::WaitingForSettings, null, null], [$result->status, $result->threshold, $result->finalScore]);
+        $this->assertFalse($result->terminal);
+    }
+
     public function test_the_cohort_is_empty_before_the_snapshot_and_is_the_union_of_recipients_after_it(): void
     {
         $this->topicWithPair('draft', 'activeIndividual');
