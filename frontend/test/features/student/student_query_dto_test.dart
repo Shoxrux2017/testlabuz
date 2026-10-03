@@ -164,12 +164,37 @@ void main() {
       expect(topic.materials.last.title, isNull);
     });
 
+    test('accepts every Topic result status and no result', () {
+      for (final status in <String?>[
+        'waiting_for_homework',
+        'waiting_for_blitz',
+        'waiting_for_teacher_review',
+        'waiting_for_settings',
+        'calculated',
+        'not_completed',
+        'closed',
+        null,
+      ]) {
+        expect(
+          StudentTopicDetailDto.fromJson(
+            _detailJson()..['result_status'] = status,
+          ).id,
+          '10000000-0000-0000-0000-000000000001',
+          reason: '$status',
+        );
+      }
+    });
+
     test('rejects unexpected placeholders and unknown detail keys', () {
       final cases = <Map<String, Object?>>[
         _detailJson()..['unknown'] = true,
         _detailJson()..['homework'] = [<String, Object?>{}],
         _detailJson()..['blitz_status'] = 'available',
         _detailJson()..['result_status'] = 'released',
+        _detailJson()..['result_status'] = 'inconsistent',
+        _detailJson()..['result_status'] = '',
+        _detailJson()..['result_status'] = 1,
+        _detailJson()..remove('result_status'),
         _detailJson()..['student_instructions'] = '   ',
         _detailJson()..['status'] = 'draft',
       ];

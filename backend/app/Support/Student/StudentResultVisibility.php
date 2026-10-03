@@ -5,24 +5,18 @@ namespace App\Support\Student;
 use App\Enums\AssessmentAttemptStatus;
 use App\Enums\AssessmentType;
 use App\Enums\BlitzStatus;
-use App\Enums\StudentResultReleaseMode;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\BlitzTask;
 use LogicException;
 
 /**
- * The one rule for showing an Attempt result to its Student (docs/09 §17.4): the result is
- * released, the Attempt is checked and eligible, and a Blitz Attempt's Blitz is closed or archived
- * (a Student who finishes early never sees a score while the Blitz is still running).
+ * The one rule for showing an Attempt result to its Student (docs/09 §17.4): the task's results are
+ * released (StudentResultRelease), the Attempt is checked and eligible, and a Blitz Attempt's Blitz
+ * is closed or archived (a Student who finishes early never sees a score while the Blitz is still running).
  */
 final class StudentResultVisibility
 {
-    public function released(?StudentResultReleaseMode $mode): bool
-    {
-        return $mode === StudentResultReleaseMode::Automatic;
-    }
-
     /** @param Assessment $task The Attempt's task; a Blitz needs its `blitzTask` loaded */
     public function visible(AssessmentAttempt $attempt, Assessment $task, bool $released): bool
     {

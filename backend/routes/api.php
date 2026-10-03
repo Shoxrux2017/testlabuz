@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Institution\InstitutionProfileController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionStudentParentsController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionUnderstandingCategoryController;
 use App\Http\Controllers\Api\V1\Institution\InstitutionUserController;
+use App\Http\Controllers\Api\V1\Parent\ParentChildTopicResultController;
 use App\Http\Controllers\Api\V1\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionAdminController;
 use App\Http\Controllers\Api\V1\Platform\PlatformInstitutionController;
@@ -119,6 +120,10 @@ Route::prefix('teacher')
         Route::get('topics/{topic}/results', [TeacherTopicResultController::class, 'index']);
         Route::get('topics/{topic}/results/{student}', [TeacherTopicResultController::class, 'show']);
         Route::put('topics/{topic}/results/{student}/comment', [TeacherTopicResultController::class, 'updateComment']);
+        Route::post('topics/{topic}/results/release/student', [TeacherTopicResultController::class, 'releaseAllToStudents']);
+        Route::post('topics/{topic}/results/release/parent', [TeacherTopicResultController::class, 'releaseAllToParents']);
+        Route::post('topics/{topic}/results/{student}/release/student', [TeacherTopicResultController::class, 'releaseToStudent']);
+        Route::post('topics/{topic}/results/{student}/release/parent', [TeacherTopicResultController::class, 'releaseToParent']);
         Route::get('topics/{topic}', [TeacherTopicController::class, 'show']);
         Route::patch('topics/{topic}', [TeacherTopicController::class, 'update']);
         Route::post('topics/{topic}/activate', [TeacherTopicController::class, 'activate']);
@@ -169,6 +174,13 @@ Route::prefix('student')
         Route::put('attempts/{attempt}/answers/{question}', [StudentAttemptAnswerController::class, 'update']);
         Route::get('topics', [StudentTopicController::class, 'index']);
         Route::get('topics/{topic}', [StudentTopicController::class, 'show']);
+        Route::get('topics/{topic}/result', [StudentTopicController::class, 'result']);
+    });
+
+Route::prefix('parent')
+    ->middleware(['auth:sanctum', 'active.account', 'password.changed', 'role:'.UserRole::Parent->value])
+    ->group(function (): void {
+        Route::get('children/{student}/topics/{topic}/result', [ParentChildTopicResultController::class, 'show']);
     });
 
 Route::get('files/{file}/download', ProtectedFileDownloadController::class)

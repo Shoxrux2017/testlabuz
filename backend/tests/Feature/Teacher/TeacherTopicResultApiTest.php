@@ -3,15 +3,11 @@
 namespace Tests\Feature\Teacher;
 
 use App\Enums\TopicResultClosureReason;
-use App\Enums\TopicResultOutcome;
-use App\Enums\TopicResultSideState;
-use App\Enums\UnderstandingCategoryCode as Code;
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
 use App\Models\GroupTeacherMembership;
 use App\Models\InstitutionSetting;
 use App\Models\InstitutionUnderstandingCategory;
-use App\Models\OfficialTaskScore;
 use App\Models\TopicResult;
 use App\Models\TopicResultPair;
 use App\Models\User;
@@ -21,44 +17,24 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
-use Tests\Feature\Teacher\Concerns\BuildsTeacherSubmissionContext;
+use Tests\Feature\Teacher\Concerns\BuildsTopicResultContext;
 use Tests\TestCase;
 
 /** S10-BE-002: the Teacher's Topic results, their visibility state and the Topic-result comment (docs/09 §25.4-25.7). */
 class TeacherTopicResultApiTest extends TestCase
 {
-    use BuildsTeacherSubmissionContext;
+    use BuildsTopicResultContext;
     use UsesBlitzReadSnapshot;
 
     private const ITEM_KEYS = ['student', 'result_status', 'closed_outcome', 'closed_at', 'missing_component', 'homework', 'blitz',
         'score_difference', 'acceptable_difference', 'consistency', 'calculation_method', 'final_score', 'category_score', 'category',
         'teacher_comment', 'visibility', 'can_close'];
 
-    private Assessment $homework;
-
-    private Assessment $blitz;
-
     protected function setUp(): void
     {
         parent::setUp();
         $this->travelTo(Carbon::parse('2026-10-05 10:00:00 UTC'));
-        $this->submissionContext();
-        $this->teacher->update(['must_change_password' => false]);
-        $this->homework = $this->homeworkTask();
-        $this->blitz = $this->blitzTask();
-        TopicResultPair::factory()->create([
-            'homework_assessment_id' => $this->homework->id, 'blitz_assessment_id' => $this->blitz->id,
-            'designated_by_user_id' => $this->teacher->id, 'designated_at' => now()->subHours(3), 'cohort_snapshotted_at' => now()->subHours(2),
-        ]);
-        InstitutionSetting::query()->where('institution_id', $this->institution->id)->update([
-            'acceptable_score_difference' => '10.00000000', 'blitz_timer_start_mode' => 'individual',
-            'student_result_release_mode' => 'manual_teacher', 'parent_result_release_mode' => 'manual_teacher',
-        ]);
-
-        foreach ([[Code::UnderstoodWell, 86, 100], [Code::PartiallyUnderstood, 71, 85], [Code::NeedsRevision, 51, 70],
-            [Code::NeedsTeacherSupport, 0, 50], [Code::NotCompleted, null, null]] as [$code, $min, $max]) {
-            InstitutionUnderstandingCategory::factory()->forInstitution($this->institution, $this->admin)->forCode($code, $min, $max)->create();
-        }
+        $this->topicResultContext();
     }
 
     public function test_the_routes_are_registered_behind_the_teacher_gates(): void
@@ -469,49 +445,6 @@ class TeacherTopicResultApiTest extends TestCase
         }
 
         $this->assertSame($counts[2], $counts[5]);
-    }
-
-    /** A calculated result the Teacher closed: H 88, B 84, T 12 used, average 86. */
-    private function closedRow(User $student, array $attributes): TopicResult
-    {
-        $attempts = AssessmentAttempt::query()->where('student_id', $student->id)->get()->keyBy('assessment_id');
-
-        return TopicResult::factory()->create([
-            'institution_id' => $this->institution->id, 'topic_id' => $this->topic->id, 'student_id' => $student->id,
-            'closed_at' => now()->subMinutes(30), 'closed_by_user_id' => $this->teacher->id, 'closure_reason' => TopicResultClosureReason::Teacher,
-            'closed_outcome' => TopicResultOutcome::Calculated, 'homework_assessment_id' => $this->homework->id, 'blitz_assessment_id' => $this->blitz->id,
-            'homework_state' => TopicResultSideState::Ready, 'blitz_state' => TopicResultSideState::Ready,
-            'homework_attempt_id' => $attempts[$this->homework->id]->id, 'homework_score' => '88.00000000',
-            'blitz_attempt_id' => $attempts[$this->blitz->id]->id, 'blitz_score' => '84.00000000',
-            'score_difference' => '4.00000000', 'acceptable_difference_used' => '12.00000000', 'calculation_method' => 'average',
-            'consistency' => 'consistent', 'final_score' => '86.00000000', 'category_score' => 86, 'category_code' => 'understood_well',
-            'category_min_score_used' => 86, 'category_max_score_used' => 100,
-            ...$attributes,
-        ]);
-    }
-
-    private function cohortStudent(string $name): User
-    {
-        $student = $this->studentNamed($name);
-        $this->blitzRecipient($this->homework, $student, $this->teacher);
-        $this->blitzRecipient($this->blitz, $student, $this->teacher);
-
-        return $student;
-    }
-
-    private function readyStudent(string $name, string $homeworkScore, string $blitzScore): User
-    {
-        $student = $this->cohortStudent($name);
-        $this->officialAttempt($this->homework, $student, $homeworkScore);
-        $this->officialAttempt($this->blitz, $student, $blitzScore);
-
-        return $student;
-    }
-
-    private function officialAttempt(Assessment $task, User $student, string $score): void
-    {
-        $attempt = $this->submission($task, $student, 'checked', ['normalized_score' => $score, 'earned_points' => '0.00000000']);
-        OfficialTaskScore::factory()->create(['official_attempt_id' => $attempt->id]);
     }
 
     /** @return array{bool, bool, bool, bool} */

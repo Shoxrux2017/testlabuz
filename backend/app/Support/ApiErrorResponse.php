@@ -66,6 +66,12 @@ final class ApiErrorResponse
 
     private const CODE_RESULT_CLOSED = 'result_closed';
 
+    private const CODE_MANUAL_RELEASE_NOT_ALLOWED = 'manual_release_not_allowed';
+
+    private const CODE_RESULT_NOT_READY = 'result_not_ready';
+
+    private const CODE_STUDENT_RESULT_NOT_RELEASED = 'student_result_not_released';
+
     private const CODE_RESOURCE_NOT_FOUND = 'resource_not_found';
 
     private const CODE_SERVER_ERROR = 'server_error';
@@ -357,6 +363,45 @@ final class ApiErrorResponse
         return self::json(
             'This result is closed and can no longer be changed.',
             self::CODE_RESULT_CLOSED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function manualReleaseNotAllowed(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'Manual release is not allowed in the current release mode.',
+            self::CODE_MANUAL_RELEASE_NOT_ALLOWED,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function resultNotReady(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The result is not ready to be released.',
+            self::CODE_RESULT_NOT_READY,
+            Response::HTTP_CONFLICT,
+        );
+    }
+
+    public static function studentResultNotReleased(Request $request): ?JsonResponse
+    {
+        if (! self::isApiRequest($request)) {
+            return null;
+        }
+
+        return self::json(
+            'The result is not visible to the Student yet.',
+            self::CODE_STUDENT_RESULT_NOT_RELEASED,
             Response::HTTP_CONFLICT,
         );
     }

@@ -16,15 +16,15 @@ use App\Models\LearningMaterial;
 use App\Models\Topic;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
+use Tests\Feature\Student\Concerns\UsesBlitzReadSnapshot;
 use Tests\TestCase;
 
 class StudentTopicApiTest extends TestCase
 {
-    use RefreshDatabase;
+    use UsesBlitzReadSnapshot;
 
     private const URI = '/api/v1/student/topics';
 
@@ -235,7 +235,8 @@ class StudentTopicApiTest extends TestCase
         $this->assertSame(['id', 'original_name', 'extension', 'size_bytes'], array_keys($response->json('data.materials.0.file')));
         $this->assertSame([], $response->json('data.homework'));
         $this->assertSame('not_available', $response->json('data.blitz_status'));
-        $this->assertSame('waiting_for_homework', $response->json('data.result_status'));
+        // Outside any Topic result cohort the Student has no result (S10-BE-003).
+        $this->assertNull($response->json('data.result_status'));
 
         foreach (['institution_id', 'teacher_id', 'uploaded_by_user_id', 'mime_type', 'secret-disk', 'private/secret-key.pptx', 'checksum_sha256', 'removed_at', 'position', 'url'] as $hidden) {
             $this->assertStringNotContainsString($hidden, $response->getContent());

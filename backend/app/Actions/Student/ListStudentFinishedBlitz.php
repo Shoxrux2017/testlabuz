@@ -8,14 +8,17 @@ use App\Models\InstitutionSetting;
 use App\Models\User;
 use App\Support\Checking\OfficialScoreEvaluator;
 use App\Support\Student\StudentBlitzAccess;
+use App\Support\Student\StudentResultRelease;
 use App\Support\Student\StudentResultVisibility;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
  * The Student's finished Blitz tasks with the result of the Attempt that counts: replacement #2
  * after an approved exception, otherwise #1 (docs/09 §20.6). A finished Blitz cannot gain an
- * exception or an Attempt, so the page is read without a snapshot.
+ * exception or an Attempt, and a Topic release only ever opens results, so the page is read
+ * without a snapshot.
  */
 final class ListStudentFinishedBlitz
 {
@@ -28,13 +31,14 @@ final class ListStudentFinishedBlitz
     public function __construct(
         private readonly StudentBlitzAccess $access,
         private readonly StudentResultVisibility $visibility,
+        private readonly StudentResultRelease $release,
         private readonly OfficialScoreEvaluator $evaluator,
     ) {}
 
     public function __invoke(User $student, int $page, int $perPage): LengthAwarePaginator
     {
         $blitz = $this->access->finishedQuery($student)->paginate(perPage: $perPage, pageName: 'page', page: $page);
-        $released = $this->visibility->released(InstitutionSetting::query()
+        $released = $this->release->forTasks($student, Collection::make($blitz->items()), InstitutionSetting::query()
             ->select(['institution_id', 'student_result_release_mode'])
             ->where('institution_id', $student->institution_id)
             ->first()?->student_result_release_mode);
@@ -44,7 +48,7 @@ final class ListStudentFinishedBlitz
         foreach ($blitz->items() as $assessment) {
             $attempt = $counting[$assessment->id] = $this->countingAttempt($assessment);
 
-            if ($attempt !== null && $this->visibility->visible($attempt, $assessment, $released)) {
+            if ($attempt !== null && $this->visibility->visible($attempt, $assessment, $released[$assessment->id])) {
                 $visible[$assessment->id] = $attempt;
             }
         }

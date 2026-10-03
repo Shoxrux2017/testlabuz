@@ -5,12 +5,16 @@ namespace Tests\Feature;
 use App\Exceptions\Files\FileTooLargeException;
 use App\Exceptions\Files\FileUploadFailedException;
 use App\Exceptions\Files\UnsupportedFileTypeException;
+use App\Exceptions\ManualReleaseNotAllowedException;
 use App\Exceptions\ResultClosedException;
+use App\Exceptions\ResultNotReadyException;
+use App\Exceptions\StudentResultNotReleasedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -103,6 +107,28 @@ class ApiErrorContractTest extends TestCase
 
         $decoded = $this->assertErrorContract($response, 409, 'result_closed');
         $this->assertSame('This result is closed and can no longer be changed.', $decoded->message);
+    }
+
+    /** @return array<string, array{class-string<RuntimeException>, string, string}> */
+    public static function releaseConflicts(): array
+    {
+        return [
+            'manual release not allowed' => [ManualReleaseNotAllowedException::class, 'manual_release_not_allowed', 'Manual release is not allowed in the current release mode.'],
+            'result not ready' => [ResultNotReadyException::class, 'result_not_ready', 'The result is not ready to be released.'],
+            'student result not released' => [StudentResultNotReleasedException::class, 'student_result_not_released', 'The result is not visible to the Student yet.'],
+        ];
+    }
+
+    /** @param class-string<RuntimeException> $exception */
+    #[DataProvider('releaseConflicts')]
+    public function test_release_conflicts_return_their_specific_contract(string $exception, string $code, string $message): void
+    {
+        Route::post('/api/v1/test-release-conflict', function () use ($exception) {
+            throw new $exception;
+        });
+
+        $decoded = $this->assertErrorContract($this->postJson('/api/v1/test-release-conflict'), 409, $code);
+        $this->assertSame($message, $decoded->message);
     }
 
     public function test_unsupported_file_type_exception_returns_exact_file_error_contract(): void

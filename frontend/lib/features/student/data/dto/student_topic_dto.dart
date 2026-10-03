@@ -229,10 +229,16 @@ class StudentTopicDetailDto {
         'Student Topic homework placeholder must be an empty array.',
       );
     }
-    if (map['blitz_status'] != 'not_available' ||
-        map['result_status'] != 'waiting_for_homework') {
+    if (map['blitz_status'] != 'not_available') {
       throw const FormatException(
         'Student Topic placeholder status is unsupported.',
+      );
+    }
+    final resultStatus = map['result_status'];
+    // Null when the Student has no Topic result (outside the cohort).
+    if (resultStatus != null && !_topicResultStatuses.contains(resultStatus)) {
+      throw const FormatException(
+        'Student Topic result status is unsupported.',
       );
     }
 
@@ -433,5 +439,14 @@ const _detailKeys = <String>{
   'homework',
   'blitz_status',
   'result_status',
+};
+const _topicResultStatuses = <String>{
+  'waiting_for_homework',
+  'waiting_for_blitz',
+  'waiting_for_teacher_review',
+  'waiting_for_settings',
+  'calculated',
+  'not_completed',
+  'closed',
 };
 const _allowedExtensions = <String>{'pdf', 'docx', 'ppt', 'pptx'};

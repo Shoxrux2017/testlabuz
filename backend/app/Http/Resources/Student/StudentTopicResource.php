@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Student;
 
+use App\Enums\TopicResultStatus;
 use App\Models\Group;
 use App\Models\Topic;
 use DateTimeImmutable;
@@ -25,6 +26,12 @@ class StudentTopicResource extends JsonResource
             throw new LogicException('Student Topic resources require preloaded Group and Learning Material projections.');
         }
 
+        if (! array_key_exists('student_result_status', $this->resource->getAttributes())) {
+            throw new LogicException('Student Topic resources require the Student\'s Topic result status.');
+        }
+
+        $resultStatus = $this->getAttribute('student_result_status');
+
         return [
             'id' => $this->id,
             'group' => [
@@ -43,7 +50,8 @@ class StudentTopicResource extends JsonResource
             'materials' => StudentLearningMaterialResource::collection($materials),
             'homework' => [],
             'blitz_status' => 'not_available',
-            'result_status' => 'waiting_for_homework',
+            // The Student's Topic result status, or null without a result (docs/09 §29.3).
+            'result_status' => $resultStatus instanceof TopicResultStatus ? $resultStatus->value : null,
         ];
     }
 
