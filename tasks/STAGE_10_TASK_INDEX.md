@@ -130,8 +130,8 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 | `1` | `S10-BE-001` | Backend | Result foundation: `PH2-4` consolidation, `CL9-11` hardening, `topic_results`, calculator, live cohort evaluator (no API) | `DOC-001` | `Approved` (on `main` `cc7a05f`) | Accepted — delivered (PR #317, `main` `f720b8a`) | `tasks/backend/stage-10/S10-BE-001-topic-result-foundation.md` |
 | `2` | `S10-BE-002` | Backend | Teacher result list and detail with the visibility state (the Student/Parent visibility rule), Teacher comment | `BE-001` | `Approved` (on `main` `f720b8a`) | Accepted — delivered (PR #318, `main` `b096f18`) | `tasks/backend/stage-10/S10-BE-002-teacher-topic-results.md` |
 | `3` | `S10-BE-003` | Backend + FE parser | Release (single, bulk), Student result read, Student Topic detail `result_status`, Stage 9 Student reads per `S10-D4`, Parent route group and read | `BE-002` | `Approved` (on `main` `b096f18`) | Accepted — delivered (PR #319, `main` `48a607a`) | `tasks/backend/stage-10/S10-BE-003-release-and-student-parent-reads.md` |
-| `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Approved` (on `main` `48a607a`) | Review `PASS`; PR open | `tasks/backend/stage-10/S10-BE-004-closure-and-work-order.md` |
-| `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | `Draft` | Not started | executed record |
+| `4` | `S10-BE-004` | Backend | Closure and work order: close (single, bulk, Topic archive), `result_closed` guards, Homework before Blitz (`S10-D8`), real-concurrency tests (closure races, `CL9-9`) | `BE-003` | `Approved` (on `main` `48a607a`) | Accepted — delivered (PR #320, `main` `4356179`) | `tasks/backend/stage-10/S10-BE-004-closure-and-work-order.md` |
+| `5` | `S10-BE-PHASE-2` | Backend checkpoint | Full backend suite + fresh review of all Stage 10 backend; then report to the owner and wait | `BE-001…004` | Executed on `main` `4356179` | `PASS` — reported to the owner | `tasks/backend/stage-10/S10-BE-PHASE-2-backend-block-review.md` |
 | — | Frontend plan | Frontend | Planned after the owner reviews the backend report | Owner review | — | — | — |
 
 Only a row whose readiness is `Approved` may be implemented.
@@ -145,9 +145,10 @@ Only a row whose readiness is `Approved` may be implemented.
   same PR (`S10-T9`); other Stage 9 Student responses change values, not shapes.
 - **`S10-BE-004`** adds `409 result_closed` to existing Teacher and Student actions and the `S10-D8`
   behavior to the Stage 8 Blitz activation and Start (`official_homework_not_activated`,
-  `homework_not_submitted`). Stage 8/9 tests and E2E seeders that activate an official Blitz while the
-  official Homework is open, or start it without a submitted Homework, are updated deliberately and listed
-  in its contract. The frontend maps the new codes and shows the activation warning in the frontend plan.
+  `homework_not_submitted`). Stage 8/9 tests that activate an official Blitz while the official Homework
+  is open, or start it without a submitted Homework, are updated deliberately and listed in its contract.
+  The Stage 8/9 E2E seeders need no change: they write history rows, which Stage 10 reads as history from
+  before `S10-D8` (the historical Stage 8 harness scenarios are superseded, `S10-BE-PHASE-2` `D-2`). The frontend maps the new codes and shows the activation warning in the frontend plan.
 
 ## 9. Checkpoints
 
@@ -211,6 +212,12 @@ Only a row whose readiness is `Approved` may be implemented.
   dataset not restored). Focused suites (`Unit`, `Results`, `Teacher`, `Student`, `Parent`, `Checking`,
   `Homework`, `Seeders`, error contract, `Authorization`): 2618 passed; the files changed by the review fixes
   rerun: 146 passed.
+- 2026-10-03: `S10-BE-004` delivered (PR #320, `main` `4356179`).
+- 2026-10-03: `S10-BE-PHASE-2` on `main` `4356179`: four read-only reviewers (foundation, Teacher surface,
+  Student/Parent and `S10-D4`, cross-cutting) all `PASS` (P1 = 0, P2 = 0, P3 = 11); full backend suite
+  3136 passed (exit 0, two known Stage 9 mock notices); Pint clean. Verdict `PASS`. Reported to the owner;
+  the owner decides the optional test-hardening items. Record:
+  `tasks/backend/stage-10/S10-BE-PHASE-2-backend-block-review.md`.
 
 ## 12. Change Log
 
