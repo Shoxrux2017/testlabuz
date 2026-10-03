@@ -2,6 +2,7 @@
 
 namespace App\Domain\Assessment\Checking;
 
+use App\Domain\Text\UnicodeWhitespace;
 use LogicException;
 use Normalizer;
 
@@ -20,8 +21,7 @@ final class AnswerTextNormalizer
         "\u{2019}" => "'",
     ];
 
-    // The Student-answer whitespace set, also used by StudentAnswerText.
-    private const WHITESPACE_RUN = '/[\x{0009}-\x{000D}\x{0020}\x{0085}\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+/u';
+    private const WHITESPACE_RUN = '/'.UnicodeWhitespace::CHARACTER_CLASS.'+/u';
 
     public function normalize(string $text): string
     {

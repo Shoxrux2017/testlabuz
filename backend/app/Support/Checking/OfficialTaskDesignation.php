@@ -4,7 +4,9 @@ namespace App\Support\Checking;
 
 use App\Models\Assessment;
 use App\Models\TopicResultPair;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /** Whether a task is the Homework or the Blitz of its Topic result pair, the only tasks with an official score. */
 final class OfficialTaskDesignation
@@ -42,5 +44,17 @@ final class OfficialTaskDesignation
 
         return $topics->keys()->filter(fn (string $id): bool => $pairs->contains(fn (TopicResultPair $pair): bool => $pair->topic_id === $topics[$id]
             && ($pair->homework_assessment_id === $id || $pair->blitz_assessment_id === $id)))->values()->all();
+    }
+
+    /**
+     * The same rule as one uncorrelated set of `(institution_id, assessment_id)` rows over every
+     * Institution, which a planner can hash instead of probing the pairs per row. A pair's tasks
+     * belong to its Topic (same-Topic foreign keys), so no Topic filter is needed.
+     */
+    public function officialTaskKeys(): Builder
+    {
+        return DB::query()->select(['institution_id', 'homework_assessment_id'])->from('topic_result_pairs')
+            ->unionAll(DB::query()->select(['institution_id', 'blitz_assessment_id'])->from('topic_result_pairs')
+                ->whereNotNull('blitz_assessment_id'));
     }
 }

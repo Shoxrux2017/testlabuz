@@ -20,7 +20,7 @@ final class StudentBlitzAccess
     {
         return Assessment::query()
             ->select([
-                'assessments.id', 'assessments.institution_id', 'assessments.topic_id',
+                'assessments.id', 'assessments.institution_id', 'assessments.topic_id', 'assessments.type',
                 'assessments.title', 'assessments.description', 'assessments.student_instructions',
                 'assessments.assignment_mode', 'assessments.total_possible_points',
                 'assessment_students.id as student_recipient_id',
@@ -93,7 +93,7 @@ final class StudentBlitzAccess
                     ->where('student_id', $student->id)
                     ->orderBy('attempt_number')->orderBy('id'),
                 'blitzAttemptExceptions' => fn ($query) => $query
-                    ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id', 'replacement_attempt_id'])
+                    ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'student_id', 'invalidated_attempt_id', 'replacement_attempt_id'])
                     ->where('institution_id', $student->institution_id)->where('student_id', $student->id),
             ])
             ->orderByRaw('coalesce(blitz_tasks.closed_at, blitz_tasks.archived_at) desc')

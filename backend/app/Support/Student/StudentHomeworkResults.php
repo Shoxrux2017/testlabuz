@@ -44,7 +44,7 @@ final class StudentHomeworkResults
             $assessment->setAttribute('student_official_score', null);
 
             foreach ($this->attempts($assessment) as $attempt) {
-                $attempt->setAttribute('student_result', $this->result($attempt, $released));
+                $attempt->setAttribute('student_result', $this->result($attempt, $assessment, $released));
             }
         }
 
@@ -77,9 +77,9 @@ final class StudentHomeworkResults
     }
 
     /** @return array{visible: bool, normalized_score: float|null} */
-    private function result(AssessmentAttempt $attempt, bool $released): array
+    private function result(AssessmentAttempt $attempt, Assessment $homework, bool $released): array
     {
-        $visible = $this->visibility->visible($attempt, $released);
+        $visible = $this->visibility->visible($attempt, $homework, $released);
 
         return ['visible' => $visible, 'normalized_score' => $visible ? (float) $attempt->normalized_score : null];
     }

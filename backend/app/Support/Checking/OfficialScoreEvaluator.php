@@ -36,6 +36,26 @@ final class OfficialScoreEvaluator
     /** @param Collection<int, AssessmentAttempt> $attempts All of the recipient's Attempts */
     public function evaluate(Assessment $assessment, AssessmentStudent $recipient, Collection $attempts): OfficialScoreEvaluation
     {
+        $exception = $assessment->type === AssessmentType::Blitz
+            ? BlitzAttemptException::query()
+                ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'invalidated_attempt_id', 'replacement_attempt_id'])
+                ->where('institution_id', $assessment->institution_id)
+                ->where('assessment_id', $assessment->id)
+                ->where('assessment_student_id', $recipient->id)
+                ->first()
+            : null;
+
+        return $this->evaluateLoaded($assessment, $recipient, $attempts, $exception);
+    }
+
+    /**
+     * The same evaluation from preloaded data, for readers of many recipients: the recipient's Blitz
+     * exception (or null when there is none) is given instead of read.
+     *
+     * @param  Collection<int, AssessmentAttempt>  $attempts  All of the recipient's Attempts
+     */
+    public function evaluateLoaded(Assessment $assessment, AssessmentStudent $recipient, Collection $attempts, ?BlitzAttemptException $exception): OfficialScoreEvaluation
+    {
         if ($recipient->assessment_id !== $assessment->id) {
             throw new LogicException('An official score is evaluated for a recipient of its own task.');
         }
@@ -47,12 +67,51 @@ final class OfficialScoreEvaluator
             }
         }
 
-        $attempts = $attempts->sortBy([['attempt_number', 'asc'], ['id', 'asc']])->values();
+        if ($exception !== null && ($assessment->type !== AssessmentType::Blitz
+            || $exception->assessment_id !== $assessment->id || $exception->assessment_student_id !== $recipient->id)) {
+            throw new LogicException('A Blitz exception belongs to the evaluated recipient of its own Blitz.');
+        }
 
         return match ($assessment->type) {
-            AssessmentType::Homework => $this->homework($attempts),
-            AssessmentType::Blitz => $this->blitz($assessment, $recipient, $attempts),
+            AssessmentType::Homework => $this->homework($attempts->sortBy([['attempt_number', 'asc'], ['id', 'asc']])->values()),
+            AssessmentType::Blitz => $this->blitzCandidate(
+                $this->countingBlitzAttempt($attempts, $exception),
+                $exception === null ? OfficialScoreSelectionPolicy::ValidNormalBlitz : OfficialScoreSelectionPolicy::ApprovedBlitzExceptionReplacement,
+            ),
         };
+    }
+
+    /**
+     * The Blitz Attempt that counts: normal #1 without an exception, else replacement #2, which is
+     * null until the Student takes it. The Attempt graph must be consistent.
+     *
+     * @param  Collection<int, AssessmentAttempt>  $attempts  All of one recipient's Blitz Attempts
+     */
+    public function countingBlitzAttempt(Collection $attempts, ?BlitzAttemptException $exception): ?AssessmentAttempt
+    {
+        $attempts = $attempts->sortBy([['attempt_number', 'asc'], ['id', 'asc']])->values();
+
+        if ($attempts->pluck('attempt_number')->all() !== array_slice([1, 2], 0, $attempts->count())) {
+            throw new LogicException('A Blitz history holds normal Attempt #1 and at most replacement #2.');
+        }
+
+        [$normal, $replacement] = [$attempts->get(0), $attempts->get(1)];
+
+        if ($exception === null) {
+            if ($replacement !== null || ($normal !== null && ! $normal->official_score_eligible)) {
+                throw new LogicException('A replacement or an invalidated normal Attempt requires a Blitz exception.');
+            }
+
+            return $normal;
+        }
+
+        if ($normal === null || $normal->official_score_eligible || $exception->invalidated_attempt_id !== $normal->id
+            || $exception->replacement_attempt_id !== $replacement?->id
+            || ($replacement !== null && ! $replacement->official_score_eligible)) {
+            throw new LogicException('A Blitz exception must link the invalidated normal and the optional replacement Attempt.');
+        }
+
+        return $replacement;
     }
 
     /** @param Collection<int, AssessmentAttempt> $attempts */
@@ -133,38 +192,6 @@ final class OfficialScoreEvaluator
                 ? (string) $question->points : throw new LogicException('A waiting answer lost its Question.'),
             AttemptAnswerCheckingStatus::Pending => throw new LogicException('A waiting Attempt still has an unchecked answer.'),
         };
-    }
-
-    /** @param Collection<int, AssessmentAttempt> $attempts */
-    private function blitz(Assessment $assessment, AssessmentStudent $recipient, Collection $attempts): OfficialScoreEvaluation
-    {
-        if ($attempts->pluck('attempt_number')->all() !== array_slice([1, 2], 0, $attempts->count())) {
-            throw new LogicException('A Blitz history holds normal Attempt #1 and at most replacement #2.');
-        }
-
-        [$normal, $replacement] = [$attempts->get(0), $attempts->get(1)];
-        $exception = BlitzAttemptException::query()
-            ->select(['id', 'institution_id', 'assessment_id', 'assessment_student_id', 'invalidated_attempt_id', 'replacement_attempt_id'])
-            ->where('institution_id', $assessment->institution_id)
-            ->where('assessment_id', $assessment->id)
-            ->where('assessment_student_id', $recipient->id)
-            ->first();
-
-        if ($exception === null) {
-            if ($replacement !== null || ($normal !== null && ! $normal->official_score_eligible)) {
-                throw new LogicException('A replacement or an invalidated normal Attempt requires a Blitz exception.');
-            }
-
-            return $this->blitzCandidate($normal, OfficialScoreSelectionPolicy::ValidNormalBlitz);
-        }
-
-        if ($normal === null || $normal->official_score_eligible || $exception->invalidated_attempt_id !== $normal->id
-            || $exception->replacement_attempt_id !== $replacement?->id
-            || ($replacement !== null && ! $replacement->official_score_eligible)) {
-            throw new LogicException('A Blitz exception must link the invalidated normal and the optional replacement Attempt.');
-        }
-
-        return $this->blitzCandidate($replacement, OfficialScoreSelectionPolicy::ApprovedBlitzExceptionReplacement);
     }
 
     private function blitzCandidate(?AssessmentAttempt $candidate, OfficialScoreSelectionPolicy $policy): OfficialScoreEvaluation

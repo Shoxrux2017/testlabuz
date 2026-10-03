@@ -82,6 +82,22 @@ class TeacherBlitzAttemptExceptionApiTest extends TestCase
             [$body, '', '?extra=1', 'application/json'], [$body, '', '', 'text/plain']];
     }
 
+    public function test_reason_of_only_unicode_whitespace_is_rejected_like_an_ascii_blank_reason(): void
+    {
+        [$student, $assessment, , $teacher] = $this->exceptionContext();
+        $ascii = $this->grantException($teacher, $assessment, $student, body: ['reason_type' => 'technical', 'reason' => '   '])
+            ->assertUnprocessable();
+
+        $this->grantException($teacher, $assessment, $student, body: ['reason_type' => 'technical', 'reason' => "\u{00A0}\u{3000}"])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'validation_failed')
+            ->assertJsonPath('errors', $ascii->json('errors'));
+        $this->assertDatabaseCount('blitz_attempt_exceptions', 0);
+
+        $this->grantException($teacher, $assessment, $student, body: ['reason_type' => 'technical', 'reason' => "\u{00A0}Device lost power.\u{00A0}"])
+            ->assertCreated();
+    }
+
     public function test_unicode_limit_is_in_characters_and_trim_precedes_length_validation(): void
     {
         [$student, $assessment, , $teacher] = $this->exceptionContext();

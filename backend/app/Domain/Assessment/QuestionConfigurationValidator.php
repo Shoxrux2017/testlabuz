@@ -2,6 +2,7 @@
 
 namespace App\Domain\Assessment;
 
+use App\Domain\Text\UnicodeWhitespace;
 use App\Enums\FileExtension;
 use App\Enums\QuestionCheckingMode;
 use App\Enums\QuestionType;
@@ -20,7 +21,7 @@ final class QuestionConfigurationValidator
         string $prompt,
         array $configuration,
     ): void {
-        if (trim($prompt) === '' || mb_strlen($prompt) > QuestionAuthoringLimits::MAX_PROMPT_LENGTH) {
+        if (UnicodeWhitespace::isBlank(trim($prompt)) || mb_strlen($prompt) > QuestionAuthoringLimits::MAX_PROMPT_LENGTH) {
             throw $this->invalidConfiguration();
         }
 
@@ -286,7 +287,7 @@ final class QuestionConfigurationValidator
 
     private function validText(mixed $value, int $maximumLength): bool
     {
-        return is_string($value) && trim($value) !== '' && mb_strlen($value) <= $maximumLength;
+        return is_string($value) && ! UnicodeWhitespace::isBlank(trim($value)) && mb_strlen($value) <= $maximumLength;
     }
 
     /** @param list<int> $positions */

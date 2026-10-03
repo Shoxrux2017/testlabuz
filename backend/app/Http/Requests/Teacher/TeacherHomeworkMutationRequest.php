@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Teacher;
 
+use App\Domain\Text\UnicodeWhitespace;
 use App\Enums\AssessmentAssignmentMode;
 use App\Support\Assessment\TeacherAssessmentQuestionPayloadValidator;
 use App\Support\Teacher\InstitutionHomeworkDeadlineAt;
@@ -53,14 +54,14 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
 
         foreach (['title', 'student_instructions'] as $field) {
             if (isset($payload[$field]) && is_string($payload[$field])) {
-                $payload[$field] = trim($payload[$field]);
+                $payload[$field] = UnicodeWhitespace::blankAsEmpty(trim($payload[$field]));
             }
         }
 
         if (isset($payload['questions']) && is_array($payload['questions'])) {
             foreach ($payload['questions'] as $index => $question) {
                 if (is_array($question) && isset($question['prompt']) && is_string($question['prompt'])) {
-                    $payload['questions'][$index]['prompt'] = trim($question['prompt']);
+                    $payload['questions'][$index]['prompt'] = UnicodeWhitespace::blankAsEmpty(trim($question['prompt']));
                 }
             }
         }
@@ -102,13 +103,14 @@ abstract class TeacherHomeworkMutationRequest extends FormRequest
 
     protected function commonRules(bool $required): array
     {
-        $presence = $required ? 'required' : 'sometimes';
+        // An update may omit a field, but a present blank one fails like on create (CL9-11).
+        $presence = $required ? ['required'] : ['sometimes', 'required'];
 
         return [
-            'title' => [$presence, 'string', 'min:1', 'max:255'],
+            'title' => [...$presence, 'string', 'min:1', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string', 'max:10000'],
-            'student_instructions' => [$presence, 'string', 'min:1', 'max:10000'],
-            'assignment_mode' => [$presence, 'string', Rule::in(AssessmentAssignmentMode::values())],
+            'student_instructions' => [...$presence, 'string', 'min:1', 'max:10000'],
+            'assignment_mode' => [...$presence, 'string', Rule::in(AssessmentAssignmentMode::values())],
             'student_ids' => [$required ? 'present' : 'sometimes', 'array'],
             'student_ids.*' => ['string', 'uuid'],
             'deadline_at' => ['sometimes', 'nullable', 'string', $this->dateTimeSyntaxRule('deadline_at')],

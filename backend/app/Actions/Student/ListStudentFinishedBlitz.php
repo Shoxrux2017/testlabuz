@@ -4,14 +4,13 @@ namespace App\Actions\Student;
 
 use App\Models\Assessment;
 use App\Models\AssessmentAttempt;
-use App\Models\BlitzAttemptException;
 use App\Models\InstitutionSetting;
 use App\Models\User;
+use App\Support\Checking\OfficialScoreEvaluator;
 use App\Support\Student\StudentBlitzAccess;
 use App\Support\Student\StudentResultVisibility;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use LogicException;
 
 /**
  * The Student's finished Blitz tasks with the result of the Attempt that counts: replacement #2
@@ -29,6 +28,7 @@ final class ListStudentFinishedBlitz
     public function __construct(
         private readonly StudentBlitzAccess $access,
         private readonly StudentResultVisibility $visibility,
+        private readonly OfficialScoreEvaluator $evaluator,
     ) {}
 
     public function __invoke(User $student, int $page, int $perPage): LengthAwarePaginator
@@ -39,13 +39,16 @@ final class ListStudentFinishedBlitz
             ->where('institution_id', $student->institution_id)
             ->first()?->student_result_release_mode);
         $counting = [];
+        $visible = [];
 
         foreach ($blitz->items() as $assessment) {
-            $counting[$assessment->id] = $this->countingAttempt($assessment);
+            $attempt = $counting[$assessment->id] = $this->countingAttempt($assessment);
+
+            if ($attempt !== null && $this->visibility->visible($attempt, $assessment, $released)) {
+                $visible[$assessment->id] = $attempt;
+            }
         }
 
-        $visible = array_filter($counting, fn (?AssessmentAttempt $attempt): bool => $attempt !== null
-            && $this->visibility->visible($attempt, $released));
         $feedback = $this->feedback($student, array_map(fn (AssessmentAttempt $attempt): string => $attempt->id, array_values($visible)));
 
         foreach ($blitz->items() as $assessment) {
@@ -65,14 +68,10 @@ final class ListStudentFinishedBlitz
 
     private function countingAttempt(Assessment $assessment): ?AssessmentAttempt
     {
-        $exception = $assessment->getRelation('blitzAttemptExceptions')->first();
-        $attempt = $assessment->getRelation('attempts')->firstWhere('attempt_number', $exception === null ? 1 : 2);
-
-        if ($exception instanceof BlitzAttemptException && $exception->replacement_attempt_id !== $attempt?->id) {
-            throw new LogicException('A Blitz exception must link the replacement Attempt.');
-        }
-
-        return $attempt;
+        return $this->evaluator->countingBlitzAttempt(
+            $assessment->getRelation('attempts'),
+            $assessment->getRelation('blitzAttemptExceptions')->first(),
+        );
     }
 
     /**
