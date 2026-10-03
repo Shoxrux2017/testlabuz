@@ -20,9 +20,9 @@ import '../domain/teacher_homework.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_homework_lifecycle_controls.dart';
 import 'teacher_homework_review_deadline_section.dart';
-import 'teacher_task_review_summary_card.dart';
 import 'teacher_official_homework_section.dart';
 import 'teacher_question_read_view.dart';
+import 'teacher_task_review_summary_card.dart';
 import 'teacher_topic_formatters.dart';
 
 class TeacherHomeworkDetailScreen extends ConsumerStatefulWidget {
@@ -173,12 +173,14 @@ class _TeacherHomeworkDetailScreenState
       ) {
         final succeeded =
             next.status == TeacherHomeworkReviewDeadlineStatus.confirmedSuccess;
-        // The refreshed archived Homework hides the section, so its message
-        // is announced here instead.
+        // A refreshed archived Homework hides the section, so its message is
+        // announced here instead; a still-shown section explains it inline.
         final archived =
             next.status ==
                 TeacherHomeworkReviewDeadlineStatus.definiteFailure &&
-            next.conflictCode == ApiErrorCodes.taskArchived;
+            next.conflictCode == ApiErrorCodes.taskArchived &&
+            ref.read(detailProvider).homework?.status ==
+                TeacherHomeworkStatus.archived;
         if ((!succeeded && !archived) ||
             next.feedback == null ||
             (previous?.status == next.status &&

@@ -12,6 +12,7 @@ import '../application/teacher_homework_create_state.dart';
 import '../application/teacher_session_key.dart';
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_homework_form.dart';
+import 'teacher_date_picker_range.dart';
 import 'teacher_homework_form_fields.dart';
 import 'teacher_homework_student_picker_dialog.dart';
 
@@ -209,11 +210,12 @@ class _TeacherHomeworkCreateScreenState
       _showTimezoneUnavailable();
       return;
     }
+    final range = teacherDatePickerRange(initial.date);
     final date = await showDatePicker(
       context: context,
       initialDate: initial.date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: range.first,
+      lastDate: range.last,
     );
     if (date == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;

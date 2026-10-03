@@ -303,10 +303,8 @@ void main() {
             (code: ApiErrorCodes.rateLimited, status: 429),
             'Too many requests. Wait before trying again.',
           ),
-          (
-            (code: 'server_error', status: 500),
-            'The review deadline could not be updated.',
-          ),
+          // A 500 never reaches here: the transport makes it an unknown
+          // outcome, which reconciles (tested above).
         ];
 
         for (final (failure, message) in cases) {

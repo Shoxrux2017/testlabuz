@@ -35,6 +35,8 @@ final teacherSubmissionReviewControllerProvider = NotifierProvider.autoDispose
     >(TeacherSubmissionReviewController.new);
 
 const _savedFeedback = 'Review saved.';
+const _needsAttentionMessage =
+    'Some answers need attention. Check the marked fields.';
 const _notMatchingMessage =
     'The review could not be confirmed. Check the answers and save again.';
 const _unconfirmedMessage =
@@ -133,9 +135,11 @@ class TeacherSubmissionReviewController
       return;
     }
     if (review.errors.isNotEmpty) {
+      // The bar's live region announces it; the next edit clears it.
       state = TeacherSubmissionReviewState(
         drafts: state.drafts,
         errors: review.errors,
+        failureMessage: _needsAttentionMessage,
       );
       return;
     }
@@ -309,21 +313,26 @@ class TeacherSubmissionReviewController
     _refreshRelatedViews(submission, sessionKey);
   }
 
-  /// Maps `answers.N.<field>` errors to the answer of sent item N.
+  /// Maps `answers.N.<field>` errors to the answer of sent item N, in item
+  /// (Question) order whatever order the server lists them in.
   Map<String, TeacherAnswerReviewErrors> _itemErrors(
     TeacherSubmissionReviewRequest request,
     Map<String, List<String>> fieldErrors,
   ) {
-    final errors = <String, TeacherAnswerReviewErrors>{};
+    final indexed = <(int, String)>[];
     for (final key in fieldErrors.keys) {
       final match = _itemErrorKey.firstMatch(key);
       final index = match == null ? null : int.tryParse(match.group(1)!);
-      if (match == null || index == null || index >= request.items.length) {
-        continue;
+      if (match != null && index != null && index < request.items.length) {
+        indexed.add((index, match.group(2)!));
       }
+    }
+    indexed.sort((a, b) => a.$1.compareTo(b.$1));
+    final errors = <String, TeacherAnswerReviewErrors>{};
+    for (final (index, field) in indexed) {
       final answerId = request.items[index].answerId;
       final current = errors[answerId] ?? const TeacherAnswerReviewErrors();
-      errors[answerId] = switch (match.group(2)) {
+      errors[answerId] = switch (field) {
         'awarded_points' => TeacherAnswerReviewErrors(
           points: TeacherReviewPointsError.invalid,
           feedbackTooLong: current.feedbackTooLong,

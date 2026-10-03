@@ -554,6 +554,8 @@ void main() {
 
       await _type(tester, _feedback(waitingId), 'Nice.');
       await _type(tester, _points(reviewedId), '4');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
       await tester.tap(find.byKey(_saveButton));
       await tester.pumpAndSettle();
 
@@ -563,6 +565,17 @@ void main() {
         find.text('Enter 0 to 3 points with up to 6 decimal places.'),
         findsOneWidget,
       );
+      // Announced, and the first marked field in Question order is focused.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('teacherSubmissionReviewMessage')),
+          matching: find.text(
+            'Some answers need attention. Check the marked fields.',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(_hasFocus(tester, find.byKey(_points(reviewedId))), isTrue);
 
       submissions.onSaveReview = (_, _) => Future.error(
         ApiRequestException(
@@ -599,9 +612,21 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        _hasFocus(
+          tester,
+          find.ancestor(
+            of: find.text('Use at most 2000 characters.'),
+            matching: find.byType(TextField),
+          ),
+        ),
+        isTrue,
+      );
     });
 
-    testWidgets('everything is disabled while saving', (tester) async {
+    testWidgets('a save locks everything but keeps the field focused', (
+      tester,
+    ) async {
       final release = Completer<TeacherSubmissionDetail>();
       final submissions = FakeTeacherSubmissionRepository()
         ..onSaveReview = (_, _) => release.future;
@@ -627,9 +652,11 @@ void main() {
       ]) {
         expect(tester.widget<IconButton>(find.byKey(key)).onPressed, isNull);
       }
+      // Read-only instead of disabled, so the edited field keeps focus.
       for (final key in [_points(waitingId), _feedback(reviewedId)]) {
-        expect(tester.widget<TextField>(find.byKey(key)).enabled, isFalse);
+        expect(tester.widget<TextField>(find.byKey(key)).readOnly, isTrue);
       }
+      expect(_hasFocus(tester, find.byKey(_feedback(waitingId))), isTrue);
 
       release.complete(
         TeacherSubmissionDetailDto.fromJson(reviewedDetailJson()).toDomain(),
@@ -640,8 +667,8 @@ void main() {
         findsNothing,
       );
       expect(
-        tester.widget<TextField>(find.byKey(_points(waitingId))).enabled,
-        isTrue,
+        tester.widget<TextField>(find.byKey(_points(waitingId))).readOnly,
+        isFalse,
       );
     });
 
@@ -1085,6 +1112,15 @@ class _Pumped {
   _Pumped(this.local);
 
   final _LocalAdapter local;
+}
+
+bool _hasFocus(WidgetTester tester, Finder field) {
+  return tester
+      .widget<EditableText>(
+        find.descendant(of: field, matching: find.byType(EditableText)),
+      )
+      .focusNode
+      .hasFocus;
 }
 
 Future<_Pumped> _pumpApp(

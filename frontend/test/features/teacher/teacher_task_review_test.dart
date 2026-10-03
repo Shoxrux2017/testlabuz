@@ -7,6 +7,7 @@ import 'package:testlabuz_client/app/device/app_device_surface.dart';
 import 'package:testlabuz_client/app/router/app_router.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_controller.dart';
 import 'package:testlabuz_client/features/auth/application/auth_session_state.dart';
+import 'package:testlabuz_client/features/auth/domain/user_role.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_mutation_activity.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_blitz_route_target.dart';
 import 'package:testlabuz_client/features/teacher/application/teacher_homework_route_mutation_activity.dart';
@@ -35,6 +36,42 @@ final _homeworkReviews =
 final _blitzReviews = '/teacher/topics/$_topicId/blitz/$_blitzId/reviews';
 
 void main() {
+  testWidgets('other roles never reach a review path', (tester) async {
+    const studentId = '60000000-0000-0000-0000-000000000001';
+    final submissions = FakeTeacherSubmissionRepository();
+    for (final (role, entry) in [
+      (UserRole.student, AppRoutePaths.student),
+      (UserRole.parent, AppRoutePaths.unsupportedDevice),
+    ]) {
+      for (final location in [
+        AppRoutePaths.teacherReviews,
+        AppRoutePaths.teacherSubmissionDetailLocation(submissionId),
+        AppRoutePaths.teacherHomeworkReviewsLocation(_topicId, _homeworkId),
+        AppRoutePaths.teacherBlitzReviewsLocation(_topicId, _blitzId),
+        AppRoutePaths.teacherTopicResultReviewsLocation(_topicId, studentId),
+      ]) {
+        await _pumpApp(
+          tester,
+          location: location,
+          submissions: submissions,
+          auth: FakeTeacherAuthSessionController.authenticated(
+            teacherUser('${role.name}-a', role: role),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(_routerPath(tester), entry, reason: '$role $location');
+        expect(find.byKey(const Key('teacherReviewQueueScreen')), findsNothing);
+        expect(
+          find.byKey(const Key('teacherSubmissionDetailScreen')),
+          findsNothing,
+        );
+      }
+    }
+    expect(submissions.queries, isEmpty);
+    expect(submissions.detailIds, isEmpty);
+  });
+
   test('the task review paths and helpers are exact', () {
     expect(
       AppRoutePaths.teacherHomeworkReviewsLocation(_topicId, _homeworkId),

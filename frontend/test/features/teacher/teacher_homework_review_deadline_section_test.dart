@@ -149,6 +149,24 @@ void main() {
     expect(_summaryValue(tester), '2026-09-21 18:30');
   });
 
+  testWidgets('a stored deadline after 2100 still opens the picker', (
+    tester,
+  ) async {
+    final repository = FakeTeacherHomeworkRepository(
+      onFetch: (_) async =>
+          teacherHomework(reviewDueAt: DateTime.utc(2150, 1, 2, 10)),
+    );
+    await _pump(tester, repository);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(_section));
+
+    await tester.tap(find.byKey(_setButton));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+  });
+
   testWidgets('cancelling either picker sends nothing', (tester) async {
     final repository = FakeTeacherHomeworkRepository(
       onFetch: (_) async => teacherHomework(reviewDueAt: _existing),
@@ -347,6 +365,42 @@ void main() {
         ),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'an archived conflict whose refresh fails is explained once, inline',
+    (tester) async {
+      var fetches = 0;
+      final repository = FakeTeacherHomeworkRepository(
+        onFetch: (_) async {
+          fetches += 1;
+          if (fetches > 1) {
+            throw teacherLocalFailure(ApiFailureKind.connection);
+          }
+          return teacherHomework(
+            reviewDueAt: _existing,
+            status: TeacherHomeworkStatus.closed,
+          );
+        },
+        onSetReviewDueAt: (_, _) async => throw teacherServerFailure(
+          ApiErrorCodes.taskArchived,
+          statusCode: 409,
+        ),
+      );
+      await _pump(tester, repository);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(_section));
+
+      await tester.tap(find.byKey(_clearButton));
+      await tester.pumpAndSettle();
+
+      const message =
+          'This Homework is archived. Its review deadline can no longer be '
+          'changed.';
+      expect(find.byKey(_section), findsOneWidget);
+      expect(find.text(message), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
     },
   );
 

@@ -1003,6 +1003,93 @@ void main() {
     expect(harness.repository.saves, isEmpty);
   });
 
+  for (final (choice, uploads) in [('Stay', 1), ('Leave', 0)]) {
+    testWidgets('a file picked during a refresh waits while leaving is asked; '
+        '$choice uploads $uploads', (tester) async {
+      final picker = _PendingPicker();
+      final harness = await _pump(tester, routed: true, picker: picker);
+      await _tap(tester, find.text('Choose file'), settle: false);
+      await tester.pump();
+      // The Attempt is read again while the picker is open.
+      harness.parent.publishState(
+        StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.refreshing,
+          attempt: _attempt(),
+        ),
+      );
+      await tester.pump();
+      picker.pending.single.complete(
+        StudentSubmissionUploadFile(
+          name: 'answer.pdf',
+          length: 10,
+          openRead: () => Stream.value(List.filled(10, 1)),
+        ),
+      );
+      // The refresh indicator never settles, so frames are pumped directly.
+      await tester.pump();
+      await tester.pump();
+      expect(harness.repository.uploads, isEmpty);
+
+      await _tap(tester, find.byTooltip('Back to Homework'), settle: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Leave Attempt?'), findsOneWidget);
+      harness.parent.publish(_attempt());
+      await tester.pump();
+      await tester.pump();
+      expect(harness.repository.uploads, isEmpty);
+
+      // A started upload animates, so frames are pumped directly.
+      await _tap(tester, find.text(choice), settle: false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(harness.repository.uploads, hasLength(uploads));
+    });
+  }
+
+  testWidgets('a written answer saves as soon as its field loses focus', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    await _enter(tester, _inside(4, find.byType(TextField)), 'focus answer');
+    expect(harness.repository.saves, isEmpty);
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+
+    // Well before the one-second autosave.
+    expect(harness.repository.saves, hasLength(1));
+  });
+
+  testWidgets('dirty answers save as soon as the app is paused', (
+    tester,
+  ) async {
+    final harness = await _pump(tester);
+    // Hidden first, so only the pause can send the save below.
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    addTearDown(() {
+      for (final state in [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+    });
+    await _enter(tester, _inside(4, find.byType(TextField)), 'paused answer');
+    expect(harness.repository.saves, isEmpty);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+
+    expect(harness.repository.saves, hasLength(1));
+  });
+
   testWidgets('session replacement invalidates an open leave confirmation', (
     tester,
   ) async {
@@ -1284,6 +1371,7 @@ Future<_Harness> _pump(
   bool routed = false,
   double? width,
   double textScale = 1,
+  StudentSubmissionFilePicker? picker,
 }) async {
   await tester.binding.setSurfaceSize(
     Size(width ?? (surface == AppDeviceSurface.mobile ? 390 : 1100), 900),
@@ -1325,7 +1413,9 @@ Future<_Harness> _pump(
         studentHomeworkAttemptRepositoryProvider.overrideWithValue(
           harness.repository,
         ),
-        studentSubmissionFilePickerProvider.overrideWithValue(_Picker()),
+        studentSubmissionFilePickerProvider.overrideWithValue(
+          picker ?? _Picker(),
+        ),
         studentHomeworkAttemptControllerProvider(
           _target,
         ).overrideWith(() => harness.parent),
@@ -1515,6 +1605,20 @@ class _Repository implements StudentHomeworkAttemptRepository {
     String homeworkId,
     String idempotencyKey,
   ) => throw UnimplementedError();
+}
+
+/// Returns each pick only when the test completes it.
+class _PendingPicker implements StudentSubmissionFilePicker {
+  final pending = <Completer<StudentSubmissionUploadFile?>>[];
+
+  @override
+  Future<StudentSubmissionUploadFile?> pickFile({
+    required List<String> allowedExtensions,
+  }) {
+    final completer = Completer<StudentSubmissionUploadFile?>();
+    pending.add(completer);
+    return completer.future;
+  }
 }
 
 class _Picker implements StudentSubmissionFilePicker {

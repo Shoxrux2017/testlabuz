@@ -1258,6 +1258,94 @@ void main() {
       expect(h.entry.status, StudentFileAnswerStatus.uploading);
     });
 
+    test('a held deferred upload waits for its release', () async {
+      final h = _Harness();
+      await h.flush();
+      final choosing = h.controller.chooseFile(_questionId);
+      h.parent.publish(
+        StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.refreshing,
+          attempt: _attempt(),
+        ),
+      );
+      await h.flush();
+      h.picker.requests.last.complete(_selected());
+      await choosing;
+      await h.flush();
+
+      // A leave confirmation is open while the Attempt publishes again.
+      h.controller.holdDeferredUpload();
+      h.parent.publish(_data(_attempt()));
+      await h.flush();
+      expect(h.repository.uploads, isEmpty);
+      expect(h.entry.status, StudentFileAnswerStatus.ready);
+
+      h.controller.releaseDeferredUpload();
+      await h.flush();
+      expect(h.repository.uploads, hasLength(1));
+
+      h.controller.releaseDeferredUpload();
+      await h.flush();
+      expect(h.repository.uploads, hasLength(1));
+    });
+
+    test(
+      'a hold just after authority returns still stops the upload',
+      () async {
+        final h = _Harness();
+        await h.flush();
+        final choosing = h.controller.chooseFile(_questionId);
+        h.parent.publish(
+          StudentHomeworkAttemptState(
+            status: StudentHomeworkAttemptLoadStatus.refreshing,
+            attempt: _attempt(),
+          ),
+        );
+        await h.flush();
+        h.picker.requests.last.complete(_selected());
+        await choosing;
+        await h.flush();
+
+        // The rebuild that sees authority runs before the hold; its scheduled
+        // upload must still respect the hold.
+        h.parent.publish(_data(_attempt()));
+        expect(h.entry.selectedFile, isNotNull);
+        h.controller.holdDeferredUpload();
+        await h.flush();
+        expect(h.repository.uploads, isEmpty);
+
+        h.controller.releaseDeferredUpload();
+        await h.flush();
+        expect(h.repository.uploads, hasLength(1));
+      },
+    );
+
+    test('a release before authority waits for the Attempt', () async {
+      final h = _Harness();
+      await h.flush();
+      final choosing = h.controller.chooseFile(_questionId);
+      h.parent.publish(
+        StudentHomeworkAttemptState(
+          status: StudentHomeworkAttemptLoadStatus.refreshing,
+          attempt: _attempt(),
+        ),
+      );
+      await h.flush();
+      h.picker.requests.last.complete(_selected());
+      await choosing;
+      await h.flush();
+
+      h.controller
+        ..holdDeferredUpload()
+        ..releaseDeferredUpload();
+      await h.flush();
+      expect(h.repository.uploads, isEmpty);
+
+      h.parent.publish(_data(_attempt()));
+      await h.flush();
+      expect(h.repository.uploads, hasLength(1));
+    });
+
     test('a deferred upload is dropped when the Attempt ends', () async {
       final h = _Harness();
       await h.flush();

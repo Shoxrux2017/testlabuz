@@ -489,6 +489,25 @@ void main() {
       },
     );
 
+    test('a held deferred upload waits for its release', () async {
+      final h = await _Harness.create();
+      final choose = h.controller.chooseFile(_file);
+      final replay = h.h.executionController.refreshCurrentAttempt();
+      h.h.picker.pending.last.complete(blitzUploadFile());
+      await choose;
+
+      // A leave confirmation is open while writes reopen.
+      h.controller.holdDeferredUpload();
+      await h.h.completeReplay(blitzExecutionAttempt());
+      await replay;
+      await flushStudentControllers();
+      expect(h.h.answers.uploads, isEmpty);
+
+      h.controller.releaseDeferredUpload();
+      await flushStudentControllers();
+      expect(h.h.answers.uploads, hasLength(1));
+    });
+
     test('a rejected file is dropped and named', () async {
       final h = await _Harness.create();
       await h.pick(blitzUploadFile(name: 'broken.pdf'));

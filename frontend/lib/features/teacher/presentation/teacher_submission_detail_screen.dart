@@ -574,12 +574,43 @@ class _ReviewFields extends ConsumerStatefulWidget {
 class _ReviewFieldsState extends ConsumerState<_ReviewFields> {
   final _pointsController = TextEditingController();
   final _feedbackController = TextEditingController();
+  final _pointsFocus = FocusNode();
+  final _feedbackFocus = FocusNode();
 
   @override
   void dispose() {
     _pointsController.dispose();
     _feedbackController.dispose();
+    _pointsFocus.dispose();
+    _feedbackFocus.dispose();
     super.dispose();
+  }
+
+  /// A save that marked fields focuses the first one; the errors keep the
+  /// Question order of the review.
+  void _focusFirstMarkedField(
+    TeacherSubmissionReviewState? previous,
+    TeacherSubmissionReviewState next,
+  ) {
+    if (next.failureMessage == null ||
+        next.errors.isEmpty ||
+        identical(previous?.errors, next.errors)) {
+      return;
+    }
+    final first = next.errors.entries
+        .where(
+          (entry) => entry.value.points != null || entry.value.feedbackTooLong,
+        )
+        .firstOrNull;
+    if (first == null || first.key != widget.answer.id) {
+      return;
+    }
+    final node = first.value.points != null ? _pointsFocus : _feedbackFocus;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        node.requestFocus();
+      }
+    });
   }
 
   @override
@@ -588,6 +619,7 @@ class _ReviewFieldsState extends ConsumerState<_ReviewFields> {
       widget.submissionId,
     );
     final review = ref.watch(provider);
+    ref.listen(provider, _focusFirstMarkedField);
     final controller = ref.read(provider.notifier);
     final answer = widget.answer;
     final draft = review.drafts[answer.id];
@@ -613,7 +645,9 @@ class _ReviewFieldsState extends ConsumerState<_ReviewFields> {
                 child: TextField(
                   key: Key('teacherSubmissionReviewPoints:${answer.id}'),
                   controller: _pointsController,
-                  enabled: !review.isBusy,
+                  focusNode: _pointsFocus,
+                  // Read-only, not disabled, so focus stays during a save.
+                  readOnly: review.isBusy,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -636,7 +670,8 @@ class _ReviewFieldsState extends ConsumerState<_ReviewFields> {
                 child: TextField(
                   key: Key('teacherSubmissionReviewFeedback:${answer.id}'),
                   controller: _feedbackController,
-                  enabled: !review.isBusy,
+                  focusNode: _feedbackFocus,
+                  readOnly: review.isBusy,
                   minLines: 2,
                   maxLines: 6,
                   keyboardType: TextInputType.multiline,
