@@ -1723,6 +1723,7 @@ The Teacher desktop interface may include:
 - Blitz task builder
 - Manual answer checking
 - File submission review
+- Topic results: statuses and counts, one Student's result, the Teacher comment, release to Students and Parents, and result closure (single and bulk)
 - Topic progress reports
 - Group progress reports
 - Student progress reports
@@ -1739,6 +1740,7 @@ The Teacher mobile interface may include:
 - View students who submitted
 - View students who did not submit
 - View basic student results
+- View Topic results (statuses, counts and one Student's result) and release them to Students and Parents, single or bulk; the Teacher comment and result closure are desktop-only (`S10-FE-D1`)
 - View read-only counts of submissions waiting for review (Homework and Blitz) and overdue (Homework only); answer review is desktop-only
 - View students who need revision or teacher support
 

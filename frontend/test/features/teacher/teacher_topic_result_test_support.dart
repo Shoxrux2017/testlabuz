@@ -2,6 +2,7 @@ import 'package:testlabuz_client/features/teacher/data/dto/teacher_topic_result_
 import 'package:testlabuz_client/features/teacher/data/dto/teacher_topic_result_list_dto.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_list.dart';
+import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_mutation.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_result_repository.dart';
 
 const teacherResultTopicId = '10000000-0000-0000-0000-000000000001';
@@ -334,7 +335,79 @@ TeacherTopicResultList emptyTeacherTopicResultList({
 }
 
 class FakeTeacherTopicResultRepository implements TeacherTopicResultRepository {
-  FakeTeacherTopicResultRepository({this.onFetchResults, this.onFetchResult});
+  FakeTeacherTopicResultRepository({
+    this.onFetchResults,
+    this.onFetchResult,
+    this.onUpdateComment,
+    this.onRelease,
+    this.onClose,
+    this.onReleaseAll,
+    this.onCloseAll,
+  });
+
+  Future<TeacherTopicResultDetail> Function(String studentId, String comment)?
+  onUpdateComment;
+  Future<TeacherTopicResultDetail> Function(
+    String studentId,
+    TeacherTopicResultAudience audience,
+  )?
+  onRelease;
+  Future<TeacherTopicResultDetail> Function(String studentId)? onClose;
+  Future<TeacherTopicResultBulkOutcome> Function(
+    TeacherTopicResultAudience audience,
+  )?
+  onReleaseAll;
+  Future<TeacherTopicResultBulkOutcome> Function()? onCloseAll;
+
+  /// Every action in order, such as `comment:<text>`, `release:student` or
+  /// `closeAll`.
+  final actions = <String>[];
+
+  @override
+  Future<TeacherTopicResultDetail> updateComment(
+    String topicId,
+    String studentId,
+    String comment,
+  ) {
+    actions.add('comment:$comment');
+    return onUpdateComment?.call(studentId, comment) ??
+        Future.error(StateError('No comment answer.'));
+  }
+
+  @override
+  Future<TeacherTopicResultDetail> release(
+    String topicId,
+    String studentId,
+    TeacherTopicResultAudience audience,
+  ) {
+    actions.add('release:${audience.segment}');
+    return onRelease?.call(studentId, audience) ??
+        Future.error(StateError('No release answer.'));
+  }
+
+  @override
+  Future<TeacherTopicResultDetail> close(String topicId, String studentId) {
+    actions.add('close');
+    return onClose?.call(studentId) ??
+        Future.error(StateError('No close answer.'));
+  }
+
+  @override
+  Future<TeacherTopicResultBulkOutcome> releaseAll(
+    String topicId,
+    TeacherTopicResultAudience audience,
+  ) {
+    actions.add('releaseAll:${audience.segment}');
+    return onReleaseAll?.call(audience) ??
+        Future.error(StateError('No bulk release answer.'));
+  }
+
+  @override
+  Future<TeacherTopicResultBulkOutcome> closeAll(String topicId) {
+    actions.add('closeAll');
+    return onCloseAll?.call() ??
+        Future.error(StateError('No bulk close answer.'));
+  }
 
   Future<TeacherTopicResultList> Function(
     String topicId,

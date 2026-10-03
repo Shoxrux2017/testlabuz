@@ -2042,7 +2042,7 @@ Rules:
 - A calculated but unreleased result is not incomplete.
 - A released result stays released (`S10-D5`). After a Teacher correction the Student and the Parent see the new values at once; if the result falls back to a waiting status they see that status without values, then the new result without a new release. The MVP has no hide or unrelease action.
 
-Stage 10 APIs: the Teacher result list and detail, the Student Topic-result read, the live result status in the Student Topic detail, and one Parent result read. Parent screens are Stage 11. Teacher result actions are device-agnostic at the API; their screens are decided in the Stage 10 frontend plan.
+Stage 10 APIs: the Teacher result list and detail, the Student Topic-result read, the live result status in the Student Topic detail, and one Parent result read. Parent screens are Stage 11. Teacher result actions are device-agnostic at the API; the screens that offer them follow `S10-FE-D1` (Teacher Screens below).
 
 ### Result Closure
 
@@ -2065,6 +2065,15 @@ The Blitz checks whether the Student did the Homework alone, so the Homework com
 - Only a Student with a submitted Homework Attempt may start the official Blitz (`409 homework_not_submitted`); a Student without one is Not completed (Homework and Blitz).
 - Practice Blitz tasks and the replacement Attempt #2 are unaffected.
 - This deliberately changes the Stage 8 official Blitz activation and Student Blitz Start. There is no rule on the Homework deadline itself.
+
+### Teacher Screens
+
+Project Owner decision `S10-FE-D1` (2026-10-03):
+
+- Desktop and mobile: the Topic results entry on the Topic detail (status counts), the results list (status and category filters, pages) and one Student's result, with single and bulk release to Students and to Parents.
+- Desktop only: the Teacher comment and result closure (single and bulk).
+- Buttons follow the server's flags (`can_release_to_student`, `can_release_to_parent`, `can_close`) and the Institution release modes; every release and closure asks for confirmation, and bulk actions name their scope (every Student of the Topic) and report what they skipped.
+- The Student sees the result on the Topic detail on desktop and mobile. There is no Parent screen in Stage 10.
 
 ## Required Tests
 

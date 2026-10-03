@@ -3,14 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router/app_route_paths.dart';
+import '../application/teacher_topic_result_bulk_action_controller.dart';
 import '../application/teacher_topic_result_list_controller.dart';
 import '../application/teacher_topic_result_list_state.dart';
 import '../domain/teacher_topic_result.dart';
+import 'teacher_topic_result_actions.dart';
 import 'teacher_topic_result_formatters.dart';
 import 'teacher_workspace_list_widgets.dart';
 
 /// The Topic results list on desktop and mobile (`S10-FE-D1`): status and
-/// category filters with the cohort counts, pages, and a row per Student.
+/// category filters with the cohort counts, pages, a row per Student, and the
+/// bulk release (everywhere) and close (desktop) actions.
 class TeacherTopicResultsScreen extends ConsumerWidget {
   const TeacherTopicResultsScreen({required this.topicId, super.key});
 
@@ -23,6 +26,10 @@ class TeacherTopicResultsScreen extends ConsumerWidget {
     );
     final state = ref.watch(provider);
     final controller = ref.read(provider.notifier);
+    final bulk = ref.watch(
+      teacherTopicResultBulkActionControllerProvider(topicId.toLowerCase()),
+    );
+    final rows = state.result?.items ?? const <TeacherTopicResult>[];
 
     // The nested route normally pops to its Topic; `go` covers an empty stack.
     void backToTopic() {
@@ -67,6 +74,36 @@ class TeacherTopicResultsScreen extends ConsumerWidget {
                 children: [
                   _ResultFilters(state: state, controller: controller),
                   const SizedBox(height: 16),
+                  // Bulk actions need confirmed current rows.
+                  if (state.status == TeacherTopicResultListStatus.data &&
+                      rows.isNotEmpty) ...[
+                    TeacherTopicResultBulkActionBar(
+                      topicId: topicId,
+                      rows: rows,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (bulk.report case final report?) ...[
+                    Semantics(
+                      key: const Key('teacherTopicResultsBulkReport'),
+                      liveRegion: true,
+                      child: Text(report),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (bulk.notice case final notice?) ...[
+                    Semantics(
+                      key: const Key('teacherTopicResultsBulkNotice'),
+                      liveRegion: true,
+                      child: Text(
+                        notice,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (state.status ==
                       TeacherTopicResultListStatus.refreshing) ...[
                     const LinearProgressIndicator(

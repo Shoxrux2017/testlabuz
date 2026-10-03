@@ -1229,7 +1229,7 @@ A typical mobile flow is:
 9. Release Student or Parent results when the institution policy requires Teacher action.
 10. Identify Students needing revision or support.
 
-The mobile interface does not replace the full desktop authoring/checking experience and does not change permissions. Answer review is desktop-only.
+The mobile interface does not replace the full desktop authoring/checking experience and does not change permissions. Answer review is desktop-only, and so are the Topic-result comment and closure (`S10-FE-D1`).
 ### Access Restriction Flow
 
 If a teacher tries to access data outside their allowed scope, the system should block access.
@@ -3986,7 +3986,7 @@ The result calculation flow should follow the approved device access model.
 The device flow is:
 
 1. Teachers use desktop to review detailed result tables, score differences, final scores, categories, and reports.
-2. Teachers may use mobile to view basic result summaries and identify students who need support.
+2. Teachers may use mobile to view basic result summaries and identify students who need support; per `S10-FE-D1` this includes the Topic results list, one Student's result and releases (single and bulk), while the Teacher comment and result closure stay desktop-only.
 3. Students use desktop or mobile to view their own released results.
 4. Parents use mobile to view their child’s released results and understanding categories.
 5. Institution Admins use desktop to view institution-level result summaries and reports.

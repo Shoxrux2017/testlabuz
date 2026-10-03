@@ -124,6 +124,16 @@ class TeacherTopicResultListController
     }
   }
 
+  /// Reloads after a result action of [owner]'s session. A load in flight
+  /// may have been read before that action, so it is replaced.
+  void refreshAfterAction(TeacherSessionKey owner) {
+    if (_activeSessionKey != owner || !_matchesSession(owner)) {
+      return;
+    }
+    _inFlightQuery = null;
+    _startLoad(state.query, retainResult: state.result != null);
+  }
+
   void _startLoad(
     TeacherTopicResultListQuery query, {
     required bool retainResult,

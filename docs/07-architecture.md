@@ -2017,7 +2017,7 @@ Still allowed after closure: a first review of a still-waiting answer. For a `ca
 
 Teacher result actions are: the result list and detail, the comment (`S10-D1`), Student and Parent release (single Student and bulk, §19), close (single Student and bulk, §17.8), and the closure inside `ArchiveTopic`.
 
-- **Access** (`S10-T6`). The Topic's Teacher only: the Teacher owns the Topic and is a current Teacher of its group (the review access rule, §16.9); otherwise a privacy-safe `404`. A Student outside the cohort is `404`. Topic and task status never restrict these actions. The API does not check the device; which screens offer the actions is decided in the Stage 10 frontend plan.
+- **Access** (`S10-T6`). The Topic's Teacher only: the Teacher owns the Topic and is a current Teacher of its group (the review access rule, §16.9); otherwise a privacy-safe `404`. A Student outside the cohort is `404`. Topic and task status never restrict these actions. The API does not check the device; the screens follow `S10-FE-D1` (release on desktop and mobile; comment and closure on desktop only).
 - **Comment** (`S10-D1`). One optional Teacher comment per Student result, at most 2000 characters after leading and trailing Unicode whitespace is trimmed; an empty value is stored as null, never as an empty string. It may be changed in every status until closure; afterwards `409 result_closed` (§17.8). The Student sees it with the visible values, the Parent only when the values are visible to the Parent; answer feedback stays Student-only.
 - **Idempotency.** Close and release are idempotent by state: an already-done single action succeeds without a change. Bulk actions apply the single-Student rule to every cohort Student in one transaction and report processed and skipped counts; a release mode that forbids the release fails the whole bulk call with `409 manual_release_not_allowed`. They use no `Idempotency-Key`.
 - **Lock order.** Teacher result actions (comment, release, close, bulk, archive) lock group → Teacher membership → Topic `FOR UPDATE` (the Topic lifecycle order), then the `topic_results` rows they write. This serializes them with scoring (checking, review and sweep repair take the Topic `FOR SHARE` first, §16.7), with Student Starts and the exception grant (they take the Topic `FOR UPDATE` first), and with Submit and answer saves (they take it shared).
@@ -2614,7 +2614,7 @@ Quick classroom/monitoring surface:
 
 Do not attempt to reproduce every desktop authoring feature in the MVP mobile UI.
 
-Stage 10 Teacher result actions (comment, release, close; single Student and bulk) are device-agnostic at the API (§17.9); which desktop and mobile screens offer them is decided in the Stage 10 frontend plan.
+Stage 10 Teacher result actions (comment, release, close; single Student and bulk) are device-agnostic at the API (§17.9). Per `S10-FE-D1` the Teacher views results and releases them (single and bulk) on desktop and mobile; the comment and closure are desktop-only.
 
 ---
 
