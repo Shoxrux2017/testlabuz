@@ -1209,11 +1209,16 @@ their historical completion handoffs.
   on `38b10f6` found P1 = 0 and five documentation P2; `S09-CLOSURE-FIX-001` (documentation and the Stage 9
   deployment notes, no production change) fixed them in the closure PR. P3 fixed, carried with targets or accepted.
   Owner decisions `S09-CL-D1`…`S09-CL-D3`.
-- Stage 9 — Checking and Scoring: Closed (when the closure PR merges).
+- Stage 9 — Checking and Scoring: Closed (closure PR #314, `main` `57d9949`).
 - No product verification rerun is required: Backend Phase 2, Frontend Phase 2 and the integration evidence stay valid.
 - Next permitted action: the dependency-update task (`S09-CL-D3`: the `composer audit` advisories present before
   Stage 9), then Stage 10 planning; the Project Owner first decides how Stage 10 is run. Stage 10 implementation is
   not authorized by this closure.
+- Post-closure platform fix `DEP-FIX-001` (owner decision `S09-CL-D3`,
+  `tasks/backend/DEP-FIX-001-composer-security-advisories.md`): `laravel/framework` 13.24.0 → 13.34.0,
+  `league/commonmark` 2.9.0 → 2.10.3 and `league/flysystem` 3.35.2 → 3.36.0, within the existing constraints and with
+  no other locked package changed; `composer audit` is clean. Next: Stage 10 planning, starting with the Project
+  Owner's decision on how Stage 10 is run.
 
 ---
 

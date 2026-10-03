@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Roadmap stage | `Stage 9 — Checking and Scoring` (`docs/06-roadmap.md` §14) |
-| Stage status | `Closed / PASS` (when the closure PR merges; `tasks/STAGE_09_CLOSURE_REVIEW.md`) |
+| Stage status | `Closed / PASS` (closure PR #314, `main` `57d9949`; `tasks/STAGE_09_CLOSURE_REVIEW.md`) |
 | Verification model | `Workflow v3 — Lean Verification + Backend/Frontend Phase 2 + Real-Stack Integration` |
 | Decomposition status | `Approved by the Project Owner (2026-09-28)` |
 | Planning baseline `origin/main` | `b07bdb14` (Stage 8 closed; `API-FIX-001` merged) |
@@ -13,7 +13,7 @@
 | Roles | Claude: contracts, readiness, implementation, review, acceptance, checkpoints, closure. Project Owner: decisions reserved to the owner, merges every PR, manual smoke |
 | Current source of truth | GitHub `main`; re-checked before every readiness decision |
 | Closure | `PASS — STAGE CLOSED (2026-10-03)`; audited `main` `38b10f6` + `S09-CLOSURE-FIX-001` (documentation only) |
-| Next permitted gate | Dependency-update task (`S09-CL-D3`), then Stage 10 planning; the Project Owner first decides how Stage 10 is run |
+| Next permitted gate | Stage 10 planning once `DEP-FIX-001` (`S09-CL-D3`) is delivered; the Project Owner first decides how Stage 10 is run |
 
 This index is the orchestration map for Stage 9. An implementation contract is self-contained; it
 never tells the implementer to read this index or the product documents to discover behavior.
@@ -158,8 +158,8 @@ The exact normative contract for all of the above is `S09-DOC-001` §§4-14.
 | `14` | `S09-FE-PHASE-2` | Frontend review | Full Stage 9 frontend review + full verification | `FE-001…004` | Executed record | Run #1 `NOT ACCEPTED` (`6e58259`, one P2); run #2 `PASS` (`ccc1d60`); delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-frontend-block-review.md` |
 | `14a` | `S09-FE-PHASE-2-FIX-001` | Frontend fix | Related-view refresh after a review save (P2) and five user-visible P3 defects (`S09-FE-PH2-D1`) | Phase 2 run #1 | `Approved` (on `main` `6e58259`) | Delivered (PR #311, `main` `f0259c8`) | `tasks/frontend/stage-09/S09-FE-PHASE-2-FIX-001-related-refresh-and-ux-defects.md` |
 | `15` | `S09-INT-001` | Integration | Real-stack Windows + Android: checking, review, official scores, visibility, files, security | Both Phase 2 PASS | `Approved` (on `main` `f0259c8`) | `PASS / Accepted` — assets PR #312 (`main` `4224fcf`); Windows run and Android smoke PASS (§14); record PR #313 (`main` `38b10f6`) | `tasks/integration/stage-09/S09-INT-001-stage-09-real-stack-integration.md` |
-| `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Executed record | `PASS — STAGE CLOSED` (2026-10-03); delivered with `16a` in the closure PR | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
-| `16a` | `S09-CLOSURE-FIX-001` | Closure fix | `docs/01-09` alignment (`CL9-1`…`CL9-7`) and the Stage 9 deployment notes (`docs/07` §36.2) | Closure audit, `S09-CL-D1`, `S09-CL-D2` | `Approved` (on `main` `38b10f6`) | Accepted; delivered in the closure PR | `tasks/S09-CLOSURE-FIX-001-documentation-and-deployment-notes.md` |
+| `16` | `STAGE_09_CLOSURE_REVIEW` | Closure | Stage-wide review and closure | `INT-001` PASS | Executed record | `PASS — STAGE CLOSED` (2026-10-03); delivered with `16a` (PR #314, `main` `57d9949`) | `tasks/STAGE_09_CLOSURE_REVIEW.md` |
+| `16a` | `S09-CLOSURE-FIX-001` | Closure fix | `docs/01-09` alignment (`CL9-1`…`CL9-7`) and the Stage 9 deployment notes (`docs/07` §36.2) | Closure audit, `S09-CL-D1`, `S09-CL-D2` | `Approved` (on `main` `38b10f6`) | Accepted — delivered (PR #314, `main` `57d9949`) | `tasks/S09-CLOSURE-FIX-001-documentation-and-deployment-notes.md` |
 
 Detailed contracts for rows 2-16a are written in execution order, each after re-checking `main`.
 Only a row whose readiness is `Approved` may be implemented.
@@ -613,6 +613,7 @@ Targeted final check of P2-A…P2-D: all resolved; no new P1/P2; two wording P3s
 | 2026-10-02 | PR #312 merged; `S09-INT-001` Windows run and Android smoke `PASS`; final integration review `PASS`; `S09-INT-001` `PASS / Accepted` (§14) |
 | 2026-10-02 | PR #313 merged (`S09-INT-001` record) |
 | 2026-10-03 | Closure review `PASS`; owner decisions `S09-CL-D1`…`D3`; `S09-CLOSURE-FIX-001`; Stage 9 `Closed / PASS` when the closure PR merges |
+| 2026-10-03 | Closure PR #314 merged (`main` `57d9949`, tree == branch); Stage 9 `Closed / PASS`; `DEP-FIX-001` (`S09-CL-D3`) started |
 
 ## 14. Integration Execution Record — `S09-INT-001` (2026-10-02)
 
