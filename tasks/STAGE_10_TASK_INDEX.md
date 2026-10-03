@@ -140,8 +140,8 @@ The normative contract for all of the above is `S10-DOC-001` §§5-18.
 | `7` | `S10-FE-002` | Frontend (Teacher) | Results entry on the Topic detail, results list (filters, counts, pages) and result detail on desktop and mobile | `FE-001` | `Approved` (on `main` `e979a46`) | Accepted — delivered (PR #324, `main` `55883ee`) | `tasks/frontend/stage-10/S10-FE-002-teacher-topic-results-read.md` |
 | `8` | `S10-FE-003` | Frontend (Teacher) | Release single/bulk (desktop and mobile), comment and close single/bulk (desktop), confirmations, skip report, error mapping; docs aligned to `S10-FE-D1` | `FE-002` | `Approved` (on `main` `55883ee`) | Accepted — delivered (PR #325, `main` `b204628`) | `tasks/frontend/stage-10/S10-FE-003-teacher-topic-result-actions.md` |
 | `9` | `S10-FE-004` | Frontend (cross-feature) | `S10-D8` activation warning, archive warning, review `result_closed`, review-queue Topic/group/Student filters (`CL9-5`), related-view refresh | `FE-003` | `Approved` (on `main` `b204628`) | Accepted — delivered (PR #326, `main` `89d94e2`) | `tasks/frontend/stage-10/S10-FE-004-cross-feature-result-integration.md` |
-| `10` | `S10-FE-005` | Frontend (polish) | Carried `FE-PH2` items: the deferred upload during the leave confirmation, `B-2`, `B-4`, `C-3`, `A-2`, `B-3`, `D-3`, `B-5` (`C-4`, `D-4` stay carried) | `FE-004` | `Approved` (on `main` `89d94e2`) | Review `PASS`; PR open | `tasks/frontend/stage-10/S10-FE-005-carried-frontend-p3.md` |
-| `11` | `S10-FE-PHASE-2` | Frontend checkpoint | Full Flutter suite, analyze, format, Windows and APK builds, fresh review; then report to the owner and wait | `FE-001…005` | `Draft` | Not started | executed record |
+| `10` | `S10-FE-005` | Frontend (polish) | Carried `FE-PH2` items: the deferred upload during the leave confirmation, `B-2`, `B-4`, `C-3`, `A-2`, `B-3`, `D-3`, `B-5` (`C-4`, `D-4` stay carried) | `FE-004` | `Approved` (on `main` `89d94e2`) | Accepted — delivered (PR #327, `main` `000154b`) | `tasks/frontend/stage-10/S10-FE-005-carried-frontend-p3.md` |
+| `11` | `S10-FE-PHASE-2` | Frontend checkpoint | Full Flutter suite, analyze, format, Windows and APK builds, fresh review; then report to the owner and wait | `FE-001…005` | Executed on `main` `000154b` | `PASS` — reported to the owner | `tasks/frontend/stage-10/S10-FE-PHASE-2-frontend-block-review.md` |
 
 Only a row whose readiness is `Approved` may be implemented.
 
@@ -176,7 +176,7 @@ Only a row whose readiness is `Approved` may be implemented.
 | `PH2-4` official and visibility rule consolidation | `S09-BE-PHASE-2` | `S10-BE-001` |
 | `CL9-10` status visible under `manual_teacher` | Stage 9 closure | Accepted (`BR-STAT-018`) |
 | `CL9-11` hardening | Stage 9 closure | `S10-BE-001` |
-| `FE-PH2` carried P3 | `S09-FE-PHASE-2` | Stage 10 frontend plan |
+| `FE-PH2` carried P3 | `S09-FE-PHASE-2` | `S10-FE-005`; `C-4` and `D-4` stay carried, target named at Stage 10 closure |
 | `PH2-1` sweep scan bound | `S09-BE-PHASE-2` | Stage 13 release readiness |
 
 ## 11. Current Stage State
@@ -260,6 +260,12 @@ Only a row whose readiness is `Approved` may be implemented.
   carried. Review #1 `PASS` (P3 = 3: a hold checked again inside the scheduled upload and 422 errors ordered by item,
   applied; Undo in a read-only field during a save accepted). Teacher, Student and router tests: 3024 passed; full
   frontend suite 4020 passed before the review P3; analyze and format clean.
+- 2026-10-04: `S10-FE-005` delivered (PR #327, `main` `000154b`).
+- 2026-10-04: `S10-FE-PHASE-2` on `main` `000154b`: four read-only reviewers (Student side, Teacher results, cross-feature
+  and routes, cross-cutting) all `PASS` (P1 = 0, P2 = 0, P3 = 11); full frontend suite 4022 passed (182 s), analyze and
+  format clean, Windows and APK debug builds pass. Verdict `PASS`. Reported to the owner; the owner decides the
+  user-visible P3 (stale results views after a Blitz/Homework close or a Student submit, Retry on `404`, two
+  screen-reader names) and the test items. Record: `tasks/frontend/stage-10/S10-FE-PHASE-2-frontend-block-review.md`.
 
 ## 12. Change Log
 
