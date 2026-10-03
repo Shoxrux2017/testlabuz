@@ -24,12 +24,14 @@ import 'package:testlabuz_client/features/teacher/data/teacher_homework_reposito
 import 'package:testlabuz_client/features/teacher/data/teacher_learning_material_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_topic_mutation.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_topic_detail_screen.dart';
 import 'package:testlabuz_client/features/teacher/presentation/teacher_topic_edit_screen.dart';
 
 import 'teacher_test_support.dart';
+import 'teacher_topic_result_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
 const _topicBId = '10000000-0000-0000-0000-000000000002';
@@ -1434,6 +1436,9 @@ Future<void> _pumpApp(
         ),
         teacherTopicRepositoryProvider.overrideWithValue(
           topics ?? FakeTeacherTopicRepository(),
+        ),
+        teacherTopicResultRepositoryProvider.overrideWithValue(
+          FakeTeacherTopicResultRepository(),
         ),
         teacherLearningMaterialRepositoryProvider.overrideWithValue(
           materials ?? FakeTeacherLearningMaterialRepository(),

@@ -19,10 +19,12 @@ import 'package:testlabuz_client/features/teacher/data/teacher_submission_reposi
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_list_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_pair_repository_impl.dart';
+import 'package:testlabuz_client/features/teacher/data/teacher_topic_result_repository_impl.dart';
 import 'package:testlabuz_client/features/teacher/domain/teacher_review_summary.dart';
 
 import 'teacher_submission_test_support.dart';
 import 'teacher_test_support.dart';
+import 'teacher_topic_result_test_support.dart';
 
 const _topicId = '10000000-0000-0000-0000-000000000001';
 const _homeworkId = '50000000-0000-0000-0000-000000000001';
@@ -468,6 +470,9 @@ Future<void> _pumpApp(
         ),
         teacherTopicRepositoryProvider.overrideWithValue(
           FakeTeacherTopicRepository(),
+        ),
+        teacherTopicResultRepositoryProvider.overrideWithValue(
+          FakeTeacherTopicResultRepository(),
         ),
         teacherLearningMaterialRepositoryProvider.overrideWithValue(
           FakeTeacherLearningMaterialRepository(),

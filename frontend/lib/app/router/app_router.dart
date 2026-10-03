@@ -49,10 +49,13 @@ import '../../features/teacher/presentation/teacher_submission_detail_screen.dar
 import '../../features/teacher/presentation/teacher_topic_create_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_detail_screen.dart';
 import '../../features/teacher/presentation/teacher_topic_edit_screen.dart';
+import '../../features/teacher/presentation/teacher_topic_result_detail_screen.dart';
+import '../../features/teacher/presentation/teacher_topic_results_screen.dart';
 import '../../features/teacher/application/teacher_blitz_route_target.dart';
 import '../../features/teacher/application/teacher_homework_route_target.dart';
 import '../../features/teacher/application/teacher_review_queue_scope.dart';
 import '../../features/teacher/application/teacher_session_key.dart';
+import '../../features/teacher/application/teacher_topic_result_target.dart';
 import '../../features/teacher/domain/teacher_submission.dart';
 import 'app_route_paths.dart';
 import 'technical_root_screen.dart';
@@ -356,6 +359,53 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     authoring: true,
                   );
                 },
+              ),
+              GoRoute(
+                name: AppRouteNames.teacherTopicResults,
+                path: AppRoutePaths.teacherResultsSegment,
+                builder: (context, state) {
+                  final topicId =
+                      state.pathParameters[AppRoutePaths
+                          .teacherTopicIdParameter] ??
+                      '';
+                  return _buildTeacherDestination(
+                    TeacherTopicResultsScreen(
+                      key: ValueKey<String>(
+                        '${AppRouteNames.teacherTopicResults}:'
+                        '${topicId.toLowerCase()}',
+                      ),
+                      topicId: topicId,
+                    ),
+                  );
+                },
+                routes: [
+                  GoRoute(
+                    name: AppRouteNames.teacherTopicResultDetail,
+                    path: ':${AppRoutePaths.teacherStudentIdParameter}',
+                    builder: (context, state) {
+                      final topicId =
+                          state.pathParameters[AppRoutePaths
+                              .teacherTopicIdParameter] ??
+                          '';
+                      final studentId =
+                          state.pathParameters[AppRoutePaths
+                              .teacherStudentIdParameter] ??
+                          '';
+                      return _buildTeacherDestination(
+                        TeacherTopicResultDetailScreen(
+                          key: ValueKey<TeacherTopicResultTarget>(
+                            TeacherTopicResultTarget(
+                              topicId: topicId,
+                              studentId: studentId,
+                            ),
+                          ),
+                          topicId: topicId,
+                          studentId: studentId,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
               GoRoute(
                 name: AppRouteNames.teacherHomeworkCreate,
@@ -896,7 +946,9 @@ String? _authRedirect(
       if (AppRoutePaths.isTeacherTopicDetailPath(location) ||
           AppRoutePaths.isTeacherHomeworkDetailPath(location) ||
           AppRoutePaths.isTeacherBlitzDetailPath(location) ||
-          AppRoutePaths.isTeacherBlitzMonitoringPath(location)) {
+          AppRoutePaths.isTeacherBlitzMonitoringPath(location) ||
+          AppRoutePaths.isTeacherTopicResultsPath(location) ||
+          AppRoutePaths.isTeacherTopicResultDetailPath(location)) {
         return null;
       }
       if (AppRoutePaths.isTeacherHomeworkEditPath(location)) {
@@ -1005,6 +1057,10 @@ bool _keepsLocationDuringBootstrap(
               surface == AppDeviceSurface.mobile)) ||
       ((AppRoutePaths.isTeacherBlitzDetailPath(location) ||
               AppRoutePaths.isTeacherBlitzMonitoringPath(location)) &&
+          (surface == AppDeviceSurface.desktop ||
+              surface == AppDeviceSurface.mobile)) ||
+      ((AppRoutePaths.isTeacherTopicResultsPath(location) ||
+              AppRoutePaths.isTeacherTopicResultDetailPath(location)) &&
           (surface == AppDeviceSurface.desktop ||
               surface == AppDeviceSurface.mobile)) ||
       ((AppRoutePaths.isStudentTopicDetailPath(location) ||
