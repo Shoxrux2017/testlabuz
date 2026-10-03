@@ -168,13 +168,13 @@ Understanding-category integer ranges are also configured by the Institution Adm
 Each institution must have one configured IANA timezone. The MVP initial setup uses `Asia/Tashkent`; the Institution Admin may change it when necessary. A timezone change affects future interpretation/display rules but must not alter the absolute instant of already-created historical deadlines, submissions, Blitz sessions, or results.
 
 **BR-INST-016B — Incomplete educational settings**  
-If an educational-policy setting is still unconfigured, the backend must reject only operations that require that setting. For example, an official Blitz cannot be activated without a timer-start mode; an official Topic result cannot be calculated without both an acceptable-difference threshold and a valid complete understanding-category configuration; and a result cannot be released when the applicable release policy is unconfigured. General user/group administration and unrelated draft authoring remain available.
+If an educational-policy setting is still unconfigured, the backend must reject or hold only operations that require that setting. For example, an official Blitz cannot be activated without a timer-start mode; an open official Topic result whose Homework and Blitz scores are both ready stays in status **Waiting for settings** until the Institution has both an acceptable-difference threshold and a valid complete understanding-category configuration (BR-STAT-007A); while the Student result-release mode is unconfigured, no Topic result becomes visible through the mode and a Teacher release returns `409 manual_release_not_allowed` (releases already made stay, BR-STAT-017A); and while the Parent result-visibility mode is unconfigured, Parents receive no result information, as in **Hidden** mode (BR-STAT-014). General user/group administration and unrelated draft authoring remain available.
 
 **BR-INST-017 — Setting isolation**  
 Changing one institution’s settings must not affect another institution.
 
-**BR-INST-018 — Historical calculation snapshot**  
-A final result must retain the institution rules used when that result was calculated. Changing category ranges or the acceptable score difference must not silently rewrite historical closed results.
+**BR-INST-018 — Open results use current settings; closed results keep theirs**
+An open (not closed) Topic result keeps no copy of the institution rules: it always uses the Institution's current acceptable-difference threshold and current category ranges (`S10-D6`). Closing a result stores the threshold, category, and category range it used in the closure snapshot (BR-RES-011A); a closed result never reads current settings again. Changing category ranges or the acceptable score difference therefore changes every open result on its next read and never rewrites a closed result.
 
 ### Platform Owner / Super Admin Boundaries
 
@@ -275,7 +275,7 @@ A Teacher must not manage institutions, Super Admin accounts, Institution Admin 
 ### Student
 
 **BR-ROLE-018 — Student learning scope**  
-A Student may access only assigned topics, materials, homework, active blitz tasks, own finished (closed or archived) Blitz tasks, own submissions, own Attempt results and Teacher answer feedback only when visible under BR-STAT-020 to BR-STAT-023, own released Topic results and understanding categories, and own progress. A Student never sees correct answers, answer keys, per-Question awarded points, per-answer checking status, reviewer identity, or the Homework review deadline.
+A Student may access only assigned topics, materials, homework, active blitz tasks, own finished (closed or archived) Blitz tasks, own submissions, own Attempt results and Teacher answer feedback only when visible under BR-STAT-020 to BR-STAT-023, own Topic result statuses, own Topic result values (scores, calculation method, understanding category, and the Teacher's Topic-result comment) only when visible under BR-STAT-013 to BR-STAT-013B, and own progress. A Student never sees correct answers, answer keys, per-Question awarded points, per-answer checking status, reviewer identity, the Homework review deadline, or a Topic result's score difference, threshold, consistency, or `category_score` (`S10-D2`).
 
 **BR-ROLE-019 — Student prohibited actions**  
 A Student must not:
@@ -418,7 +418,7 @@ The lesson date may be optional.
 A topic may contain multiple learning materials, multiple Homework assignments, multiple Blitz tasks, and multiple questions inside those tasks. For the MVP final Topic result, exactly one Homework and exactly one Blitz must be designated as the official result-bearing pair. **Both official tasks must use whole-group assignment.** A Homework or Blitz assigned only to selected Students is supplementary/practice work and cannot become result-bearing. Supplementary tasks may target the whole group or selected Students but must not affect the final Topic result or understanding category. The two official relationships do not need to be created at the same time. The Topic may first have only its official Homework designated; the official Blitz relationship is added later to the same Topic result-pair record.
 
 **BR-TOP-004A — Official Topic cohort snapshot**  
-The official result-bearing pair uses one common Student cohort. The first activated official whole-group task establishes the common official Student cohort from its persisted recipient snapshot. If the official Homework is the first task, Stage 6 stores that cohort without fabricating a Blitz or Blitz recipient rows. When the official Blitz is later designated or activated, it must use exactly the same cohort. Later Group membership changes do not rewrite the official cohort. If official Blitz activates first while `cohort_snapshotted_at = null`, its persisted whole-group recipient snapshot establishes the cohort at that activation instant; the official Homework ID is preserved and no Homework Attempt is created. Later official Homework activation reuses that cohort. Account-active/security checks still apply to historical recipients.
+The official result-bearing pair uses one common Student cohort. The first activated official whole-group task establishes the common official Student cohort from its persisted recipient snapshot. If the official Homework is the first task, Stage 6 stores that cohort without fabricating a Blitz or Blitz recipient rows. When the official Blitz is later designated or activated, it must use exactly the same cohort. Later Group membership changes do not rewrite the official cohort. Since Stage 10 the official Blitz cannot activate while the official Homework is a draft (BR-BLZ-010A). In history from before Stage 10, if the official Blitz activated first while `cohort_snapshotted_at = null`, its persisted whole-group recipient snapshot established the cohort at that activation instant; the official Homework ID is preserved and no Homework Attempt is created, and a later official Homework activation reuses that cohort. Account-active/security checks still apply to historical recipients.
 
 **BR-TOP-005 — Same-topic comparison**  
 The homework and Blitz scores used for one final result must belong to the same topic and Student and must come from the topic’s designated official assessment pair.
@@ -445,10 +445,10 @@ Before a topic becomes active, it must have valid ownership, group assignment, s
 Only assigned students and authorized institution users may access an active topic.
 
 **BR-TOP-009 — Closing a topic**  
-Closing a topic must block new homework or blitz submissions when the connected task rules no longer permit them. Existing submissions may still be reviewed. A topic cannot be closed or archived while any of its Homework is draft or active, or any of its Blitz is draft, scheduled or active; the request returns `409 topic_has_open_assessments` and changes nothing.
+Closing a topic must block new homework or blitz submissions when the connected task rules no longer permit them. Existing submissions may still be reviewed. A topic cannot be closed or archived while any of its Homework is draft or active, or any of its Blitz is draft, scheduled or active; the request returns `409 topic_has_open_assessments` and changes nothing. Closing a topic closes no Topic result.
 
 **BR-TOP-010 — Archiving a topic**  
-Archiving must preserve materials, tasks, submissions, results, and reports as read-only historical information for authorized users. Stage 9 automatic checking of frozen Attempts and Teacher review and correction of existing submissions remain allowed (BR-Q-037).
+Archiving must preserve materials, tasks, submissions, results, and reports as read-only historical information for authorized users. Stage 9 automatic checking of frozen Attempts and Teacher review and correction of existing submissions remain allowed (BR-Q-037), except a correction for a Student whose Topic result is closed (BR-RES-011B). Inside the archive transaction, archiving also closes every terminal Topic result of the official cohort (open **Calculated** or open **Not completed**, BR-STAT-010B) with closure reason `topic_archived`, recorded as closed by the archiving Teacher; results that still wait stay open (`S10-D7`, BR-RES-011). The archive request, response, and conflicts are unchanged. This is a deliberate Stage 10 change to the Stage 5 archive behavior.
 
 **BR-TOP-011 — Status transition integrity**  
 A topic with student submissions must not be returned to an editable draft state in a way that changes the meaning of completed work.
@@ -622,10 +622,10 @@ Homework must not become active until required information, questions, correct-a
 Assigned students may start and submit active homework only while deadline, attempt, assignment, and permission rules allow it.
 
 **BR-HW-012 — Closed Homework and in-progress attempts**  
-Closing Homework blocks new Starts and Student answer/file/Submit writes. Before the deadline, the backend captures one `closedAt = server_now` and atomically closes the Homework and freezes every still-`in_progress` Attempt as `status = submitted`, `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`; all changes commit or roll back together. Finalization preserves only already-committed Student answers/files as pending, performs no Stage 7 checking/scoring, and creates neither an Attempt for a never-started Student nor an answer row for an unanswered Question. At or after the deadline, close must reconcile the deadline first and preserve `homework_deadline_auto_submit` plus the exact deadline timestamp. Repeated close/finalization must not rewrite an already-frozen reason or timestamp. Stage 9 may later check the frozen work and apply the approved missing-answer-zero policy.
+Closing Homework blocks new Starts and Student answer/file/Submit writes. Before the deadline, the backend captures one `closedAt = server_now` and atomically closes the Homework and freezes every still-`in_progress` Attempt as `status = submitted`, `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`; all changes commit or roll back together. Finalization preserves only already-committed Student answers/files as pending, performs no Stage 7 checking/scoring, and creates neither an Attempt for a never-started Student nor an answer row for an unanswered Question. At or after the deadline, close must reconcile the deadline first and preserve `homework_deadline_auto_submit` plus the exact deadline timestamp. Repeated close/finalization must not rewrite an already-frozen reason or timestamp. Stage 9 may later check the frozen work and apply the approved missing-answer-zero policy. A Homework close records no actor. Besides a Teacher close, an active official Homework is also closed in exactly this way by the activation of the official Blitz, inside the activation transaction (Homework before Blitz, BR-BLZ-010A, `S10-D8`).
 
 **BR-HW-013 — Archived homework**  
-Archived homework must be retained for history and reports and must not accept new activity. Stage 9 automatic checking of its frozen Attempts and Teacher review and correction of its existing submissions remain allowed (BR-Q-037); only its review deadline can no longer change (BR-HW-018A).
+Archived homework must be retained for history and reports and must not accept new activity. Stage 9 automatic checking of its frozen Attempts and Teacher review and correction of its existing submissions remain allowed (BR-Q-037), except a correction for a Student whose Topic result is closed (BR-RES-011B); only its review deadline can no longer change (BR-HW-018A).
 
 ### Deadlines
 
@@ -675,7 +675,7 @@ Each completed Homework attempt receives its normalized score only when it becom
 A final homework score must remain separate from the final topic result until the blitz score is available and comparison rules are applied.
 
 **BR-HW-025 — Parent access**  
-A Parent may view a connected child’s homework completion status, released score, and released feedback but must not view or edit protected answer content unless separately allowed. Parent visibility of scores and feedback arrives with Stage 10 result release; Stage 9 shows Parents nothing new (BR-STAT-023).
+A Parent sees a connected child’s official Homework through the child’s Topic result (BR-STAT-016A): unless the Parent mode is hidden or unconfigured, the Parent sees the result status, including a missing Homework, and, when the result values are visible to the Parent, the official Homework score together with the Teacher’s Topic-result comment. Teacher feedback on answers is Student-only and is never visible to a Parent (`S10-D1`). A Parent must not view or edit protected answer content unless separately allowed.
 
 **BR-HW-026 — Student view of Homework results**
 A Student sees own Homework Attempt results, Teacher feedback on own answers, and the official Homework score only under BR-STAT-020 and BR-STAT-021. The Homework review deadline is never shown to the Student.
@@ -712,6 +712,9 @@ The MVP should not subtract points for an incorrect answer unless a separate neg
 
 **BR-Q-005 — Mixed checking**  
 A task may contain both automatically checked and manually checked questions. The full task score must remain pending until all required manual checking is completed.
+
+**BR-Q-005A — Teacher text is never blank (`CL9-11`)**
+A Teacher text value that is blank after trimming the Student-answer whitespace set of BR-Q-013A (U+0009–U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) is rejected with the error the request already returns for an ASCII-blank value. This applies to the Question prompt, the choice option texts, the short-written accepted answers, the matching left and right texts, the ordering item texts, the fill-in-the-blank accepted answers, the Homework and Blitz title and Student instructions, and the Blitz exception reason (BR-ATT-014). Stored values are never rewritten, and answer-feedback trimming (BR-Q-038) is unchanged.
 
 ### Single-Choice Test
 
@@ -862,7 +865,7 @@ checked → checked                              (a correction recalculates the 
 When an Attempt becomes `checked`, and after every correction, its earned points, normalized score, and scoring-completion time (the time of the latest scoring) are set. While the Attempt waits for Teacher review, its earned points and normalized score stay empty. Checking never changes `finalization_reason`, `submitted_at`, `finalized_at`, or `locked_at`.
 
 **BR-Q-034 — When automatic checking runs**
-The freeze itself performs no checking; Stage 9 checks each frozen Attempt right after the transaction that froze it commits. The freezing points are Homework Submit, Homework deadline reconciliation, and Homework Teacher close; Blitz Submit, Blitz timeout reconciliation, Blitz Teacher close, and the timeout finalization performed during a Blitz exception grant. Each Attempt is checked on its own; a checking failure is logged and never undoes or alters the freeze or changes the freeze response. A sweep that runs every minute checks every Attempt still in `submitted` or `timed_out_finalized`, including history frozen before Stage 9, and repairs the stored official score of a Student who has a `checked` eligible Attempt and no pending eligible Attempt when that score is missing or differs from its live evaluation (BR-ATT-021). Checking acts only on Attempts still in `submitted` or `timed_out_finalized`, so repeating it changes nothing.
+The freeze itself performs no checking; Stage 9 checks each frozen Attempt right after the transaction that froze it commits. The freezing points are Homework Submit, Homework deadline reconciliation, and Homework close (by the Teacher or by the official Blitz activation, BR-BLZ-010A); Blitz Submit, Blitz timeout reconciliation, Blitz Teacher close, and the timeout finalization performed during a Blitz exception grant. Each Attempt is checked on its own; a checking failure is logged and never undoes or alters the freeze or changes the freeze response. A sweep that runs every minute checks every Attempt still in `submitted` or `timed_out_finalized`, including history frozen before Stage 9, and repairs the stored official score of a Student who has a `checked` eligible Attempt and no pending eligible Attempt when that score is missing or differs from its live evaluation (BR-ATT-021). Checking acts only on Attempts still in `submitted` or `timed_out_finalized`, so repeating it changes nothing.
 
 **BR-Q-035 — Invalidated Blitz attempts and practice tasks**
 An invalidated Blitz Attempt #1 is checked like any Attempt and may wait for Teacher review; it is never official and never blocks the official Blitz score. The Student-facing status **Invalidated by approved exception** is derived, not stored (BR-STAT-004A). Practice (non-official) Homework and Blitz tasks are checked and reviewed like official tasks but never receive an official score.
@@ -882,16 +885,16 @@ Scoring never uses binary floating point; every scoring calculation uses exact d
 ### Teacher Review and Correction
 
 **BR-Q-037 — Teacher review access**
-A submission is a terminal Attempt (`submitted`, `timed_out_finalized`, `waiting_for_teacher_review`, or `checked`) of a Homework or Blitz. A Teacher may open a submission only when the Topic is visible to that Teacher (same Institution, the Teacher owns the Topic, and the Teacher is currently a member of its Group) and the Student is a persisted recipient of the task. Anything else, including an `in_progress` Attempt, is a privacy-safe not-found response. Topic, Homework, and Blitz status (active, closed, or archived) does not restrict review. The Teacher sees every Question of the task in position order with its correct-answer configuration, and the Student’s answer with its checking state, awarded points, feedback, and last reviewer; an unanswered Question shows no answer. The Teacher may download the submitted answer files of an accessible submission (BR-SUB-016). By default the review queue orders official-task submissions before practice ones, then overdue submissions (BR-HW-018A) before the rest, then the earliest finalized first; an invalidated Blitz Attempt #1 is listed with practice work and labeled invalidated. Review is desktop-only in the Teacher interface; on mobile the Teacher sees only each task’s counts of submissions waiting for review and, for a Homework, overdue. The server does not check the device (BR-ROLE-023).
+A submission is a terminal Attempt (`submitted`, `timed_out_finalized`, `waiting_for_teacher_review`, or `checked`) of a Homework or Blitz. A Teacher may open a submission only when the Topic is visible to that Teacher (same Institution, the Teacher owns the Topic, and the Teacher is currently a member of its Group) and the Student is a persisted recipient of the task. Anything else, including an `in_progress` Attempt, is a privacy-safe not-found response. Topic, Homework, and Blitz status (active, closed, or archived) does not restrict review; a closed Topic result blocks only corrections (BR-Q-039). The Teacher sees every Question of the task in position order with its correct-answer configuration, and the Student’s answer with its checking state, awarded points, feedback, and last reviewer; an unanswered Question shows no answer. The Teacher may download the submitted answer files of an accessible submission (BR-SUB-016). By default the review queue orders official-task submissions before practice ones, then overdue submissions (BR-HW-018A) before the rest, then the earliest finalized first; an invalidated Blitz Attempt #1 is listed with practice work and labeled invalidated. Review is desktop-only in the Teacher interface; on mobile the Teacher sees only each task’s counts of submissions waiting for review and, for a Homework, overdue. The server does not check the device (BR-ROLE-023).
 
 **BR-Q-038 — Teacher review of manual answers**
 The Teacher reviews only manual-review answers of an accessible submission (answers in `waiting_for_teacher_review` or `teacher_checked`); automatically checked answers and the Student’s answer content cannot be changed (BR-Q-028). For each reviewed answer the Teacher awards points from 0 to the Question’s points under the number rule of BR-Q-036 and gives feedback or none. Feedback is trimmed of ASCII whitespace (space, tab, CR, LF, NUL, vertical tab), empty feedback means none, it holds at most 2000 characters, and giving none clears earlier feedback. A review may save any subset of the manual answers (partial review). A submission still awaiting automatic checking (`submitted` or `timed_out_finalized`) cannot be reviewed and returns `409 automatic_checking_pending`. Saving marks each reviewed answer `teacher_checked` with the reviewer and the server time, recalculates the Attempt (BR-Q-033), and re-resolves the official score (BR-ATT-021), all in one transaction. Concurrent reviews of one submission apply one after another, and each answer keeps the last committed value.
 
 **BR-Q-039 — Teacher correction**
-A Teacher corrects an already reviewed (`teacher_checked`) answer in the same way. The Attempt stays `checked` and is recalculated; the official score is re-resolved and may move to another Attempt. In Stage 9 a correction is always allowed, because result closure does not exist yet; Stage 10 adds the closure guard `409 result_closed` for corrections after the Topic result is closed (BR-RES-011).
+A Teacher corrects an already reviewed (`teacher_checked`) answer in the same way. The Attempt stays `checked` and is recalculated; the official score is re-resolved and may move to another Attempt. Stage 10 adds the closure guard (BR-RES-011B, `S10-T7`): when the Student’s Topic result is closed, a review request on an Attempt of the Topic’s official Homework or official Blitz that names any `teacher_checked` answer (a correction) fails as a whole with `409 result_closed` and changes nothing; this check runs inside the scoring-lock transaction, after the re-checked `409 automatic_checking_pending` check and before the item re-validation and any write, while invalid items still get the existing pre-transaction `422` first. A first review of a still-waiting answer stays allowed after closure, and practice tasks are never affected.
 
 **BR-Q-040 — Review record and feedback location**
-Each answer keeps only its last reviewer (`checked_by_user_id`) and review time (`checked_at`); there is no review history. In Stage 9 Teacher feedback exists only on answers; feedback on a Topic result and any Parent-visible feedback flag are decided at Stage 10 planning.
+Each answer keeps only its last reviewer (`checked_by_user_id`) and review time (`checked_at`); there is no review history. Teacher feedback on answers stays on answers and is Student-only. Stage 10 adds one optional Teacher comment on the Topic result (BR-RES-007A); there is no Parent-visible feedback flag (`S10-D1`).
 
 ---
 
@@ -926,6 +929,7 @@ Resume requires a canonical UUID for the exact own Attempt; both Start intents f
 | Intent and current state | Exact result |
 |---|---|
 | `start_normal`: no #1, all preconditions pass | Create normal #1; `201`. |
+| `start_normal` on the official Blitz: no #1, the existing executability checks pass, and the Student has no terminal Attempt of the official Homework | `409 homework_not_submitted`. No Attempt (BR-BLZ-011A). |
 | `start_normal`: own editable `in_progress` #1 | Return same #1; `200`, without timer reset. |
 | `start_normal`: due `in_progress` #1 | Authoritative timeout reconciliation when the owning finalization contract is available, then `409 blitz_time_expired`. |
 | `start_normal`: terminal #1 with `finalization_reason = timeout_auto_submit` (whatever its later checking status) and no approved exception | `409 blitz_time_expired`. No new Attempt. |
@@ -942,7 +946,7 @@ Resume requires a canonical UUID for the exact own Attempt; both Start intents f
 | `start_replacement`: consumed, otherwise terminal #2, or otherwise structurally valid history with no approved exception/available capacity | `409 attempts_exhausted`. |
 | `start_replacement`: existing invalid exception graph/capacity | `409 blitz_attempt_exception_not_allowed`, preserving the invariant/public-error split. |
 
-A selected terminal Attempt with `finalization_reason = timeout_auto_submit` answers `409 blitz_time_expired` whatever its later checking status (`timed_out_finalized`, `waiting_for_teacher_review`, or `checked`), whether the Scheduler or the request path finalized it; the only exception is `start_normal` when an approved exception exists. Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`). Rekeyed for Stage 9 (`S09-DOC-001`, `S09-T2`) from the status `timed_out_finalized` to the finalization reason, so the observable responses stay exactly as in Stage 8 after Stage 9 checking changes the status.
+A selected terminal Attempt with `finalization_reason = timeout_auto_submit` answers `409 blitz_time_expired` whatever its later checking status (`timed_out_finalized`, `waiting_for_teacher_review`, or `checked`), whether the Scheduler or the request path finalized it; the only exception is `start_normal` when an approved exception exists. Amended 2026-09-28 (`S08-CLOSURE-FIX-001`) to match `docs/09-api-contracts.md` §20.3 (owner decision D3, `S08-BE-PHASE-2-FIX-002`). Rekeyed for Stage 9 (`S09-DOC-001`, `S09-T2`) from the status `timed_out_finalized` to the finalization reason, so the observable responses stay exactly as in Stage 8 after Stage 9 checking changes the status. Amended 2026-10-03 (`S10-DOC-001`, `S10-D8`) with the `homework_not_submitted` row only; every other row is unchanged.
 
 `start_normal` never creates #2. Resume never creates, switches, or selects a newer Attempt. Only `start_replacement` creates #2; #3 is forbidden. Existing `started_at`, `deadline_at`, and `attempt_number` never change on a returned Attempt.
 
@@ -978,7 +982,7 @@ When the Student has used all normal attempts and has no unused approved Blitz e
 A Student must not start a new attempt when the task is closed or archived.
 
 **BR-ATT-012 — Deadline and time restrictions**  
-A Student must not start or submit a new Homework attempt after the Homework deadline. A Student must not start a Blitz attempt unless the Blitz is active and the applicable timing rules allow it.
+A Student must not start or submit a new Homework attempt after the Homework deadline. A Student must not start a Blitz attempt unless the Blitz is active and the applicable timing rules allow it. A Student must not start normal Attempt #1 of the official Blitz without a submitted Attempt of the official Homework (BR-BLZ-011A, `S10-D8`).
 
 **BR-ATT-013 — Assignment required**  
 A Student must not use an attempt for a task that is not assigned to that Student.
@@ -1022,12 +1026,12 @@ Normally, the Student’s single valid completed Blitz attempt is the official B
 - Without an exception, the official Blitz score is ready when Attempt #1 is `checked` (selection policy `valid_normal_blitz`).
 - With an approved exception, #1 is excluded and the official Blitz score is ready when replacement #2 exists and is `checked` (selection policy `approved_blitz_exception_replacement`).
 - The exception grant withdraws the Student’s existing official Blitz score, if any, in the grant transaction, also when #1 is already checked or official.
-- A Blitz closed before the Student took replacement #2 has no official Blitz score, and Stage 10 treats the Student as **Not completed**. A #2 taken before the close becomes official once it is `checked`, even when its review ends after the close; while it is still being checked or reviewed, the Student is not **Not completed** (BR-CAT-011).
+- A Blitz closed (or archived) before the Student took replacement #2 has no official Blitz score: the Blitz side is missing and the Student’s Topic result is **Not completed**, even while the invalidated #1 still waits for review (BR-STAT-010A). A #2 taken before the close becomes official once it is `checked`, even when its review ends after the close; while #2 is still being checked or reviewed, the Blitz side waits and is never missing, so the Blitz alone never makes the result **Not completed** (BR-CAT-011).
 
 The grant dialog tells the Teacher these consequences before the exception is granted.
 
 **BR-ATT-021 — Official score resolution and live evaluation**
-The official score is re-resolved inside every automatic checking run, review save, correction, and exception grant that concerns an official task, and by the minute sweep (BR-Q-034); it may move to another Attempt. Writers for one Student and one Assessment decide one at a time, so two of them never select concurrently. Between a freeze and its checking run the stored official score can still show the previous result, so no read trusts the stored official score alone: an official score counts as ready, for the Teacher official-score read and for Student visibility (BR-STAT-021), only when the stored official score exists and a live evaluation of BR-ATT-019 steps 1-3, or of the BR-ATT-020 Blitz rules, is ready with the same Attempt and the same normalized score. The sweep also re-resolves the official score of a Student who has a `checked` eligible Attempt and no pending eligible Attempt but whose stored official score is missing or differs from the live evaluation, a state that should not exist. Stage 10 result closure must use the same live evaluation (BR-RES-011).
+The official score is re-resolved inside every automatic checking run, review save, correction, and exception grant that concerns an official task, and by the minute sweep (BR-Q-034); it may move to another Attempt. Writers for one Student and one Assessment decide one at a time, so two of them never select concurrently. Between a freeze and its checking run the stored official score can still show the previous result, so no read trusts the stored official score alone: an official score counts as ready, for the Teacher official-score read and for Student visibility (BR-STAT-021), only when the stored official score exists and a live evaluation of BR-ATT-019 steps 1-3, or of the BR-ATT-020 Blitz rules, is ready with the same Attempt and the same normalized score. The sweep also re-resolves the official score of a Student who has a `checked` eligible Attempt and no pending eligible Attempt but whose stored official score is missing or differs from the live evaluation, a state that should not exist. Stage 10 Topic results use the same live evaluation, both for an open result on every read (BR-STAT-010A) and at closure (BR-RES-011A).
 
 ---
 
@@ -1108,10 +1112,22 @@ Only an authorized Teacher may activate the Blitz task during class. Draft/Sched
 
 First activation also requires valid title, Topic, Teacher, assignment/instructions, at least one valid Question, `duration_seconds > 0`, eligible lifecycle, and valid recipient/cohort rules. It snapshots recipients, reuses any established official cohort exactly, and creates no Student Attempt. A configured `institution_settings.blitz_timer_start_mode` is required; null returns `409 institution_settings_incomplete` only for activation and does not block drafts, Question authoring, Homework, or ordinary administration.
 
-Activation requires `Idempotency-Key` and authorization before replay. A completed same-key/same-fingerprint activation with valid persisted activation evidence and idempotency result metadata returns `200` current authorized Blitz for `active`, `closed`, or `archived`, without reopening historical work. A completed-success record pointing to `draft`/`scheduled`, or invalid evidence/result metadata, fails closed as an internal integrity inconsistency. Fresh/new-key active activation returns naturally idempotent `200` and may complete its new claim to the same Blitz. Both successful paths perform zero activation-domain mutation: activation time, timer snapshot, synchronized end, recipients, official cohort, and pair identity/lock are preserved. Fresh/new-key closed/archived returns `409 task_closed`/`409 task_archived` with no successful activation result left for that failed request. First eligible draft/scheduled activation follows the readiness rules above; different fingerprint reuse returns `409 idempotency_key_reused`.
+Activation requires `Idempotency-Key` and authorization before replay. A completed same-key/same-fingerprint activation with valid persisted activation evidence and idempotency result metadata returns `200` current authorized Blitz for `active`, `closed`, or `archived`, without reopening historical work. A completed-success record pointing to `draft`/`scheduled`, or invalid evidence/result metadata, fails closed as an internal integrity inconsistency. Fresh/new-key active activation returns naturally idempotent `200` and may complete its new claim to the same Blitz. Both successful paths perform zero activation-domain mutation: activation time, timer snapshot, synchronized end, recipients, official cohort, and pair identity/lock are preserved. Fresh/new-key closed/archived returns `409 task_closed`/`409 task_archived` with no successful activation result left for that failed request. First eligible draft/scheduled activation follows the readiness rules above; different fingerprint reuse returns `409 idempotency_key_reused`. Activation of the official Blitz additionally follows BR-BLZ-010A.
+
+**BR-BLZ-010A — Homework before Blitz at official activation (`S10-D8`)**
+The Blitz checks whether the Student did the Homework alone, so the official Homework ends for the whole class when the official Blitz (the Blitz of the Topic’s result pair) is activated:
+
+- While the official Homework is still a draft, activation returns `409 official_homework_not_activated` and changes nothing. This check runs immediately after the timer-start mode check (BR-BLZ-010) and before the cohort is locked.
+- An active official Homework is closed inside the activation transaction exactly like a Teacher Homework close (BR-HW-012). After all its locks, the activation captures one untruncated `closedAt = server_now`; the Blitz `activated_at` is `closedAt` truncated to the UTC second (BR-BLZ-017), while the Homework close uses `closedAt` itself, so it never precedes the Homework’s own `activated_at` or an Attempt’s `started_at`. A passed deadline is reconciled first; every still-`in_progress` Homework Attempt is frozen as `submitted` with `finalization_reason = task_closed_auto_finalize`; the Homework gets `status = closed` and `closed_at = closedAt` with no recorded actor; and the frozen Attempts are then checked automatically (BR-Q-034).
+- A closed or archived official Homework is left unchanged.
+
+The close reuses the Homework rows that the activation’s cohort step already locks and takes no lock in another order. The activation response, idempotency, and every other activation conflict are unchanged; an idempotent replay never closes anything. Activation of a practice Blitz is unaffected.
 
 **BR-BLZ-011 — Active-only answering**  
-A Student may start or answer the Blitz only while it is active, assigned, within the applicable timing rule, and within the allowed normal or approved exception attempt.
+A Student may start or answer the Blitz only while it is active, assigned, within the applicable timing rule, and within the allowed normal or approved exception attempt. Starting normal Attempt #1 of the official Blitz also requires a submitted official Homework Attempt (BR-BLZ-011A).
+
+**BR-BLZ-011A — Homework before Blitz at Student Start (`S10-D8`)**
+Only a Student with a submitted Homework Attempt may start the official Blitz. When a `start_normal` request on the official Blitz would create a new normal Attempt #1 (after the existing executability checks, and only when the Student has no Attempt #1), the Student must have at least one terminal (`submitted`, `waiting_for_teacher_review`, or `checked`) Attempt of the official Homework; otherwise the request returns `409 homework_not_submitted` and creates nothing (BR-ATT-004A). A `start_normal` that returns an existing Attempt #1, an idempotent replay, `resume`, and `start_replacement` (the replacement Attempt #2) are unaffected, and so is every practice Blitz. When the activation closed the official Homework, a Student barred this way is **Not completed** at once, with the Homework and Blitz sides both missing (`missing_component = both`, BR-STAT-010A); in history from before Stage 10 with a still-open official Homework, the result waits for the Homework instead (BR-STAT-010B).
 
 **BR-BLZ-012 — Closing/archiving and in-progress attempts**  
 Closing an active Blitz atomically blocks Starts and Student answer/file/Submit writes and freezes existing `in_progress` Attempts from already-committed work. Capture one canonical `closedAt`: already-due Attempts become `timed_out_finalized` with `submitted_at = null`, `finalized_at = locked_at = exact deadline_at`, and `finalization_reason = timeout_auto_submit`; only still-pre-deadline Attempts become `submitted` with `submitted_at = null`, `finalized_at = locked_at = closedAt`, and `finalization_reason = task_closed_auto_finalize`. Evaluate each persisted deadline, including different individual/replacement deadlines. Existing terminal reasons/timestamps never change. No Attempt for a never-started Student or answer row for an unanswered Question is fabricated. Saved work remains pending without Stage 8 checking/scoring; Stage 9 later applies zero/checking/review rules. Repeated close is naturally idempotent without a new `Idempotency-Key` requirement. Archive blocks activity and preserves Attempts, exception, and official-pair history.
@@ -1260,7 +1276,7 @@ D > T
 When `D <= T`, the system must mark homework and blitz as consistent.
 
 **BR-CMP-010 — Inconsistent result**  
-When `D > T`, the system must mark homework and blitz as inconsistent.
+When `D > T`, the system must mark homework and blitz as inconsistent. The consistency label, `D`, and `T` are shown only to the Teacher; Students and Parents never see the word “inconsistent”, `D`, or `T` (`S10-D2`, BR-STAT-013B).
 
 **BR-CMP-011 — Inconsistency is not an accusation**  
 An inconsistent result must not automatically label the Student as cheating. It indicates only that the homework and in-class performance do not match closely.
@@ -1302,14 +1318,14 @@ Result consistency: Inconsistent
 
 ### Rule Snapshot and Changes
 
-**BR-CMP-013 — Save threshold used**  
-The final result must record the acceptable-difference threshold used for its calculation.
+**BR-CMP-013 — Threshold used**
+An open result always compares with the Institution’s current threshold `T` and keeps no copy of it. A closed result records in its closure snapshot the threshold `T` used for its calculation (BR-RES-011A).
 
-**BR-CMP-014 — No silent historical recalculation**  
-Changing the institution threshold must not silently change already closed historical results.
+**BR-CMP-014 — Threshold changes**
+Changing the institution threshold changes every open result on its next read, including a result already visible to the Student or Parent (`S10-D5`, `S10-D6`). It never changes a closed result.
 
-**BR-CMP-015 — Recalculate before closure when inputs change**  
-If an authorized correction changes an underlying official homework or blitz score before the final result is closed, the system must recalculate the result using the applicable saved or current rule according to the approved result lifecycle.
+**BR-CMP-015 — Open results follow corrections**
+An open result is computed live from the current official scores on every read and is never stored or recalculated (`S10-T1`). When an authorized correction changes an official homework or blitz score before the result is closed, the next read of the result uses the new score with the current threshold. After closure the correction is rejected (BR-RES-011B).
 
 ---
 
@@ -1325,6 +1341,8 @@ The final numeric topic result requires:
 - Completed required manual checking
 - A valid institution acceptable-difference threshold
 - Valid category ranges
+
+With both official scores ready but the threshold or a valid complete category configuration missing, the result is **Waiting for settings** (BR-STAT-007A).
 
 **BR-RES-002 — No final numeric score with missing required work**  
 When required homework or blitz is missing, the system must not invent a numeric final score.
@@ -1357,38 +1375,40 @@ The blitz score must be used when the difference is large even when the blitz sc
 **BR-RES-006 — No other formula in the MVP**  
 Weighted averages, Teacher-selected formulas, AI predictions, and custom formulas beyond the approved rule are outside the MVP.
 
-### Saved Result Data
+### Result Data
 
-**BR-RES-007 — Result record contents**  
-The final result must retain, at minimum:
+**BR-RES-007 — Result contents**
+A Topic result identifies, at minimum:
 
 - Institution
 - Student
 - Topic
 - Designated homework assignment
 - Designated blitz task
-- Official homework score
-- Official blitz score
+- Homework and Blitz side states (BR-STAT-010A)
+- Official homework score and official blitz score, each with its official Attempt, when that side is ready
 - Absolute score difference
 - Acceptable-difference threshold used
 - Calculation method
-- Final score when calculated
+- Final score and `category_score` when calculated
 - Consistency status
 - Understanding category
-- Result status
-- Visibility state
-- Relevant attempt references
-- Teacher feedback if available
+- Result status, closed outcome, and missing component
+- Student and Parent visibility, with the Teacher’s release facts
+- The Teacher’s Topic-result comment, if any (BR-RES-007A)
 
-Whether a Topic result carries its own Teacher feedback, and any Parent-visible feedback flag, are decided at Stage 10 planning; in Stage 9 feedback exists only on answers (BR-Q-040).
+An open result is computed live from the current state on every read and is not stored; only what cannot be derived is stored: the Teacher comment, the Teacher release facts, and the closure snapshot (`S10-T1`, BR-RES-011A). The score difference, threshold, calculation method, consistency, final score, and `category_score` exist only for a **Calculated** result, open or closed.
+
+**BR-RES-007A — Teacher comment on the Topic result (`S10-D1`)**
+A Topic result carries one optional Teacher comment. Leading and trailing Unicode whitespace (including non-breaking spaces) is trimmed, an empty comment means none, and the comment holds at most 2000 characters after trimming. The Topic’s Teacher (BR-STAT-012) may set, change, or clear it in every result status until the result is closed; after closure the comment cannot change (BR-RES-011B). The Student sees the comment together with the visible result values; the Parent sees it only when the values are visible to the Parent (BR-STAT-016A). There is no separate Parent flag. Teacher feedback on answers (BR-Q-038) stays Student-only.
 
 **BR-RES-008 — Calculation method values**  
-The result must identify whether it was produced by:
+A **Calculated** result identifies how its final score was formed, with exactly one of two values:
 
-- Average of homework and blitz
-- Blitz score because of a large difference
-- Waiting because required input or review is incomplete
-- Not completed because required work was not completed
+- `average` — average of homework and blitz (`D <= T`)
+- `blitz` — blitz score because of a large difference (`D > T`)
+
+Waiting and **Not completed** are result statuses (BR-STAT-005 to BR-STAT-009), never calculation methods. The Student and the Parent see the method as one neutral line on how the final score was formed (`S10-D2`).
 
 ### Manual Corrections and Closure
 
@@ -1396,13 +1416,27 @@ The result must identify whether it was produced by:
 A Teacher must not directly type a different final score that bypasses the approved calculation formula.
 
 **BR-RES-010 — Correct underlying score instead**  
-Before result closure, an authorized Teacher may correct a manually reviewed question or task score when the original review was wrong, by correcting the points of the manually reviewed answers (BR-Q-039). The system must then recalculate the final result.
+Before result closure, an authorized Teacher may correct a manually reviewed question or task score when the original review was wrong, by correcting the points of the manually reviewed answers (BR-Q-039). The open result then uses the corrected official score on its next read (BR-CMP-015). After closure the correction is rejected (BR-RES-011B).
 
-**BR-RES-011 — Result closure preconditions and stability**  
-A Teacher may close one Student’s Topic Result only when that Student has reached a terminal educational state: either (a) a fully calculated numeric result with both official task scores available, all required manual review complete, and no relevant `in_progress` or pending replacement Blitz attempt; or (b) a definitive **Not completed** outcome after required work can no longer validly be completed. Waiting for Homework, Waiting for Blitz, and Waiting for teacher review cannot be closed. Closure is Student-and-Topic-specific and does not require class-wide tasks to be closed. Result release/visibility is independent and is not a prerequisite for closure. Closure re-checks the live Attempt state and evaluates the official task scores live (BR-ATT-021) instead of trusting stored official scores alone. After closure, official scores, manual scoring, Blitz exceptions, result-pair/cohort changes, recalculation, final score, consistency, and category are immutable in the MVP; permitted visibility/release actions remain separate. Formal appeals and post-closure revision workflows are outside the MVP.
+**BR-RES-011 — Result closure preconditions (`S10-D9`)**
+A Teacher may close one Student’s Topic result only when it is closable: it is terminal (open **Calculated** or open **Not completed**, BR-STAT-010B) and the Student’s work is finished (BR-STAT-013A), which is the same moment the result can become visible. With Homework before Blitz (BR-BLZ-010A) that moment is, for every Student, right after the official Blitz closes. **Waiting for homework**, **Waiting for blitz task**, **Waiting for teacher review**, and **Waiting for settings** cannot be closed. Closing a result that is not closable returns `409 result_not_ready_for_closure`; closing an already closed result returns it unchanged.
 
-**BR-RES-012 — Calculation precision, display rounding, and category score**  
-Homework and Blitz normalized scores are the stored Attempt scores of BR-Q-036: exact decimal arithmetic with one half-up rounding to 8 decimal places when stored. Score-difference comparison, threshold evaluation, and final-score calculation use those stored scores with no further intermediate rounding and never the one-decimal display value. User-facing Homework, Blitz, and final scores are displayed rounded to **one decimal place** using standard (half-up) mathematical rounding. For understanding-category assignment only, the system derives an integer `category_score` from the final internal score: a fractional part from `.0` through `.5` rounds down to the lower integer; a fractional part greater than `.5` rounds up to the next integer. The category is resolved from this integer score, not from the one-decimal display value and not directly from the unrounded decimal score.
+Closure is Student-and-Topic-specific and needs no class-wide action. Release is independent: it is not a prerequisite for closure, and a closed result can still be released (BR-STAT-019). The Teacher may also close all closable results of a Topic at once (BR-STAT-019A). Archiving the Topic closes every terminal result automatically with closure reason `topic_archived` (BR-TOP-010): at archive every task is closed or archived and no further work is possible, so a terminal result is closable then even when the Student’s work never counted as finished (no activated official Blitz); its values stay hidden from the Student and the Parent (BR-STAT-013A, BR-STAT-013B). Results that still wait stay open at archive. Closing a Topic closes no result. Every Teacher result action serializes with scoring, Student Starts, and exception grants on the same Topic, so closure evaluates one consistent state (`S10-T6`). Reopening a closed result, formal appeals, and post-closure revision are outside the MVP.
+
+**BR-RES-011A — Closure snapshot and stability**
+Closure computes the result live inside its own transaction from the current Attempt state and the live evaluation of the official task scores (BR-ATT-021), never from stored official scores alone, and stores the closure snapshot: the closure time, the closing Teacher, the closure reason (`teacher` or `topic_archived`), the closed outcome (`calculated` or `not_completed`), the missing component, the pair’s Homework and Blitz, both side states, the official Attempts and scores of the ready sides, and for a **Calculated** outcome the score difference, the threshold, the calculation method, the consistency, the final score, `category_score`, the category, and the category range used. The snapshot references the official Attempts, which are never deleted, and never the stored official task-score rows (`S10-T2`). After closure the snapshot and the Teacher comment never change, and the result never reads current settings again (`S10-D6`); only the Teacher release facts can still be recorded.
+
+**BR-RES-011B — What closure blocks (`S10-T7`)**
+For a Student whose Topic result is closed:
+
+- a correction of that Student’s official Homework or official Blitz answer returns `409 result_closed` (BR-Q-039);
+- a change of the Teacher comment returns `409 result_closed`, also for an unchanged value (BR-RES-007A);
+- a Start of the official Homework returns `409 result_closed` after the existing lifecycle, deadline, and attempt-count conflicts. This is reachable only in history from before Stage 10: a Homework with no Attempt at all whose deadline a Teacher moved later.
+
+Closure needs finished work, so the official Blitz is already closed, or the Topic is archived (BR-RES-011): a Blitz Start, an exception grant, and a result-pair change cannot happen after closure (`result_pair_locked` and `topic_not_editable` already apply) and get no closure guard. Still allowed after closure: a first review of a still-waiting answer, automatic checking, and the sweep. For a **Calculated** closure no pending Attempt could overtake, so such a review cannot change the official score; for a **Not completed** closure a later first review may still complete the other side’s official score in the Stage 9 views, but it never changes the closed snapshot. Idempotent replays of an earlier successful request keep returning the stored response. Practice tasks are never affected.
+
+**BR-RES-012 — Calculation precision, display rounding, and category score (`S10-T5`)**
+Homework and Blitz normalized scores are the stored Attempt scores of BR-Q-036: exact decimal arithmetic with one half-up rounding to 8 decimal places when stored. The score difference, the threshold comparison, and the final score are computed exactly from those stored scores and the threshold `T`, with no intermediate rounding and never from the one-decimal display value. The exact final score (an average can need a ninth decimal place) is stored and serialized rounded half-up to 8 decimal places. For understanding-category assignment only, the system derives an integer `category_score` from the exact final score: a fractional part from `.0` through `.5` rounds down to the lower integer; a fractional part greater than `.5` rounds up to the next integer (`85.5 → 85`, `85.50000001 → 86`). The category is resolved from this integer score, not from the one-decimal display value and not directly from the decimal final score. User-facing Homework, Blitz, and final scores, and the score difference and threshold shown to the Teacher, are displayed by the client from the stored value rounded to **one decimal place** using standard (half-up) mathematical rounding. Display rounding never changes the category or the consistency, so a Teacher may correctly see an inconsistent result whose displayed difference equals the displayed threshold.
 
 ### Examples
 
@@ -1470,7 +1504,7 @@ Range boundaries are inclusive integers. For example:
 These are examples, not mandatory universal ranges.
 
 **BR-CAT-007 — One category per calculated result using `category_score`**  
-After the final internal score is calculated, the backend derives exactly one integer `category_score`: fractions `.0` through `.5` round down, while fractions greater than `.5` round up. The category resolver then maps that integer to exactly one configured category range. Example: `85.5 → 85` and `85.6 → 86`.
+After the final score is calculated, the backend derives exactly one integer `category_score` from the exact final score (BR-RES-012): fractions `.0` through `.5` round down, while fractions greater than `.5` round up. The category resolver then maps that integer to exactly one configured category range: for an open result, the range of the Institution’s current category configuration that contains it; for a closed result, the category and range stored in its closure snapshot. A stored configuration that fails the category-configuration validation counts as missing, and the result is **Waiting for settings** (BR-STAT-007A). Example: `85.5 → 85`, `85.50000001 → 86`, and `85.6 → 86`.
 
 ### Not Completed
 
@@ -1478,31 +1512,33 @@ After the final internal score is calculated, the backend derives exactly one in
 The **Not completed** category must be based on missing required work, not a low numeric score.
 
 **BR-CAT-009 — Not completed trigger**  
-If required homework or blitz was not completed after the applicable attempts, deadline, active period, or task closure, the final topic result may receive **Not completed**.
+A Topic result receives **Not completed** as soon as one side (official homework or official blitz) is missing, that is, the Student can no longer complete it after the applicable attempts, deadline, active period, or task closure (BR-STAT-010A), even while the other side is still open or waiting for review (`S10-T3`). A side the Teacher never designated or never activated is never missing: the result waits.
 
 **BR-CAT-010 — Show missing component**  
 The system must show whether the missing component is:
 
-- Homework
-- Blitz task
-- Both homework and blitz
+- Homework (`homework`)
+- Blitz task (`blitz`)
+- Both homework and blitz (`both`)
+
+The missing component names the sides that are missing now; it can change (for example from `homework` to `both`) until the result is closed.
 
 **BR-CAT-011 — Waiting for review is not Not completed**  
-Review that an official Homework or Blitz score still waits for keeps the result out of **Not completed**. Review of an Attempt that cannot affect an official score (an invalidated Blitz #1, a Homework Attempt that cannot overtake) does not (BR-ATT-019, BR-ATT-020).
+A side that waits for automatic checking or Teacher review is never missing, so review alone never makes a result **Not completed**. A result is **Not completed** only because some side is missing, even while the other side still waits for review (`S10-T3`). Review of an Attempt that cannot affect an official score (an invalidated Blitz #1, a Homework Attempt that cannot overtake) never keeps a side waiting (BR-ATT-019, BR-ATT-020).
 
 **BR-CAT-012 — Not released is not Not completed**  
-A calculated result that has not been released to the Student or Parent must not receive **Not completed** for that reason.
+A calculated result that has not been released to the Student or Parent must not receive **Not completed** for that reason. A result waiting for settings is likewise never **Not completed** (BR-STAT-007A).
 
 ### Category Changes and Visibility
 
-**BR-CAT-013 — Save category rule snapshot**  
-The result must retain the category range used when the result was calculated or closed.
+**BR-CAT-013 — Category range at closure**
+A closed result retains, in its closure snapshot, the category, `category_score`, and category range used when it was closed (BR-RES-011A). An open result stores no category; it always resolves the category from the Institution’s current configuration (`S10-D6`).
 
-**BR-CAT-014 — Future setting changes**  
-Changing institution category ranges must apply to future or explicitly recalculated open results, not silently rewrite closed historical results.
+**BR-CAT-014 — Category setting changes**
+Changing institution category ranges applies to every open result on its next read, including a result already visible to the Student or Parent (`S10-D5`), and never changes a closed result.
 
 **BR-CAT-015 — Teacher visibility**  
-The Teacher may view the category for assigned Students when the result is available.
+The Teacher may view the category and `category_score` for assigned Students when the result is available (BR-STAT-012).
 
 **BR-CAT-016 — Student and Parent visibility**  
 Students and Parents may view the category only according to result-visibility rules.
@@ -1549,91 +1585,182 @@ The Student-facing status **Invalidated by approved exception** is derived from 
 
 ### Result Calculation Statuses
 
-The MVP result calculation statuses are:
+A Topic has Topic results only after its official cohort is established (`cohort_snapshotted_at` is set, BR-TOP-004A): one result for each Student of the cohort, the persisted recipients of the official Homework and the official Blitz. Before that the Topic has no results, and later Group membership changes never change the cohort. An open (not closed) result is computed from the current state on every read; it is never stored and never recalculated by a job (`S10-T1`). A closed result is read only from its closure snapshot (BR-RES-011A).
 
-- **Waiting for homework**
-- **Waiting for blitz task**
-- **Waiting for teacher review**
-- **Calculated**
-- **Not completed**
-- **Closed**
+The MVP result statuses (`result_status`) are:
+
+- **Waiting for homework** (`waiting_for_homework`)
+- **Waiting for blitz task** (`waiting_for_blitz`)
+- **Waiting for teacher review** (`waiting_for_teacher_review`)
+- **Waiting for settings** (`waiting_for_settings`)
+- **Calculated** (`calculated`)
+- **Not completed** (`not_completed`)
+- **Closed** (`closed`)
+
+The first six are statuses of an open result and follow the precedence of BR-STAT-010B.
 
 **BR-STAT-005 — Waiting for homework**  
-Use this status while required homework or its official score is not yet available and the task may still be completed or reviewed.
+Use this status while no side is missing, the two official scores are not both ready, and the official Homework is not yet activated, can still be worked on by the Student, or has an official score still being checked automatically (BR-STAT-010B row 4).
 
 **BR-STAT-006 — Waiting for blitz task**  
-Use this status while the required blitz or its official score is not yet available and the task may still be completed or reviewed.
+Use this status while no earlier row of BR-STAT-010B applies and the official Blitz is not yet designated or activated, can still be worked on by the Student (including a pending approved replacement), or has an official score still being checked automatically (BR-STAT-010B row 5).
 
 **BR-STAT-007 — Waiting for teacher review**  
-Use this status when submitted homework or blitz answers still require manual scoring.
+Use this status when no earlier row of BR-STAT-010B applies and an official Homework or Blitz score still waits for manual scoring (BR-STAT-010B row 6).
+
+**BR-STAT-007A — Waiting for settings**
+Use this status when both official scores are ready but the Institution has no acceptable-difference threshold or no valid complete category configuration; a stored configuration that fails the category-configuration validation counts as missing (`S10-T4`). The result becomes **Calculated** on its next read after the settings are configured. It is never **Not completed**.
 
 **BR-STAT-008 — Calculated**  
-Use this status after both official scores are available, the formula has been applied, and a category has been assigned.
+Use this status after both official scores are available and the Institution has a threshold and a valid complete category configuration: the formula has been applied with the current threshold and the category resolved from the current ranges (`S10-D6`). An open Calculated result still follows later corrections and setting changes until it is closed.
 
 **BR-STAT-009 — Not completed**  
-Use this status when required work was not completed and the applicable completion window has ended.
+Use this status when some side is missing (BR-STAT-010A): the Student can no longer complete it, even while the other side is still open or waiting for review (`S10-T3`). The missing component (`homework`, `blitz`, or `both`) names the sides missing now and can change until the result is closed (BR-CAT-010). A Not completed result has the **Not completed** category and no final score, score difference, threshold, consistency, calculation method, or `category_score`.
 
 **BR-STAT-010 — Closed**  
-Use this status when the final result is finalized and no further changes are permitted in the MVP.
+Use this status when the final result is finalized by closure (BR-RES-011) and no further changes are permitted in the MVP. A closed result has `result_status = closed` and a closed outcome of `calculated` or `not_completed` (the closed outcome is null for every open result); all its values come from its closure snapshot (BR-RES-011A).
+
+**BR-STAT-010A — Side states**
+Each side (Homework, Blitz) of one cohort Student has exactly one state, the first matching row. The official-score status is the Stage 9 live read (BR-ATT-021): ready only while the stored official score matches the live evaluation.
+
+Homework side:
+
+| # | Condition | Side state |
+|---|---|---|
+| 1 | Official score status `ready` | `ready` (value H, official Attempt) |
+| 2 | Official score status `waiting_for_teacher_review` | `waiting_for_teacher_review` |
+| 3 | Official score status `automatic_checking_pending` | `checking` |
+| 4 | The official Homework was never activated | `not_activated` |
+| 5 | The Student has an `in_progress` Attempt | `open` |
+| 6 | The Homework is active, has no deadline or `server_now < deadline_at`, and the Student has fewer than three Attempts | `open` |
+| 7 | Otherwise (closed or archived, deadline passed, no checked or pending Attempt) | `missing` |
+
+Blitz side:
+
+| # | Condition | Side state |
+|---|---|---|
+| 1 | The pair has no Blitz | `not_designated` |
+| 2 | Official score status `ready` | `ready` (value B, official Attempt) |
+| 3 | Official score status `waiting_for_teacher_review` | `waiting_for_teacher_review` |
+| 4 | Official score status `automatic_checking_pending` | `checking` |
+| 5 | Official score status `waiting_for_replacement` | `open` |
+| 6 | The official Blitz was never activated (draft, scheduled, or archived before activation) | `not_activated` |
+| 7 | The Blitz is active, the Student has no Blitz Attempt, and the Homework side is `missing` (the Student can no longer get the submitted Homework that BR-BLZ-011A requires to start) | `missing` |
+| 8 | The Blitz is active | `open` |
+| 9 | Otherwise (closed or archived after activation; never started, or an exception without a taken replacement, even while #1 waits for review, BR-ATT-020) | `missing` |
+
+A side that waits for automatic checking or Teacher review is never missing. A side the Teacher never designated or never activated is never missing: the result waits (`S10-T3`).
+
+**BR-STAT-010B — Status precedence for open results**
+An open result has the status of the first matching row:
+
+| # | Condition | `result_status` |
+|---|---|---|
+| 1 | Some side is `missing` | `not_completed`; missing component `homework`, `blitz`, or `both` (the sides that are `missing` now) |
+| 2 | Both sides `ready`, and the Institution has a threshold and a valid complete category configuration | `calculated` |
+| 3 | Both sides `ready`, threshold or category configuration missing | `waiting_for_settings` |
+| 4 | Homework side `not_activated`, `open`, or `checking` | `waiting_for_homework` |
+| 5 | Blitz side `not_designated`, `not_activated`, `open`, or `checking` | `waiting_for_blitz` |
+| 6 | Otherwise (a side `waiting_for_teacher_review`) | `waiting_for_teacher_review` |
+
+The missing component is null for every other status. The precedence is Homework, then Blitz, then Teacher review (`S10-T3`). An open result is **terminal** when its status is `calculated` or `not_completed`.
 
 ### Visibility State
 
 **BR-STAT-011 — Visibility is independent**  
-A result’s calculation status and visibility must be stored and evaluated separately.
+A result’s status and its visibility must be evaluated separately: visibility never changes a status or value, and a status never depends on visibility.
 
 **BR-STAT-012 — Teacher access**  
-The authorized Teacher must be able to view calculation and review statuses for assigned Students even when the result is not released.
+Topic results are read and changed by the Topic’s Teacher: the Teacher who owns the Topic and is a current Teacher of its group (the review access rule of BR-Q-037, `S10-T6`). Topic and task status never restrict this access. The Teacher sees every cohort Student’s result with its status, both side states, official scores, score difference, threshold, consistency, calculation method, final score, `category_score`, category, comment, and Student and Parent visibility, even when the result is not visible to the Student or Parent (`S10-D2`).
 
 **BR-STAT-013 — Student result-release modes**  
 Each institution must configure one Student result-release mode:
 
-- **Automatic** — the Student’s result becomes visible automatically after the result is fully calculated and all required checking is complete.
-- **Manual Teacher release** — the result may be fully calculated and visible to the Teacher, but remains hidden from the Student until an authorized Teacher releases it.
+- **Automatic** — the Topic result values become visible to the Student by themselves at the moment the result is terminal or closed and the Student’s work is finished (BR-STAT-013A).
+- **Manual Teacher release** — the Teacher’s release to the Student becomes available at that moment (BR-STAT-019); the values stay hidden from the Student, while visible to the Teacher, until the Teacher releases them.
+
+While the mode is unconfigured, no result becomes visible through the mode and no new Teacher release is possible (BR-INST-016B).
+
+**BR-STAT-013A — Work-finished window (`S10-D3`)**
+A Student’s work on a Topic is finished when all of these hold:
+
+- the official Blitz was activated and is now closed or archived;
+- the official Homework is closed or archived, or its deadline has passed (`deadline_at <= server_now`), or the Student has used all three Attempts;
+- the Student has no `in_progress` Attempt on the official Homework or the official Blitz.
+
+A Topic without an official Blitz never has finished work for visibility. Because the official Blitz activation closes the official Homework (BR-BLZ-010A), every Student’s work is finished right after the official Blitz closes, so a Student who finishes the Blitz early never sees a Topic result before the Blitz closes. A Homework deadline moved later or removed (possible only while the Homework has no Attempt, so only in history from before Stage 10) closes the window again for an open result; a result closed with finished work, which every Teacher closure requires (BR-RES-011), always counts as finished. A result closed at Topic archive without finished work (no activated official Blitz) never counts as finished, so its values stay hidden.
+
+**BR-STAT-013B — Student view of the Topic result**
+The Topic result values (Homework score, Blitz score, final score, calculation method, category, and the Teacher’s comment) are visible to the Student exactly when all of these hold:
+
+```text
+result is terminal or closed
++ the Student's work is finished (BR-STAT-013A)
++ (student_result_release_mode = automatic  or  the Teacher released the result to the Student)
+```
+
+When visible, the Student sees the values that exist: a **Not completed** result shows the ready side’s score, the **Not completed** category, and the comment, with no final score or calculation method. The status (result status, closed outcome, and missing component) is always visible to the Student (BR-STAT-018). The Student never sees the score difference, the threshold, the consistency (never the word “inconsistent”), or `category_score` (`S10-D2`). A cohort Student keeps access to the Topic result after leaving the group (BR-REL-010).
 
 **BR-STAT-014 — Parent result-visibility modes**  
 Each institution must configure one Parent result-visibility mode:
 
-- **With Student release** — a connected Parent receives access automatically when the Student result is released.
-- **Manual Teacher release** — the Parent remains unable to see the result until an authorized Teacher releases it to Parents.
-- **Hidden** — Parents do not receive the result.
+- **With Student release** — a connected Parent sees the result values whenever they are visible to the Student (BR-STAT-013B).
+- **Manual Teacher release** — a connected Parent sees the result values only after an authorized Teacher releases the result to Parents, and only while they are visible to the Student.
+- **Hidden** — Parents receive no Topic result information at all, not even the status (`S10-T8`).
 
-**BR-STAT-015 — Parent cannot receive a result before the Student**  
-A Parent result must never become visible before that Student’s result has been released to the Student, regardless of the Parent visibility mode.
+An unconfigured Parent mode behaves as **Hidden**.
+
+**BR-STAT-015 — Parent never ahead of the Student**
+A Parent never sees result values that are not visible to the Student at that moment, regardless of the Parent visibility mode. A Teacher release to Parents is possible only while the values are visible to the Student (BR-STAT-019).
 
 **BR-STAT-016 — Separate Student and Parent visibility**  
-Student visibility and Parent visibility must be stored/evaluated separately so the institution’s approved modes can be enforced.
+Student visibility and Parent visibility must be evaluated separately, and the Teacher’s releases to the Student and to Parents are recorded separately, so the institution’s approved modes can be enforced.
 
-**BR-STAT-017 — Non-release does not change result**  
-Hiding or releasing a result must not change the scores, formula, category, consistency, or calculation status.
+**BR-STAT-016A — Parent view of the Topic result**
+A Parent sees Topic result information only for a Student with a current Parent–Student relationship (BR-REL-011, BR-REL-014) and only for a Topic that Student can access. In **Hidden** or unconfigured Parent mode the Parent receives nothing. Otherwise the Parent sees the status (result status, closed outcome, and missing component) and, when the values are visible to the Parent (BR-STAT-014, BR-STAT-015), the same values as the Student, including the Teacher’s comment (`S10-D1`). The Parent never sees the score difference, the threshold, the consistency, `category_score`, or Teacher feedback on answers. Stage 10 provides one Parent read of a child’s Topic result; Parent screens, the children list, dashboards, and progress are Stage 11.
 
-**BR-STAT-018 — Incomplete-status visibility**  
-The system may show allowed progress statuses such as waiting for review or not completed without exposing unreleased scores.
+**BR-STAT-017 — Release does not change the result**
+Releasing a result must not change the scores, formula, category, consistency, or status. The MVP has no hide or unrelease action (`S10-D5`).
+
+**BR-STAT-017A — Released results and later changes (`S10-D5`, `S10-D6`)**
+A released result stays released. After a Teacher correction the Student and the Parent see the new values at once; if the result falls back to a waiting status, they see that status without values and later the new result, with no new release. A change of a release mode acts immediately on every result, and the Teacher releases already made stay: for example, switching from automatic to manual Teacher release hides the values a Student saw only through the automatic mode until the Teacher releases them. A change of the threshold or the category ranges changes every open result at once, including one already visible; a closed result never changes.
+
+**BR-STAT-018 — Status visibility**
+The Topic result status (result status, closed outcome, and missing component) is always visible to the Student, and to the Parent unless the Parent mode is **Hidden** or unconfigured, without exposing values that are not visible. An Attempt status `checked` stays visible to the Student without its score while the Attempt result is not visible (BR-STAT-020; carried item `CL9-10` accepted).
 
 **BR-STAT-019 — Teacher release authority**  
-When the institution uses a manual release mode, only an authorized Teacher for the relevant Topic/Student may perform the release action. Institution configuration determines whether manual release is required for Students and/or Parents.
+Only the Topic’s Teacher (BR-STAT-012) may release a result, and only while the current mode for that audience is manual Teacher release; each release is checked in this order:
 
-### Stage 9 Student Result Visibility
+- **Release to the Student** — when the current Student mode is not manual Teacher release, `409 manual_release_not_allowed`; when already released to the Student, the result is returned unchanged; when the result is neither terminal nor closed, or the Student’s work is not finished (BR-STAT-013A), `409 result_not_ready`; otherwise the release is recorded with its time and Teacher.
+- **Release to Parents** — when the current Parent mode is not manual Teacher release, `409 manual_release_not_allowed`; when already released to Parents, the result is returned unchanged; when the values are not visible to the Student now (BR-STAT-013B), `409 student_result_not_released`; otherwise the release is recorded with its time and Teacher.
 
-**BR-STAT-020 — Student view of own Attempt results**
-In Stage 9 a Student sees the result of an own Attempt (its normalized score and the Teacher’s feedback on its answers) only when all of these hold:
+A closed result can be released like any other (release stays separate from closure, BR-RES-011A). A release never changes a value or status (BR-STAT-017).
+
+**BR-STAT-019A — Bulk result actions (`S10-D7`)**
+Besides the single-Student close and releases, the Topic’s Teacher may, for all cohort Students of one Topic at once: close all closable results, release to Students all results ready for release, and release to Parents all results visible to Students. Each bulk action applies the single-Student rule (BR-RES-011, BR-STAT-019) to every cohort Student in one transaction, changes only eligible results, and reports how many results it processed and how many it skipped and why: already done (already closed, or already released to the Student or to Parents) or not ready. A mode that forbids the release fails the whole bulk release with `409 manual_release_not_allowed`.
+
+### Student Attempt Result Visibility
+
+**BR-STAT-020 — Student view of own Attempt results (`S10-D4`)**
+A Student sees the result of an own Attempt (its normalized score and the Teacher’s feedback on its answers) only when all of these hold:
 
 ```text
 attempt.status = checked
 + attempt.official_score_eligible = true
-+ institution student_result_release_mode = automatic
 + (Homework) or (Blitz with status closed or archived)
++ (practice task) or (student_result_release_mode = automatic) or (the Teacher released the Student's Topic result to the Student)
 ```
 
-Answer feedback is shown only when the result is visible and the Teacher wrote feedback. Under manual Teacher release, or while the release mode is unconfigured, no Attempt result is visible in Stage 9; Stage 10 adds visibility through result release. In Stage 9 these conditions are what a released result means for a Student’s own Attempt results (BR-ROLE-018, BR-ACL-008).
+Answer feedback is shown only when the result is visible and the Teacher wrote feedback. Practice (non-official) task results are not governed by the release mode: they are visible after checking in every mode (a practice Blitz after it closes). A manual Teacher release of the Topic result (BR-STAT-019) also makes that Student’s official Homework and Blitz Attempt results and answer feedback visible. This rule replaces the Stage 9 rule, which required the automatic mode for every Attempt; only which values are visible changes. These conditions are what a released result means for a Student’s own Attempt results (BR-ROLE-018, BR-ACL-008).
 
 **BR-STAT-021 — Student view of Homework Attempts and the official Homework score**
-A Student sees every own terminal Homework Attempt in `attempt_number` order, each with its result only when visible under BR-STAT-020. For the official Homework, the Student also sees the official Homework score and the number of the Attempt it came from exactly when that official score is ready under the live evaluation of BR-ATT-021 and the release mode is automatic.
+A Student sees every own terminal Homework Attempt in `attempt_number` order, each with its result only when visible under BR-STAT-020. For the official Homework, the Student also sees the official Homework score and the number of the Attempt it came from exactly when that official score is ready under the live evaluation of BR-ATT-021 and the release condition of BR-STAT-020 holds (the Student mode is automatic, or the Teacher released the Student’s Topic result to the Student).
 
 **BR-STAT-022 — Student view of finished Blitz tasks**
 A Student sees own Blitz tasks (persisted recipient) that were activated and are now closed or archived, most recently finished first. Each shows whether the first Attempt was invalidated by an approved exception and the result of the counting Attempt (replacement #2 when an exception exists, otherwise #1), if that Attempt exists; its score and answer feedback appear only when visible under BR-STAT-020. An invalidated Blitz Attempt #1 never shows a score; the Student sees it as invalidated.
 
-**BR-STAT-023 — Never exposed to a Student; Parents unchanged in Stage 9**
-A Student never sees correct answers, answer keys, per-Question awarded points, per-answer checking status, reviewer identity, or the Homework review deadline. Parents see nothing new in Stage 9; Parent visibility of scores and feedback comes with Stage 10 result release.
+**BR-STAT-023 — Never exposed to a Student; Parent boundary**
+A Student never sees correct answers, answer keys, per-Question awarded points, per-answer checking status, reviewer identity, or the Homework review deadline. A Parent never sees Teacher feedback on answers (`S10-D1`); in Stage 10 a Parent receives result information only through the child’s Topic result under BR-STAT-016A.
 
 ---
 
@@ -1711,6 +1838,8 @@ A Student must not change answers after:
 - Blitz timeout
 - Attempt exhaustion
 - Result closure
+
+Result closure needs finished work or a Topic archive (BR-RES-011), so no Attempt of the official tasks is still editable when a result is closed; a later Start of the official Homework returns `409 result_closed` after the existing lifecycle, deadline, and attempt-count conflicts (BR-RES-011B).
 
 **BR-SUB-011 — Teacher must not rewrite answers**  
 A Teacher may score and comment on submitted answers but must not alter the Student’s answer content.
@@ -1792,7 +1921,7 @@ The action may proceed only when all applicable checks pass.
 | Homework | No routine editing | Overview only | Create/manage/check assigned | Complete assigned | View child progress if allowed |
 | Blitz | No routine editing | Overview only | Create/activate/check assigned | Complete active assigned | View child result if allowed |
 | Submissions | No routine editing | Summary/management boundary | Review assigned | View own | Progress only |
-| Scores/results | Platform statistics | Institution summaries | View assigned and score manual work | View own if released | View child if allowed |
+| Scores/results | Platform statistics | Institution summaries | View assigned, score manual work, comment, release, and close | View own when visible | View child when visible to the Parent |
 | Institution settings | Global platform settings only | Manage own institution | Task-level settings only | No | No |
 
 ### View and Edit Separation
@@ -1804,7 +1933,7 @@ Permission to view a record must not automatically grant permission to edit it.
 Parent access is read-only in the MVP.
 
 **BR-ACL-008 — Student own-data restriction**  
-A Student may view only their own submissions and released results.
+A Student may view only their own submissions and their own results when visible (BR-STAT-013B, BR-STAT-020).
 
 **BR-ACL-009 — Teacher assigned-data restriction**  
 A Teacher may view and manage only assigned groups, students, topics, tasks, and results.
@@ -1839,6 +1968,8 @@ Specific permission checks must protect at least:
 - Configuring institution timezone
 - Configuring lower institution upload limits within platform maxima
 - Releasing results when the configured mode requires Teacher release
+- Writing the Teacher comment on a Topic result
+- Closing Topic results
 - Viewing reports
 - Activating and deactivating institutions
 
@@ -1867,7 +1998,7 @@ The system should show a clear message such as:
 - “You have used all attempts.”
 - “This Student is not connected to your account.”
 - “You cannot access data from another institution.”
-- “This result is not available yet.”
+- “This result is closed and can no longer be changed.”
 - “Your account is inactive.”
 - “Your institution is inactive.”
 
@@ -1926,13 +2057,16 @@ The MVP business-rule scope must include:
 32. Separate task, submission, result, and visibility states.
 33. Institution-configured Student release mode: automatic or manual Teacher release.
 34. Institution-configured Parent visibility mode: with Student release, manual Teacher release, or hidden.
-35. Teacher result review and release actions where configured.
+35. Teacher result review, single and bulk release where configured, and result closure: single and bulk only when the Student’s work is finished, and automatic on Topic archive for every terminal result (BR-RES-011, BR-TOP-010).
 36. Platform upload maxima of 25 MB for learning materials and 15 MB for Student answer files, with institutions allowed to configure lower limits.
 37. UTC authoritative timestamps with one configurable IANA timezone per institution.
 38. Basic institution and group progress summaries.
 39. Server-side role and record-scope permission checks.
 40. Historical preservation through closure, archiving, deactivation, and invalidated Blitz-attempt history.
 41. An optional Homework review deadline that is a reminder only and never changes scores (BR-HW-018A).
+42. Live open Topic results with seven result statuses, visible to Students and Parents only after the Student’s work is finished, and a closure snapshot for closed results (BR-STAT-010B, BR-STAT-013A, BR-RES-011A).
+43. One optional Teacher comment per Topic result, visible together with the result values (BR-RES-007A).
+44. Homework before Blitz: the official Blitz activation closes the official Homework, and only a Student with a submitted Homework Attempt may start the official Blitz (BR-BLZ-010A, BR-BLZ-011A).
 
 ### Rules Excluded from the MVP
 
@@ -1961,6 +2095,7 @@ The MVP must not require business rules for:
 - Gamification or certificates
 - Complex course-builder logic
 - Formal result appeals or approval chains
+- Hiding or unreleasing a released result, reopening a closed result, or revising it after closure
 - Negative marking
 - Teacher choice of the official Attempt
 - Showing Students correct answers or per-Question points
@@ -1976,7 +2111,7 @@ The previously open MVP decisions are now approved and are mandatory:
 4. **Blitz timeout** — Stage 8 freezes committed pending answers at exact `deadline_at` as `timed_out_finalized` with `timeout_auto_submit`, without fake rows, points, or review transitions. Stage 9 later applies unanswered-zero rules, objective checking, and Teacher review.
 5. **Partial credit** — Multiple-choice limits Student selections to the number of correct options and awards credit only for correctly selected answers; matching uses correct pairs; ordering uses correctly positioned items; fill-in-the-blank uses correctly completed blanks. Single-choice, true/false, and automatically checked short answers are all-or-nothing. Manual written/file answers are scored by the Teacher within allowed points.
 6. **Score precision, display, and category rounding** — Scoring uses exact decimal arithmetic with one half-up rounding to 8 decimal places when awarded points and normalized scores are stored (BR-Q-036). Homework/Blitz comparison and final-score calculation use those stored scores with no further intermediate rounding. User-facing scores display one decimal place. Category assignment uses the derived integer `category_score`: `.0`–`.5` rounds down and `>.5` rounds up.
-7. **Result release** — Student mode is either automatic or manual Teacher release. Parent mode is with Student release, manual Teacher release, or hidden. A Parent must never receive the result before the Student.
+7. **Result release** — Student mode is either automatic or manual Teacher release. Parent mode is with Student release, manual Teacher release, or hidden. Topic result values become visible only after the Student’s work is finished (BR-STAT-013A). A Parent sees values only while they are visible to the Student, and in hidden mode receives no result information. A released result stays released (BR-STAT-017A).
 8. **Upload limits** — Platform maximum is 25 MB per learning-material file and 15 MB per Student answer file. Institutions may configure lower, never higher, limits.
 9. **Timezone** — Authoritative instants are stored as UTC. Each institution uses one configurable IANA timezone for educational date/time entry and display; device time does not control validity, and timezone changes do not alter historical absolute instants.
 10. **Result-bearing tasks** — A Topic may contain multiple Homework and Blitz tasks, but exactly one whole-group Homework + one whole-group Blitz form the eventual official result-bearing pair. Selected-Student tasks are practice-only. The first activated official task establishes the persisted official cohort, and the later task reuses it. Student activity locks the already-designated task/cohort; attaching a previously absent official Blitz completes the pair and is not replacement.
@@ -1992,11 +2127,25 @@ The final cross-document audit added the following mandatory clarifications:
 3. If highest Homework scores tie exactly, the lowest `attempt_number` is the official attempt reference.
 4. Closing active Homework before its deadline freezes every existing `in_progress` Attempt as `submitted` from already-committed pending work with `task_closed_auto_finalize`, creates no fake Attempt/answer row, and leaves checking/scoring to Stage 9. Closing active Blitz likewise freezes committed pending work without checking/scoring: due Attempts retain timeout reason/exact deadline; only pre-deadline Attempts use `submitted` with `task_closed_auto_finalize` at captured close time. Existing terminal history remains immutable.
 5. Administrator-created accounts require first-login password change and normal application access is blocked until the change succeeds.
-6. Result closure requires a terminal Student+Topic state and remains independent from visibility/release.
+6. Result closure requires a terminal Student+Topic state and, for a Teacher closure, the Student’s finished work (BR-RES-011; the Topic archive closes every terminal result) and remains independent from visibility/release.
 
 ### Second-Audit Homework Deadline Decision — Resolved
 
 The final post-audit deadline rule is approved: an `in_progress` Homework Attempt is frozen at the authoritative Homework deadline as `submitted` using already-committed saved work, with `submitted_at = null`, `finalized_at = locked_at = deadline_at`, and `homework_deadline_auto_submit`. Stage 7 leaves saved answers pending, fabricates neither an answer row for an unanswered Question nor an Attempt for a never-started Student, makes unused remaining attempts unavailable, and rejects later answer/file/Submit mutation. Stage 9 later checks the frozen history and treats missing answers as zero under the approved policy. No Homework-deadline behavior remains open.
+
+### Stage 10 Result Decisions (Project Owner, 2026-10-03)
+
+| ID | Decision | Rules |
+|---|---|---|
+| `S10-D1` | One optional Teacher comment per Topic result; the Parent sees it only with Parent-visible values; no Parent flag; answer feedback stays Student-only; the comment cannot change after closure. | BR-RES-007A, BR-Q-040, BR-HW-025 |
+| `S10-D2` | Student and Parent see H, B, final score, category, completion status, Teacher comment, and the calculation method; never “inconsistent”, `D`, or `T`. The Teacher sees everything. | BR-STAT-012, BR-STAT-013B, BR-STAT-016A |
+| `S10-D3` | Visibility only after the Student’s work is finished (official Blitz activated and now closed or archived, and official Homework no longer submittable). | BR-STAT-013, BR-STAT-013A |
+| `S10-D4` | A manual Topic release also shows the official Attempt results and answer feedback; practice results are visible after checking in every mode. | BR-STAT-020, BR-STAT-021 |
+| `S10-D5` | A released result stays released and follows corrections; no hide or unrelease action. | BR-STAT-017, BR-STAT-017A |
+| `S10-D6` | Open results use the current threshold and category ranges; closed results are frozen; release-mode changes act immediately and keep existing releases. | BR-INST-018, BR-CMP-013, BR-CMP-014, BR-CAT-013, BR-CAT-014, BR-STAT-017A |
+| `S10-D7` | Single and bulk close and release; bulk actions report skipped results; Topic archive closes every terminal result. | BR-STAT-019A, BR-RES-011, BR-TOP-010 |
+| `S10-D8` | Homework before Blitz: official Blitz activation closes the official Homework and is refused while it is a draft; only a Student with a submitted Homework Attempt may start the official Blitz. | BR-BLZ-010A, BR-BLZ-011A, BR-HW-012, BR-ATT-004A, BR-ATT-012 |
+| `S10-D9` | A result can be closed only when the Student’s work is finished. | BR-RES-011 |
 
 ### MVP Rule Success Criteria
 
@@ -2014,8 +2163,8 @@ The business rules are successfully implemented when:
 10. Missing required work never creates an invented final score.
 11. The homework–blitz difference is calculated correctly.
 12. The correct average-or-blitz formula is applied.
-13. The final result records its calculation method and rule snapshot.
-14. **Not completed** is used only for missing required work, not for waiting review or hidden results.
+13. A closed result records its calculation method and the rules it used; an open result always uses the current rules.
+14. **Not completed** is used only for missing required work, not for waiting review, missing settings, or results that are not visible.
 15. Calculated results can remain unreleased without becoming incomplete.
 16. Historical records remain stable after deactivation, closure, or archiving.
 17. Unauthorized direct links, filters, and record identifiers remain blocked.
