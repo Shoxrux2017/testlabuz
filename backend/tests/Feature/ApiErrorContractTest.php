@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Exceptions\Files\FileTooLargeException;
 use App\Exceptions\Files\FileUploadFailedException;
 use App\Exceptions\Files\UnsupportedFileTypeException;
+use App\Exceptions\ResultClosedException;
 use App\Exceptions\Teacher\TopicNotEditableException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
@@ -90,6 +91,18 @@ class ApiErrorContractTest extends TestCase
 
         $decoded = $this->assertErrorContract($response, 409, 'topic_not_editable');
         $this->assertSame('The topic is not editable.', $decoded->message);
+    }
+
+    public function test_result_closed_exception_returns_specific_conflict_contract(): void
+    {
+        Route::put('/api/v1/test-result-closed', function () {
+            throw new ResultClosedException;
+        });
+
+        $response = $this->putJson('/api/v1/test-result-closed');
+
+        $decoded = $this->assertErrorContract($response, 409, 'result_closed');
+        $this->assertSame('This result is closed and can no longer be changed.', $decoded->message);
     }
 
     public function test_unsupported_file_type_exception_returns_exact_file_error_contract(): void

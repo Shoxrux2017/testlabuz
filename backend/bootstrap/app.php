@@ -14,6 +14,7 @@ use App\Exceptions\Institution\GroupArchivedException;
 use App\Exceptions\Institution\InactiveGroupMemberException;
 use App\Exceptions\Institution\InactiveParentStudentRelationshipUserException;
 use App\Exceptions\InstitutionSettingsIncompleteException;
+use App\Exceptions\ResultClosedException;
 use App\Exceptions\Student\AttemptNotEditableException;
 use App\Exceptions\Student\AttemptsExhaustedException;
 use App\Exceptions\Student\SelectionLimitExceededException;
@@ -132,6 +133,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (SelectionLimitExceededException $e, Request $request) => ApiErrorResponse::selectionLimitExceeded($request));
         $exceptions->render(fn (OfficialTaskRequiresGroupAssignmentException $e, Request $request) => ApiErrorResponse::officialTaskRequiresGroupAssignment($request));
         $exceptions->render(fn (ResultPairLockedException $e, Request $request) => ApiErrorResponse::resultPairLocked($request));
+        $exceptions->render(fn (ResultClosedException $e, Request $request) => ApiErrorResponse::resultClosed($request));
         $exceptions->render(fn (AutomaticCheckingPendingException $e, Request $request) => ApiErrorResponse::automaticCheckingPending($request));
         $exceptions->render(fn (AssessmentHasNoScoreablePointsException $e, Request $request) => ApiErrorResponse::assessmentHasNoScoreablePoints($request));
         $exceptions->render(fn (UnsupportedFileTypeException $e, Request $request) => ApiErrorResponse::unsupportedFileType($request));
