@@ -192,6 +192,7 @@ void main() {
         (_) => _jsonResponse(409, _errorEnvelope(ApiErrorCodes.taskClosed)),
         (_) =>
             _jsonResponse(409, _errorEnvelope(ApiErrorCodes.businessConflict)),
+        (_) => _jsonResponse(500, _errorEnvelope(ApiErrorCodes.serverError)),
         (_) => _jsonResponse(200, {
           'data': _homeworkJson(),
           'message': 'Homework updated successfully.',

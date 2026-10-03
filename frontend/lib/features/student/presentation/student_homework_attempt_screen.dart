@@ -147,6 +147,7 @@ class _StudentHomeworkAttemptScreenState
     final editor = ref.read(provider);
     final files = ref.read(fileProvider);
     var leave = true;
+    StudentFileAnswerController? heldFiles;
     if (submitting ||
         submitUncertain ||
         files.hasUncertainUpload ||
@@ -193,10 +194,17 @@ class _StudentHomeworkAttemptScreenState
         ),
       );
       _leaveDialog = route;
+      // A file waiting for the Attempt must not upload while the Student is
+      // asked whether to leave; leaving drops it.
+      final held = ref.read(fileProvider.notifier)..holdDeferredUpload();
+      heldFiles = held;
       leave = await Navigator.of(context).push(route) ?? false;
       if (identical(_leaveDialog, route)) _leaveDialog = null;
     }
-    if (!mounted) return;
+    if (!mounted) {
+      heldFiles?.releaseDeferredUpload();
+      return;
+    }
     _leaving = false;
     if (!leave ||
         ref.read(studentAttemptRouteOperationGateProvider(target)) ==
@@ -204,6 +212,7 @@ class _StudentHomeworkAttemptScreenState
         target != capturedTarget ||
         _sessionKey != capturedSession ||
         router.routeInformationProvider.value.uri != capturedLocation) {
+      heldFiles?.releaseDeferredUpload();
       return;
     }
     ref.read(submitProvider.notifier).clearLocalState();

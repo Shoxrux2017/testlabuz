@@ -11,6 +11,7 @@ import '../application/teacher_homework_route_target.dart';
 import '../application/teacher_session_key.dart';
 import '../domain/teacher_homework.dart';
 import '../domain/teacher_homework_mutation.dart';
+import 'teacher_date_picker_range.dart';
 import 'teacher_homework_formatters.dart';
 
 /// Sets, changes or clears the Homework review deadline on desktop (`S09-D2`).
@@ -171,11 +172,12 @@ class _TeacherHomeworkReviewDeadlineSectionState
       return;
     }
 
+    final range = teacherDatePickerRange(initial.date);
     final date = await showDatePicker(
       context: context,
       initialDate: initial.date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: range.first,
+      lastDate: range.last,
     );
     if (date == null || !mounted) {
       return;

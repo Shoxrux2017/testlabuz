@@ -49,6 +49,9 @@ class StudentBlitzFileAnswerController
 
   /// A chosen file whose upload waited for the write gate (a replay).
   String? _deferredUpload;
+
+  /// True while the Student is asked whether to leave the Blitz.
+  var _deferredHeld = false;
   var _generation = 0;
   var _cleared = false;
 
@@ -102,10 +105,37 @@ class StudentBlitzFileAnswerController
     if (deferred != null && parent.acceptsWrites) {
       _deferredUpload = null;
       scheduleMicrotask(() {
-        if (ref.mounted) unawaited(uploadAnswer(deferred));
+        if (!ref.mounted) return;
+        // A hold that began after this rebuild still applies.
+        if (_deferredHeld) {
+          _deferredUpload ??= deferred;
+          return;
+        }
+        unawaited(uploadAnswer(deferred));
       });
     }
     return next;
+  }
+
+  /// Keeps a deferred upload from starting while the Student is asked
+  /// whether to leave; leaving drops it with [clearLocalState].
+  void holdDeferredUpload() {
+    _deferredHeld = true;
+  }
+
+  /// Ends [holdDeferredUpload]: a deferred upload starts now when the Attempt
+  /// accepts writes, otherwise once it does.
+  void releaseDeferredUpload() {
+    if (!_deferredHeld || !ref.mounted) return;
+    _deferredHeld = false;
+    final deferred = _deferredUpload;
+    if (deferred != null &&
+        ref
+            .read(studentBlitzExecutionControllerProvider(target.routeTarget))
+            .acceptsWrites) {
+      _deferredUpload = null;
+      unawaited(uploadAnswer(deferred));
+    }
   }
 
   Future<void> chooseFile(String questionId) async {
@@ -817,6 +847,7 @@ class StudentBlitzFileAnswerController
     _confirmedUpload = null;
     _lastPublication = null;
     _deferredUpload = null;
+    _deferredHeld = false;
     _recovery?.clear();
     _resolveUploadWaiters(false);
   }

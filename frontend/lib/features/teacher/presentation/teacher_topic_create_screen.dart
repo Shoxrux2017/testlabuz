@@ -15,6 +15,7 @@ import '../application/teacher_topic_group_picker_state.dart';
 import '../domain/teacher_group.dart';
 import '../domain/teacher_group_list_query.dart';
 import '../domain/teacher_topic_mutation.dart';
+import 'teacher_date_picker_range.dart';
 import 'teacher_topic_form_fields.dart';
 import 'teacher_workspace_list_widgets.dart';
 
@@ -255,11 +256,12 @@ class _TeacherTopicCreateScreenState
       _showTimezoneUnavailable();
       return;
     }
+    final range = teacherDatePickerRange(initial.date);
     final date = await showDatePicker(
       context: context,
       initialDate: initial.date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: range.first,
+      lastDate: range.last,
     );
     if (date == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;

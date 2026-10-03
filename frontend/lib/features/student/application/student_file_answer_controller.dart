@@ -45,6 +45,9 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
 
   /// A chosen file whose upload waits for the Attempt to be authoritative.
   String? _deferredUpload;
+
+  /// True while the Student is asked whether to leave the Attempt.
+  var _deferredHeld = false;
   var _generation = 0;
   var _cleared = false;
 
@@ -116,10 +119,37 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     if (deferred != null && _hasAuthority(parent)) {
       _deferredUpload = null;
       scheduleMicrotask(() {
-        if (ref.mounted) unawaited(uploadAnswer(deferred));
+        if (!ref.mounted) return;
+        // A hold that began after this rebuild still applies.
+        if (_deferredHeld) {
+          _deferredUpload ??= deferred;
+          return;
+        }
+        unawaited(uploadAnswer(deferred));
       });
     }
     return next;
+  }
+
+  /// Keeps a deferred upload from starting while the Student is asked
+  /// whether to leave; leaving drops it with [clearLocalState].
+  void holdDeferredUpload() {
+    _deferredHeld = true;
+  }
+
+  /// Ends [holdDeferredUpload]: a deferred upload starts now when the
+  /// Attempt is authoritative, otherwise once it is.
+  void releaseDeferredUpload() {
+    if (!_deferredHeld || !ref.mounted) return;
+    _deferredHeld = false;
+    final deferred = _deferredUpload;
+    if (deferred != null &&
+        _hasAuthority(
+          ref.read(studentHomeworkAttemptControllerProvider(target)),
+        )) {
+      _deferredUpload = null;
+      unawaited(uploadAnswer(deferred));
+    }
   }
 
   Future<void> chooseFile(String questionId) async {
@@ -838,6 +868,7 @@ class StudentFileAnswerController extends Notifier<StudentFileAnswerState> {
     _activeSessionKey = null;
     _operation = null;
     _deferredUpload = null;
+    _deferredHeld = false;
     _lastParent = null;
     _lastTerminal = null;
     _recovery?.clear();

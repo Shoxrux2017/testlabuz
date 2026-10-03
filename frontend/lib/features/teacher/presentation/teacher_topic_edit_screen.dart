@@ -11,6 +11,7 @@ import '../application/teacher_session_key.dart';
 import '../application/teacher_topic_edit_controller.dart';
 import '../application/teacher_topic_edit_state.dart';
 import '../domain/teacher_topic_mutation.dart';
+import 'teacher_date_picker_range.dart';
 import 'teacher_topic_form_fields.dart';
 
 class TeacherTopicEditScreen extends ConsumerStatefulWidget {
@@ -312,11 +313,12 @@ class _TeacherTopicEditScreenState
       _showTimezoneUnavailable();
       return;
     }
+    final range = teacherDatePickerRange(initial.date);
     final date = await showDatePicker(
       context: context,
       initialDate: initial.date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: range.first,
+      lastDate: range.last,
     );
     if (date == null || !mounted || !_isCurrentSessionOwner(owner)) {
       return;

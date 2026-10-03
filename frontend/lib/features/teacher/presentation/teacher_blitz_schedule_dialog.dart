@@ -11,6 +11,7 @@ import '../application/teacher_blitz_route_target.dart';
 import '../application/teacher_session_key.dart';
 import '../domain/teacher_blitz.dart';
 import '../domain/teacher_blitz_schedule.dart';
+import 'teacher_date_picker_range.dart';
 import 'teacher_topic_formatters.dart';
 
 /// Opens the Schedule/Reschedule dialog; the POST starts only after confirm.
@@ -185,11 +186,12 @@ class _TeacherBlitzScheduleDialogState
   Future<void> _chooseDate() async {
     // Only the picker focus; nothing is selected until the Teacher chooses.
     final initial = _date ?? DateUtils.dateOnly(DateTime.now());
+    final range = teacherDatePickerRange(initial);
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      firstDate: range.first,
+      lastDate: range.last,
     );
     if (date != null && mounted) {
       setState(() {

@@ -134,9 +134,14 @@ void main() {
           points: TeacherReviewPointsError.missing,
         ),
       });
+      expect(
+        state.read().failureMessage,
+        'Some answers need attention. Check the marked fields.',
+      );
 
       harness.review.editPoints(_waitingId, '1');
       expect(state.read().errors, isEmpty);
+      expect(state.read().failureMessage, isNull);
     });
 
     test('without changes nothing is sent', () async {
@@ -829,6 +834,34 @@ void main() {
         unorderedEquals([_waitingId, _reviewedId]),
       );
     });
+
+    test(
+      '422 errors keep the sent item order whatever the server order',
+      () async {
+        final harness = _Harness(
+          onSaveReview: (_, _) => Future.error(
+            _failure(422, ApiErrorCodes.validationFailed, {
+              'answers.1.awarded_points': ['Too many points.'],
+              'answers.0.feedback': ['Too long.'],
+            }),
+          ),
+        );
+        final state = await harness.loaded();
+        harness.review
+          ..editPoints(_waitingId, '2')
+          ..editPoints(_reviewedId, '3');
+
+        await harness.review.save();
+
+        // The fields are focused in this order, which is the Question order.
+        expect(
+          state.read().errors.keys,
+          harness.submissions.reviewRequests.single.items.map(
+            (item) => item.answerId,
+          ),
+        );
+      },
+    );
 
     test('a 404 makes the detail not found and refreshes the queue', () async {
       final harness = _Harness(

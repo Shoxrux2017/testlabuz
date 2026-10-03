@@ -456,6 +456,11 @@ class _StudentBlitzDetailScreenState
           return;
         }
       }
+      // A file waiting for writes must not upload while the Student is asked
+      // whether to leave; leaving drops it.
+      final heldFiles = ref.read(
+        studentBlitzFileAnswerControllerProvider(executionTarget).notifier,
+      )..holdDeferredUpload();
       final leave = await _confirmLeave(
         executionTarget,
         ref.read(studentBlitzExecutionControllerProvider(_target)),
@@ -468,6 +473,7 @@ class _StudentBlitzDetailScreenState
                 studentBlitzExecutionOperationGateProvider(executionTarget),
               ) ==
               StudentBlitzExecutionOperation.submitting) {
+        heldFiles.releaseDeferredUpload();
         return;
       }
     }

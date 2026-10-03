@@ -17,10 +17,10 @@ import '../application/teacher_topic_result_pair_controller.dart';
 import '../domain/teacher_blitz.dart';
 import '../domain/teacher_blitz_form.dart';
 import 'teacher_blitz_formatters.dart';
-import 'teacher_task_review_summary_card.dart';
 import 'teacher_blitz_lifecycle_controls.dart';
 import 'teacher_homework_formatters.dart';
 import 'teacher_question_read_view.dart';
+import 'teacher_task_review_summary_card.dart';
 import 'teacher_topic_formatters.dart';
 
 /// Blitz detail with desktop authoring and lifecycle controls, mobile

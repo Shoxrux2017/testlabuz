@@ -15,6 +15,7 @@ import 'package:testlabuz_client/features/auth/application/auth_session_controll
 import 'package:testlabuz_client/features/student/application/student_active_blitz_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_answer_editor_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_blitz_detail_controller.dart';
+import 'package:testlabuz_client/features/student/application/student_blitz_execution_controller.dart';
 import 'package:testlabuz_client/features/student/application/student_submission_file_picker.dart';
 import 'package:testlabuz_client/features/student/data/student_attempt_answer_repository_impl.dart';
 import 'package:testlabuz_client/features/student/data/student_blitz_attempt_repository_impl.dart';
@@ -558,6 +559,80 @@ void main() {
         find.textContaining('A save result is still unconfirmed.'),
         findsOneWidget,
       );
+    });
+
+    for (final (stay, uploads) in [(true, 1), (false, 0)]) {
+      testWidgets('a file picked during a replay waits while leaving is asked; '
+          '${stay ? 'Stay' : 'Leave'} uploads $uploads', (tester) async {
+        final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
+        await _scrollTo(tester, find.text('Choose file'));
+        await _tap(tester, find.text('Choose file'));
+        await tester.pump();
+        // The Attempt is replayed while the picker is open.
+        final replay = Completer<StudentBlitzAttemptStartResult>();
+        h.start = replay;
+        unawaited(
+          h.container
+              .read(
+                studentBlitzExecutionControllerProvider(
+                  blitzRouteTarget,
+                ).notifier,
+              )
+              .refreshCurrentAttempt(),
+        );
+        await tester.pump();
+        h.picker.pending.single.complete(blitzUploadFile());
+        await _settle(tester);
+        expect(h.answers.uploads, isEmpty);
+
+        await tester.tap(find.byTooltip('Back to Topic'));
+        await _settle(tester);
+        replay.complete(
+          studentBlitzStartResult(
+            attempt: blitzExecutionAttempt(),
+            kind: StudentBlitzAttemptStartResultKind.resumed,
+          ),
+        );
+        await _settle(tester);
+        expect(h.answers.uploads, isEmpty);
+
+        await tester.tap(
+          stay
+              ? find.text('Stay')
+              : find.byKey(const Key('studentBlitzLeaveConfirmButton')),
+        );
+        await _settle(tester);
+        expect(h.answers.uploads, hasLength(uploads));
+      });
+    }
+
+    testWidgets('a pending answer saves as soon as the app is paused', (
+      tester,
+    ) async {
+      final h = await _Harness.executing(tester, AppDeviceSurface.desktop);
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      addTearDown(() {
+        for (final state in [
+          AppLifecycleState.hidden,
+          AppLifecycleState.inactive,
+          AppLifecycleState.resumed,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+      });
+      await _tap(tester, find.text('True'));
+      await tester.pump();
+      expect(h.answers.saves, isEmpty);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+
+      expect(h.answers.saves, hasLength(1));
     });
 
     testWidgets('a Submit in flight cannot be abandoned', (tester) async {
